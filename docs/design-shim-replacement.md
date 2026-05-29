@@ -317,3 +317,121 @@ inline-verify rollout. Target: ≥ 80ms reduction (current loopback to
 
 Ready for review. Cross-cutting bits (cookie contract, consumer verify
 helper) ratification pass requested before build kickoff.
+
+---
+
+# Design-confirm addendum — shim-replacement chat, 2026-05-29
+
+Step 1 of the build order. I read the v0 above against the actual code
+(`platform/mu-plugins/profile-auth.php`, `profile-app/src/{Auth,Whoami}.php`,
+`bb-mirror/config.php`, the key files on disk). **The v0 design is sound and I
+adopt it.** One gap must be closed before build, two factual notes correct it,
+and the implementation is further along than the doc implies.
+
+## A. Implementation state (the doc undersells how much exists)
+
+- A WP minter **already exists**: `platform/mu-plugins/profile-auth.php`
+  (canonical deploy path per MANIFEST) hooks `wp_login` / `wp_logout` / `init`
+  re-mint, plus `/looth/auth/{refresh,issue}` REST routes. It mints **in-process
+  in WP** via `looth_auth_mint_jwt()`, reading `/etc/looth/jwt-private.pem`.
+- `profile-app/deploy/profile-auth.mu-plugin.php` is a **byte-identical
+  duplicate** of it — a drift hazard. De-dup (Open Q new-3).
+- profile-app `src/Auth.php` already **verifies** `looth_id` (cookie or Bearer,
+  RS256, `/etc/looth/jwt-public.pem`). Keys on disk as the doc says:
+  private `640 root:looth-dev`, public `644 root:root`.
+- The minter is **not confirmed deployed** to dev's `wp-content/mu-plugins/`
+  (re-verify at build). bb-mirror still loopbacks today (`config.php:135-162`,
+  curl to `/wp-json/looth/v1/whoami`) — the measured ~1.5s tax is live, no
+  `/dev/shm` cache present despite the coordinator's interim note.
+- bb-mirror has **no `composer.json`/`vendor/`** — the verify helper needs
+  `firebase/php-jwt` added there (one-time build step).
+
+## B. Two corrections to §1
+
+1. **§1 "calls existing `Auth::mintJwt($wpUser)` machinery" — that does not
+   exist in profile-app.** profile-app only *verifies* today; signing lives only
+   in the WP mu-plugin. The mint endpoint must **add** the signing side to
+   profile-app (load private key + `JWT::encode`). Reuse
+   `Whoami::buildForWpUserId`'s resolver for the claim values (read-only;
+   coordinate with profile-2.0 before touching `Whoami.php`).
+2. **"Private key never leaves profile-app" is a goal, not the current state.**
+   Today WP-FPM reads the private key. Relocating minting means a real
+   transition step: **after** the endpoint works, revoke WP's read access to
+   `/etc/looth/jwt-private.pem` (drop it from the WP-reachable group / move it
+   profile-app-only). This is the security win (WP RCE no longer leaks the
+   signing key — same spirit as §3e). Sequence it so login never breaks during
+   the flip.
+
+## C. The gap that must close — JWT claim shape (the real 10%)
+
+§4's helper returns `wp_user_id + uuid + email`; §5 then calls
+`lg_consumer_viewer_from_claims($claims)`. **But the header render
+(`lg_shared_render_site_header`) needs `display_name`, `avatar_url`, `tier`,
+`capabilities` — and the current/proposed JWT carries none of them.** As
+written, a consumer that inline-verifies would *still* have to loop back to get
+a name/avatar/tier — so the loopback would not die and the perf goal is not met.
+
+**Resolution — enrich the token at mint time, split by volatility:**
+
+| Field | In JWT? | Source | Why |
+|---|---|---|---|
+| `sub` (uuid), `wp_user_id` | yes (already) | profile-app | identity |
+| `display_name`, `avatar_url`, `slug` | **ADD** | profile-app `users` (mint already resolves the bridge row — free) | stable; profile-app owns + self-purges on profile edit |
+| `tier`, `provenance` | **NO** | `lg_tier` cookie hint (§2/§3a canon) | volatile (Arbiter flips mid-session); a 30-day token would lie |
+| `capabilities` | **NO** | reconcile via `/whoami` only when a sensitive gate is hit | rare on a read surface; not needed for first paint |
+
+Net: a consumer renders its header from **JWT (identity + display) + `lg_tier`
+cookie (coarse tier)** with zero WP boot and zero round-trip. Sensitive gating
+still reconciles against `/whoami` (30s cache), exactly as §3a recommends
+(cookie = hint, `/whoami` = truth where it matters). This is what actually
+kills the loopback on the hot path. `lg_consumer_viewer_from_claims()` becomes
+implementable: identity+display straight from claims, tier from `lg_tier`.
+
+Because the mint endpoint resolves the bridge row anyway (for `sub`), adding the
+three display claims is nearly free and keeps profile-app — the identity
+authority — as the one place that stamps identity-display.
+
+## D. Confirmations / answers to the v0 §10 open questions
+
+- **§10.1 mu-plugin home / keep `profile-auth.php`?** Don't run two minters.
+  Fold the `init` re-mint safety net into the single new mu-plugin and retire
+  `profile-auth.php`'s minting (keep its non-mint bits — admin-bar + BB nav —
+  or move them). De-dup the identical copy either way.
+- **§10.2 mint-on-every-page-if-missing?** Yes, keep the `init` re-mint as the
+  suspenders to `set_logged_in_cookie`'s belt — but with minting now remote,
+  guard it (only when logged-in + cookie missing, already the case) so it's one
+  loopback per affected session, not per pageview.
+- **§10.3 `exp` alignment:** stay 30d + init-remint for simplicity; documented
+  caveat that a valid token can briefly outlive a short WP session (minor).
+- **§10.4 live key path:** add `/etc/looth/jwt-public.pem` (0644) to the
+  CUTOVER-PLAN provisioning checklist. Confirmed needed.
+- **§10.5 linktree:** out of scope; leave in its own plan.
+
+## E. New open questions (on top of v0 §10)
+
+- **new-1 (claim shape):** ratify section C — enrich JWT with
+  `display_name/avatar_url/slug`, tier via `lg_tier` cookie NOT in token. This
+  is the cookie contract every consumer reads; archive-poc + bb-mirror +
+  shared-header should ack.
+- **new-2 (`lg_tier` ownership):** who sets `lg_tier` at login (poller? a WP
+  hook beside the mint?) and its TTL — required for C end-to-end.
+- **new-3 (de-dup):** make `platform/mu-plugins/profile-auth.php` canonical;
+  delete `profile-app/deploy/profile-auth.mu-plugin.php`.
+- **new-4 (key ownership flip):** confirm the sysadmin/lg-shell step to revoke
+  WP's private-key read after the endpoint lands (correction B2).
+
+## F. Locked build plan (post-ratification)
+
+1. ✅ design-confirm (this addendum) → ratify C/new-1, new-2.
+2. profile-app mint endpoint `api/v0/internal-mint-token.php` + nginx
+   `/internal/` route + **add signing side** + enriched claims (C). Reuse
+   `buildForWpUserId` resolver (read-only).
+3. Single WP mu-plugin: `set_logged_in_cookie`/`clear_auth_cookie` chokepoints +
+   `wp_login` belt + guarded `init` re-mint + password-reset; calls the endpoint
+   (no in-WP signing); de-dup; then flip key ownership (B2).
+4. bb-mirror inline-verify + fallback (composer + `/srv/lg-shared` helper +
+   public-key config) → prove loopback dies + TTFB drops (v0 §8).
+5. Publish helper + adoption note for archive-poc + shared-header (lanes adopt).
+6. Soak (v0 §7 thresholds) → retire shim.
+
+No code until C/new-1 + new-2 are ratified.
