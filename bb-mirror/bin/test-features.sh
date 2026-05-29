@@ -19,7 +19,7 @@ set -uo pipefail
 # ── Config ──────────────────────────────────────────────────────────────────
 HOST="dev.loothgroup.com"
 BASE="https://$HOST"
-POC="/forums-poc"
+POC="/forum"                                     # canonical base (§0d); was /forums-poc
 WP_PATH="/var/www/dev"
 WP_USER="iandavlin"
 TEST_FORUM_ID=67776                              # Strings Micro Factory
