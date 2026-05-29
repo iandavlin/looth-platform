@@ -204,3 +204,21 @@ function bb_mirror_page(): int {
     return $p < 1 ? 1 : $p;
 }
 }
+
+// ---------- avatar fallback (non-gated default) ----------
+// get_avatar_url()/whoami return gravatar URLs whose d= fallback points at a
+// dev-gated BuddyBoss bp-full image gravatar can't fetch -> broken avatar for
+// users without a gravatar. Force a non-gated default. Swap the const to a
+// gate-exempt local asset later for branding (one line).
+if (!defined('LG_BB_MIRROR_DEFAULT_AVATAR')) define('LG_BB_MIRROR_DEFAULT_AVATAR', 'mp');
+if (!function_exists('lg_bb_mirror_safe_avatar')) {
+function lg_bb_mirror_safe_avatar(?string $url): ?string {
+    if (!$url) return $url;
+    if (!preg_match('~^https?://[^/]*gravatar\\.com/~i', $url)) return $url;
+    $p = parse_url($url);
+    parse_str($p['query'] ?? '', $q);
+    $q['d'] = LG_BB_MIRROR_DEFAULT_AVATAR;   // overrides the gated bp-full d=
+    return ($p['scheme'] ?? 'https') . '://' . ($p['host'] ?? 'gravatar.com')
+         . ($p['path'] ?? '') . '?' . http_build_query($q);
+}
+}

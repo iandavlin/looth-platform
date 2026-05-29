@@ -409,9 +409,10 @@ function bb_mirror_chrome_header(string $page_title = 'Forums'): void
 <?php
     lg_shared_render_site_header([
         'authenticated'      => $authed,
+        'active_nav'         => 'forum',   // light the Forum nav item (§0a)
         'tier'               => $tier,
         'display_name'       => $dname,
-        'avatar_url'         => $avatar,
+        'avatar_url'         => lg_bb_mirror_safe_avatar($avatar),   // non-gated default
         'capabilities'       => $caps,
         'msg_unread'         => null,
         'notif_unread'       => null,

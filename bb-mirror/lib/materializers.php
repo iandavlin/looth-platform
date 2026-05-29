@@ -58,7 +58,7 @@ function bb_mirror_person_for(int $uid, PDO $db): array {
         ['id','slug','display_name','avatar_url','is_moderator','sync_at']);
     $db->prepare($sql)->execute([
         $uid, $u->user_nicename, $u->display_name,
-        get_avatar_url($uid),
+        lg_bb_mirror_safe_avatar(get_avatar_url($uid)),
         bb_mirror_bool(false),
         bb_mirror_ts(time()),
     ]);
@@ -93,6 +93,22 @@ function bb_mirror_refresh_effective_group(PDO $db, int $root_forum_id): void {
 
 // ---------- upserts -------------------------------------------------------
 
+function bb_mirror_unique_forum_slug(PDO $db, string $base, int $id): string {
+    // BB allows the same post_name under different parents, so two forums can
+    // arrive with an identical slug (Acoustic Repair vs Acoustic Builds). Keep
+    // pg slugs unique: lowest-id forum keeps the bare slug, collisions get -N
+    // (the same shape BB itself gave electric/electric-2). Stable across re-sync
+    // because the occupancy check excludes the row's own id.
+    $base = $base !== '' ? $base : ('forum-' . $id);
+    $slug = $base; $n = 1;
+    $stmt = $db->prepare("SELECT 1 FROM forum WHERE slug = ? AND id <> ? LIMIT 1");
+    while (true) {
+        $stmt->execute([$slug, $id]);
+        if (!$stmt->fetchColumn()) return $slug;
+        $slug = $base . '-' . (++$n);
+    }
+}
+
 function bb_mirror_upsert_forum(int $id, PDO $db): void {
     $p = get_post($id);
     if (!$p || $p->post_type !== 'forum') {
@@ -105,9 +121,10 @@ function bb_mirror_upsert_forum(int $id, PDO $db): void {
              'topic_count','reply_count','total_topic_count','total_reply_count',
              'last_topic_id','last_reply_id','last_active_id','last_active_at',
              'created_at','modified_at','sync_at'];
+    $slug = bb_mirror_unique_forum_slug($db, (string)$p->post_name, $id);
     $sql = bb_mirror_upsert_sql('forum', $cols);
     $db->prepare($sql)->execute([
-        $id, $p->post_name,
+        $id, $slug,
         _bb_mirror_decode($p->post_title),
         _bb_mirror_decode($p->post_content),
         (int)$p->post_parent ?: null, (int)$p->menu_order,
