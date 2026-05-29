@@ -32,6 +32,20 @@ here (see `deploy/MANIFEST.md`).
 3. Plugins / mu-plugins / server config: edit the repo copy (under the plugin/
    app dir or `platform/`), then deploy — don't hand-edit the deployed copy.
 
+## 0a. Shared-header consumer contract — EVERY consumer must pass
+
+Every caller of `lg_shared_render_site_header()` must pass, in addition to the
+viewer fields (`authenticated`, `tier`, `display_name`, `avatar_url`,
+`capabilities`, `msg_unread`, `notif_unread`):
+- **`active_nav`** — which top nav item to highlight (suppress on the matching page)
+- **`logout_url`** — `wp_logout_url()` (nonce'd) so the account menu can sign out
+
+Missing either = nav doesn't highlight + no working logout. archive-poc +
+bb-mirror pass them; events-landing + membership-chrome were missing both (fixed
+2026-05-29). **New consumers: include them.** Mirrored in the site-header.php
+docblock (lg-shell owns that file). The header is "dumb" — it renders what it's
+handed; these are the consumer's responsibility.
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
