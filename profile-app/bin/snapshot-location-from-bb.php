@@ -5,16 +5,25 @@
  * Pre-cutover, BB is authoritative for location. For every user with a
  * xprofile field_id=96 value or a usermeta geocode_96 pin:
  *
- *   - location_text  = BB text (html_entity_decode first)
- *   - lat, lng       = BB pin (autocomplete-time, so it's the real one)
+ *   - location_text     = BB text (html_entity_decode first)
+ *   - location_address  = BB text (same source; the exact-precision tier
+ *                         per the block-system spec). 2026-05-29 add.
+ *   - lat, lng          = BB pin (autocomplete-time, so it's the real one)
  *   - city / region / country / postcode = reverse-geocoded via Nominatim
  *
- * Idempotent: skip when lat + location_text already match BB source.
+ * Idempotent: skip when lat + location_text + location_address already
+ * match BB source.
  *
  * Slice 2.75 supersedes the lat/lng-only `regeocode-from-bb.php` and the
  * earlier partial version of this script. The partial version's
  * "user-edit guard" is dropped — the slice-2.5 editor saved freeform text
  * with mismatched coords, which is exactly the bug the snapshot fixes.
+ *
+ * Block-system carryover (slice 4): users.location_address is the
+ * exact-precision tier used by the new identity-block location field.
+ * Populating it from field 96 at cutover means users don't need a
+ * back-pass through the editor to re-enter what BB already knows.
+ * See docs/spec-block-identity-location.md.
  */
 
 declare(strict_types=1);
@@ -51,12 +60,13 @@ $sql = "
 $src = $wp->query($sql);
 
 $bridge = $pg->prepare("SELECT user_id FROM wp_user_bridge WHERE wp_user_id = :w");
-$selCur = $pg->prepare("SELECT location_text, lat, lng,
+$selCur = $pg->prepare("SELECT location_text, location_address, lat, lng,
                                location_city, location_region, location_country, location_postcode
                         FROM users WHERE id = :id");
 $upd = $pg->prepare("
     UPDATE users SET
         location_text     = :text,
+        location_address  = :address,
         lat               = :lat,
         lng               = :lng,
         location_city     = :city,
@@ -101,15 +111,19 @@ while ($row = $src->fetch(PDO::FETCH_ASSOC)) {
     $cur = $selCur->fetch(PDO::FETCH_ASSOC);
     if (!$cur) { $counts['no_bridge']++; continue; }
 
-    // Idempotent check: text + coords match the BB source.
+    // Idempotent check: text + address + coords match the BB source.
+    // location_address shares the same source string as location_text (BB
+    // field 96 carries the exact-precision address text); separate columns
+    // for the block-system's exact/approximate split.
     $curLat = $cur['lat'] !== null ? round((float)$cur['lat'], 6) : null;
     $curLng = $cur['lng'] !== null ? round((float)$cur['lng'], 6) : null;
     $newLat = $lat !== null ? round($lat, 6) : null;
     $newLng = $lng !== null ? round($lng, 6) : null;
-    $textMatches   = ($cur['location_text'] ?? null) === $tgtText;
-    $coordsMatch   = $curLat === $newLat && $curLng === $newLng;
-    $hasComponents = $cur['location_country'] !== null || $cur['location_city'] !== null;
-    if ($textMatches && $coordsMatch && ($lat === null || $hasComponents)) {
+    $textMatches    = ($cur['location_text'] ?? null) === $tgtText;
+    $addressMatches = ($cur['location_address'] ?? null) === $tgtText;
+    $coordsMatch    = $curLat === $newLat && $curLng === $newLng;
+    $hasComponents  = $cur['location_country'] !== null || $cur['location_city'] !== null;
+    if ($textMatches && $addressMatches && $coordsMatch && ($lat === null || $hasComponents)) {
         $counts['skipped']++;
         continue;
     }
@@ -132,6 +146,7 @@ while ($row = $src->fetch(PDO::FETCH_ASSOC)) {
 
     $upd->execute([
         ':text'     => $tgtText,
+        ':address'  => $tgtText,
         ':lat'      => $lat,
         ':lng'      => $lng,
         ':city'     => $city,

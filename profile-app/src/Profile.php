@@ -13,7 +13,7 @@ final class Profile
 {
     public const VIS_VALUES        = ['public', 'members', 'private'];
     public const LOCATION_VIS_VALUES = ['public', 'members', 'private'];
-    public const SOCIAL_KINDS      = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon'];
+    public const SOCIAL_KINDS      = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon','linktree'];
 
     /** Viewer role can see section of given visibility. */
     public static function canSee(string $role, string $visibility): bool

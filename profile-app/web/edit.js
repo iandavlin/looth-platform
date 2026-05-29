@@ -126,7 +126,7 @@
       if (!r) return;
       const row = $('#socials-row'); const pencil = row.querySelector('.pencil');
       $$('a', row).forEach(a => a.remove());
-      const glyphs = {instagram:'📷',youtube:'▶',bandcamp:'🎵',web:'🔗',email:'✉',phone:'📞',x:'𝕏',tiktok:'♪',facebook:'ƒ',patreon:'P'};
+      const glyphs = {instagram:'📷',youtube:'▶',bandcamp:'🎵',web:'🔗',email:'✉',phone:'📞',x:'𝕏',tiktok:'♪',facebook:'ƒ',patreon:'P',linktree:'🌳'};
       r.items.forEach(it => { const a = document.createElement('a'); a.href='#';
         a.innerHTML = `<span class="glyph">${glyphs[it.kind]||'🔗'}</span>${escH(it.value)}`;
         row.insertBefore(a, pencil); });
@@ -223,7 +223,7 @@
   $$('[data-save]').forEach(b => b.addEventListener('click', () => { const fn = SAVE[b.dataset.save]; if (fn) fn(); }));
 
   // ─── socials modal: seed + add-row ─────────────────────────────────────
-  const SOCIAL_KINDS = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon'];
+  const SOCIAL_KINDS = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon','linktree'];
   function addSocialRow(item) {
     const wrap = $('#socials-edit'); const row = document.createElement('div'); row.className='row';
     row.innerHTML = `<select class="k">${SOCIAL_KINDS.map(k => `<option value="${k}" ${k===item.kind?'selected':''}>${k}</option>`).join('')}</select>
