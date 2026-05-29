@@ -46,6 +46,10 @@ final class Plugin
            must also bust the post's render cache. WP fires set_object_terms
            on both create + update. */
         add_action('set_object_terms',  [self::class, 'on_object_terms_set'], 10, 6);
+        /* Events render post_content + live postmeta via the default layout,
+           so a re-publish (wp_update_post, no layout-meta change) must also
+           bust the anon cache. Scoped to the `event` CPT. */
+        add_action('save_post_event',   [self::class, 'on_event_saved'], 10, 3);
 
         /* Phase 3: authoring surface. Registers its own admin menu + save route. */
         Dash::boot();
@@ -339,25 +343,70 @@ final class Plugin
         ];
     }
 
+    /** Event postmeta the renderer reads LIVE (event-header block). When the
+     *  showrunner Sheet bridge writes any of these via update_field, the
+     *  anon render cache must be busted — otherwise logged-out visitors keep
+     *  seeing the pre-edit page (the layout meta itself never changed, so the
+     *  layout-meta path below wouldn't fire). The bare ACF value keys, not
+     *  the `_`-prefixed field-key references. */
+    private const EVENT_RENDER_META = [
+        'events_start_date_and_time_',
+        'time_of_event',
+        'zoom_url_for_looth_group_virtual_event',
+    ];
+
+    /** Drop the anon rendered-HTML cache for one post so the next anonymous
+     *  view re-renders fresh. (Logged-in viewers always render fresh.) */
+    private static function invalidate_render_cache(int $post_id): void
+    {
+        delete_post_meta($post_id, LG_LAYOUT_V2_RENDERED_AT_META);
+    }
+
     /** Cache invalidation hook handler — meta changes. */
     public static function on_post_meta_changed($meta_id, $object_id, $meta_key, $_meta_value): void
     {
-        if ($meta_key !== LG_LAYOUT_V2_META_KEY) return;
-        delete_post_meta((int) $object_id, LG_LAYOUT_V2_RENDERED_AT_META);
+        if ($meta_key === LG_LAYOUT_V2_META_KEY) {
+            self::invalidate_render_cache((int) $object_id);
+            return;
+        }
+        /* An event's live-read render meta (date / time / zoom) changed —
+           invalidate so Sheet-driven edits actually surface to anon viewers. */
+        if (in_array($meta_key, self::EVENT_RENDER_META, true)) {
+            $post = get_post((int) $object_id);
+            if ($post instanceof \WP_Post && $post->post_type === 'event') {
+                self::invalidate_render_cache((int) $object_id);
+            }
+        }
     }
 
     /** Cache invalidation hook handler — taxonomy term changes. The `tier`
-     *  taxonomy directly affects gating (auto-gate + render-time scrub), so
-     *  flipping it has to invalidate the post's render cache. Without this
-     *  hook, the anon-cached HTML keeps the OLD gating until the cache_epoch
-     *  bumps for some other reason. */
+     *  taxonomy directly affects gating (auto-gate + render-time scrub) on
+     *  every managed CPT. Events additionally DISPLAY region / event-type /
+     *  language in the event-header, so a change to any of those must
+     *  invalidate too. Without this, anon-cached HTML keeps the OLD terms
+     *  until the cache_epoch bumps for some other reason. */
     public static function on_object_terms_set($object_id, $terms, $tt_ids, $taxonomy, $append, $old_tt_ids): void
     {
-        if ($taxonomy !== 'tier') return;
         $post = get_post((int) $object_id);
         if (!$post instanceof \WP_Post) return;
         if (!in_array($post->post_type, self::MANAGED_CPTS, true)) return;
-        delete_post_meta((int) $object_id, LG_LAYOUT_V2_RENDERED_AT_META);
+
+        $relevant = $taxonomy === 'tier'
+            || ($post->post_type === 'event'
+                && in_array($taxonomy, ['region', 'event-type', 'language'], true));
+        if (!$relevant) return;
+
+        self::invalidate_render_cache((int) $object_id);
+    }
+
+    /** Cache invalidation — an event's title / body / status changed. The
+     *  default event layout renders post_content live, so a re-publish from
+     *  the Sheet (wp_update_post) must bust the anon cache even when no meta
+     *  key changed. Fires only for the `event` CPT (save_post_event). */
+    public static function on_event_saved($post_id, $post = null, $update = null): void
+    {
+        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) return;
+        self::invalidate_render_cache((int) $post_id);
     }
 
     /**

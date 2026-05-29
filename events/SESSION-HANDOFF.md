@@ -21,9 +21,14 @@ page NOT started.
 - **Sheet patch written:** `events/sheets-zoom-url-patch.gs` — adds a Zoom URL
   column + sends `zoom_url` in the publish payload. The bridge already accepts it;
   no WP change needed. This closes the one entry-point gap for the gated field.
-- **Still open (mine):** the anon-cache invalidation fix so live Sheet edits to
-  zoom/date/tier refresh for logged-out visitors (currently waits for an epoch
-  bump). This is the last gap for a fully live Sheet→render loop.
+- **Anon-cache invalidation — DONE.** `Plugin.php` now busts a post's anon
+  render cache when an event's live-read meta changes (`events_start_date_and_time_`,
+  `time_of_event`, `zoom_url_for_looth_group_virtual_event`), when its display
+  taxonomies change (`tier`/`region`/`event-type`/`language`), or on
+  `save_post_event` (title/body/status). Verified: unrelated meta does NOT bust
+  (no over-invalidation); zoom_url change does. So Sheet edits now surface to
+  logged-out visitors immediately — the live Sheet→render loop is closed.
+- **Still open:** events landing page (parked on listing-owner question).
 
 ---
 
