@@ -88,8 +88,9 @@ function lg_shared_render_site_header(array $ctx): void
     $before_nav    = $ctx['before_nav'] ?? null;
 
     // Logo: consumer may pass its own logo URL (env-specific); fall back to
-    // the live URL which always resolves on both dev and live via the proxy.
-    $logo_url = (string)($ctx['logo_url'] ?? 'https://loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
+    // a host-relative path so each environment serves its own copy and the
+    // default never 404s due to pointing at the wrong host.
+    $logo_url = (string)($ctx['logo_url'] ?? '/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
 
     // ---------- derived display values ----------
     $manage_opts = ($caps['manage_options'] ?? false) === true;
@@ -139,7 +140,7 @@ function lg_shared_render_site_header(array $ctx): void
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
         <?php if ($active_nav !== 'archive'):  ?><li><a href="/archive/">Archive</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'forum'):   ?><li><a href="/forums-poc/">Forum</a></li><?php endif; ?>
+        <?php if ($active_nav !== 'forum'):   ?><li><a href="/forum/">Forum</a></li><?php endif; ?>
         <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
         <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
       </ul>
