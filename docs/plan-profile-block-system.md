@@ -96,17 +96,26 @@ Why: the data exists now; populating at slice-4 (~30 lines in
 `snapshot-location-from-bb.php`) means users land in the new model on cutover
 day with no back-pass. Field-96 confirmation on live queued in BATCH-06 (#62-63).
 
-## FE editing model — crib layoutv2's PATTERN, not its code (2026-05-29)
+## FE editing model — sidebar palette (NOT layoutv2's inline-add) (2026-05-29, Ian)
 
-Independent block library, but **crib the FE-editing *model* from lg-layout-v2**:
-block palette, drag-drop ordering, inline block config, autosave, JSON-block
-round-trip. layoutv2's editor (`assets/lg-fe-editor.js`, `EditorRest.php`, dash)
-is proven — reuse the pattern. **Reimplement in profile-app's standalone
-context** (layoutv2 is WP-coupled — EditorRest/MetaBox/WP-post; profile-app is
-standalone PHP/pg — so the model transfers, the code doesn't). Study the
-`lg-layout-v2` skill's editor gotchas (cascade ordering, bundle/cache lifecycle,
-drag-event quirks) so they're not re-paid. Same "share pattern + tokens, not
-code" philosophy as the independent library.
+**Add-UX = a sidebar block palette + drag-to-canvas + drag-reorder** — the
+page-builder model (Elementor/Webflow), NOT layoutv2's inline-`+` add. Rationale:
+profile/practice is "assemble a page from parts," and a persistent palette
+surfaces the full block menu (discoverability → adoption → Pro upsell), shows
+Pro-locked blocks as standing upsell, and shows per-type limits in place.
+
+- **Crib layoutv2's *mechanics* only** — block render, autosave, JSON round-trip
+  (`assets/lg-fe-editor.js`, `EditorRest.php` as reference). **Own the add-UX**
+  (sidebar palette ≠ layoutv2 inline-add). Reimplement standalone (layoutv2 is
+  WP-coupled; profile-app is standalone PHP/pg). Study the `lg-layout-v2` skill's
+  editor gotchas (cascade order, bundle/cache lifecycle, drag-event quirks).
+- **Block settings** (once placed): lean = the sidebar swaps to a settings panel
+  on block-select (dual-mode sidebar, Gutenberg/Elementor style) vs. inline
+  gear/pencil. TBD — resolve via mockup.
+- **Mobile:** persistent sidebar collapses to a drawer/FAB on phone widths
+  (design for it — mobile imminent).
+- Same "share pattern/mechanics + tokens, not code/add-UX" philosophy as the
+  independent library.
 
 ## Storefront blocks carry user-defined content (2026-05-29)
 
