@@ -64,6 +64,24 @@ read their data from *outside* WP (direct read-only DB query or a mirror).
 **Fast first experience = pages standalone (no WP boot) + shim (no identity
 loopback).** Both required, orthogonal.
 
+## 0c. Post-shim identity contract — what consumers read (2026-05-29, ratified)
+
+After the shim-replacement ships, surfaces render their header with **zero WP
+boot, zero loopback** by splitting identity by volatility:
+- **`looth_id` JWT** carries: `sub`(uuid), `wp_user_id`, **`display_name`,
+  `avatar_url`, `slug`** (stable; minted by profile-app, re-minted at login;
+  self-purged on profile edit).
+- **`lg_tier` cookie** carries coarse **tier** (volatile → never in the token;
+  owned by `lg-viewer-tier.php`, set at login + refreshed on WP requests, TTL =
+  WP session, coarse first-paint HINT that may lag a mid-session role change).
+- **`/whoami`** reconciles **capabilities** + authoritative tier **only on
+  sensitive gates** (rare on read surfaces; 30s cache; §3a: cookie=hint,
+  /whoami=truth where it matters).
+
+**Consumers (archive-poc, bb-mirror, shared-header) render from JWT + `lg_tier`
+on the hot path; loop back only for sensitive gates.** This is what kills the
+per-render WP-bootstrap tax. (Design: `design-shim-replacement.md` §C.)
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
