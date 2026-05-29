@@ -130,6 +130,17 @@ applies — member is just the out-of-box default for the required header.)
 
 **One composer tool, two entity views, member-default pmp, opt-up to public.**
 
+## "View as" toggle — owner previews public vs member (2026-05-29, Ian)
+
+The profile owner gets a live **View as: Public / Member / Me** toggle on their
+own profile/practice — a SHIPPED control, not just the mockup's review device.
+Flip it to see exactly what each audience sees: Public → the members-gate +
+only opted-public blocks; Member → the member-visible blocks; Me → the full
+owner view with visibility chips + edit affordances. This is what makes
+block-level pmp + the member baseline tangible — set a block's visibility, flip
+the toggle, watch the effect. (iter-2's viewer-switch becomes a real product
+feature.) Applies to both `/u/` and `/p/`.
+
 ## Avatar = single source of profile-image truth (2026-05-29, Ian)
 
 The profile spine owns the avatar for the WHOLE platform — every surface (shared
