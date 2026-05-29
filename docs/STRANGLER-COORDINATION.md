@@ -27,8 +27,11 @@ here (see `deploy/MANIFEST.md`).
    place (`wp-content/`, `/srv/`, `/etc/`) — that caused the 10:55 shim clobber.
    Source of truth = the repo subtree; `deploy/deploy.sh` places it.
 2. **Commit at the end of every change set, then push.** A change isn't done
-   until it's committed:
-   `git -C /home/ubuntu/projects add -A && git commit -m "…" && git push`
+   until it's committed. **Stage by pathspec, NOT `git add -A`** — the working
+   tree is shared across lanes; a blanket `add -A` sweeps a neighbor's
+   uncommitted files into your commit (this happened: bb-mirror's forum work
+   landed in another chat's `d657ce8`). Stage only your lane's paths:
+   `git -C /home/ubuntu/projects add <your/paths> && git commit -m "…" && git push`
 3. Plugins / mu-plugins / server config: edit the repo copy (under the plugin/
    app dir or `platform/`), then deploy — don't hand-edit the deployed copy.
 
