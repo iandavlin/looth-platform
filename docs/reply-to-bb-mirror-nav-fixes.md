@@ -29,14 +29,24 @@ On `/forum/` the header's Forum item isn't lit. Per §0a the consumer passes
 call (in `web/_chrome.php`). (lg-shell is aligning the nav-key to `'forum'` so it
 matches.)
 
-## 3. 🟡 Avatars break via gravatar's gated `d=` fallback
-Member avatars use
-`gravatar.com/avatar/HASH?d=<dev URL>/…-bpfull.jpg`. The `d=` fallback points at a
-**dev-gated** URL gravatar can't reach, so users without a gravatar render broken.
-Fix: serve a **local default avatar** (a `/srv/lg-shared/` or bb-mirror static
-asset) instead of round-tripping through gravatar's `d=` to a gated URL — or at
-minimum a non-gated default. (I seeded one bp-fallback file on dev for testing,
-but the pattern itself is the bug.)
+## 3. 🟡 Avatars — switch to the single-source spine avatar (NEW direction, Ian)
+Member avatars currently use `gravatar.com/avatar/HASH?d=<dev URL>/…-bpfull.jpg`
+— the `d=` fallback points at a dev-gated URL gravatar can't reach, so users
+without a gravatar render broken. **Don't just patch with a local default** — Ian
+locked a platform-wide contract: **avatar is single-source from the profile spine,
+identical on every surface, edited in one place.** For bb-mirror:
+- Resolve author avatars via the **batch users lookup**
+  (`GET /profile-api/v0/users?uuids=`) — which already returns `avatar_url` per
+  `user_uuid` — NOT Gravatar, NOT BuddyBoss.
+- Render the **image** in threads/feed (currently `bb_mirror_avatar()` always
+  draws an initials circle); fall back to the **initials circle when `avatar_url`
+  is empty**. (Keep the nice initials palette as the empty-state.)
+- Your `person.avatar_url` sync column should carry the spine's canonical
+  versioned URL; an avatar edit fires the identity-purge so you re-pull.
+- Full contract: `STRANGLER-COORDINATION.md` → "Avatar / author-identity —
+  SINGLE SOURCE." (Pre-cut depends on profile-app shipping the avatar store +
+  versioned URL; until then the Gravatar path can stay, just don't entrench it.)
+(I seeded one bp-fallback file + a placeholder on dev for the screenshot — throwaway.)
 
 ## On forum post images (mostly fine)
 Most `bb_medias` images serve 200 — only a couple were missing (e.g. `2026/03/

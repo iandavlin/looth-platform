@@ -31,7 +31,8 @@ Quick-scan of active chats. Updated by coordinator. Open this when you need to k
 | cutover | [briefing-cutover-refocus.md](briefing-cutover-refocus.md) | B-now/A-later + storage architecture (probably already delivered) |
 | profile-2.0 | [reply-to-profile-2.0-block-sets.md](reply-to-profile-2.0-block-sets.md) | Block-sets design (`c88ede9`): split block sets profile/practice, separate headers, member-default pmp. **Landed AFTER its 21:31 Phase-0 mockups** — deliver as the lead input for the mockup-iteration turn. APPROVED as-is (Ian). |
 | lg-shell | [reply-to-lg-shell-header-fixes.md](reply-to-lg-shell-header-fixes.md) | 🔴 Forum nav repoint /forums-poc→/forum (closes the 301 loop) + logo default un-404-able + active_nav key='forum'. From /forum CDP audit 2026-05-29. |
-| bb-mirror | [reply-to-bb-mirror-nav-fixes.md](reply-to-bb-mirror-nav-fixes.md) | 🔴 duplicate category slug collisions (acoustic/finish/folk/amps share one slug) + pass active_nav='forum' + local default avatar (gravatar gated-fallback breaks). From /forum CDP audit. |
+| bb-mirror | [reply-to-bb-mirror-nav-fixes.md](reply-to-bb-mirror-nav-fixes.md) | 🔴 duplicate category slug collisions (acoustic/finish/folk/amps share one slug) + pass active_nav='forum' + avatar→single-source (batch lookup + image w/ initials fallback, supersedes the gravatar patch). From /forum CDP audit. |
+| archive-poc · lg-layout-v2 · lg-shell | [reply-to-consumers-avatar-single-source.md](reply-to-consumers-avatar-single-source.md) | Avatar single-source contract (STRANGLER §"Avatar / author-identity"): every surface (header/forum/archive banner/post author-header+footer/directory) reads the SAME spine avatar via /whoami + batch lookup, initials fallback, edited once in profile-2.0. Pre-cut dep: profile-app avatar store+versioned URL. |
 
 ## Outstanding Ian actions
 

@@ -130,6 +130,23 @@ applies — member is just the out-of-box default for the required header.)
 
 **One composer tool, two entity views, member-default pmp, opt-up to public.**
 
+## Avatar = single source of profile-image truth (2026-05-29, Ian)
+
+The profile spine owns the avatar for the WHOLE platform — every surface (shared
+header, forum threads, archive author banner, post author-header/footer bylines,
+directory, profile/practice) renders the SAME image, editable in ONE place.
+Full cross-cutting contract: `STRANGLER-COORDINATION.md` → "Avatar /
+author-identity — SINGLE SOURCE." profile-2.0's share:
+- **Owns** `users.avatar_url` + the image store; profile-app **stores and serves**
+  a canonical, stable, versioned per-`user_uuid` URL (not `wp-content`, not
+  Gravatar). Surfaces read it via `/whoami` (viewer) + the batch users lookup
+  (authors).
+- **Editor:** the profile-2.0 avatar upload is the single edit point → writes
+  spine + bytes, bumps `avatar_version`, fires identity-purge so mirrors re-pull.
+- **Backfill (slice-4):** copy each user's current avatar IMAGE into the store
+  (BB-uploaded files literal; Gravatar-only → one-time fetch or initials).
+- Universal empty-state = the initials circle.
+
 ## FE editing model — sidebar palette (NOT layoutv2's inline-add) (2026-05-29, Ian)
 
 **The profile block system is a SEPARATE system from layoutv2 (Ian, 2026-05-29).**

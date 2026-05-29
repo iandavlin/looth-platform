@@ -290,6 +290,45 @@ author identities) needs this — calling `/whoami` per author is wrong;
 that returns the current viewer's identity, not a third party's. Ships
 alongside `/whoami` in the same profile-app slice.
 
+**Avatar / author-identity — SINGLE SOURCE, every surface (2026-05-29, Ian):**
+
+One avatar per user, identical on every surface, editable in exactly one place.
+
+- **Source of truth = the profile spine** (`users.avatar_url`, profile-app) —
+  NOT WordPress/BuddyBoss, NOT Gravatar. Those are legacy we read ONCE to seed,
+  then decommission; truth can't live in the thing we're turning off. profile-app
+  **stores AND serves** the image file too — a canonical, stable per-user URL
+  keyed by `user_uuid` (mirrors store the URL string once; it never goes stale).
+- **Read paths (already contracted above):** the **viewer's own** avatar →
+  `/whoami`; **any author's** avatar → the batch lookup
+  `GET /profile-api/v0/users?uuids=`. No surface calls Gravatar or reaches into
+  BuddyBoss, and nobody copies the image bytes — surfaces reference the user and
+  resolve the URL.
+- **Every surface reads from those two, with the initials circle as the universal
+  empty-state fallback** (`avatar_url` null):
+  - shared header (current viewer) — **lg-shell**, via `/whoami` ✔ already does
+  - forum threads/feed (authors) — **bb-mirror**, via batch lookup (today:
+    Gravatar `d=`-to-gated-fallback + initials → switch to spine avatar)
+  - archive author banner (authors) — **archive-poc**, via batch lookup
+  - post **author-header** + post **author-footer** bylines — **lg-layout-v2**
+    content, via batch lookup keyed on the post's author `user_uuid`
+  - directory + profile/practice pages — **profile-2.0**, native to the spine
+- **Edit once → propagates everywhere:** user changes their picture in the
+  profile-2.0 editor → profile-app writes the spine + new bytes, bumps an
+  `avatar_version`, and fires the existing identity purge (generalize
+  `looth_tier_changed` → an identity-changed signal) so mirrors re-pull the person
+  record. Versioned URL (`?v=<avatar_version>`) cache-busts the image. No stale
+  snapshots — that's the whole point of resolve-by-reference, not copy.
+- **Backfill (slice-4, ONE pass — the image bytes, not just the pointer):** copy
+  each user's CURRENT avatar into the new store + set `avatar_url`/version.
+  Literal source→target: BB-uploaded avatar files copy directly. Gravatar-only
+  users (no uploaded file) → one-time fetch-and-store the gravatar (severs the
+  external dep, keeps their picture) or initials — lean toward the fetch so nobody
+  loses a picture on cut day.
+- **Owners:** profile-app owns source + store + serve + version + editor +
+  backfill. Each surface lane owns swapping its render to the batch-lookup avatar
+  with the initials fallback.
+
 **Cookie fast-path (optional):**
 - `lg_tier` cookie keeps current archive-poc behavior — a fast hint so the
   first paint doesn't have to wait on `/whoami`.

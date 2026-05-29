@@ -46,8 +46,13 @@ you're about to change. (One migration, not two.)
   then craft / socials / practices spine blocks.
 - **Migration crib (slice-4), into the final spine, ONE pass:** xprofile field
   1/2 (name/business) · field 96 (→ location_address + city/region extract) ·
-  field 266 + ACF `author_*` socials (final mapping, three-tier precedence) →
-  all into the dev-final spine. `brand_*` NOT swept (practice-side, separate).
+  field 266 + ACF `author_*` socials (final mapping, three-tier precedence) ·
+  **avatar IMAGE** (BB-uploaded `uploads/avatars/<id>/` file → profile-app's own
+  avatar store + `users.avatar_url`/version; Gravatar-only users = one-time fetch
+  or initials) → all into the dev-final spine. `brand_*` NOT swept (practice-side,
+  separate). **Avatar is single-source for the whole platform** — store+serve+
+  version+editor, read by every surface via `/whoami` + the batch users lookup;
+  see `STRANGLER-COORDINATION.md` "Avatar / author-identity — SINGLE SOURCE."
 
 ### Phase 2 — COMPOSABLE STOREFRONT.
 - **Block engine:** crib lg-layout-v2's FE-editing *model* (palette, drag-drop,
