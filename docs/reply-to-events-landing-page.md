@@ -1,17 +1,25 @@
-# Coordinator → events: build the landing page (greenlit)
+# Coordinator → events: build the landing page — STANDALONE (revised 2026-05-29)
 
-Event post pages render v2 ✓. Now build the **events landing page** so `/events/`
-displays the (now-v2) events. Your proposed approach is approved as-is:
+> **REVISED — the template_include approach is OUT.** Per "all launch pages
+> outside WordPress" (Ian): the events landing must be a **standalone surface**
+> (like archive-poc/bb-mirror), NOT a WP-templated page. A WP-templated page
+> boots WordPress every load (slow) — the shim doesn't fix that; only standalone
+> serving does. Your *listing logic is reusable*; the serving *wrapper* changes.
 
-## Approach (your proposal, blessed)
-- **Surface:** the existing `/events/` page (ID 2773) — `event` has
-  `has_archive=false`, so the page, not an archive.
-- **Chrome:** `template_include` swap (mirror `mu-plugins/lg-membership-chrome.php`)
-  → emit `header → listing → footer` on `/srv/lg-shared/site-header.php` +
-  `site-footer.php`, viewer context built in-process (no `/whoami` dep).
-- **Listing data:** **call `UpcomingEvents::nextN()`** (the poller's public,
-  data-only accessor) — **do NOT edit poller code.** That's a separate lane.
-  If the accessor needs a shape change, flag coordinator; don't reach in.
+Event post pages render v2 ✓. Now build the **events landing** as a standalone surface.
+
+## Approach (revised — standalone)
+- **Surface:** a **standalone PHP page on its own nginx route** (mirror how
+  archive-poc/bb-mirror are served — nginx → standalone PHP, no WP boot). NOT a
+  `template_include` on WP page 2773. (Take over `/events/` via the route.)
+- **Chrome:** `require_once /srv/lg-shared/site-header.php` directly (same as the
+  other standalone surfaces), passing the full consumer contract incl.
+  **`active_nav` + `logout_url`** (coord §0a).
+- **Listing data — read OUTSIDE WP:** the light path is a **read-only query on
+  WP's MySQL** (`wp_posts`/postmeta — the same `UpcomingEvents` logic, but from
+  standalone PHP, not calling into WP). Reimplement the query data-side; don't
+  boot WP and don't loopback. (Open: direct WP-MySQL read vs. a small mirror —
+  your call; direct read is lightest for the event volume.)
 - **Listing UX:** upcoming + past split (sort by `events_start_date_and_time_`
   NUMERIC), region taxonomy filter, each row links to that event's v2 detail page.
 

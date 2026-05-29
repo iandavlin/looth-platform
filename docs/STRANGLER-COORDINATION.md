@@ -46,6 +46,24 @@ bb-mirror pass them; events-landing + membership-chrome were missing both (fixed
 docblock (lg-shell owns that file). The header is "dumb" — it renders what it's
 handed; these are the consumer's responsibility.
 
+## 0b. Launch invariant — pages served STANDALONE, not WP-templated (2026-05-29, Ian)
+
+Every user-facing launch page is served **standalone** (nginx → standalone PHP →
+`require site-header.php`), like archive-poc/bb-mirror/profile-app — **NOT** as a
+WP-templated page (`template_include` on a WP page). A WP-templated page **boots
+WordPress on every load** (slow, ~2.6s floor); **the shim does NOT fix that** (it
+only kills the identity *loopback*, not WP-boot-for-the-page). Standalone pages
+read their data from *outside* WP (direct read-only DB query or a mirror).
+
+- ✅ Already standalone: front page (archive-poc), forum (bb-mirror),
+  profiles/directory (profile-app).
+- 🔧 Stragglers to convert: **events-landing** (light — read `wp_posts`) +
+  **membership pages** (heavy — 388KB shortcode UX; money-engine already
+  standalone in lg-stripe-billing).
+
+**Fast first experience = pages standalone (no WP boot) + shim (no identity
+loopback).** Both required, orthogonal.
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
