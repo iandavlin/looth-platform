@@ -1,258 +1,178 @@
-# profile-app — Session Handoff (2026-05-28, slice 3.5 as-built)
+# profile-app — Session Handoff (2026-05-29, retirement)
 
-> Prior handoff: `handoffs/2026-05-27-slice-three-plus-coordination.md`.
-> This handoff covers slice 3.5: `/whoami`, batch `/users`, internal purge
-> endpoint, WP shim, self-purge wiring, and the drop of `users.tier`.
-> Step 1 of the cutover sequence is COMPLETE.
+> **This chat (a847d1aa) is retiring.** It owned slice 0 through 3.5
+> plus the cross-lane coordination that landed during cutover-prep.
+> All cutover-critical backfills are now closed out. Profile-2.0 (the
+> block system) is fully specced and queued for a fresh chat starting
+> from `docs/marching-orders-profile-2.0.md`.
+>
+> Prior handoff: `handoffs/2026-05-29-slice-three-five-and-backfills.md`
+> (the full as-built record of slice 3.5 + the shim regression fix +
+> the cross-lane coordination thread).
 
-## What surprised me
+## Current state
 
-1. **FPM curl loopback wants HTTP/1.1 + 5s timeout.** Same code from CLI as
-   `profile-app` user completes in ~820ms via HTTP/2/ALPN. From inside FPM
-   serving a request, the same call timed out at 2s and 5s repeatedly until
-   I forced `CURLOPT_HTTP_VERSION=CURL_HTTP_VERSION_1_1` and `CURLOPT_TIMEOUT=5`.
-   ALPN handshake on a fresh FPM-worker SSL session is the apparent culprit.
-   Worth remembering for every future profile-app-to-loopback call.
-2. **Self-purge on `/me/name` was the only purge required day one.** Of all
-   `/me/*` handlers, only `me-name.php` mutates fields surfaced in `/whoami`
-   (display_name). Avatar URL, slug, business_name aren't mutated through
-   live endpoints today (slug from migration, avatar via backfill script,
-   business_name is in `/me/name` but not in `/whoami` payload). One purge
-   call covers the contract.
-3. **`/etc/lg-internal-secret` is `root:www-data 0640`.** profile-app FPM
-   runs as `profile-app` user, not `www-data`. `setfacl -m u:profile-app:r`
-   was the clean unblocker — predicted in the coordinator's preemptive
-   relay and confirmed needed.
-4. **`users.tier` had three live readers** (Profile.php `loadFull` line 232
-   + `renderForViewer` line 299). Both were emitting null implicitly via
-   `$user['tier']` which became a PHP warning the moment the column dropped.
-   Caught immediately because `/u/iandavlin` writes the warning into the
-   error log; fixed by removing the keys from the return arrays. Lesson:
-   `grep -rn "user\['tier'\]"` before dropping any column.
-5. **Capabilities merge: the poller returns a richer map than §2's named
-   trio.** It emits `manage_options`, `edit_archive_poc`, `edit_posts`,
-   `moderate_forums`. I pass-through `edit_posts` and `moderate_forums`
-   on top of the §2-named caps + profile-app's own `edit_own_profile`.
-   Flagged in coordinator report for review; trivially clip if §2 wants
-   strict-narrow.
+**Repo:** profile-app source now lives in the `looth-platform` git repo
+under `projects/profile-app/`. Edit in repo, commit at end of each
+change set, push. Don't edit deployed copies in place.
 
-## What this slice shipped
+**Status:** dev is in cutover-ready shape. All slice-4 prep is dev-
+rehearsed. Next live work is the actual cutover (run the migrations on
+prod) — outside this chat's scope; coordinator owns the timing.
 
-### Endpoints
+## What just shipped (closing this chat out)
 
-- **`GET /profile-api/v0/whoami`** — anon + authed shape per
-  STRANGLER-COORDINATION.md §2. ETag/304 honored. 30s Redis cache.
-  Cache key: `pa:whoami:user:{wp_user_id}`. Cache miss → fetch tier
-  from poller, build shape, set.
-- **`GET /profile-api/v0/users?uuids=<csv>`** — batch lookup. Cap 100.
-  Returns `[{uuid, slug, display_name, avatar_url}]`. Filters
-  `archived_at IS NULL`.
-- **`POST /profile-api/v0/internal/purge-whoami`** — localhost-only
-  (nginx `allow 127.0.0.1; deny all;` + cookie-gate skipped). Auth is
-  `X-LG-Internal-Auth` header verified via `hash_equals()` against
-  `/etc/lg-internal-secret`. Returns 204 on success, 403 on bad auth.
-- **`GET /wp-json/looth/v1/whoami`** — WP shim mu-plugin. Forwards
-  caller cookies verbatim; passes through ETag + Cache-Control from
-  upstream; returns identical body.
+### Schema (`sql/2026-05-29-block-system-precursors.sql`)
+Applied to dev. Two precursor adds that ride slice-4 cutover:
+- `users.location_address text` — exact-precision address tier from
+  the block-system spec. Populated at cutover from BB xprofile field 96
+  so users don't need a back-pass through the editor.
+- `profile_socials.kind_ck` extended with `linktree`. Locked
+  2026-05-29: `SOCIAL_KINDS` gains exactly one new entry.
 
-### Sources
+### Code
+- `src/Profile.php`: `SOCIAL_KINDS` includes `linktree`.
+- `web/edit.js`: same enum + `linktree:'🌳'` in the glyph map.
+- `bin/snapshot-location-from-bb.php`: writes `location_address` from
+  the same BB field-96 source as `location_text`. Idempotent check
+  expanded.
+- `bin/migrate-socials.php` (NEW): xprofile field 266 (primary) + ACF
+  `author_*` (fallback). Three-tier precedence
+  (`profile_socials` existing > xprofile > ACF > skip). Locked mapping:
+  facebook/instagram/youtube/website → same; twitter → x; reddit →
+  web (folded, URL preserved); linktree → linktree. **Writes
+  kind+url only** (block-level pmp wins per the converged design;
+  no per-row visibility column).
 
-- `src/Cache.php` — thin Redis wrapper. Unix socket
-  `/run/redis/redis-server.sock` preferred, 127.0.0.1:6379 fallback.
-  Methods: `getWhoami`, `setWhoami`, `purgeWhoami`. Redis-down → silent
-  no-op (a broken cache never breaks the API).
-- `src/Whoami.php` — payload assembler. `resolve()` for current JWT
-  bearer; `buildForWpUserId()` for the WP shim. Calls poller's
-  `https://127.0.0.1/wp-json/looth-internal/v1/user-context/{wp_user_id}`
-  with `X-LG-Internal-Auth` header. Stub `tier: "public" +
-  tier_unavailable: true` if poller unreachable.
-- `src/Profile.php` — dropped tier reads from `loadFull()` +
-  `renderForViewer()`.
-- `config.php` — autoloads Cache + Whoami.
+### Dev rehearsal (committed on dev)
+`migrate-socials.php --commit` on dev:
+- 1812 users walked, 0 no_bridge
+- 165 xprofile inserts, 45 ACF inserts
+- 2 kept_existing (Ian's editor edits)
+- 1689 skipped_empty
+- Final dev profile_socials distribution: 107 IG, 56 FB, 28 YT, 15 web
+  (includes reddit folds), 4 linktree, 2 x, 1 email
+- Precedence verified per-user (Ian, wp=46, wp=269)
+- walk-onboarding green: `/var/www/dev/mockups/walks/20260529T194240Z`
 
-### Schema
+Pushed in commit `23fe81b` to origin/main.
 
-`sql/2026-05-28-drop-tier.sql` (applied to dev):
-```sql
-ALTER TABLE users DROP COLUMN IF EXISTS tier;
-```
-Zero code references at drop time confirmed via grep.
+## What's still owed for live cutover (slice 4)
 
-### Wiring
+All scripts are dev-proven; slice 4 runs them on prod:
 
-- `api/v0/me-name.php` — calls `Cache::purgeWhoami($wpId)` after the
-  wp_users mirror runs. Tested: PATCH display_name → immediate `/whoami`
-  reflects new value.
-- `/etc/nginx/snippets/strangler-profile-app.conf` — three new rewrites
-  + a localhost-only fastcgi block for `internal-purge-whoami.php` +
-  added `whoami` + `users` to the public/auth-aware regex.
-- `/var/www/dev/wp-content/mu-plugins/profile-whoami-shim.php` —
-  deployed copy of `deploy/profile-whoami-shim.mu-plugin.php`.
-- `/etc/lg-internal-secret` ACL: `setfacl -m u:profile-app:r`.
+- [ ] **Triage review** with Ian (`/tmp/triage.tsv` from slice 2.75)
+- [ ] **Test-data residue wipe** on real prod accounts before re-running
+      the migration (Ian's synthetic-test About, Plek/Local Vintage Co.
+      credentials — see slice 2.75 audit notes)
+- [ ] **Hand-jigger the 6 unresolved locations** (342, 880, 889, 1076,
+      1163, 1347) — BB-text without geocode_96
+- [ ] **GeoLite2 + nginx rate-limit** deploy (cosmetic for now)
+- [ ] **Re-run `bin/backfill-avatars.php` on prod** after cutover
+      (dev has no BB avatar files; URLs resolve on live)
+- [ ] **Apply schema migrations on prod:**
+  - `sql/2026-05-27-slice-275.sql` (location_visibility column)
+  - `sql/2026-05-27-slice-275-drop-vestigial.sql` (drops + business_name)
+  - `sql/2026-05-28-drop-tier.sql` (drop users.tier)
+  - `sql/2026-05-28-slice-3-practices.sql` (practices + practice_members)
+  - `sql/2026-05-29-block-system-precursors.sql` (location_address + linktree)
+- [ ] **Run on prod (in order):**
+  - `bin/reconcile-bridge.php` (115 ghost users + any new ones since dev)
+  - `bin/snapshot-location-from-bb.php` (now populates location_address too)
+  - `bin/backfill-avatars.php`
+  - `bin/migrate-from-xprofile.php --commit` (slim version: name +
+    business_name + slug from user_nicename)
+  - `bin/migrate-socials.php --commit` (NEW)
+- [ ] **BB hijack on prod** — mirror the dev nginx redirects
+  (`/members/<slug>/` → `/u/<slug>`)
+- [ ] **Deploy `profile-whoami-shim` mu-plugin** on prod with WP-session
+      bridge intact
+- [ ] **Deploy `internal-mint-token` endpoint** if shim-replacement
+      design ratifies in time, else defer (shim stays interim)
+- [ ] **Re-run `bin/walk-onboarding.sh` post-cutover** to verify
 
-### Walk-onboarding
+## What's queued (NOT this chat's job)
 
-`bin/walk-onboarding.sh` gained 5 new smoke steps after 9b
-(business_name patch):
-- **9c.** /whoami shape sanity (authed; required keys present)
-- **9c.** self-purge: PATCH name → next /whoami reflects new value
-- **9c.** WP shim returns identical shape
-- **9c.** /users?uuids=<self> count == 1
-- **9c.** internal purge: 403 without header, 204 with valid secret
+### Profile 2.0 — block system
+Owner: fresh chat. Starting point:
+`docs/marching-orders-profile-2.0.md` + this handoff.
 
-Latest green run: `/var/www/dev/mockups/walks/20260528T165628Z/`.
+Already specced and locked:
+- `docs/plan-profile-block-system.md` (the model: relational spine +
+  composable storefront blocks, block-level pmp, typed practices,
+  tier-gating, JSON+LLM authoring layer)
+- `docs/spec-block-identity-location.md` (the buildable pilot:
+  identity + location blocks with pmp defaults locked)
 
-### Verified flows
+Schema adds for the post-cutover build:
+- `users.at_a_glance` (person summary line on the header)
+- `users.location_exact_visibility` (the address-tier visibility column)
+- `practices.type` (repair / build / touring_tech / retail / …)
 
-```
-$ curl -sk -H "Cookie: loothdev_auth=…; looth_id=…" .../profile-api/v0/whoami
-{
-  "authenticated": true,
-  "user_uuid": "f20ad778-1e5e-5508-853b-ad928c499f2f",
-  "wp_user_id": 1,
-  "slug": "iandavlin",
-  "display_name": "Ian B Davlin",
-  "avatar_url": "...",
-  "tier": "public",
-  "provenance": "lapsed",
-  "capabilities": {
-    "edit_own_profile": true,
-    "manage_options": true,
-    "edit_archive_poc": false,
-    "edit_posts": true,
-    "moderate_forums": true
-  },
-  "cache": { "etag": "W/\"...\"", "max_age": 30 }
-}
-```
+The 4th post-cutover schema add (`users.location_address`) is **already
+done** in this chat's 2026-05-29 migration since it rides cutover.
 
-`tier_unavailable: true` appears only when poller call fails.
+### Shim replacement design — `docs/design-shim-replacement.md`
+Owner: profile-app (whichever chat picks it up — could be the
+profile-2.0 chat or a sibling). Awaiting ratification by coordinator
++ lg-shell + archive-poc + bb-mirror. Pre-cutover but parallel-track
+with profile-2.0; not on the cutover critical path. Open questions
+in §10 need a review-pass before build starts.
 
-## Open items for coordinator review
+## Surprises worth carrying forward
 
-1. **Capability map pass-through scope.** Currently merge poller-supplied
-   `edit_posts` + `moderate_forums` on top of §2's named caps. If §2
-   should be strict-narrow, clip those — one-line change in
-   `Whoami::capabilitiesFor()`.
-2. **Stale-cache fallback semantics.** If the poller goes down mid-day,
-   `/whoami` will start emitting `tier_unavailable: true` on cache miss
-   for users whose 30s TTL has expired. Want last-known-good (stale)
-   instead? Tradeoff: cleaner UX (no flicker), but a permanently-broken
-   poller would mask itself. Current: fail visibly.
-3. **Anon shape minimalism.** Returns only `{authenticated: false,
-   tier: "public"}` — no `user_uuid`, no slug. If archive-poc wants any
-   anon field (e.g., a session ID for tracking), happy to add.
+(Beyond the slice 3.5 surprises in the prior handoff.)
 
-## Cross-lane queue (locked 2026-05-29)
+1. **xprofile field 266 stores `youTube` (camelCase).** BATCH-06 confirmed
+   the platform set includes `youTube` not `youtube`. The mapping table
+   in `bin/migrate-socials.php` has both variants → `youtube`. Trivial
+   gotcha; would have been a silent data loss.
 
-Multiple coordination docs landed this session; ordering settled:
+2. **Same BB source feeds two columns** (`location_text` + `location_address`).
+   Currently they're identical (both come from field 96). That's deliberate:
+   `location_text` is the legacy display string, `location_address` is the
+   new block-system exact tier. The block-system build can diverge them
+   (e.g., parse approximate vs exact) without a back-pass against this
+   migration.
 
-**Cutover-critical (priority queue):**
-1. **Shim-replacement design** (`docs/design-shim-replacement.md`) — written,
-   awaiting ratification by coordinator + lg-shell + archive-poc + bb-mirror.
-   Do NOT start the build until §10 open-questions get review-pass.
-2. **Slice-4 migration** — runs the slim `migrate-from-xprofile.php` on prod
-   plus the new carryover from the block-system spec: add
-   `users.location_address` column + backfill from xprofile field 96 alongside
-   the location_city/region snapshot. BATCH-06 #62-63 will confirm the live
-   field ID.
-3. **Social backfill** — waiting on BATCH-06 paste-back from live (xprofile #56-59
-   + ACF author socials #60-61 + address field #62-63). Will land as a sibling
-   migration to `migrate-from-xprofile.php`. **Locked: write kind+url only,
-   skip per-row visibility** (block-level pmp wins; per-row vis would be ignored
-   at render). Precedence: editor edit > xprofile > ACF author > nothing.
-4. **Linktree precursor** — add `linktree` to `Profile::SOCIAL_KINDS` + schema
-   check constraint. One-line precursor migration so the social backfill has
-   a valid target. Trivial; can ship anytime.
+3. **Precedence in migrate-socials is per-user × per-kind, not all-or-nothing.**
+   wp=269 had xprofile IG + YT (primary) AND ACF linktree (no xprofile
+   linktree). All three insert. The precedence rule only blocks within
+   a single (user, kind) tuple; cross-kind it's additive. Important for
+   future migrations following the same pattern.
 
-**Post-cutover (queued, NOT building):**
-5. **Profile 2.0 block system** (`docs/plan-profile-block-system.md` +
-   `docs/spec-block-identity-location.md`). Two pilot blocks (`identity`,
-   `location`) establish the JSON↔relational↔pmp↔render↔LLM-draft pattern.
-   Schema adds: `users.at_a_glance`, `users.location_exact_visibility`,
-   `practices.type`. (`users.location_address` rides slice-4 per #2 above.)
-   pmp defaults LOCKED: identity=public; location-approx=member; location-exact=private;
-   contact=storefront/practice-only, not personal header.
-   - **Note durably:** location precision reverses slice 2.75 INTENTIONALLY
-     (visibility × specificity beats either alone for safety-sensitive addresses;
-     coarse coords drive the geo facet, exact resolves only for permitted
-     viewers). Don't re-litigate.
-
-**Recently fixed:**
-- Shim regression (10:55 UTC clobber) — root-caused to a sibling archive-poc
-  session that manually reverted my shim during perf-debug and didn't restore.
-  Both deployed files restored from source. Cross-lane discipline note flagged
-  to archive-poc. Both restores re-verified end-to-end.
-
-## What's still owed for live cutover
-
-Coordination sequence (post-step-1):
-
-- [x] Step 1: `/whoami` ships on dev ← DONE
-- [ ] Step 2: archive-poc switches from cookie-only to `/whoami`-backed
-- [ ] Step 3: shared header partial across surfaces
-- [ ] Step 4: profile-app cutover (run migration on prod, BB hijack, etc)
-- [ ] Step 5: BB-mirror first read
-- [ ] Step 6+: post-cutover BB cleanup, poller role-shape changes
-
-Outstanding from 2.75 (still valid):
-
-- [ ] Triage review with Ian (`/tmp/triage.tsv`)
-- [ ] Test-data residue wipe on real prod accounts before re-running
-      the migration on prod
-- [ ] Hand-jigger the 6 unresolved locations (342, 880, 889, 1076,
-      1163, 1347)
-- [ ] GeoLite2 + nginx rate-limit deploy
-- [ ] Re-run `backfill-avatars.php` on prod after cutover
-
-## Next-session opening move
-
-1. Read this file.
-2. If coordinator has acknowledged step 1 complete and pinged archive-poc
-   to start step 2 — wait for archive-poc shape-clean signal, then move
-   to step 3 (shared header partial).
-3. If unclear: check `/home/ubuntu/projects/docs/` for any new briefing
-   files or marking-order docs.
-4. Slice 4 (live cutover) is gated on steps 2 + 3 — do NOT start until
-   archive-poc has switched AND the shared header is in place.
+4. **profile_socials has no per-row vis column** — block-level pmp won
+   the design battle. The social-consolidation plan was updated to
+   match before the migration ran. If a future block-system schema add
+   tries to introduce one, that's a regression of a settled decision.
 
 ## Pointers
 
-- Code: `/home/ubuntu/projects/profile-app/`
-- Coordination doc: `/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md`
-- Profile-app briefing: `/home/ubuntu/projects/docs/briefing-profile-app.md`
-- Shared-postgres FYI: `/home/ubuntu/projects/docs/briefing-profile-app-fyi-shared-pg.md`
-- Rotated handoffs: `handoffs/2026-05-{25,26,27}-*.md`
+- Repo: `/home/ubuntu/projects/looth-platform/` (this directory is
+  the repo root). profile-app source at `profile-app/`.
+- Coordination docs: `docs/STRANGLER-COORDINATION.md`,
+  `docs/plan-profile-block-system.md`, `docs/spec-block-identity-location.md`,
+  `docs/marching-orders-profile-2.0.md`, `docs/plan-social-consolidation.md`,
+  `docs/design-shim-replacement.md`, `docs/reply-to-profile-app-batch06-results.md`
+- Rotated handoffs: `handoffs/2026-05-25` through `2026-05-29` series
 - CUTOVER-CHECKLIST: `CUTOVER-CHECKLIST.md`
-- Walk transcript (slice 3.5 green): `/var/www/dev/mockups/walks/20260528T165628Z/`
+- Walk transcripts:
+  - Slice 3.5: `/var/www/dev/mockups/walks/20260528T203343Z`
+  - This session (backfills landed): `/var/www/dev/mockups/walks/20260529T194240Z`
 - nginx snippet: `/etc/nginx/snippets/strangler-profile-app.conf`
-  (backup: `.bak-pre-whoami` from this session)
 
-## WP-session auth bridge — shipped 2026-05-28
+## Lineage
 
-**profile-app → coordinator:** WP-session auth bridge live
+This chat session ID: **a847d1aa-8252-4c06-8d90-3e470d3cc265**
+- Slice 0 through 3.5 (identity backbone, practices, /whoami, batch users, WP shim)
+- Cross-lane coordination: STRANGLER, social-consolidation, block-system
+- Cutover-prep backfills (this final session)
 
-**profile-app → archive-poc:** looth_id bridge live — WP-logged-in users now
-get `authenticated: true` from `/whoami`. Re-test your gating flow.
+**Next**: profile-2.0 build, fresh chat. Coordinator will record lineage
+once spawned.
 
-### What was built
+## Next-session opening move (if this chat ever resumes)
 
-Two-part change to close the gap between WP session and profile-app identity:
-
-**`profile-whoami-shim.php` (mu-plugin):**
-- `get_current_user_id()` first (works when WP has a valid nonce session)
-- Falls back to `wp_validate_auth_cookie('', 'logged_in')` — reads session
-  cookie directly, safe for GET with no side-effects, no nonce required
-- When either returns a non-zero user ID: adds `X-LG-WP-User-Id` +
-  `X-LG-Internal-Auth` (shared secret from `/etc/lg-internal-secret`)
-- Cookie forwarding retained for `looth_id` JWT path
-
-**`api/v0/whoami.php`:**
-- Checks for `X-LG-WP-User-Id` + valid `X-LG-Internal-Auth` before JWT path
-- If both present and secret validates: calls `Whoami::buildForWpUserId()`
-- Falls through to `Whoami::resolve()` (JWT) otherwise
-
-**Verified:** `/wp-json/looth/v1/whoami` with WP admin cookie returns
-`authenticated: true` with full profile-app payload including tier + capabilities.
-
-**Files changed:** `mu-plugins/profile-whoami-shim.php`, `api/v0/whoami.php`
+Don't. This chat is retired. Open a fresh session for any further
+profile-app work — start from `docs/marching-orders-profile-2.0.md`
+or the cutover scripts depending on what's in queue.
