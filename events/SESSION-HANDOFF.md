@@ -28,7 +28,27 @@ page NOT started.
   `save_post_event` (title/body/status). Verified: unrelated meta does NOT bust
   (no over-invalidation); zoom_url change does. So Sheet edits now surface to
   logged-out visitors immediately — the live Sheet→render loop is closed.
-- **Still open:** events landing page (parked on listing-owner question).
+- **Events landing page — DONE.** `platform/mu-plugins/lg-events-landing.php`
+  (+ `lg-events-landing/template.php`) swaps page 2773 (**slug `calendar`**,
+  /calendar/ — not /events/) to a PUBLIC listing on the `/srv/lg-shared/` shell:
+  upcoming/past split, region-taxonomy filter (only regions with published
+  events), cards → each event's v2 detail page. Verified anonymous in-browser:
+  shared `.lg-chrome` header, 3 upcoming + 3 past, Europe filter → 2, **zero
+  zoom.us leak**. Self-contained own WP_Query — no poller code touched.
+  Screenshot: dev.loothgroup.com/mockups/events-landing.png. Committed 6e13861.
+  - **`nextN()` flag (per coordinator):** I did NOT use `UpcomingEvents::nextN()`
+    — it caps at 12 and returns a single upcoming-OR-past bucket, so it can't
+    express the upcoming/past split + region filter the spec wants. Used an
+    own-lane query mirroring the proven `[looth_events]` shortcode shape
+    (`meta_type CHAR` to dodge the DATE-cast crash). If you'd rather centralize,
+    extract a shared accessor later — flagging, not reaching into poller.
+  - **Note:** a dormant `lg-events-shortcode.php` (`[looth_events]`) already
+    exists at repo root — same purpose, never deployed. Left it alone.
+
+**Lane status: COMPLETE** — event post pages on v2 (only Zoom gated) + events
+landing on the shared shell. Remaining items are other lanes' (cutover ships
+`MANAGED_CPTS += event`; Sheet lane adds the Zoom URL column per
+`events/sheets-zoom-url-patch.gs`; TZ; `_ame_cpe_post_policy` confirm).
 
 ---
 
