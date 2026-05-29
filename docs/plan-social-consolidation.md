@@ -22,13 +22,14 @@ fresh block-level pmp defaults, not legacy per-field visibility.
 |---|---|
 | facebook / instagram / youtube(youTube) / website | facebook / instagram / youtube / web |
 | **twitter** | **x** (rename) |
-| **reddit** (xprofile) | **`reddit`** — NEW kind |
+| **reddit** (xprofile) | **`web`** — folded (preserve the URL, not its own kind) |
 | **linktree** (ACF) | **`linktree`** — NEW kind |
 
-**`SOCIAL_KINDS` gains `reddit` + `linktree`** (Ian: add linktree though low-use;
-coordinator: add reddit too — it's a live field [don't drop real data] + active
-in the gear scene). profile-app adds both to the enum (edit.js `SOCIAL_KINDS` +
-the block validator). Mapping is now final — both backfills can be written.
+**DECIDED 2026-05-29 (Ian, confirmed twice): `SOCIAL_KINDS` gains exactly ONE
+entry — `linktree`.** Reddit folds into `web` (preserve the real URL, don't drop;
+editor can recategorize). profile-app adds only `linktree` to the enum (edit.js
+`SOCIAL_KINDS` + the block validator). Mapping is now final — both backfills can
+be written.
 
 ### Location (slice-4, not socials but recon'd same pass)
 Field **96 "Your Location"** (type `location`), **726 users**, **free-text full

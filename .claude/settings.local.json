@@ -394,7 +394,13 @@
       "Bash(git -C /home/ubuntu/projects add -A)",
       "Bash(git -C /home/ubuntu/projects diff --cached --name-only)",
       "Bash(xargs du -ch)",
-      "Bash(grep -iE \"\\\\.pem$|\\\\.key$|_deploy|id_rsa|id_ed25519|-ssh\\\\.zip|/\\\\.ssh/|\\\\.env$\")"
+      "Bash(grep -iE \"\\\\.pem$|\\\\.key$|_deploy|id_rsa|id_ed25519|-ssh\\\\.zip|/\\\\.ssh/|\\\\.env$\")",
+      "Bash(curl -s \"https://dev.loothgroup.com/membership-guide/\" -b \"loothdev_auth=qShCjBdCVXLie7wcQddsprkYj4SuaXu7UJeYAHHG\")",
+      "Bash([ -d \"$d/.git\" ])",
+      "Bash(grep -vE \"^looth-vendor$|^index.php$\")",
+      "Bash(systemctl list-unit-files *)",
+      "Bash(chmod +x /home/ubuntu/projects/deploy/deploy.sh)",
+      "Bash(grep -rnE '\\(sk_live_|sk_test_|rk_live_|whsec_\\)[A-Za-z0-9]{20,}' /home/ubuntu/projects/lg-patreon-stripe-poller)"
     ],
     "additionalDirectories": [
       "/tmp",

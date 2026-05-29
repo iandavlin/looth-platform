@@ -16,6 +16,22 @@ Consumers today (or imminently):
 
 ---
 
+## 0. Repo + commit discipline (2026-05-29) — ALL CHATS
+
+looth-platform is now a **git repo**: working tree `/home/ubuntu/projects`,
+remote `github:iandavlin/looth-platform`. Everything that deploys to live lives
+here (see `deploy/MANIFEST.md`).
+
+**Standing protocol — every chat, every change set:**
+1. **Edit in the repo, deploy to target.** NEVER edit live-serving copies in
+   place (`wp-content/`, `/srv/`, `/etc/`) — that caused the 10:55 shim clobber.
+   Source of truth = the repo subtree; `deploy/deploy.sh` places it.
+2. **Commit at the end of every change set, then push.** A change isn't done
+   until it's committed:
+   `git -C /home/ubuntu/projects add -A && git commit -m "…" && git push`
+3. Plugins / mu-plugins / server config: edit the repo copy (under the plugin/
+   app dir or `platform/`), then deploy — don't hand-edit the deployed copy.
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
