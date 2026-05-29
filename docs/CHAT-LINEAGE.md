@@ -104,6 +104,25 @@ shortcode-markup boundary entirely.
 - **Opener (in order):** `briefing-membership-pages.md` →
   `notes-for-rotated-chat-membership-pages.md` → `SESSION-HANDOFF.md`.
 
+## 2026-05-29 — profile-app: chat a847d1aa RETIRED (clean), profile-2.0 → fresh chat
+
+- **Previous:** `a847d1aa-8252-4c06-8d90-3e470d3cc265` — carried slice 0→3.5,
+  `/whoami` + WP-session auth bridge, cross-lane coordination, and the
+  cutover-prep backfills.
+- **New:** *(profile-2.0 — Ian to spawn fresh on `marching-orders-profile-2.0.md`; ID pending)*
+- **Reason:** profile-2.0 is a multi-week arc; clean break from the dense
+  slice-history chat. Retired-not-resumed.
+- **Carried over (committed):** backfills `23fe81b` — `bin/migrate-socials.php`
+  (xprofile-266 primary + ACF author_* fallback, three-tier precedence, mapping
+  twitter→x / reddit→web / linktree-new-kind, kind+url only), `location_address`
+  fold into `snapshot-location-from-bb.php`, schema `2026-05-29-block-system-precursors.sql`
+  (location_address + linktree CK). Retirement handoff `76052eb` at
+  `profile-app/SESSION-HANDOFF.md` — slice-4 prod checklist + 4 carry-forward
+  surprises (xprofile camelCase `youTube`; dual-column same-source location;
+  per-kind not all-or-nothing precedence; no-per-row-vis is a settled invariant).
+  Dev rehearsal green: walk `20260529T194240Z` (165 xprofile + 45 ACF + 2 kept, 4 linktree).
+- **Lost:** in-conversation context; substance is in the handoff + committed code.
+
 ## Entries below this line should be appended chronologically as handoffs happen.
 
 ---
