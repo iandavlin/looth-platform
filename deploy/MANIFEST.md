@@ -41,6 +41,15 @@ WP plugins of unclear status — NOT gathered yet:
 old `lg-layout` (pre-v2), and mu-plugin `bb-forum-author-delete.php`
 (gathered provisionally — confirm it's ours).
 
+## RETIRED — do NOT deploy (replaced by standalone surfaces, §0b)
+- **`platform/mu-plugins/lg-membership-chrome.php`** (+ `lg-membership-chrome/`) —
+  the retired `template_include` membership chrome. Kept on dev as a render
+  reference for the standalone membership port to diff against; **do not deploy.**
+  Delete (dev + repo) once the standalone membership surface lands.
+- **`lg-events-landing.php`** (template_include events landing) — same: retired
+  by §0b. Don't commit/deploy the template_include version; build standalone.
+- deploy.sh should skip these; the cut never carries WP-templated chrome.
+
 ## Excluded (deliberately)
 Third-party mu-plugins (`buddyboss-performance-api`, `burst_rest_api_optimizer`),
 `looth-vendor/`, all `*.bak*`, `*.deprecated-*` plugins, dev-only infra
