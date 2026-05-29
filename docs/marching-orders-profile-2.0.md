@@ -13,6 +13,17 @@ happens when dev is fully functioning.
 
 ## Build order (all on dev, dev-proven)
 
+### Phase 0 — MOCKUPS FIRST (design-confirm before building). (Ian, 2026-05-29)
+Before code, mock the novel UX and get coordinator/Ian reaction — same cadence
+the shim chat used. Mock (HTML on `/srv/.../mockups/`, shared tokens):
+- **The composer** — the sidebar-palette editor (block-card palette, Pro-locked
+  blocks badged, drag-to-canvas, settings-panel-on-select). This is the central
+  novel interaction; nail it visually before building it.
+- **Profile page** on the block model (identity / location-with-pmp / craft /
+  Connect / a storefront block) + a **typed practice page** (e.g. repair shop).
+Surface the mockups for reaction; iterate; THEN proceed to Phase 1. (Coordinator
+already has earlier directory + profile-page mockups to build from.)
+
 ### Phase 1 — SPINE (foundation + migration target). HIGHEST priority.
 Must be dev-FINAL before the data crib runs — you can't migrate into a model
 you're about to change. (One migration, not two.)
