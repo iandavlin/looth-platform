@@ -82,6 +82,25 @@ boot, zero loopback** by splitting identity by volatility:
 on the hot path; loop back only for sensitive gates.** This is what kills the
 per-render WP-bootstrap tax. (Design: `design-shim-replacement.md` §C.)
 
+## 0d. Canonical launch URLs (2026-05-29, Ian: "clean the urls")
+
+POC URLs retire. Canonical launch paths — every surface builds to these:
+
+| Surface | Clean URL | From | When |
+|---|---|---|---|
+| Front feed | `/` (served directly, no redirect chain) | `/`→`/archive-poc/`→`/front-page/` | now |
+| Archive | `/archive/` | retire `/archive-poc/` | now |
+| Forum | `/forum/` | `/forums-poc/` | now |
+| Events | `/events/` | ✓ done | — |
+| Profiles / practices | `/u/<slug>` / `/p/<slug>` | ✓ done | — |
+| Member directory | `/members/` | `/directory/members` | **cutover** (BB holds `/members/`) |
+| Membership | (optional) `/join/`, `/membership/*` | `/lgjoin/` etc. | later/optional |
+
+**Non-breaking transition:** add clean route alongside POC → lane switches its
+self-links to the clean base → verify → 301 the POC path. **Each app must
+parameterize/update its self-link base path** (don't hardcode POC). nginx routing
++ 301s = sysadmin; self-links = each lane; nav = lg-shell.
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
