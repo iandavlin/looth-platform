@@ -16,6 +16,12 @@ logged-in user has one — and retire the per-request shim + the per-page
 - **Perf:** replaces a per-pageview HTTPS loopback (to re-derive identity from
   the WP cookie) with a once-per-login mint + inline RS256 verify. Removes WP
   from the per-request hot path for identity — matters most at mobile scale.
+  **Measured tax (bb-mirror, 2026-05-29, warm loopback):** `wp-json/` REST
+  bootstrap floor ~2.6s; `/whoami` 1.5–2.4s; this adds ~1.5s to every
+  authenticated forum render *even with* the HTTP/1.1 fix already applied —
+  it's pure WP-boot cost. archive-poc hit the same class. The shim kills it for
+  every surface at once. (Interim: bb-mirror ships a /dev/shm whoami cache,
+  removed when the shim lands.)
 - **Reliability:** retires the shim, killing the regression class that just bit
   us (the 10:55 clobber).
 
