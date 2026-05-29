@@ -18,7 +18,7 @@ rs(){ rsync -a $DRY --exclude='*.bak*' --exclude='vendor' --exclude='node_module
 echo "REPO=$REPO  WP=$WP  MODE=$([ -z "$DRY" ] && echo APPLY || echo DRY-RUN)"
 
 # --- standalone apps → /srv ---
-for app in profile-app archive-poc bb-mirror lg-shared; do
+for app in profile-app archive-poc bb-mirror lg-shared events; do
   rs "$REPO/$app/" "/srv/$app/"
 done
 

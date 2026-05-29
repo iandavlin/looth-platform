@@ -16,6 +16,7 @@ of every change set (see STRANGLER-COORDINATION.md §Commit discipline).
 | `archive-poc/` | `/srv/archive-poc/` | standalone; `discovery` pg schema |
 | `bb-mirror/` | `/srv/bb-mirror/` | standalone; `forums` pg schema |
 | `lg-shared/` | `/srv/lg-shared/` | shared header/footer/css; nginx-served at `/lg-shared/` |
+| `events/` | `/srv/events/` | standalone events-landing surface at `/events/`; reads WP MySQL read-only (no WP boot); own FPM pool (`events` user) + nginx route. Post-deploy: create `events` user, provision `/etc/lg-events-db`, then the FPM/nginx snippets below land it — add the `include …/strangler-events.conf;` line to the live site conf + reload. |
 | `lg-layout-v2/` | `wp-content/plugins/lg-layout-v2/` | WP plugin (build versioned zip per deploy doc) |
 | `lg-legacy-import/` | `wp-content/plugins/lg-legacy-import/` | WP plugin |
 | `lg-patreon-stripe-poller/` | `wp-content/plugins/lg-patreon-stripe-poller/` | WP plugin; tier/role authority |
@@ -27,6 +28,7 @@ of every change set (see STRANGLER-COORDINATION.md §Commit discipline).
 ## Secrets — PROVISION on target, NEVER committed
 - `/etc/lg-internal-secret` (poller↔profile-app shared secret)
 - `/etc/lg-archive-poc-secret`, `/etc/lg-archive-poc-db`
+- `/etc/lg-events-db` (events app → WP MySQL read-only creds: `DB_NAME`/`DB_USER`/`DB_PASSWORD`/`DB_HOST` lines; mode 640 `root:events`)
 - per-app pg passwords / db secret files (peer-auth where possible → no file)
 - the looth-platform deploy key (`~/.ssh/looth_platform_deploy`)
 - `setfacl -m u:profile-app:r /etc/lg-internal-secret` (read gotcha)

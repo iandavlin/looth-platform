@@ -28,27 +28,39 @@ page NOT started.
   `save_post_event` (title/body/status). Verified: unrelated meta does NOT bust
   (no over-invalidation); zoom_url change does. So Sheet edits now surface to
   logged-out visitors immediately — the live Sheet→render loop is closed.
-- **Events landing page — DONE.** `platform/mu-plugins/lg-events-landing.php`
-  (+ `lg-events-landing/template.php`) swaps page 2773 (**slug `calendar`**,
-  /calendar/ — not /events/) to a PUBLIC listing on the `/srv/lg-shared/` shell:
-  upcoming/past split, region-taxonomy filter (only regions with published
-  events), cards → each event's v2 detail page. Verified anonymous in-browser:
-  shared `.lg-chrome` header, 3 upcoming + 3 past, Europe filter → 2, **zero
-  zoom.us leak**. Self-contained own WP_Query — no poller code touched.
-  Screenshot: dev.loothgroup.com/mockups/events-landing.png. Committed 6e13861.
-  - **`nextN()` flag (per coordinator):** I did NOT use `UpcomingEvents::nextN()`
-    — it caps at 12 and returns a single upcoming-OR-past bucket, so it can't
-    express the upcoming/past split + region filter the spec wants. Used an
-    own-lane query mirroring the proven `[looth_events]` shortcode shape
-    (`meta_type CHAR` to dodge the DATE-cast crash). If you'd rather centralize,
-    extract a shared accessor later — flagging, not reaching into poller.
-  - **Note:** a dormant `lg-events-shortcode.php` (`[looth_events]`) already
-    exists at repo root — same purpose, never deployed. Left it alone.
+- **Events landing page — DONE (STANDALONE, revised approach).** Per the
+  coordinator's revised order ("all launch pages outside WordPress"), the
+  `template_include` mu-plugin was **retired** and rebuilt as a **standalone
+  surface** like bb-mirror/archive-poc — own nginx route + FPM pool, reads WP
+  MySQL read-only, **no WP boot**.
+  - **App:** `events/config.php`, `events/lib/events-query.php`,
+    `events/web/{index.php,events.css}`. Front controller renders a PUBLIC
+    listing (upcoming/past split, region filter) on the `/srv/lg-shared/` shell;
+    cards link to each event's v2 detail page. Zoom URL never selected/emitted.
+  - **Data:** direct read-only PDO MySQL on `wp_posts`/postmeta/terms (string
+    compare on the 8-char Ymd — no DATE cast). Creds from `/etc/lg-events-db`
+    (no committed secrets, no WP boot). Header viewer state via cached `/whoami`
+    loopback (listing data never loops back).
+  - **Route/infra:** `platform/nginx/strangler-events.conf` (mount `/events/`,
+    dev-gated) + `platform/fpm/events.conf` (`events` user pool). Wired into the
+    dev site conf + `deploy/{deploy.sh,MANIFEST.md}` for cutover.
+  - **Verified on dev:** `/events/` → shared `.lg-chrome` header, 3 upcoming +
+    3 past, `?ev_region=europe` → 2, CSS 200, **zero `zoom.us` leak**, no PHP
+    errors, no WP boot. Screenshot: dev.loothgroup.com/mockups/events-standalone.png.
+  - **`nextN()` flag (per coordinator):** did NOT use `UpcomingEvents::nextN()`
+    (caps at 12, single bucket) — reimplemented the query data-side. No poller
+    touched. Dormant `lg-events-shortcode.php` at repo root left alone.
+  - **Note:** mount is `/events/` (the route takes it over); the old WP page
+    2773 is slug `/calendar/`. If `/calendar/` should redirect to `/events/`,
+    that's a small follow-up — flagging.
 
-**Lane status: COMPLETE** — event post pages on v2 (only Zoom gated) + events
-landing on the shared shell. Remaining items are other lanes' (cutover ships
-`MANAGED_CPTS += event`; Sheet lane adds the Zoom URL column per
-`events/sheets-zoom-url-patch.gs`; TZ; `_ame_cpe_post_policy` confirm).
+**Lane status: COMPLETE** — event post pages on v2 (only Zoom gated) + standalone
+events landing at `/events/` on the shared shell. Remaining items are other lanes'
+(cutover ships `MANAGED_CPTS += event` + the events post-deploy steps in
+`deploy/MANIFEST.md`; Sheet lane adds the Zoom URL column per
+`events/sheets-zoom-url-patch.gs`; TZ; `_ame_cpe_post_policy` confirm). Header
+`active_nav` is passed but not yet consumed by the deployed shared header —
+lg-shell change (flagged).
 
 ---
 
