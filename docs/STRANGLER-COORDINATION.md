@@ -329,6 +329,16 @@ One avatar per user, identical on every surface, editable in exactly one place.
   backfill. Each surface lane owns swapping its render to the batch-lookup avatar
   with the initials fallback.
 
+**User-uploaded media — own our storage (2026-05-29, Ian):** the avatar storage
+decision GENERALIZES. ALL user-generated media — avatars, **forum reply images**
+(bb-mirror), profile/practice gallery + storefront images (profile-2.0) — should
+land in **app-owned storage**, NOT `wp-content/uploads/` (`bb_medias/`, `avatars/`,
+…). Writing new uploads into WordPress's media tree entrenches a WP dependency
+exactly as we're cutting WP loose. Each lane adding an upload path confirms its
+target store up front (app-owned dir / object store + a stable served URL);
+legacy `wp-content` media migrates once at cutover (same one-pass model as the
+avatar backfill). Don't solve avatars and reply-images two different ways.
+
 **Cookie fast-path (optional):**
 - `lg_tier` cookie keeps current archive-poc behavior — a fast hint so the
   first paint doesn't have to wait on `/whoami`.
