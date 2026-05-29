@@ -9,6 +9,11 @@
 (function () {
   'use strict';
 
+  // Forum mount base — single source, injected by _chrome.php (window.LG_FORUM_BASE).
+  // Never hardcode a path; this makes the /forums-poc → /forum flip (and any
+  // future rename) a one-line config change. Fallback matches the launch base.
+  var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
+
   // ── 1. Corner hamburger ──────────────────────────────────────────────────
   // Desktop: default = nav visible; hamburger adds body.nav-closed to hide it.
   // Mobile:  default = nav hidden;  hamburger adds body.nav-open to show drawer.
@@ -93,7 +98,7 @@
 
   // ── 2. Feed card replies: lazy-load full thread on "View N replies" ─────────
   // The feed ships only ONE teaser reply per card (perf). The full threaded
-  // list is fetched on first expand from /forums-poc/?replies=<id> and injected
+  // list is fetched on first expand from <FORUM_BASE>/?replies=<id> and injected
   // into .feed-card__replies-full, then toggled.
   document.querySelectorAll('.feed-card__expand').forEach(btn => {
     btn.dataset.collapseLabel = btn.dataset.collapseLabel || btn.textContent;
@@ -116,7 +121,7 @@
         btn.textContent = 'Loading…';
         btn.disabled = true;
         try {
-          const res = await fetch('/forums-poc/?replies=' + btn.dataset.topicId);
+          const res = await fetch(FORUM_BASE + '/?replies=' + btn.dataset.topicId);
           if (!res.ok) throw new Error('fetch failed');
           full.innerHTML = await res.text();
           full.dataset.loaded = '1';
@@ -177,7 +182,7 @@
         btn.textContent = 'Loading…';
         btn.disabled = true;
         try {
-          const res = await fetch('/forums-poc/?body=' + btn.dataset.topicId);
+          const res = await fetch(FORUM_BASE + '/?body=' + btn.dataset.topicId);
           if (!res.ok) throw new Error('fetch failed');
           body.innerHTML = await res.text();
           body.dataset.loaded = '1';
@@ -571,7 +576,7 @@
             ntmStatus.textContent = 'Posted! Redirecting…';
             // Build bb-mirror URL from the selected forum slug + topic slug extracted from BB link
             var bbLink   = res.j && res.j.link; // e.g. /all-forums-all-topics/topic/my-slug/
-            var pubPath  = ntmForm.dataset.publicPath || '/forums-poc';
+            var pubPath  = ntmForm.dataset.publicPath || FORUM_BASE;
             var opt      = ntmForumSel.options[ntmForumSel.selectedIndex];
             var fSlug    = opt && opt.dataset.slug;
             var topicSlug = bbLink && bbLink.replace(/^.*\/topic\/([^/]+)\/?$/, '$1');
@@ -935,9 +940,9 @@
         }
         if (kind === 'topic') {
           // Whole thread is gone → return to the forum (breadcrumb keeps us
-          // path-correct across the /forums-poc → /forums flip).
+          // path-correct across the /forums-poc → /forum flip).
           var fl = document.querySelector('.breadcrumbs a:nth-of-type(2)');
-          window.location.href = (fl && fl.getAttribute('href')) || '/forums-poc/';
+          window.location.href = (fl && fl.getAttribute('href')) || (FORUM_BASE + '/');
         } else {
           // Reply gone → reload so the threaded tree re-renders accurately.
           window.location.reload();

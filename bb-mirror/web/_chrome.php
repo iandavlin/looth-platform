@@ -455,6 +455,8 @@ function bb_mirror_chrome_footer(): void
 <?php bb_mirror_new_topic_modal(); ?>
 
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" defer></script>
+<!-- Single source of the forum base path for forums.js (self-links, lazy fetches). -->
+<script>window.LG_FORUM_BASE = <?= json_encode(LG_BB_MIRROR_PUBLIC_PATH) ?>;</script>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
 </body>
 </html>
