@@ -17,6 +17,15 @@ happens when dev is fully functioning.
 Must be dev-FINAL before the data crib runs — you can't migrate into a model
 you're about to change. (One migration, not two.)
 
+> **Already closed out by the retiring profile-app chat (a847d1aa), 2026-05-29:**
+> the **social + location backfills** — linktree→`SOCIAL_KINDS` + migration,
+> social backfill script (kind+url, three-tier precedence, reddit→web,
+> linktree-only), `location_address` folded into `snapshot-location-from-bb.php`.
+> These write into the FINAL spine shape (forward-compatible). **Fresh chat:
+> don't redo them** — start at the block system below; verify the schema adds
+> they made, build the identity/location block render on top. See that chat's
+> SESSION-HANDOFF.
+
 - **Schema adds:** `users.at_a_glance`, `users.location_address`,
   `users.location_exact_visibility`; `practices.type`; `SOCIAL_KINDS` +=
   `reddit`, `linktree`.
