@@ -137,6 +137,30 @@ function lg_bb_mirror_whoami(): ?array {
     if ($fetched) return $result;
     $fetched = true;
     if (PHP_SAPI === 'cli') return null;
+
+    // --- INTERIM perf cache (2026-05-29) -------------------------------------
+    // The whoami round-trip boots all of WordPress (~1.5s on this box) and is
+    // hit on every forum render. Until the profile-whoami shim removes the
+    // WP-bootstrap tax structurally, cache the result per WP session in tmpfs.
+    // Deliberately simple: TTL-only, NOT wired to PurgeNotifier — a tier/name
+    // change becomes visible within WHOAMI_CACHE_TTL. Keyed by the WP session
+    // cookie so each viewer gets their own entry ("anon" for gate-only visitors).
+    $WHOAMI_CACHE_TTL = 45;
+    $sess = '';
+    foreach ($_COOKIE as $k => $v) {
+        if (strpos($k, 'wordpress_logged_in_') === 0) { $sess = (string)$v; break; }
+    }
+    $cacheKey  = $sess !== '' ? hash('sha256', $sess) : 'anon';
+    $cacheFile = '/dev/shm/bb-whoami-' . $cacheKey . '.json';
+    if (is_readable($cacheFile) && (time() - filemtime($cacheFile)) < $WHOAMI_CACHE_TTL) {
+        $hit = json_decode((string)file_get_contents($cacheFile), true);
+        if (is_array($hit) && array_key_exists('v', $hit)) {
+            $result = is_array($hit['v']) ? $hit['v'] : null;
+            return $result;
+        }
+    }
+    // -------------------------------------------------------------------------
+
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/whoami',
@@ -158,6 +182,16 @@ function lg_bb_mirror_whoami(): ?array {
         $data['tier'] = 'public';
     }
     $result = is_array($data) ? $data : null;
+
+    // Cache only definitive results (clean 200). Transient failures (timeout,
+    // 5xx) are NOT cached, so the next render retries instead of pinning null.
+    if ($code === 200) {
+        $tmp = $cacheFile . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, json_encode(['v' => $result])) !== false) {
+            @chmod($tmp, 0600);
+            @rename($tmp, $cacheFile);
+        }
+    }
     return $result;
 }
 }

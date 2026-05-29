@@ -758,6 +758,28 @@ img { max-width: 100%; display: block; }
 }
 .post__delete-btn[disabled] { opacity: .6; cursor: default; }
 
+/* Feed card "Reply" CTA → opens the reply modal */
+.feed-card__actions { margin-top: var(--s2); }
+.feed-card__reply-cta {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 4px 14px;
+  border-radius: 14px;
+  font: 600 12px/1.4 var(--font-body);
+  cursor: pointer;
+}
+.feed-card__reply-cta:hover {
+  background: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+  border-color: var(--lg-sage-d, #6b7c52);
+}
+/* Reply modal context line ("Replying to <title>") */
+.frm-context { margin: 0 0 var(--s2); color: var(--fg-muted); font: 400 13px/1.45 var(--font-body); }
+.frm-context__title { font-weight: 600; }
+/* Optimistically-inserted reply stub (until the real one syncs in) */
+.reply-stub--mine { background: rgba(107,124,82,.10); border-radius: 8px; }
+
 /* Inline editor */
 .post-edit {
   margin-top: var(--s3);

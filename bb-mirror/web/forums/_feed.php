@@ -491,10 +491,13 @@ $header_cat = $scoped_forum
       // Category color key for this topic's forum
       $cat_key  = $_forum_cat_map[(int)$topic['forum_id']] ?? 'general';
 
-      // Full-body expand: only render if content is meaningfully longer than excerpt
+      // Full-body expand: offer it when the text is meaningfully longer than the
+      // excerpt OR the post carries image(s) — expansion lazy-loads the full body
+      // + attachment gallery (?body=<id> → _topic-body.php). card_image is a
+      // cheap "has at least one image" signal (it's the first attachment / featured).
       $full_html     = (string)($topic['content_html'] ?? '');
       $plain_full    = strip_tags($full_html);
-      $show_read_more = (mb_strlen($plain_full) > 250);
+      $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
     ?>
     <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>">
       <div class="feed-card__meta-top">
@@ -552,6 +555,13 @@ $header_cat = $scoped_forum
           <?php endif; ?>
         </div>
       <?php endif; ?>
+
+      <div class="feed-card__actions">
+        <button class="feed-card__reply-cta" type="button" data-frm-open
+                data-topic-id="<?= $topic_id ?>"
+                data-forum-id="<?= (int)$topic['forum_id'] ?>"
+                data-topic-title="<?= htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) ?>">&#8617; Reply</button>
+      </div>
 
     </article>
     <?php endforeach; ?>

@@ -3,8 +3,13 @@
  * Topic body fragment endpoint.
  *
  * Route: /forums-poc/?body=<topic_id>
- * Returns the topic's content_html as a bare HTML fragment (no chrome).
- * Called by forums.js on first "Read more" click for lazy-fetch.
+ * Returns the topic's content_html PLUS its attachment gallery as a bare HTML
+ * fragment (no chrome). Called by forums.js on first "Read more" click.
+ *
+ * Images render BELOW the text (BuddyBoss-style) and are extra-lazy: the whole
+ * fragment is fetched only on expansion, and each <img loading="lazy"> further
+ * defers the bytes until it nears the viewport. Markup mirrors the single-topic
+ * .post__attachments gallery so the shared CSS applies.
  */
 require __DIR__ . '/../../config.php';
 $db = bb_mirror_db();
@@ -31,3 +36,34 @@ if (!$row) {
 
 header('Content-Type: text/html; charset=utf-8');
 echo $row['content_html'];
+
+// -- Attachments below the text -----------------------------------------------
+$astmt = $db->prepare(
+    "SELECT url, alt, mime, width, height
+       FROM forums.attachment
+      WHERE parent_kind = 'topic' AND parent_id = :id
+      ORDER BY position"
+);
+$astmt->bindValue(':id', $tid, PDO::PARAM_INT);
+$astmt->execute();
+$atts = $astmt->fetchAll(PDO::FETCH_ASSOC);
+
+if ($atts) {
+    echo '<div class="post__attachments">';
+    foreach ($atts as $a) {
+        $url      = htmlspecialchars((string)$a['url']);
+        $alt      = htmlspecialchars((string)($a['alt'] ?? ''));
+        $is_image = $a['mime'] && str_starts_with((string)$a['mime'], 'image/');
+        if ($is_image) {
+            echo '<a class="attachment attachment--image" href="' . $url . '" target="_blank" rel="noopener">'
+               . '<img src="' . $url . '" alt="' . $alt . '" loading="lazy"'
+               . ($a['width']  ? ' width="'  . (int)$a['width']  . '"' : '')
+               . ($a['height'] ? ' height="' . (int)$a['height'] . '"' : '')
+               . '></a>';
+        } else {
+            echo '<a class="attachment attachment--file" href="' . $url . '" target="_blank" rel="noopener">&#128206; '
+               . htmlspecialchars($a['alt'] ?: basename((string)$a['url'])) . '</a>';
+        }
+    }
+    echo '</div>';
+}

@@ -592,6 +592,133 @@
     });
   }
 
+  // ── 4b. Feed reply modal ────────────────────────────────────────────────────
+  // A feed card's "Reply" button pops this modal (mirrors the new-topic modal),
+  // wired to that card's topic + forum. Posts a top-level reply via BB REST, then
+  // drops an optimistic stub into the card. Lazy auth + nonce, like the ntm modal.
+  // MUST live above the `.reply-form-wrap` early-return below — the feed has no
+  // reply-form-wrap, so anything after that return never runs on the feed.
+  var frmOverlay = document.getElementById('frm-overlay');
+  if (frmOverlay) {
+    var frmBackdrop = document.getElementById('frm-backdrop');
+    var frmCancel   = document.getElementById('frm-cancel');
+    var frmForm     = document.getElementById('frm-form');
+    var frmContent  = document.getElementById('frm-content');
+    var frmTopicId  = document.getElementById('frm-topic-id');
+    var frmForumId  = document.getElementById('frm-forum-id');
+    var frmStatus   = document.getElementById('frm-status');
+    var frmSubmit   = document.getElementById('frm-submit');
+    var frmLoading  = document.getElementById('frm-loading');
+    var frmAnon     = document.getElementById('frm-anon');
+    var frmContext  = document.getElementById('frm-context');
+    var frmCtxTitle = frmContext && frmContext.querySelector('.frm-context__title');
+    var frmRestBase = frmForm.dataset.restBase || '/wp-json/buddyboss/v1';
+
+    var frmNonce = null, frmName = 'You', frmState = 'idle', frmCard = null;
+
+    function frmSetState(s) {
+      frmState = s;
+      frmLoading.hidden = (s !== 'loading');
+      frmAnon.hidden    = (s !== 'anon');
+      frmForm.hidden    = (s !== 'authed');
+    }
+    function frmLoadAuth() {
+      frmSetState('loading');
+      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject('auth'); })
+        .then(function (d) {
+          if (!d.authenticated) { frmSetState('anon'); return; }
+          frmNonce = d.nonce; frmName = d.display_name || 'You';
+          frmSetState('authed');
+          setTimeout(function () { frmContent.focus(); }, 30);
+        })
+        .catch(function () { frmSetState('anon'); });
+    }
+    function frmOpen(trigger) {
+      // The trigger button carries topic-id / forum-id / title; the card is its
+      // ancestor (used for the optimistic stub).
+      frmCard = trigger.closest('.feed-card');
+      frmTopicId.value = trigger.dataset.topicId || '';
+      frmForumId.value = trigger.dataset.forumId || '';
+      var title = trigger.dataset.topicTitle || '';
+      if (frmCtxTitle && title) { frmCtxTitle.textContent = title; frmContext.hidden = false; }
+      else if (frmContext) { frmContext.hidden = true; }
+      frmStatus.textContent = '';
+      frmOverlay.hidden = false;
+      document.body.classList.add('ntm-active');
+      if (frmState !== 'authed') frmLoadAuth();
+      else setTimeout(function () { frmContent.focus(); }, 30);
+    }
+    function frmClose() {
+      frmOverlay.hidden = true;
+      document.body.classList.remove('ntm-active');
+      frmStatus.textContent = '';
+    }
+
+    // Delegated so it also works on lazily-loaded / optimistically-added cards.
+    document.addEventListener('click', function (e) {
+      var t = e.target.closest('.feed-card__reply-cta[data-frm-open]');
+      if (!t) return;
+      frmOpen(t);
+    });
+    frmCancel.addEventListener('click', frmClose);
+    frmBackdrop.addEventListener('click', frmClose);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !frmOverlay.hidden) frmClose();
+    });
+
+    frmForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!frmNonce) { frmStatus.textContent = 'Not signed in.'; return; }
+      var content = (frmContent.value || '').trim();
+      var topicId = parseInt(frmTopicId.value, 10);
+      var forumId = parseInt(frmForumId.value, 10);
+      if (!content) { frmStatus.textContent = "Reply can't be empty."; frmContent.focus(); return; }
+      if (!topicId) { frmStatus.textContent = 'Missing topic.'; return; }
+      frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
+      fetch(frmRestBase + '/reply', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
+        body: JSON.stringify({ content: content, topic_id: topicId, forum_id: forumId }),
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) {
+            frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.code)) || 'failed');
+            frmSubmit.disabled = false; return;
+          }
+          frmAppendOptimistic(frmCard, frmName, content);
+          frmContent.value = '';
+          frmSubmit.disabled = false;
+          frmClose();
+        })
+        .catch(function (err) { frmStatus.textContent = 'Network error: ' + err.message; frmSubmit.disabled = false; });
+    });
+
+    function frmEsc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function frmAppendOptimistic(card, name, content) {
+      if (!card) return;
+      var wrapEl = card.querySelector('.feed-card__replies');
+      if (!wrapEl) {
+        wrapEl = document.createElement('div');
+        wrapEl.className = 'feed-card__replies';
+        card.insertBefore(wrapEl, card.querySelector('.feed-card__actions') || null);
+      }
+      var text = content.replace(/<[^>]*>/g, '').trim();
+      var initial = (name || 'Y').charAt(0).toUpperCase();
+      var stub = document.createElement('div');
+      stub.className = 'reply-stub reply-stub--mine';
+      stub.innerHTML =
+        '<div class="reply-stub__head">' +
+          '<span class="avatar-init" style="width:28px;height:28px;font-size:12px;background:#6b7c52" aria-hidden="true">' + frmEsc(initial) + '</span>' +
+          '<span class="reply-stub__author">' + frmEsc(name) + '</span>' +
+          '<time class="reply-stub__time">now</time>' +
+        '</div>' +
+        '<div class="reply-stub__body"><span class="reply-stub__excerpt">' + frmEsc(text.slice(0, 160)) + '</span></div>';
+      wrapEl.insertBefore(stub, wrapEl.firstChild);
+    }
+  }
+
   // ── 3b. Single-topic page: reply form + mark-seen on load ───────────────
   var wrap = document.querySelector('.reply-form-wrap');
   if (!wrap) return;

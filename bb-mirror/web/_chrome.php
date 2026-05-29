@@ -323,6 +323,37 @@ function bb_mirror_new_topic_modal(): void
     </form>
   </div>
 </div>
+
+<!-- Feed reply modal — opened by a card's "Reply" button (see forums.js §4b). -->
+<div class="ntm-overlay" id="frm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="frm-heading">
+  <div class="ntm-backdrop" id="frm-backdrop"></div>
+  <div class="ntm-dialog">
+    <h2 class="ntm-heading" id="frm-heading">Reply</h2>
+    <p class="frm-context" id="frm-context" hidden>Replying to <span class="frm-context__title"></span></p>
+
+    <div class="ntm-state ntm-state--loading" id="frm-loading" hidden>Loading…</div>
+
+    <div class="ntm-state ntm-state--anon" id="frm-anon" hidden>
+      <p class="ntm-anon__msg">Sign in to reply.</p>
+      <a class="ntm-anon__link" href="<?= htmlspecialchars($login_url) ?>">Sign in</a>
+    </div>
+
+    <form class="ntm-form" id="frm-form" novalidate hidden
+          data-rest-base="<?= htmlspecialchars($rest_base) ?>">
+      <input type="hidden" id="frm-topic-id" name="topic_id" value="">
+      <input type="hidden" id="frm-forum-id" name="forum_id" value="">
+      <label class="ntm-label" for="frm-content">Your reply</label>
+      <textarea class="ntm-textarea" id="frm-content" name="content" rows="5" required
+                placeholder="Share your thoughts…"></textarea>
+      <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
+      <div class="ntm-row">
+        <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
+        <button type="button" class="ntm-cancel" id="frm-cancel">Cancel</button>
+        <span class="ntm-status" id="frm-status" aria-live="polite"></span>
+      </div>
+    </form>
+  </div>
+</div>
     <?php
 }
 

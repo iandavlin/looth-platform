@@ -83,6 +83,7 @@ function lg_shared_render_site_header(array $ctx): void
     $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
+    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'forum'|'events'|'members'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
 
@@ -126,7 +127,7 @@ function lg_shared_render_site_header(array $ctx): void
       </svg>
     </button>
 
-    <a class="lg-chrome__logo" href="/" rel="home" aria-label="Looth Group home">
+    <a class="lg-chrome__logo" href="/front-page/" rel="home" aria-label="Looth Group home">
       <img src="<?= $h($logo_url) ?>" alt="Looth Group" width="36" height="36">
       <span class="lg-chrome__wordmark">Looth Group</span>
     </a>
@@ -137,10 +138,10 @@ function lg_shared_render_site_header(array $ctx): void
 
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
-        <li><a href="/archive/">Archive</a></li>
-        <li><a href="/forums-poc/">Forum</a></li>
-        <li><a href="/calendar/">Events</a></li>
-        <li><a href="/about/">About</a></li>
+        <?php if ($active_nav !== 'archive'):  ?><li><a href="/archive/">Archive</a></li><?php endif; ?>
+        <?php if ($active_nav !== 'forum'):   ?><li><a href="/forums-poc/">Forum</a></li><?php endif; ?>
+        <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
+        <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
       </ul>
     </nav>
 
