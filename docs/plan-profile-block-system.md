@@ -98,17 +98,20 @@ day with no back-pass. Field-96 confirmation on live queued in BATCH-06 (#62-63)
 
 ## FE editing model — sidebar palette (NOT layoutv2's inline-add) (2026-05-29, Ian)
 
+**The profile block system is a SEPARATE system from layoutv2 (Ian, 2026-05-29).**
+- **layoutv2 = content** (posts, articles, events/gated CPTs) — inline-add editor,
+  **untouched.** Don't go near it.
+- **Profile system = profiles + practices** — its own block library, own editor,
+  own render. Not layoutv2 reskinned, not coupled.
+- **Only shared thing: design tokens** (`/srv/lg-shared`) so both look on-brand.
+- May *reference* layoutv2 for general patterns (block render, autosave, JSON
+  round-trip) but **no shared code, no coupling.** Standalone in profile-app.
+
 **Add-UX = a sidebar block palette + drag-to-canvas + drag-reorder** — the
 page-builder model (Elementor/Webflow), NOT layoutv2's inline-`+` add. Rationale:
 profile/practice is "assemble a page from parts," and a persistent palette
 surfaces the full block menu (discoverability → adoption → Pro upsell), shows
 Pro-locked blocks as standing upsell, and shows per-type limits in place.
-
-- **Crib layoutv2's *mechanics* only** — block render, autosave, JSON round-trip
-  (`assets/lg-fe-editor.js`, `EditorRest.php` as reference). **Own the add-UX**
-  (sidebar palette ≠ layoutv2 inline-add). Reimplement standalone (layoutv2 is
-  WP-coupled; profile-app is standalone PHP/pg). Study the `lg-layout-v2` skill's
-  editor gotchas (cascade order, bundle/cache lifecycle, drag-event quirks).
 - **Block settings** (once placed): lean = the sidebar swaps to a settings panel
   on block-select (dual-mode sidebar, Gutenberg/Elementor style) vs. inline
   gear/pencil. TBD — resolve via mockup.
