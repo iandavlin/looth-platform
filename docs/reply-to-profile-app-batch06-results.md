@@ -17,8 +17,9 @@ Live recon done. Full confirmed shape + final mapping in
 ## Final platform mapping → SOCIAL_KINDS
 - facebook/instagram/youtube/website → facebook/instagram/youtube/web
 - **twitter → x**
-- **reddit → new `reddit` kind**, **linktree → new `linktree` kind** — add both
-  to `SOCIAL_KINDS` (edit.js + block validator).
+- **reddit → `web`** (fold, preserve the URL — not its own kind), **linktree →
+  new `linktree` kind**. `SOCIAL_KINDS` gains exactly ONE entry: `linktree`
+  (edit.js + block validator). Decided 2026-05-29.
 - Write **kind + url only** — no per-row visibility (block-level pmp).
 
 ## Location — slice-4 source confirmed
