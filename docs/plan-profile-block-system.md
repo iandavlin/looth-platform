@@ -71,7 +71,13 @@ JSON blocks (presentation, not queried). Don't let users compose the spine away.
 
 ## pmp defaults — LOCKED (2026-05-29, ratified w/ profile-app)
 
-- `identity` (name/avatar/at_a_glance/website/socials) → **public**
+> **SUPERSEDED on the header by the Phase-0 member-baseline** (see "Block sets +
+> pmp baseline" below): the required header now comes in **member**, not public;
+> public is opt-up. The relative ordering below still holds (location-exact more
+> private than approximate; contact most restricted) — just shifted down one notch
+> from a member baseline rather than a public one.
+
+- `identity`/header → **member** (was public — opt up to public)
 - location **approximate** → **member** · location **exact** → **private**
 - **`contact` = storefront/practice-side only**, not a personal profile field
   (personal email/phone on the header is a privacy footgun).
@@ -95,6 +101,34 @@ location_city/region snapshot — even though the block UI ships post-cutover.
 Why: the data exists now; populating at slice-4 (~30 lines in
 `snapshot-location-from-bb.php`) means users land in the new model on cutover
 day with no back-pass. Field-96 confirmation on live queued in BATCH-06 (#62-63).
+
+## Block sets + pmp baseline — profile vs practice (2026-05-29, Ian, Phase-0)
+
+**Two entity views, overlapping block sets (some shared, some specific):**
+- **Profile** (`/u/`): **profile-header** ("me at a glance") + craft, connect,
+  socials, location. The person.
+- **Practice** (`/p/`): **practice-header** (name / type / location) + storefront
+  (hours / services / gallery), staff roster. The business.
+- **Shared blocks** work on both (e.g. gallery, about/text); **specific blocks**
+  are entity-only (storefront/hours = practice-only). The composer filters the
+  palette by entity = shared + that entity's own.
+
+**Separate headers** — supersedes the single identity block with
+`subject: person|practice` toggle (`spec-block-identity-location.md`): split into
+**profile-header** + **practice-header** blocks.
+
+**Only the header is REQUIRED.** Everything else is optional/composed — a minimal
+profile or practice is just a header; the user adds the rest.
+
+**pmp baseline = MEMBER (supersedes `identity → public` and "practice =
+public-leaning").** A new profile/practice comes in **member-only**; the user
+opts **up to public** (storefronts will, for findability) or **down to private**,
+per block. Product stance: **profiles are members-community by default** — the
+public web doesn't see a profile unless the owner opens it. The directory works
+because members see members; public visibility is opt-in. (Per-block pmp still
+applies — member is just the out-of-box default for the required header.)
+
+**One composer tool, two entity views, member-default pmp, opt-up to public.**
 
 ## FE editing model — sidebar palette (NOT layoutv2's inline-add) (2026-05-29, Ian)
 

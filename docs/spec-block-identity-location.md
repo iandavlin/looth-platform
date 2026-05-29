@@ -1,5 +1,13 @@
 # Spec — Identity + Location blocks (profile block-system, pilot #1)
 
+> **⚠️ SUPERSEDED in part (2026-05-29 Phase-0, Ian) — see
+> `reply-to-profile-2.0-block-sets.md` + plan "Block sets + pmp baseline":**
+> (1) the single `identity` block with `subject: person|practice` toggle is
+> **split into two blocks** — `profile-header` (`/u/`) + `practice-header` (`/p/`);
+> (2) the header pmp default is now **member**, not public (public is opt-up).
+> The JSON-shape/relational-mapping/render/pmp *pattern* below still stands —
+> apply it to each of the two header blocks, with the member baseline.
+
 Buildable contract for the first two blocks. Sets the pattern every later block
 follows: **JSON shape → relational mapping → block-level pmp → render →
 LLM-draftable.** Design rationale: `plan-profile-block-system.md`. Owner:
