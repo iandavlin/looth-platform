@@ -1,0 +1,406 @@
+<?php
+/**
+ * archive-poc/web/index.php — SSR landing page (Variant D + C in one document).
+ *
+ * Server-renders discovery rows from rows.json into the initial HTML so
+ * Googlebot sees a fully populated page on first fetch. archive.js attaches
+ * interactive behaviors (search, tab clicks → mode flip to grid).
+ *
+ * Routed through the archive-poc FPM pool (read-only SQLite). No WP needed.
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../api/v0/_rowlib.php';
+
+// ---- DB -----------------------------------------------------------------
+$db_path = realpath(__DIR__ . '/../index.sqlite');
+$db = new PDO('sqlite:' . $db_path, null, null, [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+]);
+$db->exec('PRAGMA query_only = ON');
+
+// ---- Audience detection -------------------------------------------------
+// WP sets wordpress_logged_in_<hash> on auth. Any such cookie means a member.
+$is_member = false;
+foreach (array_keys($_COOKIE) as $name) {
+    if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
+}
+// Admin preview: ?as=public forces the logged-out view.
+if (($_GET['as'] ?? '') === 'public') $is_member = false;
+
+// ---- Run all rows --------------------------------------------------------
+$rows_full_config = archive_poc_load_rows_full(__DIR__ . '/../rows.json');
+$rows_config = $rows_full_config['rows'] ?? [];
+$signup_banner = $rows_full_config['signup_banner'] ?? null;
+
+// Filter by audience: 'public' rows hide from members, 'members' rows hide from non-members, 'both' always show.
+$rows_config = array_values(array_filter($rows_config, function ($r) use ($is_member) {
+    $aud = $r['audience'] ?? 'both';
+    return $aud === 'both' || ($aud === 'members' && $is_member) || ($aud === 'public' && !$is_member);
+}));
+$rendered_rows = [];
+$top_tags_cache = null;
+foreach ($rows_config as $row) {
+    $type = $row['type'] ?? 'static';
+    if ($type === 'tag-random') {
+        $top_tags_cache ??= archive_poc_top_tags($db, 20, $row['exclude'] ?? []);
+    }
+    $rendered = match ($type) {
+        'hero'             => archive_poc_run_hero($db, $row),
+        'events-upcoming'  => archive_poc_run_events_upcoming($db, $row),
+        'tag-random'       => archive_poc_run_row($db, $row, $top_tags_cache),
+        default            => archive_poc_run_row($db, $row),
+    };
+    $rendered['id'] = $row['id'] ?? '';
+    $rendered_rows[] = $rendered;
+}
+$happening_now = archive_poc_happening_now($db);
+
+// ---- Helpers -------------------------------------------------------------
+function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
+
+function thumb_url(array $it): string {
+    if (!empty($it['thumb_url']) && empty($it['thumb_broken'])) return $it['thumb_url'];
+    // Dev-only picsum fallback; swap for kind placeholder in prod.
+    return 'https://picsum.photos/seed/lg-' . (int)$it['id'] . '/480/320';
+}
+
+function tier_label(string $tier): string {
+    return match (strtolower($tier)) { 'pro' => 'Pro', 'lite' => 'Lite', default => 'Public' };
+}
+
+const KIND_LABELS = [
+    'article' => 'Articles', 'video' => 'Videos', 'loothprint' => 'Loothprints',
+    'event' => 'Events', 'discussion' => 'Discussions', 'profile' => 'Profiles',
+    'benefit' => 'Benefits', 'misc' => 'Misc',
+];
+
+/** Primary CTA verb per kind. */
+function kind_cta(string $kind): string {
+    return match ($kind) {
+        'video'      => 'Watch',
+        'loothprint' => 'Download',
+        'event'      => 'RSVP',
+        'discussion' => 'Join the discussion',
+        default      => 'Read',
+    };
+}
+
+/** Relative time ago — for discussion 'Active 2h ago' badges. */
+function rel_time(int $ts): string {
+    $delta = max(1, time() - $ts);
+    if ($delta < 60)       return $delta . 's ago';
+    if ($delta < 3600)     return (int)floor($delta / 60) . 'm ago';
+    if ($delta < 86400)    return (int)floor($delta / 3600) . 'h ago';
+    if ($delta < 86400*30) return (int)floor($delta / 86400) . 'd ago';
+    return gmdate('M j, Y', $ts);
+}
+
+/** Format an event date block: ['mon' => 'JUN', 'day' => '05', 'time' => '10:00 AM', 'rel' => 'in 12 days']. */
+function event_date_block(array $it): array {
+    $ts = (int) ($it['event_start_at'] ?? 0);
+    if (!$ts) return ['mon' => '—', 'day' => '?', 'time' => '', 'rel' => ''];
+    $mon = strtoupper(gmdate('M', $ts));
+    $day = gmdate('j', $ts);
+    $time = gmdate('g:i A', $ts) . ' UTC';
+    $now = time();
+    $delta = $ts - $now;
+    if ($delta < 0)            $rel = '';
+    elseif ($delta < 86400)    $rel = 'today';
+    elseif ($delta < 86400*2)  $rel = 'tomorrow';
+    elseif ($delta < 86400*30) $rel = 'in ' . (int) round($delta / 86400) . ' days';
+    else                       $rel = 'in ' . (int) round($delta / 86400 / 7) . ' weeks';
+    return compact('mon','day','time','rel');
+}
+
+/** Schema.org @type per kind. */
+function schema_type(array $it): string {
+    return match ($it['kind']) {
+        'article'    => 'BlogPosting',
+        'video'      => 'VideoObject',
+        'loothprint' => !empty($it['has_download']) ? 'HowTo' : 'CreativeWork',
+        'event'      => 'Event',
+        'discussion' => 'DiscussionForumPosting',
+        'profile'    => 'ProfilePage',
+        'benefit'    => 'Offer',
+        default      => 'CreativeWork',
+    };
+}
+
+function jsonld_item(array $it): array {
+    $obj = [
+        '@type'    => schema_type($it),
+        '@id'      => $it['url'],
+        'name'     => $it['title'],
+        'url'      => $it['url'],
+        'headline' => $it['title'],
+    ];
+    if (!empty($it['excerpt']))     $obj['description'] = mb_substr($it['excerpt'], 0, 280);
+    if (!empty($it['thumb_url']) && empty($it['thumb_broken'])) $obj['image'] = $it['thumb_url'];
+    if (!empty($it['author_name'])) {
+        $obj['author'] = ['@type' => 'Person', 'name' => $it['author_name']];
+    }
+    if (!empty($it['published_at'])) {
+        $obj['datePublished'] = gmdate('c', (int)$it['published_at']);
+    }
+    if (!empty($it['like_count'])) {
+        $obj['interactionStatistic'] = [
+            '@type' => 'InteractionCounter',
+            'interactionType' => ['@type' => 'LikeAction'],
+            'userInteractionCount' => (int)$it['like_count'],
+        ];
+    }
+    // Paywall flag — Google's blessed signal for gated content.
+    $obj['isAccessibleForFree'] = (strtolower($it['tier'] ?? 'public') === 'public');
+    if (!$obj['isAccessibleForFree']) {
+        $obj['hasPart'] = [[
+            '@type'      => 'WebPageElement',
+            'isAccessibleForFree' => false,
+            'cssSelector' => '.card__body',
+        ]];
+    }
+    return $obj;
+}
+
+function row_jsonld(array $row): string {
+    if (!$row['items']) return '';
+    $list = [];
+    foreach ($row['items'] as $i => $it) {
+        $list[] = ['@type' => 'ListItem', 'position' => $i + 1, 'item' => jsonld_item($it)];
+    }
+    $doc = [
+        '@context' => 'https://schema.org',
+        '@type'    => 'ItemList',
+        'name'     => $row['title'],
+        'numberOfItems' => count($row['items']),
+        'itemListElement' => $list,
+    ];
+    return json_encode($doc, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+}
+
+// Hero image for OG: first item of the first row.
+$hero = $rendered_rows[0]['items'][0] ?? null;
+$og_image = $hero ? thumb_url($hero) : 'https://picsum.photos/seed/lg-archive/1200/630';
+
+$canonical = 'https://dev.loothgroup.com/archive-poc/';
+
+// Pre-baked window.__ROWS__ so JS can hydrate without re-fetching.
+$client_state = [
+    'rows' => array_map(fn($r) => [
+        'title' => $r['title'],
+        'layout' => $r['layout'],
+        'item_ids' => array_column($r['items'] ?? [], 'id'),
+    ], $rendered_rows),
+];
+
+?><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looth Group — Lutherie Community</title>
+<meta name="description" content="The Looth Group archive — articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="<?= h($canonical) ?>">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Looth Group">
+<meta property="og:description" content="Articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta property="og:url" content="<?= h($canonical) ?>">
+<meta property="og:image" content="<?= h($og_image) ?>">
+<meta property="og:site_name" content="Looth Group">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Looth Group">
+<meta name="twitter:description" content="Articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta name="twitter:image" content="<?= h($og_image) ?>">
+
+<link rel="stylesheet" href="archive.css">
+</head>
+<body class="view-discover<?= $happening_now ? ' has-live' : '' ?>">
+<?php require __DIR__ . '/_chrome.php'; ?>
+<?php if ($happening_now): $hn = $happening_now; ?>
+<aside class="live-banner" role="status">
+  <span class="live-banner__dot">🔴</span>
+  <span class="live-banner__label">LIVE NOW</span>
+  <span class="live-banner__title"><?= h($hn['title']) ?></span>
+  <a class="live-banner__cta" href="<?= h($hn['event_join_url'] ?: $hn['url']) ?>" target="_blank" rel="noopener">Join →</a>
+</aside>
+<?php endif; ?>
+<?php if (!$is_member && $signup_banner): ?>
+<aside class="signup-banner" role="region" aria-label="Sign up">
+  <div class="signup-banner__inner">
+    <div>
+      <strong class="signup-banner__title"><?= h($signup_banner['title']) ?></strong>
+      <span class="signup-banner__body"><?= h($signup_banner['body']) ?></span>
+    </div>
+    <a class="signup-banner__cta" href="<?= h($signup_banner['cta_url']) ?>"><?= h($signup_banner['cta_label']) ?> →</a>
+  </div>
+</aside>
+<?php endif; ?>
+<main class="arc-page" id="main">
+  <h1 class="brand-h"><span class="brand-h__name">Looth Group</span> <span class="brand-h__tag">a community of luthiers</span></h1>
+
+  <form class="topbar" id="topbar" autocomplete="off">
+    <svg class="topbar__icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b6f6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="q" name="q" type="search" placeholder="Search or just browse…">
+    <select id="sort" class="sort" hidden>
+      <option value="newest">Newest</option>
+      <option value="liked">Most liked</option>
+      <option value="active">Most active</option>
+      <option value="oldest">Oldest</option>
+      <option value="relevance">Best match</option>
+    </select>
+  </form>
+
+  <!-- Grid-mode tabs + subfilters (hidden in discover mode) -->
+  <nav class="tabs" id="tabs" aria-label="Content type"></nav>
+  <section class="subfilters" id="subfilters" hidden>
+    <span class="lbl">Tags:</span>
+    <div class="pills" id="tag-pills"></div>
+    <label class="access"><input type="checkbox" id="public-only"> Public only</label>
+  </section>
+
+  <!-- Grid-mode results container (used after mode flip) -->
+  <p class="results-meta" id="results-meta" hidden></p>
+  <section class="cards" id="cards" aria-live="polite" hidden></section>
+  <div class="loadmore" hidden><button id="loadmore" type="button" hidden>Load more</button><span id="loadmore-status"></span></div>
+
+  <!-- Discover mode: SSR'd rows -->
+  <div class="rows" id="rows">
+<?php foreach ($rendered_rows as $row):
+    if (empty($row['items'])) continue;
+    $layout = $row['layout'] ?? 'rail';
+    $row_id = $row['id'] ?? '';
+?>
+
+<?php if ($layout === 'billboard'): $it = $row['items'][0]; $tier = strtolower($it['tier'] ?? 'public'); $kind = $it['kind']; ?>
+    <section class="row row--billboard" data-row-id="<?= h($row_id) ?>">
+      <a class="billboard billboard--<?= h($kind) ?>" href="<?= h($it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+        <img class="billboard__img" src="<?= h(thumb_url($it)) ?>" alt="" width="1280" height="640">
+        <div class="billboard__scrim"></div>
+        <div class="billboard__body">
+          <span class="billboard__eyebrow">
+            <span class="billboard__kind"><?= h(KIND_LABELS[$kind] ?? $kind) ?></span>
+            <?php if ($tier !== 'public'): ?><span class="billboard__tier billboard__tier--<?= h($tier) ?>"><?= h(tier_label($tier)) ?></span><?php endif; ?>
+          </span>
+          <h2 class="billboard__title"><?= h($it['title'] ?: '(untitled)') ?></h2>
+          <?php if (!empty($it['excerpt'])): ?>
+            <p class="billboard__excerpt"><?= h(mb_substr($it['excerpt'], 0, 180)) ?><?= mb_strlen($it['excerpt']) > 180 ? '…' : '' ?></p>
+          <?php endif; ?>
+          <div class="billboard__meta">
+            <?php if ($it['author_name']): ?><span class="billboard__author"><?= h($it['author_name']) ?></span><?php endif; ?>
+            <span class="billboard__cta"><?= h(kind_cta($kind)) ?> →</span>
+          </div>
+        </div>
+      </a>
+      <script type="application/ld+json"><?= row_jsonld($row) ?></script>
+    </section>
+
+<?php elseif ($layout === 'events'): ?>
+    <section class="row row--events" data-row-id="<?= h($row_id) ?>">
+      <header class="row__head">
+        <h2 class="row__title"><?= h($row['title']) ?></h2>
+      </header>
+      <div class="rail">
+<?php foreach ($row['items'] as $it): $blk = event_date_block($it); $tier = strtolower($it['tier'] ?? 'public'); ?>
+        <a class="ecard" href="<?= h($it['event_join_url'] ?: $it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+          <div class="ecard__date">
+            <span class="ecard__mon"><?= h($blk['mon']) ?></span>
+            <span class="ecard__day"><?= h($blk['day']) ?></span>
+          </div>
+          <div class="ecard__body">
+            <h3 class="ecard__title"><?= h($it['title']) ?></h3>
+            <div class="ecard__meta">
+              <span class="ecard__time"><?= h($blk['time']) ?></span>
+              <?php if (!empty($blk['rel'])): ?><span class="ecard__rel"><?= h($blk['rel']) ?></span><?php endif; ?>
+              <?php if (!empty($it['event_region'])): ?><span class="ecard__region"><?= h($it['event_region']) ?></span><?php endif; ?>
+            </div>
+            <div class="ecard__foot">
+              <span class="badge badge--<?= h($tier) ?>"><?= h(tier_label($tier)) ?></span>
+              <span class="ecard__cta"><?= !empty($it['event_join_url']) ? 'Join →' : 'RSVP →' ?></span>
+            </div>
+          </div>
+        </a>
+<?php endforeach; ?>
+      </div>
+      <script type="application/ld+json"><?= row_jsonld($row) ?></script>
+    </section>
+
+<?php elseif ($layout === 'discussions'): ?>
+    <section class="row row--discussions" data-row-id="<?= h($row_id) ?>">
+      <header class="row__head">
+        <h2 class="row__title"><?= h($row['title']) ?></h2>
+      </header>
+      <div class="rail">
+<?php foreach ($row['items'] as $it):
+        $author = $it['author_name'] ?: 'Member';
+        $author_id = (int)($it['author_id'] ?? 0);
+        $avatar = 'https://picsum.photos/seed/lg-user-' . ($author_id ?: $it['id']) . '/64/64';
+        $replies = (int)($it['reply_count'] ?? 0);
+        $last = (int)($it['last_activity'] ?? 0);
+        $is_stale = $last > 0 && (time() - $last) > 86400 * 30;
+        $badge_label = $last ? ($is_stale ? 'Quiet · ' . rel_time($last) : 'Active · ' . rel_time($last)) : 'New';
+        $badge_class = $is_stale ? 'dcard__badge--quiet' : 'dcard__badge--active';
+?>
+        <a class="dcard" href="<?= h($it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+          <div class="dcard__head">
+            <img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy">
+            <span class="dcard__author"><?= h($author) ?></span>
+          </div>
+          <h3 class="dcard__title"><?= h($it['title']) ?></h3>
+          <p class="dcard__excerpt"><?= h($it['excerpt'] ?: '') ?></p>
+          <div class="dcard__foot">
+            <span class="dcard__replies">💬 <?= $replies ?> <?= $replies === 1 ? 'reply' : 'replies' ?></span>
+            <span class="dcard__badge <?= $badge_class ?>"><?= h($badge_label) ?></span>
+          </div>
+        </a>
+<?php endforeach; ?>
+      </div>
+      <script type="application/ld+json"><?= row_jsonld($row) ?></script>
+    </section>
+
+<?php else: /* default rail */ ?>
+    <section class="row row--<?= h($layout) ?>" data-row-id="<?= h($row_id) ?>">
+      <header class="row__head">
+        <h2 class="row__title"><?= h($row['title']) ?></h2>
+      </header>
+      <div class="rail">
+<?php foreach ($row['items'] as $it):
+        $tier = strtolower((string)($it['tier'] ?? 'public'));
+        $kind = $it['kind'];
+        $date = $it['published_at'] ? date('M j, Y', (int)$it['published_at']) : '';
+?>
+        <a class="rcard rcard--<?= h($kind) ?>" href="<?= h($it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+          <img class="rcard__img" src="<?= h(thumb_url($it)) ?>" alt="" loading="lazy" width="480" height="320">
+          <div class="rcard__body">
+            <h3 class="rcard__title"><?= h($it['title'] ?: '(untitled)') ?></h3>
+            <div class="rcard__meta">
+              <?php if ($it['author_name']): ?><span class="author"><?= h($it['author_name']) ?></span><?php endif; ?>
+              <?php if ($date):              ?><span><?= h($date) ?></span><?php endif; ?>
+            </div>
+            <div class="rcard__foot">
+              <span class="badge badge--<?= h($tier) ?>"><?= h(tier_label($tier)) ?></span>
+              <span class="badge badge--kind"><?= h(KIND_LABELS[$kind] ?? $kind) ?></span>
+              <?php if (!empty($it['like_count'])): ?><span class="like">♥ <?= (int)$it['like_count'] ?></span><?php endif; ?>
+            </div>
+          </div>
+        </a>
+<?php endforeach; ?>
+      </div>
+      <script type="application/ld+json"><?= row_jsonld($row) ?></script>
+    </section>
+<?php endif; ?>
+
+<?php endforeach; ?>
+  </div>
+</main>
+<?php require __DIR__ . '/_chrome-footer.php'; ?>
+<script>window.__ROWS__ = <?= json_encode($client_state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;</script>
+<script src="archive.js"></script>
+</body>
+</html>

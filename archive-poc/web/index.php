@@ -1,0 +1,705 @@
+<?php
+/**
+ * archive-poc/web/index.php — SSR landing page (Variant D + C in one document).
+ *
+ * Server-renders discovery rows from rows.json into the initial HTML so
+ * Googlebot sees a fully populated page on first fetch. archive.js attaches
+ * interactive behaviors (search, tab clicks → mode flip to grid).
+ *
+ * Routed through the archive-poc FPM pool (read-only SQLite). No WP needed.
+ */
+
+declare(strict_types=1);
+require __DIR__.'/../config.php';
+
+
+// DEMO MODE: ?demo=1 loads demo-activity.json instead of the live endpoint.
+if (isset($_GET['demo'])) {
+    define('LG_ARCHIVE_POC_DEMO_ACTIVITY', __DIR__ . '/demo-activity.json');
+}
+require_once __DIR__ . '/../api/v0/_rowlib.php';
+
+// ---- DB -----------------------------------------------------------------
+$db_path = realpath(__DIR__ . '/../index.sqlite');
+$db = new PDO('sqlite:' . $db_path, null, null, [
+    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+]);
+$db->exec('PRAGMA query_only = ON');
+
+
+/**
+ * Activity strip: loopback fetch to the WP REST endpoint. Forwards
+ * wordpress_logged_in_* cookie so the endpoint sees the visitor's audience.
+ */
+const LG_ACTIVITY_CACHE_TTL = 30;   // seconds a cached strip is "fresh"
+
+/** Build the cookie header forwarded to the WP activity endpoint. */
+function archive_poc_activity_cookie(bool $is_member): string {
+    $cookie = (LG_ARCHIVE_POC_GATE_COOKIE ? LG_ARCHIVE_POC_GATE_COOKIE.'='.($_COOKIE[LG_ARCHIVE_POC_GATE_COOKIE]??'').';' : '');
+    if ($is_member) {
+        foreach ($_COOKIE as $cn => $cv) {
+            if (str_starts_with($cn, 'wordpress_logged_in_')) {
+                $cookie .= ' ' . $cn . '=' . $cv . ';';
+            }
+        }
+    }
+    return $cookie;
+}
+
+/** Cache file path for an audience+limit combo. */
+function archive_poc_activity_cache_file(bool $is_member, int $limit): string {
+    return sys_get_temp_dir() . '/lg_actstrip_' . ($is_member ? 'm' : 'p') . '_' . $limit . '.json';
+}
+
+/** Blocking WP fetch → items array (empty on any failure). */
+function archive_poc_activity_fetch(int $limit, string $cookie): array {
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/activity?limit=' . $limit,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_HTTPHEADER     => ['Host: '.LG_ARCHIVE_POC_HOST, 'Cookie: ' . $cookie],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    $payload = ($code === 200 && $body) ? json_decode($body, true) : null;
+    return (is_array($payload) && !empty($payload['items'])) ? $payload['items'] : [];
+}
+
+/**
+ * Stale-while-revalidate activity strip.
+ *
+ * WordPress REST bootstrap is ~0.8s per call (BuddyBoss + plugins), and a cold
+ * worker can blow past any timeout — so a blocking fetch per render makes the
+ * page slow AND blanks the strip whenever the fetch is slow/empty.
+ *
+ * Instead: ALWAYS serve the cached items instantly (even if stale). When stale,
+ * queue a background refresh that runs after fastcgi_finish_request() — the user
+ * already has the page, and the next visitor gets fresher data. The strip never
+ * blanks once it's been populated; no render ever blocks on WP. Only the very
+ * first load (no cache yet) fetches synchronously to seed the file.
+ */
+function archive_poc_run_activity_strip(array $row, bool $is_member): array {
+    // DEMO MODE — short-circuit to local JSON when ?demo=1
+    if (defined('LG_ARCHIVE_POC_DEMO_ACTIVITY') && file_exists(LG_ARCHIVE_POC_DEMO_ACTIVITY)) {
+        $payload = json_decode(file_get_contents(LG_ARCHIVE_POC_DEMO_ACTIVITY), true);
+        $items = (is_array($payload) && !empty($payload['items'])) ? $payload['items'] : [];
+        return ['title' => $row['title'] ?? '', 'items' => $items, 'layout' => 'activity', 'tag' => null];
+    }
+    $limit      = (int) ($row['query']['limit'] ?? 15);
+    $cache_file = archive_poc_activity_cache_file($is_member, $limit);
+
+    $cached = is_file($cache_file) ? json_decode((string) @file_get_contents($cache_file), true) : null;
+    if (is_array($cached) && !empty($cached)) {
+        // Serve cache instantly. If stale, queue a post-response refresh — but
+        // touch the file FIRST so concurrent requests in this window see it as
+        // fresh and don't all queue (prevents a thundering herd of WP fetches
+        // on cache expiry; exactly one request refreshes).
+        $age = time() - (int) @filemtime($cache_file);
+        if ($age >= LG_ACTIVITY_CACHE_TTL) {
+            @touch($cache_file);
+            $GLOBALS['LG_ACTIVITY_REFRESH'][] = [
+                'file'   => $cache_file,
+                'limit'  => $limit,
+                'cookie' => archive_poc_activity_cookie($is_member),
+            ];
+        }
+        return ['title' => $row['title'] ?? '', 'items' => $cached, 'layout' => 'activity', 'tag' => null];
+    }
+
+    // No cache yet (first load) — fetch synchronously to seed the file.
+    $items = archive_poc_activity_fetch($limit, archive_poc_activity_cookie($is_member));
+    if (!empty($items)) {
+        @file_put_contents($cache_file, json_encode($items), LOCK_EX);
+    }
+    return ['title' => $row['title'] ?? '', 'items' => $items, 'layout' => 'activity', 'tag' => null];
+}
+
+/**
+ * Run any queued activity-cache refreshes AFTER the response is flushed.
+ * Call once at the very end of the page. Keeps the WP fetch entirely off the
+ * critical path — the visitor already has their (cached) page.
+ */
+function archive_poc_flush_activity_refreshes(): void {
+    $jobs = $GLOBALS['LG_ACTIVITY_REFRESH'] ?? [];
+    if (!$jobs) return;
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();   // send response now; keep running
+    }
+    foreach ($jobs as $job) {
+        $items = archive_poc_activity_fetch($job['limit'], $job['cookie']);
+        if (!empty($items)) {
+            @file_put_contents($job['file'], json_encode($items), LOCK_EX);
+        } else {
+            // Fetch failed — bump mtime so we serve the existing stale copy for
+            // another TTL instead of hammering WP on every render during a slow spell.
+            @touch($job['file']);
+        }
+    }
+}
+
+// ---- Audience detection -------------------------------------------------
+// First-paint: cookie values for fast initial render before /whoami resolves.
+$is_member = false;
+foreach (array_keys($_COOKIE) as $name) {
+    if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
+}
+$viewer_tier = $_COOKIE['lg_tier'] ?? 'public';
+if (!in_array($viewer_tier, ['public', 'lite', 'pro'], true)) $viewer_tier = 'public';
+
+// /whoami — truth for tier + capabilities when the user is authenticated there.
+// profile-app uses its own looth_id JWT cookie (not the WP cookie), so
+// authenticated:false from /whoami does NOT mean the user isn't a WP member —
+// it means they haven't yet received a looth_id token (pre-full-cutover state).
+// Only promote $is_member and $viewer_tier when /whoami says authenticated:true;
+// otherwise keep WP-cookie values so no logged-in user is accidentally downgraded.
+$whoami = lg_archive_poc_whoami();
+if (!empty($whoami['authenticated'])) {
+    $is_member   = true;
+    $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
+                 ? $whoami['tier'] : $viewer_tier;
+}
+$edit_capable = ($whoami['capabilities']['edit_archive_poc'] ?? false) === true;
+
+// Admin preview: ?as=public|lite|pro forces viewer state for QA (overrides /whoami).
+$preview_as = $_GET['as'] ?? null;
+if ($preview_as === 'public') { $is_member = false; $viewer_tier = 'public'; $edit_capable = false; }
+elseif ($preview_as === 'lite') { $is_member = true;  $viewer_tier = 'lite'; }
+elseif ($preview_as === 'pro')  { $is_member = true;  $viewer_tier = 'pro'; }
+
+// Expose to templates as globals the render closures can capture.
+$GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
+$GLOBALS['LG_EDIT_CAPABLE'] = $edit_capable;
+
+// ---- Run all rows --------------------------------------------------------
+$rows_full_config = archive_poc_load_rows_full(__DIR__ . '/../rows.json');
+$rows_config = $rows_full_config['rows'] ?? [];
+$signup_banner = $rows_full_config['signup_banner'] ?? null;
+// Dash override: config.json's `rows` key (when present) replaces the rows.json
+// default list. Same overlay pattern as the sponsors/CTAs blocks above.
+if (defined('LG_ARCHIVE_POC_CONFIG_JSON') && is_file(LG_ARCHIVE_POC_CONFIG_JSON)) {
+    $_lg_raw = @file_get_contents(LG_ARCHIVE_POC_CONFIG_JSON);
+    $_lg_cfg_rows = $_lg_raw !== false ? json_decode($_lg_raw, true) : null;
+    if (is_array($_lg_cfg_rows) && !empty($_lg_cfg_rows['rows']) && is_array($_lg_cfg_rows['rows'])) {
+        $rows_config = $_lg_cfg_rows['rows'];
+    }
+    unset($_lg_raw, $_lg_cfg_rows);
+}
+
+// Filter by audience: 'public' rows hide from members, 'members' rows hide from non-members, 'both' always show.
+$rows_config = array_values(array_filter($rows_config, function ($r) use ($is_member) {
+    $aud = $r['audience'] ?? 'both';
+    return $aud === 'both' || ($aud === 'members' && $is_member) || ($aud === 'public' && !$is_member);
+}));
+$rendered_rows = [];
+$top_tags_cache = null;
+foreach ($rows_config as $row) {
+    $type = $row['type'] ?? 'static';
+    if ($type === 'tag-random') {
+        $top_tags_cache ??= archive_poc_top_tags($db, 20, $row['exclude'] ?? []);
+    }
+    $rendered = match ($type) {
+        'hero'             => archive_poc_run_hero($db, $row),
+        'events-upcoming'  => archive_poc_run_events_upcoming($db, $row),
+        'tag-random'       => archive_poc_run_row($db, $row, $top_tags_cache),
+        'activity-strip'   => archive_poc_run_activity_strip($row, $is_member),
+        // Static config-driven rows (data lives in this file, not the DB).
+        'cta-bar'          => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'cta-bar',      'tag' => null],
+        'local-looths'     => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'local-looths', 'tag' => null],
+        'sponsors'         => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'sponsors',     'tag' => null],
+        // Per-row config rides through as `query` (the dash's JSON field) — see _render-main-row.php
+        'video-promo'      => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'video-promo',  'tag' => null, 'query' => $row['query'] ?? null],
+        default            => archive_poc_run_row($db, $row),
+    };
+    $rendered['id'] = $row['id'] ?? '';
+    $rendered_rows[] = $rendered;
+}
+$happening_now = archive_poc_happening_now($db);
+
+// ---- Helpers -------------------------------------------------------------
+function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
+
+const LG_FALLBACK_IMG = 'https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp';
+
+// --- Static front-page widgets ----
+// Defaults live in web/defaults.php (single source of truth, shared with the
+// /_config webhook so the dash can pre-populate forms with effective values).
+// LG_ARCHIVE_POC_CONFIG_JSON overlays each top-level key. Empty array = render
+// nothing; missing key = fall back to defaults.
+$_lg_defaults = require __DIR__ . '/defaults.php';
+$_lg_overlay  = [];
+if (defined('LG_ARCHIVE_POC_CONFIG_JSON') && is_file(LG_ARCHIVE_POC_CONFIG_JSON)) {
+    $_lg_raw    = @file_get_contents(LG_ARCHIVE_POC_CONFIG_JSON);
+    $_lg_parsed = $_lg_raw !== false ? json_decode($_lg_raw, true) : null;
+    if (is_array($_lg_parsed)) $_lg_overlay = $_lg_parsed;
+}
+define('LG_SPONSORS',     is_array($_lg_overlay['sponsors']     ?? null) ? $_lg_overlay['sponsors']     : $_lg_defaults['sponsors']);
+define('LG_LOCAL_LOOTHS', is_array($_lg_overlay['local_looths'] ?? null) ? $_lg_overlay['local_looths'] : $_lg_defaults['local_looths']);
+define('LG_CTA_MEMBER',   is_array($_lg_overlay['cta_member']   ?? null) ? $_lg_overlay['cta_member']   : $_lg_defaults['cta_member']);
+define('LG_CTA_PUBLIC',   is_array($_lg_overlay['cta_public']   ?? null) ? $_lg_overlay['cta_public']   : $_lg_defaults['cta_public']);
+unset($_lg_defaults, $_lg_overlay, $_lg_raw, $_lg_parsed);
+
+function thumb_url(array $it): string {
+    if (!empty($it['thumb_url']) && empty($it['thumb_broken'])) return $it['thumb_url'];
+    return LG_FALLBACK_IMG;
+}
+
+function tier_label(string $tier): string {
+    return match (strtolower($tier)) { 'pro' => 'Pro', 'lite' => 'Lite', default => 'Public' };
+}
+
+const KIND_LABELS = [
+    'article' => 'Articles', 'video' => 'Videos', 'loothprint' => 'Loothprints',
+    'event' => 'Events', 'discussion' => 'Discussions', 'profile' => 'Profiles',
+    'benefit' => 'Benefits', 'misc' => 'Misc',
+];
+
+/** Primary CTA verb per kind. */
+function kind_cta(string $kind): string {
+    return match ($kind) {
+        'video'      => 'Watch',
+        'loothprint' => 'Download',
+        'event'      => 'RSVP',
+        'discussion' => 'Join the discussion',
+        default      => 'Read',
+    };
+}
+
+/** Relative time ago — for discussion 'Active 2h ago' badges. */
+function rel_time(int $ts): string {
+    $delta = max(1, time() - $ts);
+    if ($delta < 60)       return $delta . 's ago';
+    if ($delta < 3600)     return (int)floor($delta / 60) . 'm ago';
+    if ($delta < 86400)    return (int)floor($delta / 3600) . 'h ago';
+    if ($delta < 86400*30) return (int)floor($delta / 86400) . 'd ago';
+    return gmdate('M j, Y', $ts);
+}
+
+/** Format an event date block: ['mon' => 'JUN', 'day' => '05', 'time' => '10:00 AM', 'rel' => 'in 12 days']. */
+function event_date_block(array $it): array {
+    $ts = (int) ($it['event_start_at'] ?? 0);
+    if (!$ts) return ['mon' => '—', 'day' => '?', 'dow' => '', 'time' => '', 'rel' => ''];
+    $mon  = strtoupper(gmdate('M', $ts));
+    $day  = gmdate('j', $ts);
+    $dow  = gmdate('D', $ts);                          // Sun, Mon, Tue, ...
+    $time = gmdate('g:i A', $ts) . ' UTC';
+    $now = time();
+    $delta = $ts - $now;
+    if ($delta < 0)            $rel = '';
+    elseif ($delta < 86400)    $rel = 'today';
+    elseif ($delta < 86400*2)  $rel = 'tomorrow';
+    elseif ($delta < 86400*30) $rel = 'in ' . (int) round($delta / 86400) . ' days';
+    else                       $rel = 'in ' . (int) round($delta / 86400 / 7) . ' weeks';
+    return compact('mon','day','dow','time','rel');
+}
+
+/** Schema.org @type per kind. */
+function schema_type(array $it): string {
+    return match ($it['kind']) {
+        'article'    => 'BlogPosting',
+        'video'      => 'VideoObject',
+        'loothprint' => !empty($it['has_download']) ? 'HowTo' : 'CreativeWork',
+        'event'      => 'Event',
+        'discussion' => 'DiscussionForumPosting',
+        'profile'    => 'ProfilePage',
+        'benefit'    => 'Offer',
+        default      => 'CreativeWork',
+    };
+}
+
+function jsonld_item(array $it): array {
+    $obj = [
+        '@type'    => schema_type($it),
+        '@id'      => $it['url'],
+        'name'     => $it['title'],
+        'url'      => $it['url'],
+        'headline' => $it['title'],
+    ];
+    if (!empty($it['excerpt']))     $obj['description'] = mb_substr($it['excerpt'], 0, 280);
+    if (!empty($it['thumb_url']) && empty($it['thumb_broken'])) $obj['image'] = $it['thumb_url'];
+    if (!empty($it['author_name'])) {
+        $obj['author'] = ['@type' => 'Person', 'name' => $it['author_name']];
+    }
+    if (!empty($it['published_at'])) {
+        $obj['datePublished'] = gmdate('c', (int)$it['published_at']);
+    }
+    if (!empty($it['like_count'])) {
+        $obj['interactionStatistic'] = [
+            '@type' => 'InteractionCounter',
+            'interactionType' => ['@type' => 'LikeAction'],
+            'userInteractionCount' => (int)$it['like_count'],
+        ];
+    }
+    // Paywall flag — Google's blessed signal for gated content.
+    $obj['isAccessibleForFree'] = (strtolower($it['tier'] ?? 'public') === 'public');
+    if (!$obj['isAccessibleForFree']) {
+        $obj['hasPart'] = [[
+            '@type'      => 'WebPageElement',
+            'isAccessibleForFree' => false,
+            'cssSelector' => '.card__body',
+        ]];
+    }
+    return $obj;
+}
+
+function row_jsonld(array $row): string {
+    if (!$row['items']) return '';
+    $list = [];
+    foreach ($row['items'] as $i => $it) {
+        $list[] = ['@type' => 'ListItem', 'position' => $i + 1, 'item' => jsonld_item($it)];
+    }
+    $doc = [
+        '@context' => 'https://schema.org',
+        '@type'    => 'ItemList',
+        'name'     => $row['title'],
+        'numberOfItems' => count($row['items']),
+        'itemListElement' => $list,
+    ];
+    return json_encode($doc, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+}
+
+// Hero image for OG: first item of the first row.
+$hero = $rendered_rows[0]['items'][0] ?? null;
+$og_image = $hero ? thumb_url($hero) : LG_FALLBACK_IMG;
+
+$canonical = LG_ARCHIVE_POC_CANONICAL_BASE.'/front-page/';
+
+// Pre-baked window.__ROWS__ so JS can hydrate without re-fetching.
+$client_state = [
+    'rows' => array_map(fn($r) => [
+        'title' => $r['title'],
+        'layout' => $r['layout'],
+        'item_ids' => array_column($r['items'] ?? [], 'id'),
+    ], $rendered_rows),
+];
+
+?><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Looth Group — Lutherie Community</title>
+<meta name="description" content="The Looth Group archive — articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="<?= h($canonical) ?>">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Looth Group">
+<meta property="og:description" content="Articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta property="og:url" content="<?= h($canonical) ?>">
+<meta property="og:image" content="<?= h($og_image) ?>">
+<meta property="og:site_name" content="Looth Group">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Looth Group">
+<meta name="twitter:description" content="Articles, videos, loothprints, events, and discussions from the lutherie community.">
+<meta name="twitter:image" content="<?= h($og_image) ?>">
+
+<link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
+</head>
+<body class="view-discover<?= $happening_now ? ' has-live' : '' ?>">
+<?php require __DIR__ . '/_chrome.php'; ?>
+<?php if ($happening_now): $hn = $happening_now; ?>
+<aside class="live-banner" role="status">
+  <span class="live-banner__dot">🔴</span>
+  <span class="live-banner__label">LIVE NOW</span>
+  <span class="live-banner__title"><?= h($hn['title']) ?></span>
+  <a class="live-banner__cta" href="<?= h($hn['event_join_url'] ?: $hn['url']) ?>" target="_blank" rel="noopener">Join →</a>
+</aside>
+<?php endif; ?>
+<?php if (!$is_member && $signup_banner): ?>
+<aside class="signup-banner" role="region" aria-label="Sign up">
+  <div class="signup-banner__inner">
+    <div>
+      <strong class="signup-banner__title"><?= h($signup_banner['title']) ?></strong>
+      <span class="signup-banner__body"><?= h($signup_banner['body']) ?></span>
+    </div>
+    <a class="signup-banner__cta" href="<?= h($signup_banner['cta_url']) ?>"><?= h($signup_banner['cta_label']) ?> →</a>
+  </div>
+</aside>
+<?php endif; ?>
+<main class="arc-page" id="main">
+
+  <form class="topbar topbar--standalone" id="topbar" autocomplete="off" onsubmit="event.preventDefault(); return false">
+    <svg class="topbar__icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b6f6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="q" name="q" type="search" placeholder="Search or just browse…">
+    <button type="button" class="search-close" aria-label="Close search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <select id="sort" class="sort" hidden>
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+      <option value="liked">Most liked</option>
+      <option value="viewed">Most viewed</option>
+      <option value="least_viewed">Least viewed</option>
+      <option value="discussed">Most discussed</option>
+      <option value="active">Most recently active</option>
+      <option value="random">Random</option>
+      <option value="relevance">Best match</option>
+    </select>
+  </form>
+
+  <!-- Grid-mode 2-column layout (rail + content). Discover view hides the whole thing. -->
+  <div class="grid-layout">
+    <button class="rail-toggle" type="button" id="rail-toggle" aria-expanded="false" aria-controls="grid-rail">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+      <span>Filters</span>
+    </button>
+
+    <aside class="grid-rail" id="grid-rail" aria-label="Filters">
+      <button class="rail-close" type="button" id="rail-close" aria-label="Close filters">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+
+      <button class="rail-clear" type="button" id="rail-clear" hidden>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Clear all filters
+      </button>
+
+      <section class="rail-sec">
+        <h3 class="rail-h">Type</h3>
+        <nav class="tabs" id="tabs" aria-label="Content type"></nav>
+      </section>
+
+      <section class="rail-sec" id="rail-sec-tag" hidden>
+        <h3 class="rail-h">Tags</h3>
+        <div class="pills" id="tag-pills"></div>
+      </section>
+
+      <section class="rail-sec" id="rail-sec-author" hidden>
+        <h3 class="rail-h">Author</h3>
+        <div class="pills" id="author-pills"></div>
+      </section>
+
+      <section class="rail-sec" id="rail-sec-tier" hidden>
+        <h3 class="rail-h">Membership</h3>
+        <div class="pills" id="tier-pills"></div>
+      </section>
+    </aside>
+
+    <div class="grid-content">
+      <div class="grid-sort">
+        <label for="sort-rail" class="grid-sort__label">Sort:</label>
+        <select id="sort-rail" class="grid-sort__select">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="liked">Most liked</option>
+          <option value="viewed">Most viewed</option>
+          <option value="least_viewed">Least viewed</option>
+          <option value="discussed">Most discussed</option>
+          <option value="active">Most recently active</option>
+          <option value="random">Random</option>
+          <option value="relevance">Best match</option>
+        </select>
+      </div>
+      <aside class="author-banner" id="author-banner" hidden></aside>
+      <div class="lg-modal author-bio-modal" id="author-bio-modal" hidden aria-hidden="true">
+        <div class="lg-modal__backdrop" data-author-bio-close></div>
+        <div class="lg-modal__panel author-bio-modal__panel" role="dialog" aria-modal="true" aria-labelledby="author-bio-name">
+          <button type="button" class="lg-modal__close" data-author-bio-close aria-label="Close">×</button>
+          <div class="author-bio-modal__body" id="author-bio-body"></div>
+        </div>
+      </div>
+      <p class="results-meta" id="results-meta" hidden></p>
+      <div class="active-filters" id="active-filters" hidden></div>
+      <section class="cards" id="cards" aria-live="polite" hidden></section>
+      <nav class="pagination" id="pagination" aria-label="Pagination" hidden></nav>
+      <div class="loadmore" hidden><span id="loadmore-status"></span></div>
+    </div>
+  </div>
+
+  <!-- Legacy subfilters wrapper kept as a no-op anchor; some JS may reference it. -->
+  <div id="subfilters" hidden></div>
+
+  <!-- Discover mode: SSR'd rows, two-column layout -->
+<?php
+    // Split into main vs sidebar columns. Static layouts (cta-bar/looths/sponsors)
+    // never have $row['items'] — exempt them from the empty-skip.
+    $static_layouts = ['cta-bar','local-looths','sponsors','video-promo'];
+    $activity_row = null;
+    $main_rows = [];
+    $left_rows = [];
+    $right_rows = [];
+    foreach ($rendered_rows as $r) {
+        $lay = $r['layout'] ?? 'rail';
+        if (empty($r['items']) && !in_array($lay, $static_layouts, true)) continue;
+        $col = 'main';
+        foreach ($rows_config as $rc) {
+            if (($rc['id'] ?? '') === ($r['id'] ?? '')) { $col = $rc['column'] ?? 'main'; break; }
+        }
+        if      ($col === 'left')      $left_rows[]  = $r;
+        elseif  ($col === 'right')     $right_rows[] = $r;
+        elseif  ($lay === 'activity')  $activity_row = $r;   // pulled out for sidebar-flanked band
+        else                           $main_rows[]  = $r;
+    }
+
+    // Render closure for one row's HTML — same dispatch chain we already had
+    // below, factored out so we can call it from inside the activity band's
+    // center pane AND from the regular below-band flow.
+    $render_main_row = function(array $row) use ($is_member) {
+        $layout = $row['layout'] ?? 'rail';
+        $row_id = $row['id'] ?? '';
+        ob_start();
+        include __DIR__ . '/_render-main-row.php';
+        return ob_get_clean();
+    };
+?>
+
+<?php if ($activity_row): ?>
+  <div class="activity-band">
+    <aside class="band-pane band-pane--left">
+<?php foreach ($left_rows as $row):
+        $layout = $row['layout'] ?? '';
+        $row_id = $row['id'] ?? '';
+        if ($layout === 'cta-bar'):
+            $buttons = $is_member ? LG_CTA_MEMBER : LG_CTA_PUBLIC;
+?>
+      <section class="side-row side-row--cta" data-row-id="<?= h($row_id) ?>">
+<?php foreach ($buttons as $b): ?>
+        <a class="cta-btn cta-btn--<?= h($b['style']) ?>" href="<?= h($b['url']) ?>"<?= !empty($b['action']) ? ' data-action="' . h($b['action']) . '"' : '' ?><?= !empty($b['attr']) ? ' ' . $b['attr'] : '' ?>><?= !empty($b['icon']) ? $b['icon'] : '' ?><?= h($b['label']) ?></a>
+<?php endforeach; ?>
+      </section>
+<?php elseif ($layout === 'events'): ?>
+      <section class="side-row side-row--events" data-row-id="<?= h($row_id) ?>">
+        <h3 class="side-row__title"><?= h($row['title'] ?: 'Upcoming events') ?></h3>
+        <ul class="side-events">
+<?php foreach ($row['items'] as $it):
+            $blk = event_date_block($it);
+            $tier = strtolower((string)($it['tier'] ?? 'public'));
+            // Always link to the event post page — never leak the Zoom URL anonymously.
+            $href = $it['url'] ?: '#';
+?>
+          <li><a class="side-event" href="<?= h($href) ?>">
+            <div class="side-event__date">
+              <span class="side-event__dow"><?= h($blk['dow']) ?></span>
+              <span class="side-event__day"><?= h($blk['day']) ?></span>
+              <span class="side-event__mon"><?= h($blk['mon']) ?></span>
+            </div>
+            <div class="side-event__body">
+              <h4 class="side-event__title"><?= h($it['title']) ?></h4>
+              <div class="side-event__meta">
+                <span class="side-event__time"><?= h($blk['time']) ?></span>
+<?php if (!empty($blk['rel'])): ?><span class="side-event__rel"><?= h($blk['rel']) ?></span><?php endif; ?>
+              </div>
+            </div>
+          </a></li>
+<?php endforeach; ?>
+        </ul>
+      </section>
+<?php elseif ($layout === 'local-looths'): ?>
+      <section class="side-row side-row--looths" data-row-id="<?= h($row_id) ?>">
+        <h3 class="side-row__title"><?= h($row['title'] ?: 'Local Looths') ?></h3>
+        <ul class="side-looths">
+<?php foreach (LG_LOCAL_LOOTHS as $l): ?>
+          <li><a href="<?= h($l['url']) ?>">
+            <img src="<?= h($l['avatar']) ?>" alt="" loading="lazy" width="36" height="36"
+                 onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+            <span><?= h($l['name']) ?></span>
+          </a></li>
+<?php endforeach; ?>
+        </ul>
+      </section>
+<?php endif; endforeach; ?>
+    </aside>
+
+    <div class="band-pane band-pane--center">
+      <?= $render_main_row($activity_row) ?>
+    </div>
+
+    <aside class="band-pane band-pane--right">
+<?php foreach ($right_rows as $row):
+        $layout = $row['layout'] ?? '';
+        $row_id = $row['id'] ?? '';
+        if ($layout === 'local-looths'): ?>
+      <section class="side-row side-row--looths" data-row-id="<?= h($row_id) ?>">
+        <h3 class="side-row__title"><?= h($row['title'] ?: 'Local Looths') ?></h3>
+        <ul class="side-looths">
+<?php foreach (LG_LOCAL_LOOTHS as $l): ?>
+          <li><a href="<?= h($l['url']) ?>">
+            <img src="<?= h($l['avatar']) ?>" alt="" loading="lazy" width="36" height="36"
+                 onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+            <span><?= h($l['name']) ?></span>
+          </a></li>
+<?php endforeach; ?>
+        </ul>
+      </section>
+<?php elseif ($layout === 'sponsors'): ?>
+      <section class="side-row side-row--sponsors" data-row-id="<?= h($row_id) ?>">
+        <h3 class="side-row__title"><?= h($row['title'] ?: 'Our Sponsors') ?></h3>
+        <div class="side-sponsors">
+<?php foreach (LG_SPONSORS as $s):
+            $bg = !empty($s['bg']) ? 'style="background:' . h($s['bg']) . ';"' : '';
+?>
+          <a class="side-sponsor" href="<?= h($s['url']) ?>" target="_blank" rel="noopener" <?= $bg ?>>
+            <img src="<?= h($s['logo']) ?>" alt="<?= h($s['name']) ?>" loading="lazy">
+          </a>
+<?php endforeach; ?>
+        </div>
+      </section>
+<?php endif; endforeach; ?>
+    </aside>
+  </div><!-- /.activity-band -->
+<?php endif; ?>
+
+  <div class="rows" id="rows">
+<?php foreach ($main_rows as $row):
+    $layout = $row['layout'] ?? 'rail';
+    $row_id = $row['id'] ?? '';
+?>
+
+<?php include __DIR__ . "/_render-main-row.php"; ?>
+<?php endforeach; /* /main_rows */ ?>
+  </div><!-- /.rows -->
+  </div><!-- /.arc-pane--main -->
+  </div><!-- /.arc-app -->
+  <?php /* Right-column rows (sponsors, looths) are rendered inside the
+           activity band; the duplicate bottom-stacked render was removed. */ ?>
+</main>
+<!-- Search modal (opened by [data-action="open-search-modal"]) -->
+<div class="search-modal" id="search-modal" hidden aria-hidden="true">
+  <div class="search-modal__backdrop" data-search-modal-close></div>
+  <div class="search-modal__dialog" role="dialog" aria-modal="true" aria-label="Search the archive">
+    <form class="search-modal__form" onsubmit="event.preventDefault();">
+      <svg class="search-modal__icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="search-modal-q" class="search-modal__input" placeholder="Search articles, videos, loothprints, discussions…" autocomplete="off">
+      <button type="button" class="search-modal__close" data-search-modal-close aria-label="Close">×</button>
+    </form>
+    <div class="search-modal__results" id="search-modal-results"></div>
+    <div class="search-modal__foot">
+      <button type="button" class="search-modal__more" id="search-modal-more" hidden>See all results →</button>
+    </div>
+  </div>
+</div>
+<!-- Member Map modal (opened by [data-action="open-member-map"]) -->
+<div class="lg-modal member-map-modal" id="member-map-modal" hidden aria-hidden="true">
+  <div class="lg-modal__backdrop" data-member-map-close></div>
+  <div class="lg-modal__dialog" role="dialog" aria-modal="true" aria-label="Member map">
+    <div class="lg-modal__head">
+      <svg class="lg-modal__title-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+      <h2 class="lg-modal__title">Member Map</h2>
+      <span class="lg-modal__count" id="member-map-count" aria-live="polite"></span>
+      <button type="button" class="lg-modal__close" data-member-map-close aria-label="Close">×</button>
+    </div>
+    <div class="lg-modal__body">
+      <div id="member-map" class="member-map" role="application" aria-label="Map of Looth Group members"></div>
+      <div class="member-map__status" id="member-map-status">Loading map…</div>
+    </div>
+  </div>
+</div>
+<?php require __DIR__ . '/_chrome-footer.php'; ?>
+<script>window.__ROWS__ = <?= json_encode($client_state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;</script>
+<script src="/archive-poc/archive.js?v=<?= @filemtime(__DIR__.'/archive.js') ?>"></script>
+</body>
+</html>
+<?php
+// Refresh any stale activity-strip caches AFTER the response is flushed, so the
+// WP fetch never blocks the visitor's page render.
+archive_poc_flush_activity_refreshes();

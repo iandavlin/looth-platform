@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post-Footer Mockup — Stacked Card</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Stacked card: single soft container, author up top, divider, carousel below ── */
+  .pf-stacked {
+    margin-top: 64px;
+    padding: 32px;
+    background: rgba(0,0,0,0.025);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+  }
+
+  /* Author block */
+  .pf-stacked__author {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: 20px;
+    row-gap: 12px;
+    align-items: start;
+  }
+  .pf-stacked__name { font-weight: 700; font-size: 16px; margin: 0; }
+  .pf-stacked__tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--lg-green-1);
+    margin: 2px 0 0;
+  }
+  .pf-stacked__edit {
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.15);
+    background: #fff;
+    color: var(--lg-ink-2);
+    cursor: pointer;
+  }
+  .pf-stacked__bio {
+    grid-column: 2 / span 2;
+    color: var(--lg-ink-2);
+    font-size: 15px;
+    margin: 0;
+  }
+  .pf-stacked__socials {
+    grid-column: 2 / span 2;
+  }
+
+  /* Divider before related */
+  .pf-stacked__divider {
+    height: 1px;
+    background: rgba(0,0,0,0.08);
+    margin: 28px 0 24px;
+  }
+
+  /* Related header + carousel */
+  .pf-stacked__related-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .pf-stacked__related-head h2 {
+    margin: 0; font-size: 18px;
+  }
+  .pf-stacked__nav { display: flex; gap: 6px; }
+  .pf-stacked__nav button {
+    width: 32px; height: 32px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.15);
+    background: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--lg-ink-2);
+  }
+  .pf-stacked__track {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 880px) {
+    .pf-stacked__track { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .pf-stacked { padding: 24px 20px; }
+    .pf-stacked__author { grid-template-columns: auto 1fr; }
+    .pf-stacked__edit { grid-column: 1 / -1; justify-self: start; }
+    .pf-stacked__bio,
+    .pf-stacked__socials { grid-column: 1 / -1; }
+    .pf-stacked__track { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="lg-main">
+  <article class="lg-article">
+    <h1>Jeff's '59 P-Bass — A Strange Repair</h1>
+    <div class="lg-section-fake">
+      <p>While it would have been tempting to finish the body in a Mary Kaye blonde, the tuners, bridge, and even the control pots are from 1965 (no gold plating on the bridge or tuners). With that in mind, I will clean the hardware as best I can…</p>
+      <p class="last"><em>In Part Two you'll see how we handled the rest of these jobs and the bass will be back in action.</em></p>
+    </div>
+
+    <div class="demo-note">↓ post-footer (end matter) starts here</div>
+
+    <!-- ── Post footer ── -->
+    <section class="pf-stacked">
+      <div class="pf-stacked__author">
+        <div class="avatar avatar--lg" style="background-image: linear-gradient(135deg, #c2d0bb, #889b80);"></div>
+        <div>
+          <p class="pf-stacked__name">Ian B Davlin</p>
+          <p class="pf-stacked__tag">Looth Lite Member</p>
+        </div>
+        <button class="pf-stacked__edit">Edit profile</button>
+        <p class="pf-stacked__bio">Luthier and writer based in DC. Specializes in vintage Fender restoration and one-off jig fabrication. Founder of The Looth Group.</p>
+        <div class="pf-stacked__socials socials">
+          <a href="#">IG</a><a href="#">YT</a><a href="#">FB</a><a href="#">WEB</a>
+        </div>
+      </div>
+
+      <div class="pf-stacked__divider"></div>
+
+      <div class="pf-stacked__related-head">
+        <h2>More from the Looth Group</h2>
+        <div class="pf-stacked__nav"><button>‹</button><button>›</button></div>
+      </div>
+      <div class="pf-stacked__track">
+        <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Local Looths Tri-State Meetup At Guitar Specialist</div></a>
+        <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Martin Pickguard Reglue with Titebond and 3DP Cauls</div></a>
+        <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Collapsible and Height Adjustable Go-Bar Deck</div></a>
+        <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">00-21 Top Off Restoration</div></a>
+      </div>
+    </section>
+  </article>
+</main>
+
+</body>
+</html>

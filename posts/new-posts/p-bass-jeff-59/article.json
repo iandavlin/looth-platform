@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "_meta": {
+    "title": "Jeff's '59 P-Bass — A Strange Repair",
+    "featured_image_id": 69098,
+    "notes": "Hand-built via /write-article skill. 13 portrait images (3:4) paired into columns where the narrative permits. Image 001 is the cover; intro carries the bulleted problem list."
+  },
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "Jeff's '59 P-Bass — A Strange Repair"
+    },
+    {
+      "type": "text",
+      "html": "<p>Here's one of the stranger repairs I have done. My customer, Jeff, sent me this photo of a bass he bought — a '59 P-bass with a '65 neck. He hoped that it could be salvaged, but there were numerous problems, including, from worst to least:</p><ul><li>the horribly \"modified\" body that he wanted me to rebuild</li><li>a missing nut and a chipped nut slot in the fretboard</li><li>a broken truss rod that had been repaired poorly</li><li>a working pickup that's falling apart</li><li>a wiring harness that needs a complete overhaul</li></ul><p>Naturally, I started out restoring the body.</p>"
+    },
+    {
+      "type": "columns",
+      "cols": 2,
+      "blocks": [
+        {
+          "type": "image-caption",
+          "id": 69099,
+          "alt": "Original modified body — wood carved away",
+          "caption": "<p><strong>002</strong> So much wood had been carved away from the body that I thought long and hard about even doing the work.</p>",
+          "variant": "stacked"
+        },
+        {
+          "type": "image-caption",
+          "id": 69100,
+          "alt": "Cutting away unsalvageable wood",
+          "caption": "<p><strong>003</strong> Finally I decided to cut away all the wood that couldn't be saved. Then, to make the job faster and easier, I bought an extremely light swamp ash P-bass body, sawed it in three, and joined its outer parts to the center of the original. I retained the original pickup cavity, including the penciled-in date of 7/59 in the pickup cavity. There was so much wood carved away in the bridge area that I had to fit a block of new wood at the butt end (see next photo).</p>",
+          "variant": "stacked"
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "cols": 2,
+      "blocks": [
+        {
+          "type": "image-caption",
+          "id": 69101,
+          "alt": "Original control cavity inlaid into new body",
+          "caption": "<p><strong>004</strong> I also cut out the original control cavity and inlaid it into the new body to retain the original look (crazy, I know, but that's the kind of thing that makes it fun to do such difficult and time-consuming jobs). In this photo you can see the block of wood in the bridge area. I ran the body through a thickness sander on both sides, leaving a smooth surface for me to glue swamp ash overlays onto, hiding the glue joints.</p>",
+          "variant": "stacked"
+        },
+        {
+          "type": "image-caption",
+          "id": 69102,
+          "alt": "Swamp ash laminates cut on the bandsaw",
+          "caption": "<p><strong>005</strong> My woodworking friend Isaac used his giant bandsaw to cut slabs from a large block of swamp ash standing on edge, producing two laminates. One piece is .100\" thick so it can bend over the body cut on the top; the piece for the back of the bass is .250\". We removed just enough wood from the top and back of the bass to keep the final thickness close to the original size.</p>",
+          "variant": "stacked"
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "cols": 2,
+      "blocks": [
+        {
+          "type": "image-caption",
+          "id": 69103,
+          "alt": "Laminates pinned and glued in a vacuum press",
+          "caption": "<p><strong>006</strong> Both laminates were then pinned together with small locating pins and glued in a vacuum press that pulled the top laminate over the arm curve slowly and evenly without breaking.</p>",
+          "variant": "stacked"
+        },
+        {
+          "type": "image-caption",
+          "id": 69104,
+          "alt": "Routing cavities through the top laminate",
+          "caption": "<p><strong>007</strong> Here I'm drilling holes through the top laminate so that I could drop a flush-cutting router into the cavities and rout them clean; after that I routed the top and bottom overhangs with a round-over ball-bearing router bit to replace the body's curved edges.</p>",
+          "variant": "stacked"
+        }
+      ]
+    },
+    {
+      "type": "image-caption",
+      "id": 69105,
+      "alt": "Neck test-mounted to locate the bridge",
+      "caption": "<p><strong>008</strong> I mounted the neck to be sure the pickup cavity was on center to the bridge, and to locate the bridge. Next I will drill the mounting holes for the bridge and pickguard. Then, after final-sanding the body, I'll hand it off to my friend and super-finisher, Keith McGrath.</p>",
+      "variant": "stacked"
+    },
+    {
+      "type": "columns",
+      "cols": 2,
+      "blocks": [
+        {
+          "type": "image-caption",
+          "id": 69106,
+          "alt": "Truss rod adjusting nut buried deep in the hole",
+          "caption": "<p><strong>009</strong> While Keith is spraying I'll figure out why the truss rod adjusting nut is so deep in the hole…</p>",
+          "variant": "stacked"
+        },
+        {
+          "type": "image-caption",
+          "id": 69107,
+          "alt": "Pickups cleaned and copper ground plates polished",
+          "caption": "<p><strong>010</strong> …clean up the pickups and their copper ground plates, and install new rubber risers.</p>",
+          "variant": "stacked"
+        }
+      ]
+    },
+    {
+      "type": "columns",
+      "cols": 2,
+      "blocks": [
+        {
+          "type": "image-caption",
+          "id": 69108,
+          "alt": "Repairing the nut slot chip and making a new bone nut",
+          "caption": "<p><strong>011</strong> I will also repair the nut slot chip and make a new bone nut.</p>",
+          "variant": "stacked"
+        },
+        {
+          "type": "image-caption",
+          "id": 69109,
+          "alt": "New gold anodized pickguard with rewired harness",
+          "caption": "<p><strong>012</strong> My long-time pal and fellow repairman Gene Imbody is going to save what he can from the original wiring and wire it into a new gold anodized pickguard. (Gene is head of Customer Service &amp; Chief Technician for StewMac).</p>",
+          "variant": "stacked"
+        }
+      ]
+    },
+    {
+      "type": "image-caption",
+      "id": 69110,
+      "alt": "Evidence of original Mary Kaye blonde finish in the pickup cavity",
+      "caption": "<p><strong>013</strong> First, however, Keith and I need to decide on the finish. I think this bass originally had a blonde Mary Kaye finish because there are remnants in the body cavities. It shows clearly here in the pickup cavity, where the brass ground plate, stuck to the thick yellow varnish that had been applied over the original finish, pulled a section loose and exposed the color. Also, the strap buttons, though very worn, still show gold plating (another sure sign of a Mary Kaye finish).</p>",
+      "variant": "stacked"
+    },
+    {
+      "type": "text",
+      "html": "<p>While it would have been tempting to finish the body in a Mary Kaye blonde, the tuners, bridge, and even the control pots are from 1965 (no gold plating on the bridge or tuners). With that in mind, I will clean the hardware as best I can, and ask Keith to do a warm two-tone vintage sunburst that will go great with the anodized gold guard; besides, Jeff's 12-year-old daughter Eli will inherit this bass, and after looking at photos of both a Mary Kaye and the sunburst, she definitely wants the burst.</p><p><em>In Part Two you'll see how we handled the rest of these jobs and the bass will be back in action.</em></p>"
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Footer Mockup — Editorial Big-Type</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Footer 3: Editorial big-type, brand-led ─────────────────────────── */
+  .lg-footer-ed {
+    margin-top: 80px;
+    background: var(--lg-sage-1);
+    color: var(--lg-ink-1);
+  }
+
+  .lg-footer-ed__hero {
+    max-width: 1200px; margin: 0 auto;
+    padding: 80px 24px 56px;
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 64px;
+    align-items: end;
+    border-bottom: 1px solid var(--lg-sage-3);
+  }
+  .lg-footer-ed__title {
+    font-size: 56px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+    margin: 0;
+    color: var(--lg-green-dark);
+  }
+  .lg-footer-ed__title em {
+    font-style: italic;
+    color: var(--lg-green-1);
+    font-weight: 500;
+  }
+
+  .lg-footer-ed__signup {
+    background: #fff;
+    border: 1px solid var(--lg-sage-3);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .lg-footer-ed__signup h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--lg-green-dark);
+  }
+  .lg-footer-ed__signup p {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: var(--lg-ink-2);
+  }
+  .lg-footer-ed__form { display: flex; gap: 6px; }
+  .lg-footer-ed__form input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--lg-sage-3);
+    background: var(--lg-paper);
+    font-size: 14px;
+  }
+  .lg-footer-ed__form button {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 0;
+    background: var(--lg-green-dark);
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .lg-footer-ed__form button:hover { background: #1f2a1d; }
+
+  /* Three column lists below the hero */
+  .lg-footer-ed__lists {
+    max-width: 1200px; margin: 0 auto;
+    padding: 40px 24px 32px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+  .lg-footer-ed__list h4 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--lg-green-dark); margin: 0 0 12px; font-weight: 700;
+  }
+  .lg-footer-ed__list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .lg-footer-ed__list a {
+    font-size: 14px;
+    color: var(--lg-ink-1);
+    border-bottom: 1px solid transparent;
+    padding-bottom: 1px;
+  }
+  .lg-footer-ed__list a:hover {
+    border-bottom-color: var(--lg-green-dark);
+  }
+
+  /* Bottom band */
+  .lg-footer-ed__bar {
+    border-top: 1px solid var(--lg-sage-3);
+    padding: 20px 24px;
+  }
+  .lg-footer-ed__bar-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--lg-ink-2);
+  }
+  .lg-footer-ed__social { display: flex; gap: 10px; }
+  .lg-footer-ed__social a {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    color: var(--lg-green-dark);
+    border: 1px solid var(--lg-sage-3);
+  }
+  .lg-footer-ed__social a:hover { background: var(--lg-sage-2); }
+  .lg-footer-ed__legal { display: flex; gap: 16px; }
+  .lg-footer-ed__legal a { font-size: 12px; }
+
+  @media (max-width: 880px) {
+    .lg-footer-ed__hero {
+      grid-template-columns: 1fr;
+      padding: 56px 24px 40px;
+      gap: 32px;
+    }
+    .lg-footer-ed__title { font-size: 40px; }
+    .lg-footer-ed__lists { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .lg-footer-ed__lists { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="demo-body">
+  <h1>Footer Option 3 — Editorial Big-Type</h1>
+  <p>Brand-led footer with an oversized statement, an inset newsletter card, and three loose flowing tag-style link lists below. Maps to magazine-style footers (Awwwards collection) and Eleken's "doormat" variant when the brand voice deserves real estate.</p>
+  <div class="demo-note">Best fit if you want the footer to feel like part of the editorial product — the sage palette extends into the footer rather than switching to a dark band. Trades scanability for personality.</div>
+</main>
+
+<footer class="lg-footer-ed">
+  <!-- Hero band: oversized brand statement + signup card -->
+  <div class="lg-footer-ed__hero">
+    <h2 class="lg-footer-ed__title">
+      Stories from the workbench. <em>For the people who keep the music playing.</em>
+    </h2>
+    <div class="lg-footer-ed__signup">
+      <h3>Get the Friday dispatch</h3>
+      <p>One long-form repair story a week. No filler.</p>
+      <form class="lg-footer-ed__form" onsubmit="return false">
+        <input type="email" placeholder="Your email" required>
+        <button type="submit">Subscribe</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Three category lists, tag-style flow -->
+  <div class="lg-footer-ed__lists">
+    <div class="lg-footer-ed__list">
+      <h4>Read</h4>
+      <ul>
+        <li><a href="#">Articles</a></li>
+        <li><a href="#">Repairs</a></li>
+        <li><a href="#">Tools & Jigs</a></li>
+        <li><a href="#">Tips</a></li>
+        <li><a href="#">Events</a></li>
+      </ul>
+    </div>
+    <div class="lg-footer-ed__list">
+      <h4>Community</h4>
+      <ul>
+        <li><a href="#">Members</a></li>
+        <li><a href="#">Become a Member</a></li>
+        <li><a href="#">Submit a story</a></li>
+        <li><a href="#">Local meetups</a></li>
+      </ul>
+    </div>
+    <div class="lg-footer-ed__list">
+      <h4>Group</h4>
+      <ul>
+        <li><a href="#">About</a></li>
+        <li><a href="#">Contact</a></li>
+        <li><a href="#">Press</a></li>
+        <li><a href="#">Privacy</a></li>
+        <li><a href="#">Terms</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="lg-footer-ed__bar">
+    <div class="lg-footer-ed__bar-inner">
+      <div>© 2026 The Looth Group</div>
+      <div class="lg-footer-ed__social">
+        <a href="#" aria-label="Instagram">IG</a>
+        <a href="#" aria-label="YouTube">YT</a>
+        <a href="#" aria-label="Facebook">FB</a>
+      </div>
+      <div class="lg-footer-ed__legal">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

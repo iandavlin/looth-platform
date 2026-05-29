@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "defaultMode": "bypassPermissions",
+    "allow": [],
+    "additionalDirectories": [
+      "/srv/thumb-app",
+      "/usr/local/bin",
+      "/etc/nginx/sites-available",
+      "/home/ubuntu/projects/lg-layout-v2/.claude/skills",
+      "/var/www/dev/mockups",
+      "/home/ubuntu/projects/lg-layout-v2"
+    ]
+  }
+}

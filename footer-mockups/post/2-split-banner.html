@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post-Footer Mockup — Split Banner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Split banner: sage banner for author, white carousel below ── */
+  .pf-split {
+    margin-top: 64px;
+  }
+
+  /* Author banner: full-bleed sage with overlapping avatar */
+  .pf-split__author {
+    background: var(--lg-sage-1);
+    border-radius: 14px;
+    padding: 32px 32px 28px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: start;
+  }
+  .pf-split__name { font-weight: 800; font-size: 20px; margin: 0; color: var(--lg-green-dark); }
+  .pf-split__tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--lg-green-1);
+    margin: 4px 0 10px;
+  }
+  .pf-split__bio {
+    color: var(--lg-ink-2);
+    font-size: 15px;
+    margin: 0 0 14px;
+    max-width: 540px;
+  }
+  .pf-split__edit {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+    border: 1px solid var(--lg-green-1);
+    background: transparent;
+    color: var(--lg-green-dark);
+    font-weight: 600;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .pf-split__edit:hover { background: var(--lg-sage-2); }
+
+  /* Related section */
+  .pf-split__related { margin-top: 40px; }
+  .pf-split__related-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 16px;
+    padding: 0 4px;
+  }
+  .pf-split__related-head h2 {
+    margin: 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--lg-green-dark);
+  }
+  .pf-split__related-head a {
+    font-size: 12px;
+    color: var(--lg-ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--lg-sage-3);
+    padding-bottom: 1px;
+  }
+  .pf-split__track {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 880px) {
+    .pf-split__author { grid-template-columns: auto 1fr; }
+    .pf-split__edit { grid-column: 1 / -1; justify-self: start; }
+    .pf-split__track { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .pf-split__track { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="lg-main">
+  <article class="lg-article">
+    <h1>Jeff's '59 P-Bass — A Strange Repair</h1>
+    <div class="lg-section-fake">
+      <p>While it would have been tempting to finish the body in a Mary Kaye blonde, the tuners, bridge, and even the control pots are from 1965…</p>
+      <p class="last"><em>In Part Two you'll see how we handled the rest of these jobs and the bass will be back in action.</em></p>
+    </div>
+
+    <div class="demo-note">↓ post-footer (end matter) starts here</div>
+
+    <!-- ── Post footer ── -->
+    <section class="pf-split">
+      <!-- Author banner -->
+      <div class="pf-split__author">
+        <div class="avatar avatar--xl" style="background-image: linear-gradient(135deg, #c2d0bb, #889b80);"></div>
+        <div>
+          <p class="pf-split__name">Ian B Davlin</p>
+          <p class="pf-split__tag">Looth Lite Member · DC</p>
+          <p class="pf-split__bio">Luthier and writer based in DC. Specializes in vintage Fender restoration and one-off jig fabrication. Founder of The Looth Group.</p>
+          <div class="socials">
+            <a href="#">IG</a><a href="#">YT</a><a href="#">FB</a><a href="#">WEB</a>
+          </div>
+        </div>
+        <button class="pf-split__edit">Edit profile</button>
+      </div>
+
+      <!-- Related, clean separation, header is small label not big H2 -->
+      <div class="pf-split__related">
+        <div class="pf-split__related-head">
+          <h2>More from the Looth Group</h2>
+          <a href="#">See all →</a>
+        </div>
+        <div class="pf-split__track">
+          <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Local Looths Tri-State Meetup At Guitar Specialist</div></a>
+          <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Martin Pickguard Reglue with Titebond and 3DP Cauls</div></a>
+          <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">Collapsible and Height Adjustable Go-Bar Deck</div></a>
+          <a class="related-card" href="#"><div class="related-card__thumb"></div><div class="related-card__title">00-21 Top Off Restoration</div></a>
+        </div>
+      </div>
+    </section>
+  </article>
+</main>
+
+</body>
+</html>

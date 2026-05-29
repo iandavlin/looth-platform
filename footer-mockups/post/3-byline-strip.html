@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Post-Footer Mockup — Byline Strip</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Byline strip: editorial magazine treatment ──────────────────────── */
+  .pf-byline {
+    margin-top: 64px;
+  }
+
+  /* Author: hairline-only, no card */
+  .pf-byline__author {
+    border-top: 2px solid var(--lg-green-dark);
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    padding: 28px 0;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+  }
+  .pf-byline__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--lg-green-1);
+    grid-column: 1 / -1;
+    margin: 0 0 12px;
+  }
+  .pf-byline__main {
+    display: flex; gap: 20px; align-items: flex-start;
+    grid-column: 2;
+  }
+  .pf-byline__avatar-col { grid-column: 1; }
+  .pf-byline__name {
+    font-weight: 800;
+    font-size: 22px;
+    color: var(--lg-green-dark);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .pf-byline__tag {
+    font-size: 12px;
+    color: var(--lg-ink-2);
+    margin: 4px 0 10px;
+  }
+  .pf-byline__bio {
+    color: var(--lg-ink-2);
+    font-size: 15px;
+    margin: 0;
+    line-height: 1.55;
+    max-width: 600px;
+  }
+  .pf-byline__actions {
+    grid-column: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .pf-byline__edit {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.2);
+    background: transparent;
+    color: var(--lg-ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .pf-byline__edit:hover { background: rgba(0,0,0,0.04); }
+
+  /* Related — horizontal scroll snap, no card chrome, just thumbs + titles */
+  .pf-byline__related {
+    margin-top: 40px;
+  }
+  .pf-byline__related h2 {
+    margin: 0 0 16px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--lg-green-1);
+  }
+  .pf-byline__track {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+  .pf-byline__card { display: block; }
+  .pf-byline__card-thumb {
+    aspect-ratio: 4/3;
+    background: linear-gradient(135deg, var(--lg-sage-1), var(--lg-sage-2));
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  .pf-byline__card-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--lg-ink-1);
+  }
+  .pf-byline__card:hover .pf-byline__card-title { color: var(--lg-green-dark); }
+
+  @media (max-width: 880px) {
+    .pf-byline__author { grid-template-columns: auto 1fr; }
+    .pf-byline__actions { grid-column: 1 / -1; flex-direction: row; }
+    .pf-byline__track { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .pf-byline__track { grid-template-columns: 1fr; }
+    .pf-byline__name { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="lg-main">
+  <article class="lg-article">
+    <h1>Jeff's '59 P-Bass — A Strange Repair</h1>
+    <div class="lg-section-fake">
+      <p>While it would have been tempting to finish the body in a Mary Kaye blonde, the tuners, bridge, and even the control pots are from 1965…</p>
+      <p class="last"><em>In Part Two you'll see how we handled the rest of these jobs and the bass will be back in action.</em></p>
+    </div>
+
+    <div class="demo-note">↓ post-footer (end matter) starts here</div>
+
+    <!-- ── Post footer ── -->
+    <section class="pf-byline">
+      <div class="pf-byline__author">
+        <p class="pf-byline__label">Written by</p>
+        <div class="pf-byline__avatar-col">
+          <div class="avatar avatar--lg" style="background-image: linear-gradient(135deg, #c2d0bb, #889b80);"></div>
+        </div>
+        <div class="pf-byline__main">
+          <div>
+            <p class="pf-byline__name">Ian B Davlin</p>
+            <p class="pf-byline__tag">Looth Lite Member · DC · <a href="#" style="border-bottom: 1px solid var(--lg-sage-3);">12 articles</a></p>
+            <p class="pf-byline__bio">Luthier and writer based in DC. Specializes in vintage Fender restoration and one-off jig fabrication. Founder of The Looth Group.</p>
+          </div>
+        </div>
+        <div class="pf-byline__actions">
+          <div class="socials">
+            <a href="#">IG</a><a href="#">YT</a><a href="#">FB</a>
+          </div>
+          <button class="pf-byline__edit">Edit profile</button>
+        </div>
+      </div>
+
+      <div class="pf-byline__related">
+        <h2>More from the Looth Group</h2>
+        <div class="pf-byline__track">
+          <a class="pf-byline__card" href="#"><div class="pf-byline__card-thumb"></div><div class="pf-byline__card-title">Local Looths Tri-State Meetup At Guitar Specialist</div></a>
+          <a class="pf-byline__card" href="#"><div class="pf-byline__card-thumb"></div><div class="pf-byline__card-title">Martin Pickguard Reglue with Titebond and 3DP Cauls</div></a>
+          <a class="pf-byline__card" href="#"><div class="pf-byline__card-thumb"></div><div class="pf-byline__card-title">Collapsible and Height Adjustable Go-Bar Deck</div></a>
+          <a class="pf-byline__card" href="#"><div class="pf-byline__card-thumb"></div><div class="pf-byline__card-title">00-21 Top Off Restoration</div></a>
+        </div>
+      </div>
+    </section>
+  </article>
+</main>
+
+</body>
+</html>

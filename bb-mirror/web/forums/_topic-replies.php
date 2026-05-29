@@ -1,0 +1,68 @@
+<?php
+/**
+ * Threaded replies fragment endpoint.
+ *
+ * Route: /forums-poc/?replies=<topic_id>
+ * Returns the full threaded reply list for one topic as a bare HTML fragment
+ * (top-level threads newest-first, each with indented direct children).
+ * Called by forums.js on the first "View N replies" click — keeps the initial
+ * feed light (one teaser reply per card; the rest load on demand).
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../../config.php';
+require __DIR__ . '/_reply-render.php';
+
+$tid = (int)($_GET['replies'] ?? 0);
+if (!$tid) { http_response_code(400); echo 'bad request'; exit; }
+
+$db = bb_mirror_db();
+
+$rs = $db->prepare("
+    SELECT r.id AS reply_id, r.parent_reply_id,
+           COALESCE(r.author_name, 'Anonymous') AS author_name,
+           p.slug AS author_slug,
+           LEFT(r.content_text, 200) AS excerpt,
+           r.created_at,
+           reply_img.url AS reply_image_url
+      FROM forums.reply r
+      LEFT JOIN forums.person p ON p.id = r.author_id
+      LEFT JOIN LATERAL (
+        SELECT url FROM forums.attachment
+         WHERE parent_kind = 'reply' AND parent_id = r.id
+         ORDER BY id ASC LIMIT 1
+      ) reply_img ON true
+     WHERE r.topic_id = :tid AND r.status = 'publish'
+     ORDER BY r.created_at ASC
+");
+$rs->bindValue(':tid', $tid, PDO::PARAM_INT);
+$rs->execute();
+$flat = $rs->fetchAll();
+
+if (!$flat) { header('Content-Type: text/html; charset=utf-8'); echo ''; exit; }
+
+// Build the tree: index by id, attach children, collect top-level roots.
+$by_id = [];
+foreach ($flat as $r) {
+    $by_id[(int)$r['reply_id']] = $r + ['_children' => []];
+}
+$top = [];
+foreach ($by_id as $rid => $node) {
+    $pid = $node['parent_reply_id'] !== null ? (int)$node['parent_reply_id'] : null;
+    if ($pid !== null && isset($by_id[$pid])) {
+        $by_id[$pid]['_children'][] = $rid;
+    } else {
+        $top[] = $rid;
+    }
+}
+// Newest top-level thread first (matches feed ordering).
+usort($top, fn($a, $b) => strtotime((string)$by_id[$b]['created_at']) - strtotime((string)$by_id[$a]['created_at']));
+
+header('Content-Type: text/html; charset=utf-8');
+foreach ($top as $rid) {
+    bb_mirror_render_reply_stub($by_id[$rid], false, false);
+    foreach ($by_id[$rid]['_children'] as $cid) {
+        bb_mirror_render_reply_stub($by_id[$cid], true, false);
+    }
+}

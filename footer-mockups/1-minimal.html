@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Footer Mockup — Minimal Utility</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Footer 1: Minimal utility row ───────────────────────────────────── */
+  .lg-footer-min {
+    margin-top: 80px;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    background: #fff;
+    padding: 32px 0;
+  }
+  .lg-footer-min__inner {
+    max-width: 1200px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+  }
+  .lg-footer-min__brand {
+    font-weight: 800; color: var(--lg-green-dark); font-size: 16px;
+  }
+  .lg-footer-min__copyright {
+    font-size: 13px; color: var(--lg-ink-2);
+  }
+  .lg-footer-min__links {
+    display: flex; gap: 22px; list-style: none; padding: 0; margin: 0;
+  }
+  .lg-footer-min__links a {
+    font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+    color: #555;
+  }
+  .lg-footer-min__links a:hover { color: var(--lg-green-dark); }
+  .lg-footer-min__social {
+    display: flex; gap: 12px;
+  }
+  .lg-footer-min__social a {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--lg-sage-1);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--lg-green-dark); font-size: 14px;
+  }
+  .lg-footer-min__social a:hover { background: var(--lg-sage-2); }
+  @media (max-width: 720px) {
+    .lg-footer-min__inner { flex-direction: column; align-items: flex-start; gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="demo-body">
+  <h1>Footer Option 1 — Minimal Utility</h1>
+  <p>One-row footer. Brand, copyright, the smallest possible link set, social icons. Best when the site's main nav already covers everything; the footer is just legal & "we're a real org" affordance.</p>
+  <div class="demo-note">Maps closest to the <strong>utility-only</strong> pattern from Eleken's 2026 UX writeup. Lowest cognitive load; suits long article pages where readers shouldn't be pulled into a 40-link maze at the bottom.</div>
+</main>
+
+<footer class="lg-footer-min">
+  <div class="lg-footer-min__inner">
+    <div class="lg-footer-min__brand">The Looth Group</div>
+    <ul class="lg-footer-min__links">
+      <li><a href="#">About</a></li>
+      <li><a href="#">Contact</a></li>
+      <li><a href="#">Privacy</a></li>
+      <li><a href="#">Terms</a></li>
+    </ul>
+    <div class="lg-footer-min__social">
+      <a href="#" aria-label="Instagram">IG</a>
+      <a href="#" aria-label="YouTube">YT</a>
+      <a href="#" aria-label="Facebook">FB</a>
+    </div>
+    <div class="lg-footer-min__copyright">© 2026 The Looth Group</div>
+  </div>
+</footer>
+
+</body>
+</html>

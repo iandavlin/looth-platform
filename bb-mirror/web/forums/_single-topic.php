@@ -1,0 +1,379 @@
+<?php
+/**
+ * /forums-poc/<forum-slug>/<topic-slug>/ — single topic + threaded replies.
+ *
+ * Reads are NOT tier-gated. Visibility = 'public' on forum is the only gate.
+ *
+ * Reply tree: built in PHP from parent_reply_id, rendered recursively.
+ * Depth-capped at 4 desktop / 2 mobile (CSS handles mobile cap).
+ * Deeper chains show a decorative "Show N deeper replies" toggle (no JS yet).
+ *
+ * Reply form: wireframe, action /wp-json/buddyboss/v1/reply, disabled.
+ * JS fetch handler is a separate next-session item.
+ */
+
+declare(strict_types=1);
+
+require __DIR__ . '/../_chrome.php';
+
+$db          = bb_mirror_db();
+$forum_slug  = $_GET['forum_slug'] ?? '';
+$topic_slug  = $_GET['topic_slug']  ?? '';
+
+// ── 1+2. Combined forum+topic lookup (JOIN on both slugs simultaneously) ─────
+// Two forums share slug='finish' (ids 3829 + 3847). A forum-first lookup by
+// slug alone returns whichever row the DB picks first (non-deterministic). The
+// JOIN anchors the topic to the correct forum in one shot.
+$topq = $db->prepare("
+    SELECT t.id, t.slug, t.title, t.content_html,
+           t.author_name, t.author_slug, t.author_id,
+           t.created_at, t.status, t.sticky_kind, t.voice_count, t.reply_count,
+           f.id   AS forum_id,
+           f.slug AS forum_slug,
+           f.title AS forum_title
+      FROM forums.topic  t
+      JOIN forums.forum  f ON f.id = t.forum_id
+     WHERE f.slug  = :fs
+       AND t.slug  = :ts
+       AND t.status IN ('publish', 'closed')
+       AND f.visibility = 'public'
+     LIMIT 1
+");
+$topq->execute([':fs' => $forum_slug, ':ts' => $topic_slug]);
+$row = $topq->fetch();
+
+if (!$row) {
+    bb_mirror_chrome_header('Topic not found');
+    http_response_code(404);
+    echo '<div class="page"><p class="bb-mirror__empty">Topic not found.</p></div>';
+    bb_mirror_chrome_footer();
+    return;
+}
+
+$forum = ['id' => $row['forum_id'], 'slug' => $row['forum_slug'], 'title' => $row['forum_title']];
+$topic = $row; // all t.* fields are top-level keys
+
+// ── 3. OP person record (for moderator badge) ────────────────────────────────
+$op_is_mod = false;
+if ($topic['author_id']) {
+    $ps = $db->prepare("SELECT is_moderator FROM person WHERE id = ? LIMIT 1");
+    $ps->execute([$topic['author_id']]);
+    $op_person = $ps->fetch();
+    $op_is_mod = (bool)($op_person['is_moderator'] ?? false);
+}
+
+// ── 4. All published replies + person data ───────────────────────────────────
+$rs = $db->prepare("
+    SELECT r.id, r.parent_reply_id, r.content_html, r.author_name,
+           r.author_slug, r.author_id, r.created_at,
+           p.is_moderator
+      FROM reply r
+      LEFT JOIN person p ON p.id = r.author_id
+     WHERE r.topic_id = ?
+       AND r.status   = 'publish'
+     ORDER BY r.created_at ASC
+");
+$rs->execute([(int)$topic['id']]);
+$replies_flat = $rs->fetchAll();
+
+// ── 4b. Attachments — one query covers topic + all replies in this thread. ──
+$reply_ids = array_map(fn($r) => (int)$r['id'], $replies_flat);
+$topic_id  = (int)$topic['id'];
+$att_map   = ['topic' => [], 'reply' => []];
+$asql = "SELECT parent_kind, parent_id, url, alt, mime, width, height
+           FROM attachment
+          WHERE (parent_kind = 'topic' AND parent_id = ?)";
+$binds = [$topic_id];
+if ($reply_ids) {
+    $ph = implode(',', array_fill(0, count($reply_ids), '?'));
+    $asql .= " OR (parent_kind = 'reply' AND parent_id IN ($ph))";
+    $binds = array_merge($binds, $reply_ids);
+}
+$asql .= " ORDER BY parent_kind, parent_id, position";
+$as = $db->prepare($asql);
+$as->execute($binds);
+foreach ($as->fetchAll() as $a) {
+    $att_map[$a['parent_kind']][(int)$a['parent_id']][] = $a;
+}
+
+// ── 5. Build reply tree ──────────────────────────────────────────────────────
+// Index by id; build children map; find roots (no valid parent in set).
+$reply_map    = []; // id => reply row
+$children_map = []; // parent_id => [child_id, ...]
+
+foreach ($replies_flat as $r) {
+    $reply_map[(int)$r['id']] = $r;
+}
+foreach ($replies_flat as $r) {
+    $pid = $r['parent_reply_id'] ? (int)$r['parent_reply_id'] : null;
+    if ($pid && isset($reply_map[$pid])) {
+        $children_map[$pid][] = (int)$r['id'];
+    }
+}
+$roots = [];
+foreach ($replies_flat as $r) {
+    $pid = $r['parent_reply_id'] ? (int)$r['parent_reply_id'] : null;
+    if (!$pid || !isset($reply_map[$pid])) {
+        $roots[] = (int)$r['id'];
+    }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt_ts_single($ts): string {
+    if (!$ts) return '—';
+    $unix = is_numeric($ts) ? (int)$ts : strtotime((string)$ts . ' UTC');
+    return $unix ? date('Y-m-d H:i', $unix) : '—';
+}
+
+function fmt_ts_dt($ts): string {
+    if (!$ts) return '';
+    $unix = is_numeric($ts) ? (int)$ts : strtotime((string)$ts . ' UTC');
+    return $unix ? date('c', $unix) : '';
+}
+
+function avatar_letter(string $name): string {
+    return strtoupper(mb_substr(trim($name) ?: '?', 0, 1));
+}
+
+// Render the attachment gallery for one parent post (topic or reply).
+// Images become a flex row of thumbnails linking to the original URL;
+// non-image mimes get a download chip.
+function render_attachments(array $atts): void {
+    if (!$atts) return;
+    ?>
+    <div class="post__attachments">
+      <?php foreach ($atts as $a):
+        $is_image = $a['mime'] && str_starts_with((string)$a['mime'], 'image/');
+        $alt = htmlspecialchars((string)($a['alt'] ?? ''));
+        $url = htmlspecialchars((string)$a['url']);
+      ?>
+        <?php if ($is_image): ?>
+          <a class="attachment attachment--image" href="<?= $url ?>" target="_blank" rel="noopener">
+            <img src="<?= $url ?>" alt="<?= $alt ?>" loading="lazy"
+                 <?php if ($a['width']):  ?>width="<?= (int)$a['width']  ?>"<?php endif; ?>
+                 <?php if ($a['height']): ?>height="<?= (int)$a['height'] ?>"<?php endif; ?>>
+          </a>
+        <?php else: ?>
+          <a class="attachment attachment--file" href="<?= $url ?>" target="_blank" rel="noopener">
+            📎 <?= htmlspecialchars($a['alt'] ?: basename((string)$a['url'])) ?>
+          </a>
+        <?php endif; ?>
+      <?php endforeach; ?>
+    </div>
+    <?php
+}
+
+// Count total descendants of a node.
+function count_descendants(int $id, array $children_map): int {
+    $kids = $children_map[$id] ?? [];
+    $n    = count($kids);
+    foreach ($kids as $cid) $n += count_descendants($cid, $children_map);
+    return $n;
+}
+
+const MAX_DEPTH = 4;
+
+function render_reply(
+    int $id, array $reply_map, array $children_map,
+    int $op_id, int $depth = 0
+): void {
+    $r        = $reply_map[$id];
+    $children = $children_map[$id] ?? [];
+    $is_op    = ((int)$r['author_id'] === $op_id && $op_id > 0);
+    $is_mod   = (bool)($r['is_moderator'] ?? false);
+    $letter   = avatar_letter($r['author_name'] ?: '?');
+    $created  = fmt_ts_single($r['created_at']);
+    $dt_attr  = fmt_ts_dt($r['created_at']);
+    ?>
+    <div class="post" id="reply-<?= (int)$r['id'] ?>">
+      <div class="post__avatar-wrap">
+        <div class="post__avatar"><?= htmlspecialchars($letter) ?></div>
+      </div>
+      <div class="post__content">
+        <div class="post__head">
+          <span class="post__author"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></span>
+          <?php if ($is_op): ?>
+            <span class="badge badge--op">OP</span>
+          <?php endif; ?>
+          <?php if ($is_mod): ?>
+            <span class="badge badge--mod">MOD</span>
+          <?php endif; ?>
+          <?php if ($r['parent_reply_id'] && isset($reply_map[(int)$r['parent_reply_id']])): ?>
+            <span class="post__reply-to">↩ in reply to
+              <a href="#reply-<?= (int)$r['parent_reply_id'] ?>">
+                <?= htmlspecialchars($reply_map[(int)$r['parent_reply_id']]['author_name'] ?: 'a reply') ?>
+              </a>
+            </span>
+          <?php endif; ?>
+          <time class="post__time" datetime="<?= $dt_attr ?>"><?= $created ?></time>
+        </div>
+        <div class="post__body"><?= $r['content_html'] /* sanitized at sync write */ ?></div>
+        <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
+        <div class="post__actions">
+          <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"
+                  data-reply-to-author="<?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?>"
+                  hidden>Reply</button>
+          <button type="button" class="post__edit-btn" hidden
+                  data-edit-kind="reply"
+                  data-edit-id="<?= (int)$r['id'] ?>"
+                  data-author-id="<?= (int)($r['author_id'] ?? 0) ?>"
+                  data-topic-id="<?= (int)($GLOBALS['topic_id'] ?? 0) ?>"
+                  data-forum-id="<?= (int)($GLOBALS['forum']['id'] ?? 0) ?>">Edit</button>
+          <button type="button" class="post__delete-btn" hidden
+                  data-del-kind="reply"
+                  data-del-id="<?= (int)$r['id'] ?>"
+                  data-author-id="<?= (int)($r['author_id'] ?? 0) ?>">Delete</button>
+        </div>
+      </div>
+    </div>
+    <?php
+    if (!$children) return;
+
+    if ($depth >= MAX_DEPTH) {
+        $n = count_descendants($id, $children_map);
+        ?>
+        <div class="collapse-toggle">↩ Show <?= $n ?> deeper <?= $n === 1 ? 'reply' : 'replies' ?></div>
+        <?php
+        return;
+    }
+    ?>
+    <ul class="replies-tree">
+      <?php foreach ($children as $cid): ?>
+        <li>
+          <?php render_reply($cid, $reply_map, $children_map, $op_id, $depth + 1); ?>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+    <?php
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+bb_mirror_chrome_header($topic['title']);
+
+$op_letter  = avatar_letter($topic['author_name'] ?: '?');
+$op_created = fmt_ts_single($topic['created_at']);
+$op_dt      = fmt_ts_dt($topic['created_at']);
+$reply_count = (int)$topic['reply_count'];
+$public_path = LG_BB_MIRROR_PUBLIC_PATH;
+?>
+
+<div class="page">
+
+  <nav class="breadcrumbs">
+    <a href="<?= htmlspecialchars($public_path . '/') ?>">Forums</a> /
+    <a href="<?= htmlspecialchars($public_path . '/' . $forum['slug'] . '/') ?>"><?= htmlspecialchars($forum['title']) ?></a> /
+    <?= htmlspecialchars($topic['title']) ?>
+  </nav>
+
+  <div class="topic-header">
+    <h1 class="topic-header__title"><?= htmlspecialchars($topic['title']) ?></h1>
+    <div class="topic-header__meta">
+      <?php if ($topic['sticky_kind'] === 'super'): ?><span>📍 super sticky</span><?php endif; ?>
+      <?php if ($topic['sticky_kind'] === 'forum'): ?><span>📌 pinned</span><?php endif; ?>
+      <?php if ($topic['status'] === 'closed'): ?><span>🔒 closed</span><?php endif; ?>
+      <span><?= $reply_count ?> repl<?= $reply_count === 1 ? 'y' : 'ies' ?></span>
+      <span>·</span>
+      <span><?= (int)$topic['voice_count'] ?> voice<?= (int)$topic['voice_count'] === 1 ? '' : 's' ?></span>
+    </div>
+  </div>
+
+  <div class="thread__util">
+    <span><?= $reply_count ?> repl<?= $reply_count === 1 ? 'y' : 'ies' ?></span>
+    <span class="star">★</span>
+  </div>
+
+  <!-- OP post -->
+  <div class="thread">
+    <div class="post post--op" id="topic-<?= (int)$topic['id'] ?>">
+      <div class="post__avatar-wrap">
+        <div class="post__avatar"><?= htmlspecialchars($op_letter) ?></div>
+      </div>
+      <div class="post__content">
+        <div class="post__head">
+          <span class="post__author"><?= htmlspecialchars($topic['author_name'] ?: 'Anonymous') ?></span>
+          <span class="badge badge--op">OP</span>
+          <?php if ($op_is_mod): ?>
+            <span class="badge badge--mod">MOD</span>
+          <?php endif; ?>
+          <time class="post__time" datetime="<?= $op_dt ?>"><?= $op_created ?></time>
+        </div>
+        <div class="post__body"><?= $topic['content_html'] /* sanitized at sync write */ ?></div>
+        <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
+        <div class="post__actions">
+          <button type="button" class="post__edit-btn" hidden
+                  data-edit-kind="topic"
+                  data-edit-id="<?= (int)$topic['id'] ?>"
+                  data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>"
+                  data-forum-id="<?= (int)$forum['id'] ?>"
+                  data-title="<?= htmlspecialchars((string)$topic['title'], ENT_QUOTES) ?>">Edit</button>
+          <button type="button" class="post__delete-btn" hidden
+                  data-del-kind="topic"
+                  data-del-id="<?= (int)$topic['id'] ?>"
+                  data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Threaded replies -->
+  <?php if ($replies_flat): ?>
+    <h2 class="replies-heading"><?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?></h2>
+    <ul class="replies-tree">
+      <?php foreach ($roots as $rid): ?>
+        <li>
+          <?php render_reply($rid, $reply_map, $children_map, (int)($topic['author_id'] ?? 0)); ?>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  <?php endif; ?>
+
+  <!--
+    Reply form — two states managed by web/forums.js after fetching
+    /bb-mirror-api/v0/auth.php for cookie-authed nonce.
+      .reply-form--anon      → Sign in CTA
+      .reply-form--authed    → enabled textarea + submit
+    Server renders both shapes hidden; JS reveals the appropriate one.
+    Group-membership gate is a noop today; hook present for /whoami wiring.
+  -->
+  <section class="reply-form-wrap"
+           data-topic-id="<?= (int)$topic['id'] ?>"
+           data-forum-id="<?= (int)$forum['id'] ?>"
+           data-bb-rest-base="/wp-json/buddyboss/v1">
+    <div class="reply-form reply-form--loading" data-state="loading">
+      <p class="reply-form__note">Checking sign-in…</p>
+    </div>
+
+    <div class="reply-form reply-form--anon" data-state="anon" hidden>
+      <p class="reply-form__cta">
+        <a class="reply-form__signin"
+           href="/wp-login.php?redirect_to=<?= rawurlencode(LG_BB_MIRROR_PUBLIC_PATH . '/' . $forum['slug'] . '/' . $topic['slug'] . '/') ?>">
+          Sign in to post a reply
+        </a>
+      </p>
+    </div>
+
+    <form class="reply-form reply-form--authed" data-state="authed" hidden
+          method="post" action="/wp-json/buddyboss/v1/reply">
+      <input type="hidden" name="topic_id" value="<?= (int)$topic['id'] ?>">
+      <input type="hidden" name="forum_id" value="<?= (int)$forum['id'] ?>">
+      <input type="hidden" name="parent_reply_id" value="">
+      <div class="reply-form__replying-to" hidden>
+        ↩ replying to <strong class="reply-form__replying-to-name"></strong>
+        <button type="button" class="reply-form__cancel-thread">cancel</button>
+      </div>
+      <label class="reply-form__label" for="reply-content">Add a reply</label>
+      <textarea id="reply-content" name="content" rows="6"
+                placeholder="Share your build, ask a question, drop a measurement…"
+                required></textarea>
+      <div class="reply-form__row">
+        <button type="submit" class="reply-form__submit">Post reply</button>
+        <span class="reply-form__status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+
+</div>
+
+<?php bb_mirror_chrome_footer(); ?>

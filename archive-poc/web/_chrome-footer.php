@@ -1,0 +1,51 @@
+<?php
+require __DIR__.'/../config.php';
+$LOGO = LG_ARCHIVE_POC_LOGO_URL;
+?>
+<footer class="lg-chrome-foot" role="contentinfo">
+  <div class="lg-chrome-foot__inner">
+    <div class="lg-chrome-foot__brand">
+      <a class="lg-chrome-foot__logo" href="/" rel="home" aria-label="Looth Group home">
+        <img src="<?= h($LOGO) ?>" alt="Looth Group" width="56" height="56">
+      </a>
+      <p class="lg-chrome-foot__tag">Online Group for Luthiers, Musical Instrument Repair and Restoration Specialists and Technicians</p>
+    </div>
+
+    <nav class="lg-chrome-foot__cols" aria-label="Footer">
+      <div class="lg-chrome-foot__col">
+        <h3 class="lg-chrome-foot__h">Browse</h3>
+        <ul>
+          <li><a href="/archive-poc/">Front page</a></li>
+          <li><a href="/calendar/">Calendar</a></li>
+          <li><a href="/sponsors/">Sponsors</a></li>
+          <li><a href="/shops/">Shops</a></li>
+        </ul>
+      </div>
+      <div class="lg-chrome-foot__col">
+        <h3 class="lg-chrome-foot__h">Community</h3>
+        <ul>
+          <li><a href="/all-forums-all-topics/">Forums</a></li>
+          <li><a href="/activity/">Activity</a></li>
+          <li><a href="/members/">Members</a></li>
+        </ul>
+      </div>
+      <div class="lg-chrome-foot__col">
+        <h3 class="lg-chrome-foot__h">About</h3>
+        <ul>
+          <li><a href="/about/">About</a></li>
+          <li><a href="/lgjoin/">Membership</a></li>
+          <li><a href="/contact/">Contact</a></li>
+        </ul>
+      </div>
+    </nav>
+  </div>
+
+  <div class="lg-chrome-foot__legal">
+    <span>© <?= date('Y') ?> The Looth Group. All rights reserved.</span>
+    <nav aria-label="Legal">
+      <a href="/privacy/">Privacy</a>
+      <a href="/terms/">Terms</a>
+      <a href="/billing-refund/">Billing &amp; Refund</a>
+    </nav>
+  </div>
+</footer>

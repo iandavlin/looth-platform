@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Footer Mockup — Columns + Newsletter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_shared.css">
+<style>
+  /* ── Footer 2: Multi-column with newsletter signup band ──────────────── */
+  .lg-footer-cols { margin-top: 80px; background: var(--lg-green-dark); color: #f5f3ec; }
+  .lg-footer-cols a { color: rgba(245, 243, 236, 0.85); }
+  .lg-footer-cols a:hover { color: #fff; }
+
+  /* Newsletter signup band on top */
+  .lg-footer-cols__signup {
+    background: #243121;
+    padding: 32px 24px;
+  }
+  .lg-footer-cols__signup-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap;
+  }
+  .lg-footer-cols__signup-copy h3 {
+    margin: 0 0 4px; font-size: 18px; color: #fff;
+  }
+  .lg-footer-cols__signup-copy p {
+    margin: 0; font-size: 14px; color: rgba(245,243,236,0.7);
+  }
+  .lg-footer-cols__signup-form {
+    display: flex; gap: 8px; min-width: 320px; flex: 1; max-width: 480px;
+  }
+  .lg-footer-cols__signup-form input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    font-size: 14px;
+  }
+  .lg-footer-cols__signup-form input::placeholder { color: rgba(255,255,255,0.5); }
+  .lg-footer-cols__signup-form button {
+    padding: 10px 18px;
+    border-radius: 6px;
+    border: 0;
+    background: var(--lg-sage-2);
+    color: var(--lg-green-dark);
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .lg-footer-cols__signup-form button:hover { background: var(--lg-sage-3); }
+
+  /* Columns grid */
+  .lg-footer-cols__grid {
+    max-width: 1200px; margin: 0 auto; padding: 48px 24px 32px;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 40px;
+  }
+  .lg-footer-cols__brand-blurb p {
+    margin: 12px 0 0; font-size: 14px; color: rgba(245,243,236,0.7); max-width: 260px;
+  }
+  .lg-footer-cols__col h4 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: rgba(245,243,236,0.55); margin: 0 0 14px; font-weight: 700;
+  }
+  .lg-footer-cols__col ul { list-style: none; margin: 0; padding: 0; }
+  .lg-footer-cols__col li { margin: 0 0 8px; }
+  .lg-footer-cols__col a { font-size: 14px; }
+
+  /* Bottom bar */
+  .lg-footer-cols__bar {
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 18px 24px;
+  }
+  .lg-footer-cols__bar-inner {
+    max-width: 1200px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: rgba(245,243,236,0.55);
+  }
+  .lg-footer-cols__bar-links { display: flex; gap: 18px; }
+  .lg-footer-cols__bar-links a { font-size: 12px; }
+
+  @media (max-width: 880px) {
+    .lg-footer-cols__grid { grid-template-columns: 1fr 1fr; }
+    .lg-footer-cols__brand-blurb { grid-column: 1 / -1; }
+  }
+  @media (max-width: 560px) {
+    .lg-footer-cols__grid { grid-template-columns: 1fr; }
+    .lg-footer-cols__signup-inner { flex-direction: column; align-items: flex-start; }
+    .lg-footer-cols__signup-form { width: 100%; min-width: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="lg-site-header">
+  <div class="lg-site-header-inner">
+    <a class="lg-logo" href="#">The Looth Group</a>
+    <ul class="lg-nav-list">
+      <li><a href="#">Articles</a></li>
+      <li><a href="#">Tools & Jigs</a></li>
+      <li><a href="#">Events</a></li>
+      <li><a href="#">Members</a></li>
+    </ul>
+    <div class="lg-account"></div>
+  </div>
+</header>
+
+<main class="demo-body">
+  <h1>Footer Option 2 — Columns + Newsletter</h1>
+  <p>Dark sage-green band with a newsletter signup at the top, four-column link grid, and a bottom legal bar. Maps to the <strong>doormat / sitemap-lite</strong> pattern from the research — guides readers who scroll all the way down without overwhelming them.</p>
+  <div class="demo-note">Best fit for an editorial site with multiple content surfaces (articles, tools, events, member tiers). The newsletter signup is the highest-converting top-of-footer placement in most magazine studies.</div>
+</main>
+
+<footer class="lg-footer-cols">
+  <!-- Newsletter signup band -->
+  <div class="lg-footer-cols__signup">
+    <div class="lg-footer-cols__signup-inner">
+      <div class="lg-footer-cols__signup-copy">
+        <h3>Join the workbench newsletter</h3>
+        <p>Weekly long-form repair stories and shop tricks. No spam, unsubscribe anytime.</p>
+      </div>
+      <form class="lg-footer-cols__signup-form" onsubmit="return false">
+        <input type="email" placeholder="you@workshop.com" required>
+        <button type="submit">Subscribe</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Link grid -->
+  <div class="lg-footer-cols__grid">
+    <div class="lg-footer-cols__brand-blurb">
+      <div class="lg-logo" style="color: var(--lg-sage-2);">The Looth Group</div>
+      <p>A community of luthiers, repair techs, and players sharing long-form workbench knowledge.</p>
+    </div>
+    <div class="lg-footer-cols__col">
+      <h4>Read</h4>
+      <ul>
+        <li><a href="#">Latest Articles</a></li>
+        <li><a href="#">Repairs</a></li>
+        <li><a href="#">Tools & Jigs</a></li>
+        <li><a href="#">Tips</a></li>
+      </ul>
+    </div>
+    <div class="lg-footer-cols__col">
+      <h4>Community</h4>
+      <ul>
+        <li><a href="#">Members</a></li>
+        <li><a href="#">Events</a></li>
+        <li><a href="#">Forum</a></li>
+        <li><a href="#">Become a Member</a></li>
+      </ul>
+    </div>
+    <div class="lg-footer-cols__col">
+      <h4>Group</h4>
+      <ul>
+        <li><a href="#">About</a></li>
+        <li><a href="#">Contact</a></li>
+        <li><a href="#">Submit a story</a></li>
+        <li><a href="#">Press</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Bottom bar -->
+  <div class="lg-footer-cols__bar">
+    <div class="lg-footer-cols__bar-inner">
+      <div>© 2026 The Looth Group. All rights reserved.</div>
+      <div class="lg-footer-cols__bar-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Code of conduct</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
