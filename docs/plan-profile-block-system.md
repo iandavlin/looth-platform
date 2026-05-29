@@ -128,7 +128,42 @@ public web doesn't see a profile unless the owner opens it. The directory works
 because members see members; public visibility is opt-in. (Per-block pmp still
 applies — member is just the out-of-box default for the required header.)
 
-**One composer tool, two entity views, member-default pmp, opt-up to public.**
+## Visibility model — FINAL (2026-05-29, Ian)
+
+**Three tiers, unified platform-wide with POSTS:** **public** = open web /
+logged-out (identical meaning to a public post — Ian), **member** = signed-in
+members, **private** = owner only. Same vocabulary for posts AND profile blocks,
+so post-conversion gating and block pmp speak one language.
+
+**The HEADER is the ceiling (the profile's front door).** The header's pmp caps
+the whole profile; a block can be EQUAL or MORE restrictive than the header, never
+more open. **Effective block visibility = the more restrictive of (header, block).**
+- header **private** → entire profile private (owner only); nothing else renders,
+  regardless of block settings. (Ian: "no point showing anything else.")
+- header **member** → members-only page; a logged-out visitor gets the
+  join / sign-in gate. A block marked **public is capped to member** — public info
+  nobody can attribute to a visible identity is pointless (Ian).
+- header **public** → profile is on the open web; blocks refine DOWN — **public
+  peeks through** to logged-out, member gates, private = owner. (Public header +
+  some member/private blocks is the normal mix.)
+
+So "public peeks through" holds **beneath a public header only.** No separate
+profile-level flag — visibility is the per-block tri-state, ceilinged by the header.
+
+**UX (Ian):** the block pmp control shows a **hover/tooltip when the header is
+overriding** a block's chosen visibility — e.g. block set public, header member →
+"Header is members-only, so this block is limited to members." Users see why a
+setting is capped.
+
+**Header default** (member vs public) is the one remaining knob — sets how open a
+new profile is out of the box. Build header pmp as a normal settable value so
+either default drops in; Ian rules on the next mockup. NON-BLOCKING for the spine.
+
+**Schema note:** all of the above is render/UI logic (effective vis =
+min(header, block) + the hover) — the spine schema is unchanged (block pmp
+tri-state). The visibility MODEL is now final; the spine GO stands.
+
+**One composer tool, two entity views, member baseline, header-ceilinged pmp.**
 
 ## "View as" toggle — owner previews public vs member (2026-05-29, Ian)
 
