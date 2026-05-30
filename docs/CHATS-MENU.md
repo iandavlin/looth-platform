@@ -67,6 +67,11 @@ Quick-scan of active chats. Updated by coordinator. Open this when you need to k
 
 When all ✅, cutover-eligible.
 
+## Backlog / parked ideas
+- **Tutorial / product-tour modal** (Ian, 2026-05-30) — a guided coachmark/tour
+  overlay to onboard users into the new live-edit profile + social features.
+  lg-shell's domain (owns modals). Not cut-critical; revisit after the spine.
+
 ## Chat lineage
 
 When a chat gets replaced by another for the same workstream (context burn, fresh start, etc.), log the handoff in [CHAT-LINEAGE.md](CHAT-LINEAGE.md). This menu shows current; lineage log shows history.
