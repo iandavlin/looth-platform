@@ -109,18 +109,19 @@ natively, and the WP-side clone is simply no longer on the read path.
 - **Materializer integrity:** the save hook is the only writer of the artifact;
   same mirror-writer discipline as archive-poc/bb-mirror (§3i grants).
 
-## 6. Open questions for Ian / the lane
+## 6. Decisions (RULED 2026-05-30, Ian — lane does NOT re-ask)
 
-1. **Where does the standalone renderer HOST live?** Options: (a) extend
-   **archive-poc** — it already mirrors editorial posts + has the FPM pool +
-   standalone pattern; single-post render is a natural extension; (b) a new
-   sibling service; (c) a standalone mode of lg-layout-v2 itself. **Lean (a)** —
-   archive-poc already owns editorial-post mirroring; least new infra.
-2. **Comments** — snapshot into the blob on save (simple, slightly stale) vs a
-   live comments mirror (fresher, more infra)? Lean snapshot to start.
-3. **FE-editor retirement** — confirm editing fully moves to wp-admin (Gutenberg/
-   the dash), or do we keep a WP-rendered "edit view" behind a flag for power
-   users during transition?
+1. **HOST = extend archive-poc.** It already mirrors editorial posts + has the FPM
+   pool + standalone chrome; full-article render reads the *same* mirror, so it's a
+   natural extension, not new scope. "Don't pre-split" (§3i): if article render ever
+   outgrows the feed, splitting later is a `pg_dump` + connection-string swap.
+   Rejected: a new sibling service (re-derives mirror+chrome+FPM for separation we
+   don't need yet).
+2. **Comments = snapshot into the blob on save.** Simple, slightly stale. Add a
+   live comments mirror later only if staleness actually bites.
+3. **FE-editor = retire from the LIVE page, keep a WP-rendered edit view behind a
+   flag during transition.** Editing's home is wp-admin; don't burn the live-edit
+   bridge until standalone render is proven on real traffic, then drop the flag.
 
 ## 7. What stays in WP (by design)
 
