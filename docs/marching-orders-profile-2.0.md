@@ -45,7 +45,10 @@ you're about to change. (One migration, not two.)
 - **Pilot blocks: identity + location** (`spec-block-identity-location.md`),
   then craft / socials / practices spine blocks.
 - **Migration crib (slice-4), into the final spine, ONE pass:** xprofile field
-  1/2 (name/business) · field 96 (→ location_address + city/region extract) ·
+  **1 (name) → profile name ONLY** (Ian 2026-05-30: field 2 business is NOT merged
+  into the profile name — business fills at the **practice** level; literal
+  backfill, don't auto-split mingled name+business strings, editor self-corrects) ·
+  field 96 (→ location_address + city/region extract) ·
   field 266 + ACF `author_*` socials (final mapping, three-tier precedence) ·
   **avatar IMAGE** (BB-uploaded `uploads/avatars/<id>/` file → profile-app's own
   avatar store + `users.avatar_url`/version; Gravatar-only users = one-time fetch

@@ -61,6 +61,16 @@ JSON blocks (presentation, not queried). Don't let users compose the spine away.
    exist (`location_city/region` = approximate; `postcode/lat/lng` = exact) +
    ~one added visibility field. Every OTHER block stays simple block-level
    show/hide — location is the lone special case, model stays uniform elsewhere.
+
+   **User-MANAGED pin (2026-05-30, Ian) — not auto-coarsened-only:** specificity +
+   privacy are the USER's to control on the location block. They manage **where the
+   pin sits**, **how precise it shows** (exact → neighborhood → city/region), and
+   **who sees which tier** (public/member/private). A storefront drops an exact
+   public pin; a private maker fuzzes to town-level or hides it. Same approximate/
+   exact tiers, but **user-driven placement + precision**, not derived-only. The
+   directory **MAP** plots each member's managed pin at their chosen precision +
+   visibility; "near me" still ranks on the coarse tier. Build the pin-manager into
+   the location block (drag/place + precision selector + per-tier visibility).
 5. **Profile (`/u/`) and practice (`/p/`) are separate loads**, related via
    links (profile→practices card, practice→staff). No conditional in/out
    headers (that was the over-elaborate ACF design — dropped).
