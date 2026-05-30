@@ -379,16 +379,80 @@ function bb_mirror_new_topic_modal(): void
     <?php
 }
 
+/**
+ * Viewer assembly — inline-verify fast path + whoami fallback.
+ * design-shim-replacement.md §4 Step A. Both builders return the SAME shape so
+ * bb_mirror_chrome_header() is source-agnostic. Defined here (not config.php)
+ * because config.php is bb-mirror-owned; lg_bb_mirror_whoami() is already loaded
+ * from config.php before this file runs.
+ */
+if (!function_exists('lg_bb_mirror_viewer_from_claims')) {
+function lg_bb_mirror_viewer_from_claims(array $claims): array {
+    // Identity + display straight from the verified token (§0c). Tier from the
+    // lg_tier cookie hint (validated against the known set). Capabilities left
+    // empty — bb-mirror renders no mod UI (single-mod model §3f); any sensitive
+    // cap check reconciles via /whoami at the action site, not in the header.
+    $lg   = (string)($_COOKIE['lg_tier'] ?? 'public');
+    $tier = in_array($lg, ['public', 'lite', 'pro'], true) ? $lg : 'public';
+    return [
+        'authenticated' => true,
+        'user_uuid'     => $claims['sub'] ?? null,
+        'wp_user_id'    => isset($claims['wp_user_id']) ? (int)$claims['wp_user_id'] : null,
+        'slug'          => $claims['slug'] ?? null,
+        'display_name'  => (string)($claims['display_name'] ?? ''),
+        'avatar_url'    => $claims['avatar_url'] ?? null,
+        'tier'          => $tier,
+        'capabilities'  => [],
+    ];
+}
+}
+
+if (!function_exists('lg_bb_mirror_viewer_from_whoami')) {
+function lg_bb_mirror_viewer_from_whoami(): array {
+    // Existing loopback (lg_bb_mirror_whoami in config.php), normalized to the
+    // shared shape. Retired in Step B once looth_id is universal — NOT this turn.
+    $w = lg_bb_mirror_whoami();
+    return [
+        'authenticated' => ($w['authenticated'] ?? false) === true,
+        'user_uuid'     => $w['user_uuid'] ?? null,
+        'wp_user_id'    => $w['wp_user_id'] ?? null,
+        'slug'          => $w['slug'] ?? null,
+        'display_name'  => (string)($w['display_name'] ?? ''),
+        'avatar_url'    => $w['avatar_url'] ?? null,
+        'tier'          => (string)($w['tier'] ?? 'public'),
+        'capabilities'  => (array)($w['capabilities'] ?? []),
+    ];
+}
+}
+
 function bb_mirror_chrome_header(string $page_title = 'Forums'): void
 {
     require_once '/srv/lg-shared/site-header.php';
 
-    $whoami = lg_bb_mirror_whoami();
-    $authed = ($whoami['authenticated'] ?? false) === true;
-    $tier   = (string)($whoami['tier'] ?? 'public');
-    $caps   = (array)($whoami['capabilities'] ?? []);
-    $dname  = (string)($whoami['display_name'] ?? '');
-    $avatar = $whoami['avatar_url'] ?? null;
+    // Inline-verify fast path (design §4 Step A): verify looth_id locally with
+    // the RS256 public key — no WP-boot loopback. Fall back to the whoami shim
+    // when the cookie is absent/invalid so nothing breaks mid-rollout. The
+    // is_readable guard keeps bb-mirror working even before the helper deploys.
+    $verify_helper = '/srv/lg-shared/jwt-verify.php';
+    $claims = null;
+    if (is_readable($verify_helper)) {
+        require_once $verify_helper;
+        if (function_exists('lg_shared_verify_looth_id')) {
+            $claims = lg_shared_verify_looth_id($_COOKIE['looth_id'] ?? null);
+        }
+    }
+    if ($claims !== null) {
+        error_log('[shim-inline] JWT verified for ' . ($claims['sub'] ?? '?'));
+        $viewer = lg_bb_mirror_viewer_from_claims($claims);
+    } else {
+        error_log('[shim-fallback] looth_id absent/invalid, using whoami');
+        $viewer = lg_bb_mirror_viewer_from_whoami();
+    }
+    $authed = $viewer['authenticated'];
+    $tier   = (string)$viewer['tier'];
+    $caps   = (array)$viewer['capabilities'];
+    $dname  = (string)$viewer['display_name'];
+    $avatar = $viewer['avatar_url'] ?? null;
 
     if ($authed && $dname === '') {
         foreach ($_COOKIE as $name => $val) {

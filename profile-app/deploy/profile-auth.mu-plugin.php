@@ -88,6 +88,13 @@ add_action('wp_login', function ($user_login, WP_User $user) {
 // On logout, clear.
 add_action('wp_logout', function () { looth_auth_clear_cookie(); });
 
+// Belt to wp_logout's suspenders: clear_auth_cookie fires on programmatic
+// cookie clears + session destruction (password change, "log out everywhere")
+// that wp_logout alone misses. Without this, those paths leave a valid looth_id
+// behind and the user stays "logged in" to strangler surfaces after WP logout.
+// Double-clear on a plain logout is harmless (setcookie with past expiry twice).
+add_action('clear_auth_cookie', function () { looth_auth_clear_cookie(); });
+
 // On any normal pageview where user is logged in but cookie is missing, mint.
 add_action('init', function () {
     if (is_admin() && wp_doing_ajax()) return;
