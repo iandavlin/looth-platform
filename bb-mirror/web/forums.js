@@ -150,6 +150,22 @@
     btn.remove();
   });
 
+  // ── 2c-bis. Reply sort toggle (Newest / Oldest) in the expanded thread ──────
+  // The ?replies fragment carries the toggle; clicking re-fetches with &sort= and
+  // swaps the thread HTML (the fragment re-emits the toggle with active state).
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.replies-sort__btn');
+    if (!b || b.classList.contains('is-active')) return;
+    var bar = b.closest('.replies-sort');
+    var host = b.closest('.feed-card__replies-full');
+    if (!bar || !host) return;
+    host.style.opacity = '0.5';
+    fetch(FORUM_BASE + '/?replies=' + bar.dataset.topicId + '&sort=' + b.dataset.sort)
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('fetch')); })
+      .then(function (html) { host.innerHTML = html; host.style.opacity = ''; })
+      .catch(function () { host.style.opacity = ''; });
+  });
+
   // ── 2b. Feed card full-body expand (Read more / Read less — lazy fetch) ──
   document.querySelectorAll('.feed-card__read-more').forEach(btn => {
     btn.addEventListener('click', async () => {

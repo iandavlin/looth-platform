@@ -14,7 +14,8 @@ declare(strict_types=1);
 require __DIR__ . '/../../config.php';
 require __DIR__ . '/_reply-render.php';
 
-$tid = (int)($_GET['replies'] ?? 0);
+$tid  = (int)($_GET['replies'] ?? 0);
+$sort = (($_GET['sort'] ?? '') === 'oldest') ? 'oldest' : 'newest';   // default newest
 if (!$tid) { http_response_code(400); echo 'bad request'; exit; }
 
 $db = bb_mirror_db();
@@ -56,10 +57,25 @@ foreach ($by_id as $rid => $node) {
         $top[] = $rid;
     }
 }
-// Newest top-level thread first (matches feed ordering).
-usort($top, fn($a, $b) => strtotime((string)$by_id[$b]['created_at']) - strtotime((string)$by_id[$a]['created_at']));
+// Order top-level threads by the chosen sort (children stay chronological within
+// each thread). Newest-first is the default + matches the feed teaser.
+usort($top, function ($a, $b) use ($by_id, $sort) {
+    $d = strtotime((string)$by_id[$a]['created_at']) - strtotime((string)$by_id[$b]['created_at']);
+    return $sort === 'oldest' ? $d : -$d;
+});
 
 header('Content-Type: text/html; charset=utf-8');
+
+// Newest/Oldest toggle — only meaningful with more than one top-level thread.
+if (count($top) > 1) {
+    echo '<div class="replies-sort" data-topic-id="' . $tid . '">';
+    foreach (['newest' => 'Newest', 'oldest' => 'Oldest'] as $key => $label) {
+        echo '<button type="button" class="replies-sort__btn' . ($sort === $key ? ' is-active' : '')
+           . '" data-sort="' . $key . '">' . $label . '</button>';
+    }
+    echo '</div>';
+}
+
 foreach ($top as $rid) {
     bb_mirror_render_reply_stub($by_id[$rid], false, false);
     foreach ($by_id[$rid]['_children'] as $cid) {

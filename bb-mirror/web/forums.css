@@ -1131,7 +1131,7 @@ body.nav-open .nav-overlay { display: block; }
   min-width: 0;
 }
 .bb-layout__content .page {
-  max-width: 860px;
+  max-width: 1100px;   /* was 860 — reclaim the desktop gutter (shell allows 1280) */
 }
 
 /* Mobile / tablet: drawer */
@@ -2276,3 +2276,35 @@ body.ntm-active { overflow: hidden; }
 .post__body a:hover,
 .feed-card__full-body a:hover,
 .bb-autolink:hover { color: var(--accent-2, #c4631e); }
+
+/* ── Reply sort toggle (Newest / Oldest) in the expanded feed thread ── */
+.replies-sort { display: flex; gap: 4px; margin: 2px 0 10px; }
+.replies-sort__btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  padding: 2px 12px;
+  border-radius: 11px;
+  font: 600 11px/1.5 var(--font-body);
+  cursor: pointer;
+}
+.replies-sort__btn.is-active {
+  background: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+  border-color: var(--lg-sage-d, #6b7c52);
+}
+.replies-sort__btn:not(.is-active):hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Desktop/tablet readability: larger reading type + wider column.
+      Scoped to >640px so mobile (which already reads fine full-width) is unchanged. ── */
+@media (min-width: 641px) {
+  .feed-card__title      { font-size: 20px; }
+  .feed-card__op-excerpt { font-size: 15px; line-height: 1.55; }
+  .feed-card__full-body  { font-size: 16px; line-height: 1.65; }
+  .feed-card__op-meta,
+  .feed-card__meta-top   { font-size: 13px; }
+  .reply-stub            { font-size: 14px; }
+  .reply-stub--child     { font-size: 13.5px; }
+  .post__body            { font-size: 16px; line-height: 1.6; }
+  .topic-header__title   { font-size: 26px; }
+}
