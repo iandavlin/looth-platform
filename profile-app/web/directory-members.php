@@ -42,6 +42,8 @@ $_whoami = Whoami::resolve();
 <title>Directory · Looth</title>
 <link rel="stylesheet" href="/lg-shared/site-header.css">
 <link rel="stylesheet" href="/profile/edit/edit.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
 <?php
@@ -176,43 +178,43 @@ document.querySelectorAll('#dir-form input[type=checkbox]').forEach(cb =>
 // Initial load using the SSR-rendered query string.
 loadPage(1, false);
 
-// Map setup.
+// Map setup — Leaflet + OpenStreetMap (no API key needed).
 let dirMap = null, dirMarkers = [];
 function initDirMap() {
-  if (!window.google?.maps || dirMap) return;
-  dirMap = new google.maps.Map(document.getElementById('dir-map'), {
-    zoom: 3,
-    center: {lat: 39, lng: -98},
-    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-    styles: [{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}],
-  });
+  if (dirMap) return;
+  dirMap = L.map('dir-map', {zoomControl: true, scrollWheelZoom: false})
+    .setView([39, -98], 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(dirMap);
 }
+const pinIcon = L.divIcon({
+  className: '',
+  html: '<div style="width:14px;height:14px;border-radius:50%;background:#b9450b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+  iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
+});
 function updateMapPins(items, append) {
   if (!dirMap) return;
-  if (!append) { dirMarkers.forEach(m => m.setMap(null)); dirMarkers = []; }
-  const bounds = append ? null : new google.maps.LatLngBounds();
+  if (!append) { dirMarkers.forEach(m => dirMap.removeLayer(m)); dirMarkers = []; }
+  const pts = [];
   items.forEach(it => {
     if (!it.location?.lat || !it.location?.lng) return;
-    const pos = {lat: it.location.lat, lng: it.location.lng};
-    const m = new google.maps.Marker({
-      position: pos, map: dirMap, title: it.display_name,
-      icon: {path: google.maps.SymbolPath.CIRCLE, scale: 7,
-             fillColor:'#b9450b', fillOpacity:1, strokeColor:'#fff', strokeWeight:2},
-    });
-    const iw = new google.maps.InfoWindow({content:
-      `<a href="/u/${escH(it.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(it.display_name)}</a>`
-      + (it.location.text ? `<div style="font-size:12px;color:#8a8478">${escH(it.location.text)}</div>` : '')
-    });
-    m.addListener('click', () => iw.open(dirMap, m));
+    const m = L.marker([it.location.lat, it.location.lng], {icon: pinIcon, title: it.display_name})
+      .bindPopup(`<a href="/u/${escH(it.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(it.display_name)}</a>`
+        + (it.location.text ? `<div style="font-size:12px;color:#8a8478">${escH(it.location.text)}</div>` : ''))
+      .addTo(dirMap);
     dirMarkers.push(m);
-    if (bounds) bounds.extend(pos);
+    pts.push([it.location.lat, it.location.lng]);
   });
-  if (bounds && !bounds.isEmpty()) dirMap.fitBounds(bounds);
+  if (!append && pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
 }
 
-// Google Places for location filter + map init.
+// Initialize map immediately (Leaflet needs no API key callback).
+document.addEventListener('DOMContentLoaded', initDirMap);
+
+// Google Places for location filter (autocomplete only — separate from map).
 window.lootInitDirPlaces = function () {
-  initDirMap();
   const input = document.getElementById('dir-loc');
   if (!input || !window.google?.maps?.places) return;
   const ac = new google.maps.places.Autocomplete(input, {fields:['geometry','formatted_address'], types:['geocode']});
