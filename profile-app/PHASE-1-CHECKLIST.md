@@ -110,10 +110,20 @@ for reaction. Nothing here is executed yet (scaffold turn).
 ## Spine sign-off
 - [ ] Coordinator declares the spine dev-FINAL. Only then →
 
-## Slice-4 crib (one pass, after sign-off)
-- [ ] Implement `bin/migrate-crib-slice4.php` (stub today).
-- [ ] Dry-run on dev; diff vs slice-3.5 rehearsal counts.
-- [ ] `--commit` on dev; walk-onboarding green.
+## Slice-4 crib (one pass) — IMPLEMENTED (write-only)
+- [x] `bin/migrate-crib-slice4.php` now runs: spine-schema sanity (abort if missing),
+      bridge/population check, fixture spot-check (user 3 — clobber semantics per script),
+      then orchestrates the 4 sub-scripts in order. Dry-run default; `--commit` to apply.
+- [x] Dry-run = runs the two dry-run-capable sub-scripts (xprofile, socials) in preview
+      (writes nothing — their UPDATEs are `$COMMIT`-guarded) + read-only candidate counts
+      for the two direct-write ones (snapshot, avatars). Diffs vs slice-3.5 rehearsal.
+- [x] Idempotent: re-`--commit` safe (xprofile only-if-empty; snapshot skip-on-match;
+      socials precedence; avatars NULL-only). Aborts the chain on any sub-script non-zero.
+- [ ] **Coordinator:** dry-run → review → `--commit` on dev; then browse `/u/<slug>` for
+      a few real members + walk-onboarding green.
+- [ ] **FLAG — avatar bytes/store:** step 4 uses the EXISTING URL-based `backfill-avatars`
+      (BB-upload/Gravatar URL). The "copy bytes into app-owned store + versioned URL"
+      (avatar single-source media) is a SEPARATE unbuilt increment — NOT in this crib.
 - [ ] (Cutover = coordinator-timed; outside Phase 1.)
 
 ## Hard stops (this turn observed)

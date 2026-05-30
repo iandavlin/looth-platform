@@ -68,6 +68,30 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Slice-4 crib implemented (2026-05-30, WRITE-ONLY)
+
+`bin/migrate-crib-slice4.php` is no longer a stub — it orchestrates the 4 existing
+sub-scripts to seed the spine with real profiles. Coordinator runs it (dry-run → commit).
+
+- **Schema sanity** (abort if the dev-final spine columns are missing: at_a_glance,
+  location_address, location_exact_visibility, location_pin_precision, practices.type;
+  avatar_version intentionally NOT required — deferred). + bridge/population check.
+- **Fixture spot-check (user 3 / wp 1918):** prints its current spine state + whether BB
+  has xprofile/ACF source, and the per-script clobber semantics — name/business/slug are
+  **only-if-empty** (merge, safe), socials precedence-protected, avatar NULL-only; **only
+  `snapshot-location` overwrites** (the one to watch if wp 1918 has field 96).
+- **Orchestration:** 1 xprofile (--commit) → 2 snapshot-location (direct write, idempotent)
+  → 3 socials (--commit) → 4 backfill-avatars (direct write, NULL-only). Aborts the chain
+  on any non-zero exit. Dry-run runs the two dry-run-capable scripts in preview (their
+  UPDATEs are `$COMMIT`-guarded → no writes) + read-only candidate counts for the other two.
+- **Idempotent** re-commit (each sub-script guards its own writes). Header members-only
+  default comes from `Block::headerCeiling`'s fallback — crib does NOT seed 1,812 header rows.
+- Commands: `sudo -u profile-app php bin/migrate-crib-slice4.php` (dry-run) / `--commit`.
+
+⚠️ **FLAG:** step 4 is the EXISTING URL-based avatar backfill; the avatar single-source
+**bytes-into-app-store + versioned URL** is a separate unbuilt increment, NOT in this crib.
+`config.php`/`Whoami.php` untouched; no schema changes (orchestrates applied migrations).
+
 ## Inline per-block pmp control (2026-05-30, WRITE-ONLY)
 
 The read-only vis chips are now interactive privacy controls (owner/Me view only):
