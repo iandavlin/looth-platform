@@ -433,6 +433,24 @@ BuddyPress social cluster — **connections** (friends / follow / requests) +
     only) AND a thin in-house DM preserves history + serves on-platform users. The
     connection graph powers both.
 
+**Social decisions RULED (2026-05-30, Ian):**
+- **Follow DROPPED as a user feature.** Connections = **mutual only**. If a feature
+  (feed, etc.) needs a follow signal, **auto-follow on connect** — derived from the
+  connection, not a separate graph or UI. **Do NOT migrate `wp_bp_follow`** (the
+  9,002 one-directional follows don't carry). Schema: drop the `follow` type.
+- **Messaging = connections-only** — preserve current BB behavior: a **mutual
+  connection gates DM** (connect first, then message). No any-member DM.
+- **Notifications: start FRESH** — don't port the 49,603 BP rows; seed current-unread
+  DMs + pending connection requests so the bell isn't empty at cut.
+- **Notification counts** — badge **caps at "9+"** for display (endpoint returns the
+  true count); **+ a retention job auto-deletes notifications older than 30 days**
+  (keeps the table lean — BB's grew to 49,603 unbounded; the DM/connection persists,
+  only the bell alert prunes).
+- **Header counts via dedicated `me-social-counts`** (additive; no `/whoami` change).
+
+**Schema impact:** one revision — drop the `follow` type/graph; then the social
+schema is dev-final. Rest is logic (DM connection-gate), UI (9+ badge), cron (prune).
+
 **Cookie fast-path (optional):**
 - `lg_tier` cookie keeps current archive-poc behavior — a fast hint so the
   first paint doesn't have to wait on `/whoami`.
