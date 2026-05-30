@@ -624,6 +624,7 @@
     var frmEditorEl = document.getElementById('frm-editor');
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
     var frmMediaIds = [];       // bbp_media upload_ids for this reply
+    var frmMediaPreviews = [];  // preview URLs, for the optimistic stub (no refresh)
 
     function frmFocus() { if (frmQuill) frmQuill.focus(); else if (frmContent) frmContent.focus(); }
 
@@ -671,6 +672,7 @@
               frmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error'); return;
             }
             frmMediaIds.push(res.j.upload_id);
+            frmMediaPreviews.push(res.j.upload_thumb || res.j.upload);
             frmStatus.textContent = 'Image attached.';
             var range = frmQuill.getSelection(true);
             frmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
@@ -691,6 +693,7 @@
 
     function frmResetEditor() {
       frmMediaIds = [];
+      frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
     }
@@ -771,7 +774,7 @@
             frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.code)) || 'failed');
             frmSubmit.disabled = false; return;
           }
-          frmAppendOptimistic(frmCard, frmName, content || (frmMediaIds.length ? '🖼 image' : ''));
+          frmAppendOptimistic(frmCard, frmName, content);   // images come from frmMediaPreviews
           frmResetEditor();
           frmSubmit.disabled = false;
           frmClose();
@@ -790,6 +793,13 @@
       }
       var text = content.replace(/<[^>]*>/g, '').trim();
       var initial = (name || 'Y').charAt(0).toUpperCase();
+      // Render the just-uploaded image(s) so the reply shows complete without a
+      // refresh. upload_thumb is a cookie-gated BB preview URL; the browser holds
+      // the gate cookie, so it loads. Same .reply-stub__img markup as the server.
+      var imgsHtml = frmMediaPreviews.map(function (u) {
+        return '<img class="reply-stub__img" src="' + frmEsc(u) + '" alt="" loading="lazy">';
+      }).join('');
+      var textHtml = text ? '<span class="reply-stub__excerpt">' + frmEsc(text.slice(0, 160)) + '</span>' : '';
       var stub = document.createElement('div');
       stub.className = 'reply-stub reply-stub--mine';
       stub.innerHTML =
@@ -798,7 +808,7 @@
           '<span class="reply-stub__author">' + frmEsc(name) + '</span>' +
           '<time class="reply-stub__time">now</time>' +
         '</div>' +
-        '<div class="reply-stub__body"><span class="reply-stub__excerpt">' + frmEsc(text.slice(0, 160)) + '</span></div>';
+        '<div class="reply-stub__body">' + textHtml + imgsHtml + '</div>';
       wrapEl.insertBefore(stub, wrapEl.firstChild);
     }
   }
