@@ -204,6 +204,7 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .dir-card .loc-row{color:var(--ink-mute);font-size:12.5px}
 .dir-card .hl-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .dir-card .hl-chips .hl{font-size:11px;padding:2px 7px;background:var(--accent-soft);color:var(--accent);border-radius:999px;font-weight:600}
+.dir-map{height:340px;background:var(--line);border-bottom:1px solid var(--line)}
 .dir-empty{padding:48px;text-align:center;color:var(--ink-mute);font-style:italic}
 .dir-load-more{margin:24px auto;display:block}
 .dir-header{padding:18px 32px;background:var(--panel);border-bottom:1px solid var(--line);font:600 18px/1 ui-serif,Georgia,serif}

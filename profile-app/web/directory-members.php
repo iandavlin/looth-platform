@@ -61,6 +61,7 @@ lg_shared_render_site_header([
 ]);
 ?>
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span></div>
+<div id="dir-map" class="dir-map" aria-hidden="true"></div>
 <div class="dir-app">
 
   <aside class="dir-filters">
@@ -152,6 +153,7 @@ function renderResults(items, append) {
     </a>`).join('');
   if (append) wrap.insertAdjacentHTML('beforeend', html);
   else wrap.innerHTML = html || '<div class="dir-empty">no members match. try widening filters.</div>';
+  updateMapPins(items, append);
 }
 
 async function loadPage(page, append) {
@@ -174,8 +176,43 @@ document.querySelectorAll('#dir-form input[type=checkbox]').forEach(cb =>
 // Initial load using the SSR-rendered query string.
 loadPage(1, false);
 
-// Google Places for location filter.
+// Map setup.
+let dirMap = null, dirMarkers = [];
+function initDirMap() {
+  if (!window.google?.maps || dirMap) return;
+  dirMap = new google.maps.Map(document.getElementById('dir-map'), {
+    zoom: 3,
+    center: {lat: 39, lng: -98},
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    styles: [{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}],
+  });
+}
+function updateMapPins(items, append) {
+  if (!dirMap) return;
+  if (!append) { dirMarkers.forEach(m => m.setMap(null)); dirMarkers = []; }
+  const bounds = append ? null : new google.maps.LatLngBounds();
+  items.forEach(it => {
+    if (!it.location?.lat || !it.location?.lng) return;
+    const pos = {lat: it.location.lat, lng: it.location.lng};
+    const m = new google.maps.Marker({
+      position: pos, map: dirMap, title: it.display_name,
+      icon: {path: google.maps.SymbolPath.CIRCLE, scale: 7,
+             fillColor:'#b9450b', fillOpacity:1, strokeColor:'#fff', strokeWeight:2},
+    });
+    const iw = new google.maps.InfoWindow({content:
+      `<a href="/u/${escH(it.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(it.display_name)}</a>`
+      + (it.location.text ? `<div style="font-size:12px;color:#8a8478">${escH(it.location.text)}</div>` : '')
+    });
+    m.addListener('click', () => iw.open(dirMap, m));
+    dirMarkers.push(m);
+    if (bounds) bounds.extend(pos);
+  });
+  if (bounds && !bounds.isEmpty()) dirMap.fitBounds(bounds);
+}
+
+// Google Places for location filter + map init.
 window.lootInitDirPlaces = function () {
+  initDirMap();
   const input = document.getElementById('dir-loc');
   if (!input || !window.google?.maps?.places) return;
   const ac = new google.maps.places.Autocomplete(input, {fields:['geometry','formatted_address'], types:['geocode']});
