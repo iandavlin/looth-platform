@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/_render.php';
 
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Whoami;
 
 $qs = $_GET;
 $insts  = (array)($qs['inst']  ?? []);
@@ -30,15 +31,35 @@ $initialQS = http_build_query([
 ]);
 
 $placesKey = looth_places_key();
+require_once '/srv/lg-shared/site-header.php';
+require_once '/srv/lg-shared/site-footer.php';
+$_whoami = Whoami::resolve();
 ?>
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Directory · Looth</title>
+<link rel="stylesheet" href="/lg-shared/site-header.css">
 <link rel="stylesheet" href="/profile/edit/edit.css">
 </head>
 <body>
+<?php
+lg_shared_render_site_header([
+    'authenticated' => (bool)($_whoami['authenticated'] ?? false),
+    'tier'          => (string)($_whoami['tier'] ?? 'public'),
+    'display_name'  => (string)($_whoami['display_name'] ?? ''),
+    'avatar_url'    => $_whoami['avatar_url'] ?? null,
+    'capabilities'  => (array)($_whoami['capabilities'] ?? []),
+    'msg_unread'    => null,
+    'notif_unread'  => null,
+    'profile_url'   => isset($_whoami['slug']) && $_whoami['slug']
+        ? '/u/' . rawurlencode((string)$_whoami['slug'])
+        : '/profile/edit',
+    'active_nav'    => 'members',
+    'logout_url'    => ($_whoami['authenticated'] ?? false) ? '/wp-login.php?action=logout' : null,
+]);
+?>
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span></div>
 <div class="dir-app">
 
@@ -171,5 +192,6 @@ window.lootInitDirPlaces = function () {
 <?php if ($placesKey): ?>
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($placesKey, ENT_QUOTES) ?>&libraries=places&callback=lootInitDirPlaces"></script>
 <?php endif; ?>
+<?php lg_shared_render_site_footer(); ?>
 </body>
 </html>
