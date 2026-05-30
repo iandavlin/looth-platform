@@ -9,6 +9,58 @@ also box sysadmin `ubuntu`).
 
 ---
 
+## LATEST — 2026-05-30 build phase (refresh; ~3/4 context, 1 compaction)
+
+**Moved from design into BUILDING the profile spine.** Everything in the "morning"
+section below is still canon; this is what's new + the live process state.
+
+### Profile spine — increment 1 DONE + tested; schema APPLIED to dev
+- **Schema dev-final AND applied** to the dev `profile_app` DB — the 3 adds
+  (`at_a_glance`, `location_exact_visibility` default private, `practices.type`),
+  header-vis on the `profile_sections` row (no column), no approx-coord column,
+  `members` literal. Idempotent. `profile-app/sql/2026-05-30-block-system-spine.sql`.
+- **profile-header (identity) block built + logic-tested GREEN**: ceiling math
+  (`effectiveVisibility = min(header,block)`), `loadHeader` assemble, all 3
+  render/gate branches (private→nothing / members→gate / public→card), write +
+  validation + `member↔members` normalize round-trip. Files: `Block.php`,
+  `_render_blocks.php`, `api/v0/me-header.php`, `Profile.php`. Fixture seeded:
+  user id 3 ("Profile App Test", wp 1918).
+- **BLOCKED: the authed HTTP round-trip** — can't mint a `looth_id` on dev (JWT key
+  `/etc/looth/jwt-private.pem` is `looth-dev`-group; the DB is `profile-app`-peer;
+  no user has both). → **shim-replacement's `/mint-token` now gates testing the
+  WHOLE profile `/me` surface.** Relayed `reply-to-shim-mint-dev-priority.md`.
+- **Increment 2 = location block** (user-managed pin) — NEXT, currently HELD to
+  serialize the profile-app tree with the social turn.
+
+### Social lane — CONFIRMED (e9fd24ab) + ruled + a turn IN FLIGHT
+- Schema finalized + grounded vs live BB (friends **10,978**, `wp_bp_follow` EXISTS
+  9,002, messages 1,881/370/219, notifications 49,603).
+- **4 decisions RULED (Ian):** drop follow (mutual-only; auto-on-connect; don't
+  migrate wp_bp_follow) · DM **connections-only** · notifications start-fresh +
+  seed-unread · counts 9+ badge + 30-day prune, dedicated `me-social-counts`.
+  Canon: STRANGLER-COORDINATION "Social decisions RULED."
+- **⚠️ A social BACKGROUND TURN IS IN FLIGHT** (`bywl7ob3o`): drop-follow→dev-final,
+  scaffold `Notifications.php` + `me-notifications.php`. When it pings: commit its
+  output by pathspec, THEN launch increment 2. **Never two profile-app turns at once.**
+
+### Live process state (successor: READ THIS)
+- Lane turns: `claude --resume <id> --print --permission-mode acceptEdits` via Bash
+  `run_in_background`. WRITE-ONLY (sandbox blocks their git/apply/`php -l`/screenshot).
+  **Coordinator commits by pathspec + applies schema + tests after** = the "tested" gate.
+- **idle-hold `/tmp/no-idle-shutdown` is currently SET** (for the social turn) — `rm`
+  it once that turn lands.
+- Apply/test recipe: `sudo -u profile-app psql -d profile_app -f <sql>`; run PHP as
+  `sudo -u profile-app php` (peer-auth DB). me/* routes in
+  `/etc/nginx/snippets/strangler-profile-app.conf` (repo copy DRIFTED — don't deploy-clobber).
+
+### Open / next
+- Ian: **header default** (member vs public) — last visibility knob.
+- Spine: increment 2 (location) → craft/socials → crib (profiles-only, gated dev-final).
+- shim: unblock dev `/mint-token` → then close the profile `/me` HTTP tests.
+- Backlog: tutorial/tour modal (lg-shell).
+
+---
+
 ## Where we are (2026-05-30 morning)
 
 This session pivoted from cutover-plumbing to **building the profile side of the
