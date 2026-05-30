@@ -2365,3 +2365,9 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card__embed { margin-top: var(--s3); max-width: 540px; }
 .feed-card__embed:empty { margin: 0; }   /* keep box so IntersectionObserver can fire */
 .feed-card__embed .bb-embed { margin: 0; }
+
+/* Rich-text reply editor (Quill) on the single-topic page */
+.reply-form__editor { background: #fff; border-radius: var(--r-sm, 6px); }
+.reply-form__editor .ql-editor { min-height: 120px; font: 15px/1.6 var(--font-body); }
+.reply-form__editor .ql-toolbar.ql-snow,
+.reply-form__editor .ql-container.ql-snow { border-color: var(--border); }

@@ -921,6 +921,47 @@
   var submitBtn    = authed.querySelector('.reply-form__submit');
   var status       = authed.querySelector('.reply-form__status');
 
+  // Rich-text reply editor (Quill + image upload), like the new-topic/feed-reply modals.
+  var replyEditorEl = authed.querySelector('.reply-form__editor');
+  var replyQuill = null, replyMediaIds = [];
+  function replyImageHandler() {
+    var input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      status.textContent = 'Uploading image…';
+      var fd = new FormData(); fd.append('file', file);
+      fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok || !res.j.upload_id) { status.textContent = 'Image upload failed.'; return; }
+          replyMediaIds.push(res.j.upload_id);
+          status.textContent = 'Image attached.';
+          var range = replyQuill.getSelection(true);
+          replyQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
+        })
+        .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
+    };
+    input.click();
+  }
+  function replyInitEditor() {
+    if (replyQuill || !replyEditorEl) return;
+    if (typeof Quill === 'undefined') { if (textarea) textarea.hidden = false; replyEditorEl.style.display = 'none'; return; }
+    replyQuill = new Quill(replyEditorEl, {
+      theme: 'snow', placeholder: 'Share your build, ask a question, drop a measurement…',
+      modules: { toolbar: {
+        container: [ [{ header: [2, 3, false] }], ['bold','italic','underline'], ['blockquote','code-block'], [{ list:'ordered' }, { list:'bullet' }], ['link','image'], ['clean'] ],
+        handlers: { image: replyImageHandler },
+      } } });
+  }
+  function replyGetContent() {
+    var html = replyQuill ? replyQuill.root.innerHTML : (textarea.value || '').trim();
+    if (html === '<p><br></p>') html = '';
+    return html.replace(/<img[^>]*>/gi, '').replace(/<p>\s*<\/p>/gi, '').trim();
+  }
+  function replyFocus() { if (replyQuill) replyQuill.focus(); else if (textarea) textarea.focus(); }
+
   function show(el) { el.hidden = false; }
   function hide(el) { el.hidden = true; }
   function setState(stateEl) {
@@ -937,6 +978,7 @@
       if (!data.authenticated) { setState(anon); return; }
       nonce = data.nonce;
       setState(authed);
+      replyInitEditor();
       revealReplyButtons();
       revealEditButtons(data.wp_user_id || 0, !!data.can_edit_others);
       revealDeleteButtons(data.wp_user_id || 0, !!data.can_edit_others);
@@ -958,8 +1000,8 @@
         parentInput.value = btn.dataset.replyTo;
         replyingToNm.textContent = btn.dataset.replyToAuthor || 'a reply';
         show(replyingTo);
-        textarea.focus();
-        textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        replyFocus();
+        authed.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     });
     cancelThread.addEventListener('click', function () {
@@ -1007,13 +1049,37 @@
     if (kind === 'topic') box.querySelector('.post-edit__title').value = btn.dataset.title || '';
 
     // Quill (fallback to a plain textarea if the CDN didn't load)
-    var quill = null, ta = null;
+    var quill = null, ta = null, editMediaIds = [];
     var qEl = box.querySelector('.post-edit__quill');
+    function editImageHandler() {
+      var input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        statusEl.textContent = 'Uploading image…';
+        var fd = new FormData(); fd.append('file', file);
+        fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok || !res.j.upload_id) { statusEl.textContent = 'Image upload failed.'; return; }
+            editMediaIds.push(res.j.upload_id);
+            statusEl.textContent = 'Image attached.';
+            var range = quill.getSelection(true);
+            quill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
+          })
+          .catch(function (err) { statusEl.textContent = 'Upload error: ' + err.message; });
+      };
+      input.click();
+    }
     if (typeof Quill !== 'undefined') {
-      quill = new Quill(qEl, { theme: 'snow', modules: { toolbar: [
-        [{ header: [2, 3, false] }], ['bold','italic','underline'],
-        ['blockquote','code-block'], [{ list:'ordered' }, { list:'bullet' }],
-        ['link'], ['clean'] ] } });
+      quill = new Quill(qEl, { theme: 'snow', modules: { toolbar: {
+        container: [
+          [{ header: [2, 3, false] }], ['bold','italic','underline'],
+          ['blockquote','code-block'], [{ list:'ordered' }, { list:'bullet' }],
+          ['link','image'], ['clean'] ],
+        handlers: { image: editImageHandler },
+      } } });
       quill.root.innerHTML = body.innerHTML;   // seed from rendered body
     } else {
       ta = document.createElement('textarea');
@@ -1036,9 +1102,13 @@
     saveBtn.addEventListener('click', function () {
       var html = quill ? quill.root.innerHTML : ta.value;
       if (html === '<p><br></p>') html = '';
+      // Strip inline preview <img> — new images attach via bbp_media and are
+      // rendered by the mirror (bb-mirror content images are attachments, not
+      // inline <img>, so this is safe).
+      html = html.replace(/<img[^>]*>/gi, '').replace(/<p>\s*<\/p>/gi, '').trim();
       saveBtn.disabled = true; statusEl.textContent = 'Saving…';
 
-      // Omit bbp_media → existing attachments are preserved server-side.
+      // New uploads attach via bbp_media; existing attachments are preserved.
       var payload, url;
       if (kind === 'topic') {
         url = restBase + '/topics/' + id;
@@ -1049,6 +1119,7 @@
         payload = { id: id, topic_id: parseInt(btn.dataset.topicId, 10),
                     forum_id: parseInt(btn.dataset.forumId, 10), content: html };
       }
+      if (editMediaIds.length) payload.bbp_media = editMediaIds;
 
       fetch(url, {
         method: 'PUT',
@@ -1135,12 +1206,14 @@
   authed.addEventListener('submit', function (e) {
     e.preventDefault();
     if (!nonce) { status.textContent = 'Not signed in.'; return; }
-    var content = textarea.value.trim();
-    if (!content) { status.textContent = "Reply can't be empty."; textarea.focus(); return; }
+    var content = replyGetContent();
+    if (!content && !replyMediaIds.length) { status.textContent = "Reply can't be empty."; replyFocus(); return; }
     submitBtn.disabled = true;
     status.textContent = 'Posting…';
 
-    var body = { content: content, topic_id: topicId, forum_id: forumId };
+    var body = { topic_id: topicId, forum_id: forumId };
+    if (content) body.content = content;
+    if (replyMediaIds.length) body.bbp_media = replyMediaIds;
     var parentId = parseInt(parentInput.value, 10);
     if (parentId > 0) body.reply_to = parentId;
 

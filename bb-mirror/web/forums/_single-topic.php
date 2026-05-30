@@ -388,10 +388,11 @@ $fh_image      = $forum['header_image_url'] ?: null;
         ↩ replying to <strong class="reply-form__replying-to-name"></strong>
         <button type="button" class="reply-form__cancel-thread">cancel</button>
       </div>
-      <label class="reply-form__label" for="reply-content">Add a reply</label>
+      <label class="reply-form__label">Add a reply</label>
+      <!-- Quill mounts here (same editor as new-topic/feed reply); textarea is the fallback -->
+      <div class="reply-form__editor" id="reply-editor"></div>
       <textarea id="reply-content" name="content" rows="6"
-                placeholder="Share your build, ask a question, drop a measurement…"
-                required></textarea>
+                placeholder="Share your build, ask a question, drop a measurement…" hidden></textarea>
       <div class="reply-form__row">
         <button type="submit" class="reply-form__submit">Post reply</button>
         <span class="reply-form__status" role="status" aria-live="polite"></span>
