@@ -349,6 +349,26 @@
       }
     }
 
+    // 3b. Any text node that is EXACTLY a single provider URL → embed it.
+    //     Legacy content sometimes leads with a bare provider URL glued straight
+    //     to following markup (e.g. an IG reel URL + "<div>…"), so it never sits
+    //     alone in a <p> and steps 1–3 miss it; catch it before auto-linking
+    //     turns it into a plain text link.
+    (function () {
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      var nodes = [], n;
+      while ((n = w.nextNode())) nodes.push(n);
+      nodes.forEach(function (node) {
+        var txt = (node.nodeValue || '').trim();
+        if (!/^https?:\/\/\S+$/.test(txt)) return;
+        for (var p = node.parentNode; p && p !== root; p = p.parentNode) {
+          if (p.nodeName === 'A' || (p.classList && p.classList.contains('bb-embed'))) return;
+        }
+        var em = bbBuildEmbed(txt);
+        if (em && node.parentNode) node.parentNode.replaceChild(em, node);
+      });
+    })();
+
     // 4. Auto-link any remaining bare URLs (legacy posts store them as plain
     //    text; WP make_clickable()s them at render — we echo raw, so do it here).
     bbAutoLink(root);
