@@ -157,11 +157,13 @@ if ($scoped_forum) {
     $scope_ids = array_column($scope_stmt->fetchAll(), 'id');
 }
 
-// -- Header image: explicit per-forum override (admin pencil) wins, else auto --
+// -- Header image: explicit override (admin pencil) wins, else auto.
+//    Scoped forum -> forum.header_image_url; site-wide -> sync_state.site_header_image.
 $header_image_url = null;
-$header_image_explicit = $scoped_forum && !empty($scoped_forum['header_image_url']);
-if ($header_image_explicit) {
+$header_image_explicit = false;
+if ($scoped_forum && !empty($scoped_forum['header_image_url'])) {
     $header_image_url = (string)$scoped_forum['header_image_url'];
+    $header_image_explicit = true;
 } elseif ($scope_ids !== null && count($scope_ids) > 0) {
     $scope_id_list = '{' . implode(',', array_map('intval', $scope_ids)) . '}';
     $hi_stmt = $db->prepare("
@@ -176,14 +178,15 @@ if ($header_image_explicit) {
     $hi_row = $hi_stmt->fetch();
     $header_image_url = $hi_row ? $hi_row['url'] : null;
 } else {
-    // site-wide: most recent attachment overall
-    $hi_stmt = $db->query("
-        SELECT url FROM forums.attachment
-         WHERE url IS NOT NULL
-         ORDER BY id DESC LIMIT 1
-    ");
-    $hi_row = $hi_stmt->fetch();
-    $header_image_url = $hi_row ? $hi_row['url'] : null;
+    // site-wide: explicit admin override (All Forums pencil) wins, else most recent.
+    $sw = $db->query("SELECT value FROM sync_state WHERE key = 'site_header_image'")->fetch();
+    if ($sw && trim((string)$sw['value']) !== '') {
+        $header_image_url = (string)$sw['value'];
+        $header_image_explicit = true;
+    } else {
+        $hi_row = $db->query("SELECT url FROM forums.attachment WHERE url IS NOT NULL ORDER BY id DESC LIMIT 1")->fetch();
+        $header_image_url = $hi_row ? $hi_row['url'] : null;
+    }
 }
 
 // -- Topic query with LATERAL join for first attachment image --
@@ -429,17 +432,11 @@ $header_cat = $scoped_forum
         <h1 class="forum-header__title"><?= htmlspecialchars($header_title, ENT_QUOTES, 'UTF-8') ?></h1>
       </div>
       <span class="forum-header__label">Activity</span>
-      <?php if ($scoped_forum): ?>
-        <button class="forum-header__edit-img" type="button" hidden
-                data-forum-id="<?= (int)$scoped_forum['id'] ?>"
-                title="Set header image" aria-label="Set header image">&#9998;</button>
-      <?php endif; ?>
+      <button class="forum-header__edit-img" type="button" hidden
+              data-forum-id="<?= $scoped_forum ? (int)$scoped_forum['id'] : 0 ?>"
+              title="Set header image" aria-label="Set header image">&#9998;</button>
     </div>
   </header>
-
-  <?php if ($scoped_forum && trim((string)($scoped_forum['description'] ?? '')) !== ''): ?>
-    <p class="forum__description"><?= htmlspecialchars($scoped_forum['description']) ?></p>
-  <?php endif; ?>
 
   <?php if ($pill_forums): ?>
   <nav class="subforum-pills" aria-label="<?= $pill_active_id ? 'Related forums' : 'Sub-forums' ?>">

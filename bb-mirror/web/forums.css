@@ -1662,7 +1662,7 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
 .forum-header--has-image { min-height: 132px; }
 /* Admin-set image shows more prominently than the faint auto-derived one
    (still right-side-faded so left-aligned text stays readable). */
-.forum-header--explicit-image .forum-header__bg { opacity: .42; }
+.forum-header--explicit-image .forum-header__bg { opacity: .58; }
 
 /* Image as a soft fade on the right; text stays on the readable left. */
 .forum-header__bg {
@@ -1670,7 +1670,7 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   inset: 0;
   background-size: cover;
   background-position: center 35%;
-  opacity: 0.22;
+  opacity: 0.4;
   -webkit-mask-image: linear-gradient(to left, #000 0%, transparent 62%);
   mask-image: linear-gradient(to left, #000 0%, transparent 62%);
 }

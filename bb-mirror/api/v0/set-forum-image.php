@@ -45,7 +45,7 @@ $body = json_decode(file_get_contents('php://input'), true) ?: [];
 $forum_id  = (int)($body['forum_id'] ?? 0);
 $upload_id = (int)($body['upload_id'] ?? 0);
 $url       = trim((string)($body['url'] ?? ''));
-if ($forum_id <= 0) lg_sfi_fail(400, 'forum_id required');
+if ($forum_id < 0) lg_sfi_fail(400, 'bad forum_id');
 
 // Preferred path: resolve a clean, public wp-content URL from the upload's
 // attachment ID (the raw /media/upload preview URL is access-gated and won't
@@ -60,6 +60,23 @@ if ($upload_id > 0) {
 if ($url !== '' && !preg_match('#^https://#i', $url)) lg_sfi_fail(400, 'url must be https');
 
 $db = bb_mirror_db(false);
+
+// forum_id 0 = the site-wide "All Forums" header (no forum row); store in the
+// sync_state kv so the pg-only feed can read it.
+if ($forum_id === 0) {
+    if ($url === '') {
+        $db->prepare("DELETE FROM sync_state WHERE key = 'site_header_image'")->execute();
+    } else {
+        $up = $db->prepare("INSERT INTO sync_state (key, value, updated_at)
+                            VALUES ('site_header_image', :url, now())
+                            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()");
+        $up->bindValue(':url', $url);
+        $up->execute();
+    }
+    echo json_encode(['ok' => true, 'forum_id' => 0, 'url' => $url ?: null]);
+    exit;
+}
+
 // Confirm the forum exists + is public before writing.
 $chk = $db->prepare("SELECT 1 FROM forum WHERE id = ? AND visibility = 'public' LIMIT 1");
 $chk->execute([$forum_id]);
