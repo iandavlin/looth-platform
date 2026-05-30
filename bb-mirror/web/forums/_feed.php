@@ -501,7 +501,7 @@ $header_cat = $scoped_forum
       $plain_full    = strip_tags($full_html);
       $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
     ?>
-    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>">
+    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>">
       <div class="feed-card__meta-top">
         <span class="feed-card__forum-ctx"><?= $ctx ?></span>
         <time class="feed-card__time" title="<?= htmlspecialchars((string)$topic['event_time']) ?>"><?= $rtime ?></time>

@@ -14,6 +14,17 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // Clickable card: a click anywhere on a feed card navigates to its topic,
+  // EXCEPT on real interactive elements (links/buttons/inputs) or while the
+  // user is selecting text. data-href is the topic URL.
+  document.addEventListener('click', function (e) {
+    var card = e.target.closest('.feed-card--topic[data-href]');
+    if (!card) return;
+    if (e.target.closest('a, button, input, textarea, select, label, [role=\"button\"]')) return;
+    if (window.getSelection && String(window.getSelection()).length) return;
+    window.location.href = card.dataset.href;
+  });
+
   // ── 1. Corner hamburger ──────────────────────────────────────────────────
   // Desktop: default = nav visible; hamburger adds body.nav-closed to hide it.
   // Mobile:  default = nav hidden;  hamburger adds body.nav-open to show drawer.

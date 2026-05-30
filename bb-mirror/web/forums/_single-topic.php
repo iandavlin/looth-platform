@@ -30,7 +30,9 @@ $topq = $db->prepare("
            t.created_at, t.status, t.sticky_kind, t.voice_count, t.reply_count,
            f.id   AS forum_id,
            f.slug AS forum_slug,
-           f.title AS forum_title
+           f.title AS forum_title,
+           f.parent_forum_id,
+           f.header_image_url
       FROM forums.topic  t
       JOIN forums.forum  f ON f.id = t.forum_id
      WHERE f.slug  = :fs
@@ -50,7 +52,8 @@ if (!$row) {
     return;
 }
 
-$forum = ['id' => $row['forum_id'], 'slug' => $row['forum_slug'], 'title' => $row['forum_title']];
+$forum = ['id' => $row['forum_id'], 'slug' => $row['forum_slug'], 'title' => $row['forum_title'],
+          'parent_forum_id' => $row['parent_forum_id'], 'header_image_url' => $row['header_image_url']];
 $topic = $row; // all t.* fields are top-level keys
 
 // ── 3. OP person record (for moderator badge) ────────────────────────────────
@@ -256,15 +259,38 @@ $op_created = fmt_ts_single($topic['created_at']);
 $op_dt      = fmt_ts_dt($topic['created_at']);
 $reply_count = (int)$topic['reply_count'];
 $public_path = LG_BB_MIRROR_PUBLIC_PATH;
+
+// Forum-header context for the post page (category accent + parent breadcrumb).
+$fcat_rows  = $db->query("SELECT id, slug, parent_forum_id FROM forum WHERE visibility='public' AND status IN ('open','closed')")->fetchAll();
+$forum_cat  = bb_mirror_build_cat_map($fcat_rows)[(int)$forum['id']] ?? 'general';
+$fh_parent  = null;
+if (!empty($forum['parent_forum_id'])) {
+    $pfq = $db->prepare("SELECT slug, title FROM forum WHERE id = ? AND visibility='public' LIMIT 1");
+    $pfq->execute([(int)$forum['parent_forum_id']]);
+    $fh_parent = $pfq->fetch() ?: null;
+}
+$forum_url     = $public_path . '/' . $forum['slug'] . '/';
+$fh_parent_url = $fh_parent ? $public_path . '/' . $fh_parent['slug'] . '/' : '';
+$fh_image      = $forum['header_image_url'] ?: null;
 ?>
 
 <div class="page">
 
-  <nav class="breadcrumbs">
-    <a href="<?= htmlspecialchars($public_path . '/') ?>">Forums</a> /
-    <a href="<?= htmlspecialchars($public_path . '/' . $forum['slug'] . '/') ?>"><?= htmlspecialchars($forum['title']) ?></a> /
-    <?= htmlspecialchars($topic['title']) ?>
-  </nav>
+  <header class="forum-header forum-header--post<?= $fh_image ? ' forum-header--has-image' : '' ?>" data-cat="<?= htmlspecialchars($forum_cat) ?>">
+    <?php if ($fh_image): ?>
+      <div class="forum-header__bg" style="background-image: url('<?= htmlspecialchars($fh_image, ENT_QUOTES, 'UTF-8') ?>')"></div>
+    <?php endif; ?>
+    <div class="forum-header__body">
+      <a class="forum-header__home" href="<?= htmlspecialchars($public_path . '/') ?>">Forums</a>
+      <?php if ($fh_parent): ?>
+        <a class="forum-header__parent" href="<?= htmlspecialchars($fh_parent_url) ?>">&lsaquo; <?= htmlspecialchars($fh_parent['title']) ?></a>
+      <?php endif; ?>
+      <div class="forum-header__title-row">
+        <a class="forum-header__title forum-header__title--link" href="<?= htmlspecialchars($forum_url) ?>"><?= htmlspecialchars($forum['title']) ?></a>
+      </div>
+      <span class="forum-header__label">Forum</span>
+    </div>
+  </header>
 
   <div class="topic-header">
     <h1 class="topic-header__title"><?= htmlspecialchars($topic['title']) ?></h1>

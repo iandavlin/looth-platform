@@ -2338,3 +2338,12 @@ body.ntm-active { overflow: hidden; }
 .feed-card[data-cat="general"]  .feed-card__ctx-parent::before { content:"💬 "; }
 .feed-card[data-cat="sponsors"] .feed-card__ctx-parent::before { content:"⭐ "; }
 .feed-card[data-cat="looths"]   .feed-card__ctx-parent::before { content:"📍 "; }
+
+/* Clickable feed card — whole card navigates to the topic (links/buttons opt out via JS) */
+.feed-card--topic { cursor: pointer; transition: box-shadow .12s ease, border-color .12s ease; }
+.feed-card--topic:hover { box-shadow: var(--shadow-elev, 0 8px 24px rgba(0,0,0,.08)); }
+
+/* Forum header on a single post — title links back to the forum */
+a.forum-header__title--link { color: inherit; text-decoration: none; }
+a.forum-header__title--link:hover { text-decoration: underline; text-decoration-color: var(--hdr-accent, var(--lg-sage)); }
+.forum-header__home { font: 600 11px/1 var(--lg-font-sans); text-transform: uppercase; letter-spacing: .06em; color: var(--lg-mute); display: inline-block; margin-bottom: 2px; }
