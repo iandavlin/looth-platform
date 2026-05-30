@@ -161,6 +161,17 @@
     btn.remove();
   });
 
+  // Lead-reply image opener: a teaser reply hides its image (and defers loading)
+  // until opened. Swap data-src -> src and reveal.
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.reply-stub__img-open');
+    if (!b) return;
+    e.stopPropagation();
+    var img = b.nextElementSibling;
+    if (img && img.dataset && img.dataset.src) { img.src = img.dataset.src; img.hidden = false; }
+    b.remove();
+  });
+
   // ── 2c-bis. Reply sort toggle (Newest / Oldest) in the expanded thread ──────
   // The ?replies fragment carries the toggle; clicking re-fetches with &sort= and
   // swaps the thread HTML (the fragment re-emits the toggle with active state).

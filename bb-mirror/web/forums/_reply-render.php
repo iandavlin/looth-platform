@@ -48,7 +48,7 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
      * @param bool  $is_child indented child styling
      * @param bool  $overflow hidden-until-expanded (only used inside the lazy thread)
      */
-    function bb_mirror_render_reply_stub(array $r, bool $is_child = false, bool $overflow = false): void
+    function bb_mirror_render_reply_stub(array $r, bool $is_child = false, bool $overflow = false, bool $collapse_image = false): void
     {
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
@@ -80,7 +80,15 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             echo '</span>';
         }
         if (!empty($r['reply_image_url'])) {
-            echo '<img class="reply-stub__img" src="' . htmlspecialchars($r['reply_image_url']) . '" alt="" loading="lazy">';
+            $iu = htmlspecialchars($r['reply_image_url']);
+            if ($collapse_image) {
+                // Teaser context: keep the image hidden AND unloaded (data-src, no
+                // src) until the reader opens the reply — keeps the feed card compact.
+                echo '<button class="reply-stub__img-open" type="button">&#128247; Show image</button>'
+                   . '<img class="reply-stub__img reply-stub__img--deferred" data-src="' . $iu . '" alt="" hidden>';
+            } else {
+                echo '<img class="reply-stub__img" src="' . $iu . '" alt="" loading="lazy">';
+            }
         }
         echo '</div></div>';
     }

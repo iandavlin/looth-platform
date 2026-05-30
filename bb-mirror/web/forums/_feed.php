@@ -545,7 +545,7 @@ $header_cat = $scoped_forum
 
       <?php if ($teaser || $has_more): ?>
         <div class="feed-card__replies">
-          <?php if ($teaser) bb_mirror_render_reply_stub($teaser); ?>
+          <?php if ($teaser) bb_mirror_render_reply_stub($teaser, false, false, true); ?>
 
           <!-- Full thread lazy-loads here on click (see forums.js + ?replies=<id>) -->
           <div class="feed-card__replies-full" hidden></div>
