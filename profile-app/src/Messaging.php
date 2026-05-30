@@ -28,8 +28,13 @@ final class Messaging
     /** Send. Creates a thread if $threadId null (DM to $toUuid). Returns the message. */
     public static function send(string $senderUuid, ?int $threadId, ?string $toUuid, string $body): array
     {
-        // TODO: validate participant/eligibility (Connections::canMessage for new threads);
-        //       INSERT message; bump threads.last_message_at; recipients.unread_count++ for others.
+        // GATE (Ian, 2026-05-30): messaging is CONNECTIONS-ONLY.
+        //   - NEW thread (to $toUuid): require Connections::canMessage($sender,$to)
+        //     === an ACCEPTED mutual connection, not blocked. No any-member DM.
+        //   - EXISTING thread: assert $sender is a recipient; still reject if the peer
+        //     has since blocked (canMessage) — connect first, then message.
+        // TODO: validate per above; INSERT message; bump threads.last_message_at;
+        //       recipients.unread_count++ for others; Notifications::push(peer,'message',thread_id).
         return ['ok' => false, 'todo' => true];
     }
 

@@ -11,25 +11,26 @@
 
 BEGIN;
 
--- ---------- connections (friends / follow / requests / blocks) ----------
+-- ---------- connections (mutual friends / requests / blocks) ----------
 CREATE TABLE connections (
     id              bigserial PRIMARY KEY,
     requester_uuid  uuid NOT NULL REFERENCES users(uuid),   -- "a" (initiator)
     addressee_uuid  uuid NOT NULL REFERENCES users(uuid),   -- "b"
     status          text NOT NULL CHECK (status IN ('pending','accepted','blocked')),
-    type            text NOT NULL DEFAULT 'friend' CHECK (type IN ('friend','follow')),
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now(),
     CHECK (requester_uuid <> addressee_uuid),
-    UNIQUE (requester_uuid, addressee_uuid, type)
+    UNIQUE (requester_uuid, addressee_uuid)
 );
--- friend = symmetric (ONE row; query both directions). follow = directional.
+-- Connections are MUTUAL ONLY (Ian, 2026-05-30) — symmetric: ONE row per pair,
+-- queried both directions. The `follow` type/graph is DROPPED; if a feature ever
+-- needs a follow signal it is AUTO-DERIVED from the connection (accepted = mutual
+-- follow), never stored as a row or surfaced as UI. `wp_bp_follow` is NOT migrated.
 -- PORT NOTE (wp_bp_friends, 10,978 edges = 7,346 accepted / 3,632 pending): BB
 -- stores ONE row per friendship → maps 1:1, no reciprocal-row dedup needed. The
--- UNIQUE(requester,addressee,type) blocks exact dupes but NOT the reversed pair
--- for friends; BB source is clean (one row/pair) and app-layer request() rejects an
--- existing edge in either direction, so reversed-pair friend dupes can't arise.
--- BB `is_limited` (rare) is dropped on import; `wp_bp_follow` (9,002 rows) → type='follow'.
+-- UNIQUE(requester,addressee) blocks exact dupes but NOT the reversed pair; BB
+-- source is clean (one row/pair) and app-layer request() rejects an existing edge in
+-- either direction, so reversed-pair dupes can't arise. BB `is_limited` dropped on import.
 CREATE INDEX idx_connections_addressee ON connections (addressee_uuid, status);
 CREATE INDEX idx_connections_requester ON connections (requester_uuid, status);
 CREATE INDEX idx_connections_pending   ON connections (addressee_uuid) WHERE status = 'pending';
