@@ -1,122 +1,103 @@
 <?php
 /**
- * Plugin Name: LG Membership Pages — Shared Chrome
- * Description: Renders the lg-patreon-stripe-poller auto-seeded membership pages
- *              (lgjoin, membership-guide, manage-subscription, …) on the unified
- *              /srv/lg-shared/ header+footer instead of BuddyBoss theme chrome,
- *              by swapping the template via `template_include`.
+ * Plugin Name: LG Membership Chrome
+ * Description: Renders WP membership pages on the shared /srv/lg-shared/ header instead of BuddyBoss theme chrome.
+ * Author: Looth Group
  *
- * Owner lane: poller (lg-patreon-stripe-poller). Consumes the shared header
- * (lg-shell owns /srv/lg-shared/ — we do NOT modify it, only call it).
+ * Briefing: /home/ubuntu/projects/docs/briefing-membership-pages.md
+ * Coord doc: STRANGLER-COORDINATION.md §0a (active_nav + logout_url required),
+ *            §0b (launch invariant — see SESSION-HANDOFF for the open question
+ *                 about template_include vs. standalone), §1 (tier vocab).
  *
- * Mechanism:
- *   - On a singular page whose slug is one of the 11 registry slugs, return a
- *     custom template that emits  header → the_content() → footer  and bypasses
- *     the active theme entirely.
- *   - Viewer state is built IN-PROCESS (wp_get_current_user() + lg_viewer_tier())
- *     so these pages still render while profile-app / Stripe are dormant
- *     (B-now/A-later cutover). No /whoami loopback dependency.
- *   - Fail-safe: if the shared partial isn't readable, fall through to the
- *     theme template rather than fatal.
+ * PoC scope (2026-05-29): /membership-guide/ only. The other 10 auto-seeded
+ * membership slugs (lgjoin, lggift-buy, lggift, manage-subscription, etc.)
+ * are listed below as comments and will be added after coordinator + Ian
+ * resolve briefing decision #1 (fate of [lg_member_nav]).
+ *
+ * Mechanism: hooks `template_include` at priority 99 (after the theme has
+ * made its pick) to swap to a self-contained template that renders:
+ *   <doctype> → wp_head() → shared header → the_content() → shared footer → wp_footer()
+ *
+ * Bypasses BuddyBoss theme chrome entirely. WP plugins/styles still load via
+ * wp_head/wp_footer so welcome modal, REST endpoints, body_class filters
+ * (lgms-mg-anon/lgms-mg-member) continue to work.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit;
+    exit;
 }
 
 /**
- * Slugs of the poller's auto-seeded membership pages (Pages::PAGES registry).
- * Keep in sync with src/Wp/Pages.php — 11 entries.
+ * Page slugs that should render on the shared shell.
+ *
+ * PoC starts with just /membership-guide/. After briefing decision #1 lands,
+ * extend this with the remaining auto-seeded membership slugs:
+ *   lgjoin, lggift-buy, lggift, manage-subscription,
+ *   regional-pricing-not-available, welcome, my-gifts,
+ *   affiliate-earnings, test-checklist, request-refund
  */
 const LG_MEMBERSHIP_CHROME_SLUGS = [
-	'lgjoin',
-	'lggift-buy',
-	'lggift',
-	'manage-subscription',
-	'regional-pricing-not-available',
-	'welcome',
-	'my-gifts',
-	'membership-guide',
-	'affiliate-earnings',
-	'test-checklist',
-	'request-refund',
+    'membership-guide',
 ];
 
-const LG_MEMBERSHIP_CHROME_HEADER = '/srv/lg-shared/site-header.php';
-const LG_MEMBERSHIP_CHROME_FOOTER = '/srv/lg-shared/site-footer.php';
+add_filter( 'template_include', static function ( $template ) {
+    global $post;
 
-/**
- * Swap in the shared-chrome template for membership pages on the main query.
- *
- * Priority 99 so it runs after most theme/template-routing filters and wins.
- */
-add_filter( 'template_include', function ( $template ) {
+    if ( ! ( $post instanceof WP_Post ) || $post->post_type !== 'page' ) {
+        return $template;
+    }
+    if ( ! in_array( $post->post_name, LG_MEMBERSHIP_CHROME_SLUGS, true ) ) {
+        return $template;
+    }
 
-	// Only the real page view — never feeds, REST, embeds, or secondary queries.
-	if ( ! is_main_query() || ! is_singular( 'page' ) ) {
-		return $template;
-	}
-
-	$obj = get_queried_object();
-	if ( ! $obj instanceof WP_Post || ! in_array( $obj->post_name, LG_MEMBERSHIP_CHROME_SLUGS, true ) ) {
-		return $template;
-	}
-
-	// Fail-safe: shared partials must be present + readable, else keep the theme.
-	if ( ! is_readable( LG_MEMBERSHIP_CHROME_HEADER ) || ! is_readable( LG_MEMBERSHIP_CHROME_FOOTER ) ) {
-		return $template;
-	}
-
-	$custom = __DIR__ . '/lg-membership-chrome/template.php';
-	return is_readable( $custom ) ? $custom : $template;
-
+    $custom = __DIR__ . '/lg-membership-chrome/template.php';
+    return file_exists( $custom ) ? $custom : $template;
 }, 99 );
 
 /**
- * Build the viewer-context array the shared header expects, in-process.
- * No DB-write, no HTTP. Mirrors lg-viewer-tier.php's tier map.
+ * Build the viewer-context array for lg_shared_render_site_header().
  *
- * @return array<string,mixed>
+ * Derives identity + tier from in-process WP state (the briefing's
+ * "Alternative" path — simpler than calling /whoami over loopback, and
+ * we already have WP booted on this request). Role→tier mapping matches
+ * STRANGLER-COORDINATION.md §1.
  */
-function lg_membership_chrome_viewer_ctx(): array {
-	$authed = is_user_logged_in();
+function lg_membership_chrome_viewer(): array {
+    $user = wp_get_current_user();
+    $auth = ( $user instanceof WP_User ) && (int) $user->ID > 0;
 
-	$tier = 'public';
-	if ( $authed && function_exists( 'lg_viewer_tier' ) ) {
-		$tier = lg_viewer_tier();
-	}
+    $tier = 'public';
+    if ( $auth ) {
+        // Walk highest → lowest so a user with multiple looth roles gets the
+        // top one. Matches Arbiter + InternalRestController convention.
+        foreach ( [ 'looth4' => 'pro', 'looth3' => 'pro', 'looth2' => 'lite', 'looth1' => 'public' ] as $role => $t ) {
+            if ( in_array( $role, (array) $user->roles, true ) ) {
+                $tier = $t;
+                break;
+            }
+        }
+    }
 
-	$display_name = '';
-	$avatar_url   = null;
-	$caps         = [
-		'manage_options'   => false,
-		'edit_archive_poc' => false,
-	];
+    $caps = [
+        'manage_options'   => $auth && user_can( $user->ID, 'manage_options' ),
+        'edit_archive_poc' => $auth && user_can( $user->ID, 'edit_archive_poc' ),
+    ];
 
-	if ( $authed ) {
-		$user         = wp_get_current_user();
-		$display_name = (string) ( $user->display_name ?: $user->user_login );
-		$avatar_url   = get_avatar_url( $user->ID ) ?: null;
-		$caps         = [
-			'manage_options'   => current_user_can( 'manage_options' ),
-			'edit_archive_poc' => current_user_can( 'edit_archive_poc' ),
-		];
-	}
-
-	$logo_url = ( defined( 'WP_HOME' ) && str_contains( WP_HOME, 'dev.loothgroup.com' ) )
-		? 'https://dev.loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png'
-		: 'https://loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png';
-
-	return [
-		'authenticated' => $authed,
-		'tier'          => $tier,
-		'display_name'  => $display_name,
-		'avatar_url'    => $avatar_url,
-		'capabilities'  => $caps,
-		'msg_unread'    => null,   // lazy-load via REST
-		'notif_unread'  => null,   // lazy-load via REST
-		'profile_url'   => '/profile/edit',
-		'logout_url'    => wp_logout_url( '/' ),
-		'logo_url'      => $logo_url,
-	];
+    return [
+        'authenticated' => $auth,
+        'tier'          => $tier,
+        'display_name'  => $auth ? (string) $user->display_name : '',
+        'avatar_url'    => $auth ? (string) get_avatar_url( $user->ID, [ 'size' => 96 ] ) : null,
+        'capabilities'  => $caps,
+        // null = let the header lazy-load these via REST (§0a allows null).
+        'msg_unread'    => null,
+        'notif_unread'  => null,
+        // §0a required. Empty string = no top-nav item highlighted (membership
+        // pages aren't in the canonical top nav per §0d).
+        'active_nav'    => '',
+        // §0a required. wp_logout_url() emits a nonce'd URL that returns to
+        // the current page after sign-out, or home on anon (idempotent).
+        'logout_url'    => wp_logout_url( $auth ? get_permalink() : home_url( '/' ) ),
+        'profile_url'   => '/profile/edit',
+    ];
 }
