@@ -1,4 +1,4 @@
--- profile-app — SOCIAL LAYER schema (connections + messaging).
+-- profile-app — SOCIAL LAYER schema (connections + messaging + notifications).
 --
 -- ⚠️ STUB — NOT YET APPLIED. Joins the spine as a dev-FINAL migration target,
 -- reviewed before any crib runs. CUT-DAY-REQUIRED (P-list blocker, on the
@@ -24,6 +24,12 @@ CREATE TABLE connections (
     UNIQUE (requester_uuid, addressee_uuid, type)
 );
 -- friend = symmetric (ONE row; query both directions). follow = directional.
+-- PORT NOTE (wp_bp_friends, 10,978 edges = 7,346 accepted / 3,632 pending): BB
+-- stores ONE row per friendship → maps 1:1, no reciprocal-row dedup needed. The
+-- UNIQUE(requester,addressee,type) blocks exact dupes but NOT the reversed pair
+-- for friends; BB source is clean (one row/pair) and app-layer request() rejects an
+-- existing edge in either direction, so reversed-pair friend dupes can't arise.
+-- BB `is_limited` (rare) is dropped on import; `wp_bp_follow` (9,002 rows) → type='follow'.
 CREATE INDEX idx_connections_addressee ON connections (addressee_uuid, status);
 CREATE INDEX idx_connections_requester ON connections (requester_uuid, status);
 CREATE INDEX idx_connections_pending   ON connections (addressee_uuid) WHERE status = 'pending';
@@ -60,5 +66,34 @@ CREATE TABLE message_recipients (
     PRIMARY KEY (thread_id, user_uuid)
 );
 CREATE INDEX idx_recipients_user ON message_recipients (user_uuid) WHERE is_deleted = false;
+
+-- ---------- notifications (bell backend; lg-shell renders the UI) ----------
+-- Third pillar of this lane. Modeled on BP's proven wp_bp_notifications envelope
+-- (user / component+action / item / is_new), trimmed to looth_id + typed referents.
+-- profile-app owns the DATA + counts; lg-shell's bell + modal are the UI that READ
+-- this. Extensible to other lanes later via the `type` namespace (a new lane adds
+-- its type + its own nullable referent column; don't pre-build columns we don't use).
+--
+-- NOTE: BB notification HISTORY (49,603 rows, mostly groups/activity/mentions we do
+-- NOT own) is NOT a migration target — notifications are ephemeral UI state. The
+-- bell fills live from unread DMs + pending requests. (Open decision: optionally
+-- seed current-unread message/friends notices so the bell isn't empty at cut.)
+CREATE TABLE notifications (
+    id           bigserial PRIMARY KEY,
+    user_uuid    uuid NOT NULL REFERENCES users(uuid),            -- recipient
+    actor_uuid   uuid REFERENCES users(uuid),                     -- who triggered it (null = system)
+    type         text NOT NULL CHECK (type IN ('message','connection_request','connection_accept')),
+    -- typed, nullable referents (clean cascades; better-DB over a polymorphic blob).
+    thread_id    bigint REFERENCES message_threads(id) ON DELETE CASCADE,
+    connection_id bigint REFERENCES connections(id)    ON DELETE CASCADE,
+    is_read      boolean NOT NULL DEFAULT false,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    read_at      timestamptz
+);
+-- unread bell count (cheap, hot path); recent-first feed for the modal.
+CREATE INDEX idx_notifications_unread ON notifications (user_uuid) WHERE is_read = false;
+CREATE INDEX idx_notifications_feed   ON notifications (user_uuid, created_at DESC);
+-- Dedup is app-layer (Notifications::push upserts: collapse "new message" to one
+-- unread row per (user, thread); one request/accept row per (user, connection)).
 
 COMMIT;
