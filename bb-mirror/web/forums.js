@@ -58,8 +58,18 @@
     var toggle = sec.querySelector('.nav-tree__section-toggle');
     if (!toggle) return;
     toggle.addEventListener('click', function () {
-      var open = sec.classList.toggle('nav-tree__section--open');
-      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      var willOpen = !sec.classList.contains('nav-tree__section--open');
+      if (willOpen) {
+        // single-expand: collapse any other open section first
+        document.querySelectorAll('.nav-tree__section--open').forEach(function (o) {
+          if (o === sec) return;
+          o.classList.remove('nav-tree__section--open');
+          var t = o.querySelector('.nav-tree__section-toggle');
+          if (t) t.setAttribute('aria-expanded', 'false');
+        });
+      }
+      sec.classList.toggle('nav-tree__section--open', willOpen);
+      toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     });
   });
 

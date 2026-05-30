@@ -2371,3 +2371,13 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .reply-form__editor .ql-editor { min-height: 120px; font: 15px/1.6 var(--font-body); }
 .reply-form__editor .ql-toolbar.ql-snow,
 .reply-form__editor .ql-container.ql-snow { border-color: var(--border); }
+
+/* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
+.nav-tree__icon { display: inline-block; width: 1.35em; margin-right: 5px; text-align: center; font-style: normal; }
+/* caption accent (--nc) + a lighter end-cap tint (--leaf-cap), per brand accent family */
+.nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: #586b3f; --leaf-cap: #99b27e; }
+.nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: #b8842b; --leaf-cap: #ecb351; }
+.nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: #323532; --leaf-cap: #a8aa9e; }
+.nav-tree__section-label { color: var(--nc) !important; font-weight: 700; }
+.nav-tree__item--child { border-left: 3px solid var(--leaf-cap); padding-left: 9px; }
+.nav-tree__item--child.nav-tree__item--active { border-left-color: var(--nc); }
