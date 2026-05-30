@@ -16,6 +16,26 @@ Consumers today (or imminently):
 
 ---
 
+## ⭐ GOVERNING INVARIANT — dev-complete + fully tested BEFORE the cut (Ian, 2026-05-30)
+
+**Everything we build works on DEV, completely tested, before the cut. Cut day is
+LIVE day — a FLIP, not a build. No half-baked features ship at launch.**
+
+- A feature is **cut-eligible only when it is dev-complete AND dev-proven** (tested
+  on dev, not just written). Generalizes the auth invariant ("only dev-proven auth
+  on cut day") to **every** feature.
+- **Cut day does zero building** — it flips dev-finished, soaked work to live and
+  migrates data once into the final shape. Anything not done + tested by then is
+  **cut from launch scope, not shipped half-baked.**
+- ∴ anything **cut-day-required** (profile spine, social layer, …) must be built +
+  tested on dev **with runway to spare** — which is exactly why those lanes spawn
+  **early, not late.** "Cut-day-required" = *finished before* cut day, never *built
+  on* cut day.
+- Every lane owes a **dev test pass** before it's marked cut-eligible; coordinator
+  tracks the P-list as "done = dev-complete + tested."
+
+---
+
 ## 0. Repo + commit discipline (2026-05-29) — ALL CHATS
 
 looth-platform is now a **git repo**: working tree `/home/ubuntu/projects`,

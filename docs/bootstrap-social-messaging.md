@@ -40,9 +40,12 @@ applied/run). Verify + build on:
 You + profile-2.0 both edit `profile-app/` in the **shared working tree**. Stay in
 your files (the social-layer set above); **commit by PATHSPEC, never `git add -A`**.
 - **profile-2.0 (`1c98b564`)** owns the spine, blocks, profile/practice pages,
-  directory. The **Connect/Message buttons render on `/u/`** (profile-app's profile
-  page) — coordinate the button markup with profile-2.0; you own the actions behind
-  them.
+  directory. **Connect/Message buttons = YOU own the whole widget** (markup +
+  state-driven labels [Connect→Requested→Connected, Message gated by who-can-DM] +
+  actions). profile-2.0 only provides a **one-line SLOT** in the `/u/` header
+  template — `Social::renderProfileActions($viewerUuid, $profileUuid)` — because the
+  buttons render off social state, not page state ("dumb host" pattern, like the
+  shared header). That one-liner is all profile-2.0 owes; coordinator relays it.
 - **lg-shell (`1d248347`)** owns the header modals (messages/friends/notifications
   UI) — they CALL your backend. Agree the response shapes with them via coordinator.
 - **shim-replacement (`d9380b73`)** shares `Whoami.php`/`config.php` — **flag
