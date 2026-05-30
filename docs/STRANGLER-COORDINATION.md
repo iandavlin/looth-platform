@@ -339,6 +339,37 @@ target store up front (app-owned dir / object store + a stable served URL);
 legacy `wp-content` media migrates once at cutover (same one-pass model as the
 avatar backfill). Don't solve avatars and reply-images two different ways.
 
+**Messaging — OFFER IT (keep + rebuild, 2026-05-30, Ian):** member-to-member DMs
+are a KEEP, not a decommission. Usage (dev's ~4-month-old snapshot; live is ahead):
+**1,881 msgs / 370 threads / 219 senders** (~12% of 1,812 users), ~140/mo steady,
+**5.1 msgs/thread** — real conversations, not pings. Ian: "we have to offer it."
+Implications:
+- lg-shell **"messages" modal gets a real backend**, not a stub.
+- **Message history is a migration target** — `wp_bp_messages_*` (threads +
+  recipients) carries into the new store; users expect their DMs to survive the cut.
+- **Storage = app-owned** (per the media/single-source direction), not wp-content.
+- **Owner = TBD** — no natural fit in current lanes; likely a dedicated messaging
+  service. **Timing = TBD** — Ian to call **cut-day-required vs fast-follow** (it's
+  secondary to the forum, so it *could* be a fast-follow, but history must migrate
+  whenever it lands).
+
+**It's the whole social LAYER, not just DMs (Ian, 2026-05-30):** scope = the
+BuddyPress social cluster — **connections** (friends / follow / requests) +
+**messaging** + the lg-shell modals (friends / follow / messages / notifications).
+- **Connections = the easy half:** simple relational (`connections(a, b, status)`),
+  no realtime; ties to directory + profile; often gates who-can-DM-whom. Build it.
+- **Build vs adopt for messaging (Ian asked re: an OTS server to skin):** decided
+  by VOLUME — ~5 msgs/day, async 1:1, NOT realtime chat.
+  - SaaS drop-in (Sendbird/CometChat/Stream): fastest skin, but DMs live with a
+    3rd party (breaks own-our-data), paid, awkward history import + identity bridge.
+  - Self-host OSS (Matrix/Rocket.Chat/Mattermost/Tinode): data stays local but a
+    whole extra service + still a custom client + migrate history into its schema —
+    overkill for the volume. (Tinode = closest "server you skin" if we go this way.)
+  - **Build thin on the existing stack** (postgres + profile-app pattern): identity
+    solved (`/whoami`/`looth_id`), history imports SQL→SQL, consistent with all lanes.
+  - **Coordinator lean = build thin.** OTS earns its keep only for high-scale
+    realtime or zero-UI — neither applies. Ian's call; flagged, non-blocking.
+
 **Cookie fast-path (optional):**
 - `lg_tier` cookie keeps current archive-poc behavior — a fast hint so the
   first paint doesn't have to wait on `/whoami`.
