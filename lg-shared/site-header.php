@@ -119,11 +119,53 @@ function lg_shared_render_site_header(array $ctx): void
 
     ?>
 <style>
-/* Overrides for WP/BB theme pages where 3rd-party CSS loads after site-header.css.
-   Inline body <style> wins the cascade over <head> stylesheets at equal specificity. */
+/* Critical chrome overrides — inline so they beat any <head> stylesheet (BB theme,
+   archive.css, etc.) that loads after site-header.css at equal or higher specificity. */
 .lg-chrome ul.lg-chrome__menu,
 .lg-chrome ul.lg-chrome__account-menu,
 .lg-chrome ul.lg-chrome__account-menu li { list-style: none !important; }
+
+.lg-chrome ul.lg-chrome__account-menu {
+  display: block;
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  right: 0 !important;
+  min-width: 210px !important;
+  background: #fff !important;
+  border: 1px solid #e3ddd0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06) !important;
+  padding: 6px !important;
+  margin: 0 !important;
+  z-index: 200 !important;
+}
+.lg-chrome ul.lg-chrome__account-menu[hidden] { display: none !important; }
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"] {
+  display: block !important;
+  padding: 9px 12px !important;
+  border-radius: 6px !important;
+  text-decoration: none !important;
+  font-size: 13px !important;
+  color: #323532 !important;
+  white-space: nowrap !important;
+  background: transparent !important;
+}
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:hover,
+.lg-chrome ul.lg-chrome__account-menu [role="menuitem"]:focus {
+  background: #eef2e3 !important;
+  color: #6b7c52 !important;
+}
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-divider {
+  height: 1px !important;
+  background: #e3ddd0 !important;
+  margin: 4px 0 !important;
+  padding: 0 !important;
+}
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout { color: #c66845 !important; }
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:hover,
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout:focus {
+  background: #fdf0ec !important; color: #c66845 !important;
+}
 </style>
 <a href="#lg-main" class="skip-link">Skip to content</a>
 
@@ -214,7 +256,7 @@ function lg_shared_render_site_header(array $ctx): void
         </a>
 
         <!-- Account dropdown trigger -->
-        <div class="lg-chrome__account-wrap" data-lg-account-wrap>
+        <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
           <button class="lg-chrome__account" type="button"
                   aria-haspopup="true" aria-expanded="false"
                   aria-controls="lg-account-menu"
