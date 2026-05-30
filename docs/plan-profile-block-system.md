@@ -193,6 +193,23 @@ author-identity — SINGLE SOURCE." profile-2.0's share:
   (BB-uploaded files literal; Gravatar-only → one-time fetch or initials).
 - Universal empty-state = the initials circle.
 
+## Edit ON the live profile — no separate page (2026-05-30, Ian)
+
+**The owner's own `/u/` (or `/p/`) IS the editor — live front-end edit**, same
+idea as the layoutv2 post editor. Hitting your own page = edit mode; there is **no
+separate composer page and no separate settings page.** Everything happens in place:
+- **Per-block privacy (incl. the header) is set inline on the block itself** —
+  not on a settings page. The header's pmp control lives on the header block (and
+  it *is* the ceiling).
+- The **sidebar palette** (the add-blocks UX Ian chose over inline-add) is an
+  **overlay panel on that same live page**, not a separate route.
+- It folds into **View-as**: "Me" = edit mode (inline controls + privacy chips +
+  palette); flip to Public/Member to preview. Same surface, no navigation.
+- Collapses profile + composer + settings into ONE surface. Only true *account*
+  settings (billing, password) live elsewhere (the account menu) — not profile content.
+- Mockup implication: `profile-composer.html` is really "`/u/` in edit mode," not
+  a distinct page.
+
 ## FE editing model — sidebar palette (NOT layoutv2's inline-add) (2026-05-29, Ian)
 
 **The profile block system is a SEPARATE system from layoutv2 (Ian, 2026-05-29).**
