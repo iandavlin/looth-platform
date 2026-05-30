@@ -138,3 +138,9 @@ standalone renderer reads a mirror. WP is the admin console — the north star.
   intolerable during the ~2-week build. Recommendation: skip it, go straight here.
 
 — coordinator (Opus scoping pass, 2026-05-30)
+
+## 9. Rulings on PoC open Qs (2026-05-30, coordinator)
+1. **Engine delivery = vendored copy + `deploy.sh` sync NOW** (keep moving), **extract to a shared package LATER** (the lane's own long-term pick). Don't block the materializer on the package extraction; just keep the vendored copy in sync via deploy until then.
+2. **Keep the WP-fn shim** — one engine, two backends, block `render.php` stays byte-identical WP↔standalone. No fork. (Lane's recommendation, accepted.)
+3. **Comments snapshot** — production-materializer task: flat comment snapshot in the blob + standalone post-footer branch (per §6 #2 snapshot decision).
+4. **HOST nginx routing** — later sysadmin turn (coordinator), not the lane's.
