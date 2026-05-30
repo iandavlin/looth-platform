@@ -95,7 +95,7 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
 
 /**
  * The socials / links block — website + platform links, one block-level vis,
- * ceiling-capped. (Inc-1 header also shows an inline social row — overlap flagged.)
+ * ceiling-capped. Sole location for social links (header inline row dropped).
  */
 function looth_render_socials_block(int $userId, string $role, string $headerVis): void
 {
@@ -197,9 +197,7 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     $name    = (string)($f['display_name'] ?? 'Member');
     $avatar  = $f['avatar'] ?? null;
     $glance  = (string)($f['at_a_glance'] ?? '');
-    $website = $f['website'] ?? null;
-    $socials = $f['socials'] ?? [];
-    $visUi   = Block::normalizeVis($headerVis);                 // 'public'|'member'|'private'
+    $visUi   = Block::normalizeVis($headerVis);
     $isOwner = ($role === 'me');
 
     echo '<section class="block lg-block lg-block--header" data-block="profile-header">';
@@ -213,31 +211,16 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     if ($avatar) {
         echo '<img src="' . looth_h((string)$avatar) . '" alt="' . looth_h($name) . '" width="96" height="96">';
     } else {
-        echo looth_h(looth_initials($name));                   // initials fallback (single-source empty state)
+        echo looth_h(looth_initials($name));
     }
     if ($isOwner) echo '<button class="lg-idrow__cam" type="button" aria-label="Change avatar">📷</button>';
     echo '</div>';
 
     echo '<div class="lg-idrow__body">';
     echo '<h1 class="lg-idrow__name">' . looth_h($name);
-    if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';   // derived, never stored
+    if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';
     echo '</h1>';
     if ($glance !== '') echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
-    if ($website) {
-        $label = preg_replace('#^https?://#i', '', (string)$website);
-        echo '<a class="lg-idrow__web" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank">' . looth_h($label) . ' ↗</a>';
-    }
-    if ($socials) {
-        echo '<div class="lg-socrow">';
-        foreach ($socials as $s) {
-            $kind = (string)($s['kind'] ?? '');
-            $url  = (string)($s['url'] ?? '');
-            if ($url === '') continue;
-            echo '<a class="lg-socrow__a" href="' . looth_h($url) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
-               . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
-        }
-        echo '</div>';
-    }
     echo '</div></div></section>';
 }
 

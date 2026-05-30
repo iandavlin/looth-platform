@@ -164,28 +164,14 @@ final class Block
         $row = $u->fetch();
         if (!$row) return null;
 
-        $website = null;
-        $socials = [];
-        $sq = $pg->prepare('SELECT kind, value FROM profile_socials WHERE user_id = :u ORDER BY sort_order, id');
-        $sq->execute([':u' => $userId]);
-        while ($s = $sq->fetch()) {
-            if ($s['kind'] === 'web' && $website === null) {
-                $website = $s['value'];
-            } else {
-                $socials[] = ['kind' => $s['kind'], 'url' => $s['value']];
-            }
-        }
-
         return [
             'block'   => 'profile-header',
             'subject' => 'person',
             'vis'     => self::normalizeVis(self::headerCeiling($userId)),
             'fields'  => [
                 'display_name' => $row['display_name'],
-                'avatar'       => $row['avatar_url'],          // null → initials fallback at render
-                'at_a_glance'  => $row['at_a_glance'],         // single-source author bio
-                'website'      => $website,
-                'socials'      => $socials,                    // kind + url only (block-level pmp)
+                'avatar'       => $row['avatar_url'],    // null → initials fallback at render
+                'at_a_glance'  => $row['at_a_glance'],   // single-source author bio
             ],
             'tier_badge' => 'auto',   // derived from /whoami at render; never stored
         ];
