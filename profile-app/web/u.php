@@ -62,6 +62,9 @@ $viewLink = fn(string $v): string => '/u/' . rawurlencode($slugSafe) . '?view=' 
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($displayName) ?> · Looth</title>
 <link rel="stylesheet" href="/lg-shared/site-header.css">
+<!-- Leaflet from CDN (standalone shell has no WP head to enqueue from) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 <style>
 /* Block-model /u/ render. Tokens (--lg-*) come from site-header.css. */
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
@@ -105,10 +108,9 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
 .lg-loc__exact{font-size:14.5px;color:var(--lg-ink);margin-top:8px}
 .lg-loc__exact-note{font-size:13px;color:var(--lg-mute);margin-top:8px;font-style:italic}
-.lg-loc__map,.lg-loc__pin{margin-top:12px;height:120px;border-radius:12px;border:1px solid var(--lg-line);
-  background:linear-gradient(0deg,rgba(135,152,106,.08),rgba(135,152,106,.08)),
-  repeating-linear-gradient(0deg,var(--lg-line) 0 1px,transparent 1px 24px),
-  repeating-linear-gradient(90deg,var(--lg-line) 0 1px,transparent 1px 24px),var(--lg-sage-tint)}
+.lg-loc__map,.lg-loc__pin{margin-top:12px;height:160px;border-radius:12px;border:1px solid var(--lg-line);
+  overflow:hidden;background:var(--lg-sage-tint)}
+.lg-loc__map .leaflet-container,.lg-loc__pin .leaflet-container{height:100%;border-radius:12px;font:inherit}
 
 /* craft chips */
 .lg-chips{display:flex;flex-wrap:wrap;gap:0}
@@ -179,6 +181,30 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 </main>
 
 <?php lg_shared_render_site_footer(); ?>
+
+<script>
+/* Real maps for the location block — Leaflet + OSM tiles (CDN, no WP, no API key).
+   The renderer already emits the MANAGED coords on each map div; .lg-loc__map is
+   the coarse approximate dot (circle), .lg-loc__pin is the exact pin (marker). */
+window.addEventListener('load', function () {
+  if (typeof L === 'undefined') return;
+  document.querySelectorAll('.lg-loc__map[data-lat], .lg-loc__pin[data-lat]').forEach(function (el) {
+    var lat = parseFloat(el.getAttribute('data-lat')), lng = parseFloat(el.getAttribute('data-lng'));
+    if (isNaN(lat) || isNaN(lng)) return;
+    var exact = el.classList.contains('lg-loc__pin');
+    var prec  = el.getAttribute('data-precision');
+    var zoom  = exact ? (prec === 'neighborhood' ? 13 : 15) : 11;
+    var map = L.map(el, { zoomControl: false, scrollWheelZoom: false, dragging: false,
+      doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([lat, lng], zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+    if (exact) L.marker([lat, lng]).addTo(map);
+    else L.circle([lat, lng], { radius: 1500, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
+    setTimeout(function () { map.invalidateSize(); }, 80);   // standalone-shell sizing fix
+  });
+});
+</script>
+
 <?php if (!$isOwner): ?>
 <script>
 document.getElementById('report-link')?.addEventListener('click', function (e) {

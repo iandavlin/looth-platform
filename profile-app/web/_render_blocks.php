@@ -274,3 +274,71 @@ function looth_render_members_gate(int $userId): void
        . '<a class="lg-gate__signin" href="/wp-login.php">Sign in</a></div>'
        . '</div>';
 }
+
+/* ==================== PRACTICE (/p/) blocks ==================== */
+
+/**
+ * Render a /p/ practice's blocks for a viewer — parallel to
+ * looth_render_profile_blocks(). practice-header is the required, ceiling block;
+ * storefront blocks (hours/services/staff) come in later increments.
+ * @param string $role 'me'|'member'|'friend'|'public'
+ */
+function looth_render_practice_blocks(int $practiceId, string $role, ?string $tierBadge = null): void
+{
+    $headerVis = Block::practiceHeaderCeiling($practiceId);     // DB literal
+    switch (Block::gateDecision($role, $headerVis)) {
+        case 'private': return;                                 // owner-only
+        case 'gate':    looth_render_practice_gate(); return;
+    }
+    $h = Block::loadPracticeHeader($practiceId);
+    if ($h === null) { http_response_code(404); echo 'not found'; return; }
+    looth_render_practice_header_block($h, $role, $headerVis, $tierBadge);
+    // TODO(next): practice storefront blocks — same ceiling-capped shape.
+}
+
+/** The practice-header (identity) block — name / type / tagline / location / website / owner avatar. */
+function looth_render_practice_header_block(array $header, string $role, string $headerVis, ?string $tierBadge): void
+{
+    $f       = $header['fields'];
+    $name    = (string)($f['name'] ?? 'Practice');
+    $type    = (string)($f['type'] ?? '');
+    $tagline = (string)($f['tagline'] ?? '');
+    $website = $f['website'] ?? null;
+    $avatar  = $f['avatar'] ?? null;
+    $loc     = trim(implode(', ', array_filter([(string)($f['city'] ?? ''), (string)($f['region'] ?? '')])));
+    $isOwner = ($role === 'me');
+
+    echo '<section class="block lg-block lg-block--practice-header" data-block="practice-header">';
+    if ($isOwner) echo looth_pmp_control('practice-header', Block::normalizeVis($headerVis), '');
+
+    echo '<div class="lg-idrow">';
+    echo '<div class="lg-idrow__pic">';
+    if ($avatar) echo '<img src="' . looth_h((string)$avatar) . '" alt="' . looth_h($name) . '" width="96" height="96">';
+    else echo looth_h(looth_initials($name));
+    echo '</div>';
+
+    echo '<div class="lg-idrow__body">';
+    echo '<h1 class="lg-idrow__name">' . looth_h($name);
+    if ($type !== '') echo ' <span class="lg-ptype">' . looth_h(ucwords(str_replace('_', ' ', $type))) . '</span>';
+    if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';
+    echo '</h1>';
+    if ($tagline !== '') echo '<p class="lg-idrow__glance">' . looth_h($tagline) . '</p>';
+    if ($loc !== '') echo '<div class="lg-loc__line" style="margin-top:8px">📍 ' . looth_h($loc) . '</div>';
+    if ($website) {
+        $label = preg_replace('#^https?://#i', '', (string)$website);
+        echo '<a class="lg-idrow__web" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank">' . looth_h($label) . ' ↗</a>';
+    }
+    echo '</div></div></section>';
+}
+
+/** Members-only interstitial for a member-ceiling practice hit logged-out. */
+function looth_render_practice_gate(): void
+{
+    echo '<div class="lg-gate">'
+       . '<div class="lg-gate__lock">🔒</div>'
+       . '<h2>This practice is members-only</h2>'
+       . '<p>Sign in to see this practice — or join Looth to list your own.</p>'
+       . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
+       . '<a class="lg-gate__signin" href="/wp-login.php">Sign in</a></div>'
+       . '</div>';
+}

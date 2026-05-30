@@ -68,6 +68,33 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## practice-header block + /p/ page + Leaflet fix (2026-05-30, WRITE-ONLY)
+
+Built the `practice-header` block (the /p/ equivalent of profile-header) end-to-end,
+the `/p/<slug>` page, the Leaflet map fix, and confirmed the header-socials drop.
+
+- **`src/Block.php`:** `loadPracticeHeader` (name/type/tagline/website + the OWNER's
+  single-source avatar + owner city/region), `savePracticeHeader`, `practiceHeaderCeiling`,
+  `practiceOwnerId`, `isPracticeOwner`. Header-as-ceiling, default members.
+  **No new schema:** practice header vis is stored namespaced in the OWNER's
+  `profile_sections` (`key='practice-header:<id>'`); a `practice_sections` table is the
+  clean future home (flagged).
+- **`api/v0/me-practice-header.php`:** GET assembled / PATCH vis; owner-only (403 else);
+  `?practice=<id>` or `?slug=`. NEW endpoint → needs an nginx route (mirror me-craft).
+- **`web/_render_blocks.php`:** `looth_render_practice_blocks` + `looth_render_practice_header_block`
+  + `looth_render_practice_gate`; practice-header pmp control for the owner.
+- **`web/p.php`:** rewired to the block render (shared chrome, View-as owner toggle, block
+  loop, practice-header pmp menu JS) — replaces the slice-3 `_render_practice` path.
+- **Leaflet fix (`web/u.php`):** Leaflet 1.9.4 from unpkg CDN + init JS — the location
+  block's `.lg-loc__map` (coarse circle) / `.lg-loc__pin` (exact marker) now render real
+  OSM tiles from the managed coords (was a grey-grid placeholder; standalone shell can't
+  enqueue from WP).
+- **Header socials:** verified the profile-header is ALREADY identity-only (avatar/name/
+  glance) — socials live solely in the dedicated Links block. No change needed.
+
+⚠️ Owner of a practice = `practices.created_by` (or `practice_members.role='owner'`).
+Test needs a practice owned by the test user. `config.php`/`Whoami.php` untouched; no schema.
+
 ## Slice-4 crib implemented (2026-05-30, WRITE-ONLY)
 
 `bin/migrate-crib-slice4.php` is no longer a stub — it orchestrates the 4 existing

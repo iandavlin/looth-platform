@@ -92,9 +92,30 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [ ] **Coordinator: CDP as owner 1918** — click each block's chip, change vis, confirm
       persist + reload + View-as reflects it; header-ceiling edge cases below.
 
+## practice-header block + /p/ page — DONE (write-only)
+- [x] `src/Block.php` — `loadPracticeHeader` (name/type/tagline/website + owner avatar +
+      owner city/region), `savePracticeHeader`, `practiceHeaderCeiling`, `practiceOwnerId`,
+      `isPracticeOwner`. **No new schema:** practice header vis stored namespaced in the
+      OWNER's `profile_sections` (`key='practice-header:<id>'`) — a `practice_sections`
+      table is the clean future home (flagged).
+- [x] `api/v0/me-practice-header.php` — GET assembled / PATCH vis; owner-only (403 else);
+      resolves `?practice=<id>` or `?slug=`. **Needs nginx route (mirror me-craft).**
+- [x] `web/_render_blocks.php` — `looth_render_practice_blocks()` + `looth_render_practice_header_block()`
+      + `looth_render_practice_gate()`; practice-header pmp control (owner).
+- [x] `web/p.php` — rewired to the block render: shared chrome, View-as (owner), block loop,
+      practice-header pmp menu JS. Replaces the slice-3 `_render_practice` path.
+- [ ] **Coordinator: add nginx route + allowlist for `me-practice-header`; browser-test `/p/<slug>`**
+      (needs a practice owned by the test user — see test steps).
+
+## Leaflet maps + header socials
+- [x] **Leaflet fix in `web/u.php`** — enqueue Leaflet 1.9.4 from unpkg CDN (standalone shell
+      has no WP head); location block `.lg-loc__map` (coarse circle) / `.lg-loc__pin` (exact
+      marker) now render real OSM tiles from the managed coords. Replaced the grey-grid placeholder.
+- [x] **Socials dropped from profile-header** — VERIFIED already identity-only (avatar/name/
+      glance only; socials live solely in the dedicated Links block). No change needed.
+
 ## Spine blocks — next increments
-- [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
-- [ ] connect block → then the migration crib (profiles-only, practices greenfield).
+- [ ] practice storefront blocks (hours/services/staff) → connect block → crib.
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 
 ## Remaining spine blocks (additive)

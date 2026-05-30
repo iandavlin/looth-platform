@@ -399,4 +399,97 @@ final class Block
             'fields'  => ['website' => $website, 'links' => $links],
         ];
     }
+
+    // ---------- block: practice-header (the required /p/ header) ----------
+
+    public const PRACTICE_HEADER_DEFAULT = 'members';
+
+    /**
+     * Where a practice's header (ceiling) vis lives WITHOUT new schema: a
+     * namespaced row in the OWNER's profile_sections, key='practice-header:<id>'.
+     * (A dedicated practice_sections table is the clean future home — flagged.)
+     */
+    private static function practiceHeaderKey(int $practiceId): string
+    {
+        return 'practice-header:' . $practiceId;
+    }
+
+    /** The practice owner's profile-app user id (practices.created_by). */
+    public static function practiceOwnerId(int $practiceId): ?int
+    {
+        $s = Db::pg()->prepare('SELECT created_by FROM practices WHERE id = :p AND archived_at IS NULL');
+        $s->execute([':p' => $practiceId]);
+        $v = $s->fetchColumn();
+        return ($v === false || $v === null) ? null : (int) $v;
+    }
+
+    /** Owner = practices.created_by, or an explicit practice_members role='owner'. */
+    public static function isPracticeOwner(int $practiceId, int $userId): bool
+    {
+        if ($userId <= 0) return false;
+        if (self::practiceOwnerId($practiceId) === $userId) return true;
+        $s = Db::pg()->prepare("SELECT 1 FROM practice_members WHERE practice_id = :p AND user_id = :u AND role = 'owner'");
+        $s->execute([':p' => $practiceId, ':u' => $userId]);
+        return (bool) $s->fetchColumn();
+    }
+
+    /** The practice header ceiling vis (DB literal). Stored on the owner's profile_sections. */
+    public static function practiceHeaderCeiling(int $practiceId): string
+    {
+        $owner = self::practiceOwnerId($practiceId);
+        if ($owner === null) return self::PRACTICE_HEADER_DEFAULT;
+        return self::blockVisibility($owner, self::practiceHeaderKey($practiceId), self::PRACTICE_HEADER_DEFAULT);
+    }
+
+    /**
+     * Assemble the practice-header block from `practices` + the owner's spine
+     * (single-source avatar + city/region). vis normalized to 'member'. Null if
+     * the practice doesn't exist / is archived.
+     */
+    public static function loadPracticeHeader(int $practiceId): ?array
+    {
+        $s = Db::pg()->prepare(
+            'SELECT p.id, p.name, p.type, p.tagline, p.website, p.avatar_url AS practice_avatar,
+                    o.avatar_url AS owner_avatar, o.location_city AS city, o.location_region AS region
+             FROM practices p LEFT JOIN users o ON o.id = p.created_by
+             WHERE p.id = :p AND p.archived_at IS NULL'
+        );
+        $s->execute([':p' => $practiceId]);
+        $r = $s->fetch();
+        if (!$r) return null;
+
+        return [
+            'block'       => 'practice-header',
+            'subject'     => 'practice',
+            'practice_id' => (int) $r['id'],
+            'vis'         => self::normalizeVis(self::practiceHeaderCeiling($practiceId)),
+            'fields'      => [
+                'name'    => $r['name'],
+                'type'    => $r['type'],
+                'tagline' => $r['tagline'],
+                'website' => $r['website'],
+                'avatar'  => $r['owner_avatar'] ?: $r['practice_avatar'],   // owner single-source; practice as fallback
+                'city'    => $r['city'],
+                'region'  => $r['region'],
+            ],
+        ];
+    }
+
+    /**
+     * Persist the practice header's ceiling visibility (the only editable bit here).
+     * Caller must confirm ownership for the right status code; this re-checks as
+     * defense-in-depth. Returns the re-assembled block, or null on permission /
+     * invalid-vis failure.
+     */
+    public static function savePracticeHeader(int $practiceId, int $editorUserId, array $fields): ?array
+    {
+        if (!self::isPracticeOwner($practiceId, $editorUserId)) return null;
+        $owner = self::practiceOwnerId($practiceId) ?? $editorUserId;
+        if (array_key_exists('visibility', $fields)) {
+            if (self::saveBlockVisibility($owner, self::practiceHeaderKey($practiceId), $fields['visibility'], 0) === null) {
+                return null;   // invalid visibility
+            }
+        }
+        return self::loadPracticeHeader($practiceId);
+    }
 }
