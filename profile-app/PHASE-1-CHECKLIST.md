@@ -44,9 +44,24 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [x] Test plan: `PHASE-1-INCREMENT-2-TEST.md` (HTTP authed pass noted BLOCKED on shim mint).
 - [ ] **Coordinator: apply precision schema + run the test plan.**
 
-## Pilot block — next increments
+## Spine blocks — craft + socials/links, increment 3 — DONE (write-only)
+- [x] `src/Block.php` — `loadCraft` (instruments+skills+highlights via loadFull),
+      `loadSocials` (website + links), generic `blockVisibility`/`saveBlockVisibility`,
+      `CRAFT_KEY`/`SOCIALS_KEY`. No new schema (vis on profile_sections key).
+- [x] `api/v0/me-craft.php` — NEW: GET assembled craft / PATCH visibility.
+- [x] `api/v0/me-socials.php` — extended: +GET assembled block, +`visibility` in PUT
+      (items path preserved, now optional).
+- [x] `web/_render_blocks.php` — `looth_render_craft_block` + `looth_render_socials_block`,
+      ceiling-capped, wired after location.
+- [x] Test plan `PHASE-1-INCREMENT-3-TEST.md` (incl. inc1/inc2/inc3 HTTP curls, now
+      unblocked) + runnable `PHASE-1-HTTP-TESTS.sh` (mints token, hits every /me block).
+- [ ] **Coordinator: add nginx route + allowlist for `me-craft` (test §4); run HTTP tests.**
+- [ ] **Ruling needed:** socials render in BOTH the inc-1 header (inline row) and the new
+      socials block — keep both, or drop the header's inline row? (didn't touch header.)
+
+## Spine blocks — next increments
 - [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
-- [ ] craft + socials spine blocks → then the migration crib (profiles-only).
+- [ ] connect block → then the migration crib (profiles-only, practices greenfield).
 - [ ] "View as: Public / Member / Me" owner toggle (render layer).
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 

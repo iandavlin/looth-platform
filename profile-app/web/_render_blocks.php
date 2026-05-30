@@ -57,9 +57,74 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     // increment 2: the location block (two-tier, ceiling-capped per tier).
     looth_render_location_block($userId, $role, $headerVis);
 
-    // TODO(next increments): craft, connect, socials, practices — same shape:
+    // increment 3: craft (search-fuel) + socials/links blocks.
+    looth_render_craft_block($userId, $role, $headerVis);
+    looth_render_socials_block($userId, $role, $headerVis);
+
+    // TODO(next increments): connect, practices — same shape:
     //   if (Block::canSee($role, $headerVis, $blockVis)) looth_render_block(...);
     //   owner also sees a capped-by-header hint where Block::isCappedByHeader().
+}
+
+/**
+ * The craft block — instruments / skills / highlights as search-fuel chips, one
+ * block-level vis, ceiling-capped via Block::canSee.
+ */
+function looth_render_craft_block(int $userId, string $role, string $headerVis): void
+{
+    $craft = Block::loadCraft($userId);
+    if ($craft === null) return;
+    $f = $craft['fields'];
+    $chips = array_merge(
+        array_map(fn($i) => (string)($i['name'] ?? ''), $f['skills']      ?? []),
+        array_map(fn($i) => (string)($i['name'] ?? ''), $f['instruments'] ?? [])
+    );
+    $chips = array_values(array_filter($chips, fn($c) => $c !== ''));
+    if (!$chips) return;                                   // empty craft → no block
+
+    $isOwner = ($role === 'me');
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$craft['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--craft" data-block="craft">';
+    echo '<h3 class="lg-bh">Craft';
+    if ($isOwner) echo ' ' . looth_vchip((string)$craft['vis']);
+    echo '</h3><div class="lg-chips">';
+    foreach ($chips as $c) echo '<span class="lg-chip">' . looth_h($c) . '</span>';
+    echo '</div></section>';
+}
+
+/**
+ * The socials / links block — website + platform links, one block-level vis,
+ * ceiling-capped. (Inc-1 header also shows an inline social row — overlap flagged.)
+ */
+function looth_render_socials_block(int $userId, string $role, string $headerVis): void
+{
+    $soc = Block::loadSocials($userId);
+    if ($soc === null) return;
+    $website = $soc['fields']['website'] ?? null;
+    $links   = $soc['fields']['links']   ?? [];
+    if (!$website && !$links) return;                      // empty → no block
+
+    $isOwner = ($role === 'me');
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$soc['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--socials" data-block="socials">';
+    echo '<h3 class="lg-bh">Links';
+    if ($isOwner) echo ' ' . looth_vchip((string)$soc['vis']);
+    echo '</h3><div class="lg-socrow">';
+    if ($website) {
+        $label = preg_replace('#^https?://#i', '', (string)$website);
+        echo '<a class="lg-socrow__a" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank" title="website">'
+           . looth_h($label) . ' ↗</a>';
+    }
+    foreach ($links as $l) {
+        $kind = (string)($l['kind'] ?? '');
+        $url  = (string)($l['url'] ?? '');
+        if ($url === '') continue;
+        echo '<a class="lg-socrow__a" href="' . looth_h($url) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
+           . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
+    }
+    echo '</div></section>';
 }
 
 /** Owner-only per-block/tier visibility chip (vis already normalized to 'member'). */

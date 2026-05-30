@@ -318,4 +318,99 @@ final class Block
         $db = self::denormalizeVis($vis);   // 'member' → 'members'
         return in_array($db, self::EXACT_VIS_VALUES, true) ? $db : null;
     }
+
+    // ---------- composable-block visibility (generic) ----------
+
+    public const CRAFT_KEY    = 'craft';
+    public const SOCIALS_KEY  = 'socials';
+
+    /** Any composable block's visibility (DB literal) from its profile_sections row. */
+    public static function blockVisibility(int $userId, string $key, string $default = 'members'): string
+    {
+        $s = Db::pg()->prepare('SELECT visibility FROM profile_sections WHERE user_id = :u AND key = :k');
+        $s->execute([':u' => $userId, ':k' => $key]);
+        $v = $s->fetchColumn();
+        return ($v && in_array($v, self::VIS_VALUES, true)) ? (string)$v : $default;
+    }
+
+    /**
+     * Set a composable block's visibility. $visInput is the UI vocabulary
+     * ('public'|'member'|'private'); returns the persisted DB literal, or null if
+     * invalid. Upserts the profile_sections row (data left untouched / '{}').
+     */
+    public static function saveBlockVisibility(int $userId, string $key, $visInput, int $sortOrder = 0): ?string
+    {
+        $vis = self::visFromInput($visInput);   // → DB literal
+        if ($vis === null) return null;
+        Db::pg()->prepare("
+            INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+            VALUES (:u, :k, :v, '{}'::jsonb, :so)
+            ON CONFLICT (user_id, key) DO UPDATE
+               SET visibility = EXCLUDED.visibility, updated_at = now()
+        ")->execute([':u' => $userId, ':k' => $key, ':v' => $vis, ':so' => $sortOrder]);
+        return $vis;
+    }
+
+    // ---------- block: craft (what you make/do — search fuel) ----------
+
+    /**
+     * Assemble the craft block — instruments + skills + highlights (the
+     * directory search-fuel), with one block-level vis (profile_sections key='craft').
+     * Reuses Profile::loadFull (the canonical assembler) to avoid duplicating the
+     * catalog joins. Returns null if the user doesn't exist.
+     */
+    public static function loadCraft(int $userId): ?array
+    {
+        $full = Profile::loadFull($userId);
+        if (!$full) return null;
+        $vis = $full['sections'][self::CRAFT_KEY]['visibility'] ?? 'members';
+        $pick = fn(array $rows, array $keys) => array_map(
+            fn($r) => array_intersect_key($r, array_flip($keys)), $rows
+        );
+        return [
+            'block'   => 'craft',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis($vis),
+            'fields'  => [
+                'instruments' => $pick($full['instruments'] ?? [], ['slug', 'name']),
+                'skills'      => $pick($full['skills']      ?? [], ['slug', 'name', 'note']),
+                'highlights'  => $pick($full['highlights']  ?? [], ['kind', 'slug', 'name']),
+            ],
+        ];
+    }
+
+    // ---------- block: socials / links (website + platforms) ----------
+
+    /**
+     * Assemble the socials/links block — website (kind='web') + the other social
+     * links, one block-level vis (profile_sections key='socials'). kind + url only.
+     * NOTE: the inc-1 header also renders an inline social row; this is the
+     * canonical managed list. Overlap flagged for coordinator ruling.
+     */
+    public static function loadSocials(int $userId): ?array
+    {
+        $pg = Db::pg();
+        $exists = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
+        $exists->execute([':i' => $userId]);
+        if (!$exists->fetchColumn()) return null;
+
+        $website = null;
+        $links   = [];
+        $q = $pg->prepare('SELECT kind, value FROM profile_socials WHERE user_id = :u ORDER BY sort_order, id');
+        $q->execute([':u' => $userId]);
+        while ($r = $q->fetch()) {
+            if ($r['kind'] === 'web' && $website === null) {
+                $website = $r['value'];
+            } else {
+                $links[] = ['kind' => $r['kind'], 'url' => $r['value']];
+            }
+        }
+
+        return [
+            'block'   => 'socials',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(self::blockVisibility($userId, self::SOCIALS_KEY, 'members')),
+            'fields'  => ['website' => $website, 'links' => $links],
+        ];
+    }
 }

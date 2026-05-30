@@ -68,6 +68,36 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Spine build · increment 3 — craft + socials blocks (2026-05-30, WRITE-ONLY)
+
+Two more spine blocks, same pattern. **NO new schema** (block data uses existing
+tables; block-level vis lives on `profile_sections` key `craft`/`socials` — no key
+CHECK, only a vis CHECK). Mint CLI is live → inc1/inc2/inc3 HTTP tests now runnable.
+
+- **craft** = instruments + skills + highlights (search-fuel), one block vis.
+  `Block::loadCraft` reuses `Profile::loadFull` (canonical assembler). New endpoint
+  `api/v0/me-craft.php` (GET assembled / PATCH vis) — **needs an nginx route +
+  allowlist entry** (test §4 has the two lines; coordinator's infra step).
+- **socials/links** = website (kind='web') + platform links, one block vis. Built
+  ON the existing `me-socials.php` (added GET + optional `visibility` in PUT; items
+  path preserved). `Block::loadSocials`.
+- Generic `Block::blockVisibility` / `saveBlockVisibility` (any composable block's
+  pmp on its profile_sections row). Render: `looth_render_craft_block` +
+  `looth_render_socials_block`, ceiling-capped, wired after location.
+
+Files (write-only, nothing applied/committed):
+- `profile-app/src/Block.php` — +loadCraft/loadSocials/blockVisibility/saveBlockVisibility + keys.
+- `profile-app/api/v0/me-craft.php` — NEW (needs nginx route).
+- `profile-app/api/v0/me-socials.php` — extended (GET + visibility; items now optional).
+- `profile-app/web/_render_blocks.php` — +craft/socials render.
+- `profile-app/PHASE-1-INCREMENT-3-TEST.md` — block logic + render + the unblocked HTTP curls.
+- `profile-app/PHASE-1-CHECKLIST.md` — updated.
+
+⚠️ **Coordinator infra:** add nginx route + allowlist for `me-craft` (test §4).
+⚠️ **Ruling:** socials now render in BOTH the inc-1 header (inline) and the new
+socials block — keep both or drop the header row? (left header untouched).
+config.php gap still stands (Block.php self-required in the new/extended endpoints).
+
 ## Spine build · increment 2 — location block (2026-05-30, WRITE-ONLY)
 
 Two-tier location block, built ON the existing `api/v0/me-location.php` (not
