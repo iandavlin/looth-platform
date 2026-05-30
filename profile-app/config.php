@@ -62,3 +62,5 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Practice.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/GeoIP.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Cache.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Whoami.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // profile-2.0 spine (centralized per coordinator ask)
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Mint.php';    // looth_id signing (shim-replacement)
