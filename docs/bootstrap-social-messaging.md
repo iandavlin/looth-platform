@@ -25,6 +25,16 @@ applied/run). Verify + build on:
   to write until you make it real).
 - `profile-app/SOCIAL-LAYER-CHECKLIST.md` — your checklist.
 
+## Scope reality (Ian) — this is PORT + WIRE, not greenfield
+The schema is a **port** of BB's known shapes (friends, messages) into postgres +
+`looth_id`; the APIs are **CRUD** against it; then **skin a messages page + the
+connect/message widget + wire header notifications.** Don't over-engineer; the
+scaffold already drafted most of it. The two parts that are NOT trivial — where the
+bugs live, so where the "tested" stamp is earned: the **history migrations**
+(`wp_bp_friends` + the 1,881-msg `wp_bp_messages_*`, idempotent, history intact) and
+the **gating** (who-can-DM + visibility tied to the header-ceiling / connection
+state). Plus the dev-test pass (governing invariant).
+
 ## Scope (what you own)
 - **Connections**: `connections(requester/addressee uuid, status[pending|accepted|
   blocked], type[friend|follow])` keyed on `looth_id`; API; **seed from
