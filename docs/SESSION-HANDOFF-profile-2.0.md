@@ -6,10 +6,35 @@
 > social+location backfills DONE @ `23fe81b`, don't redo). This file is the
 > ACTIVE profile-2.0 chat's state.
 
-## Status — Phase 0, iteration 2 (2026-05-29). MOCKUPS, awaiting reaction.
+## Status — Phase 1 GREENLIT; this turn = PLAN + SCAFFOLD only (2026-05-29).
 
-Still pre-build. **No profile-app code / schema / migrations written.** Phase 1
-(spine) does not start until Phase 0 is reaction-confirmed.
+Ian approved Phase 1 (relay `docs/reply-to-profile-2.0-phase1-go.md`); visibility
+model is FINAL (commit `0641744`): **header is the ceiling**, effective block vis =
+min(header, block); header private→profile private, header member→members-only
+(logged-out hit join-gate, a 'public' block caps to member), header public→public
+blocks peek through. Header DEFAULT (member vs public) = the one deferred knob
+(next mockup; non-blocking).
+
+**This turn produced PLAN + SCAFFOLD STUBS only — nothing applied/run/committed.**
+Real build is interactive with Ian next. Deliverables:
+- Build plan: `docs/plan-profile-2.0-phase1-build.md` (schema deltas + decisions
+  A/B/C, pilot blocks, spine blocks, slice-4 crib, avatar store, build order).
+- Checklist: `profile-app/PHASE-1-CHECKLIST.md`.
+- Schema stub (NOT applied): `profile-app/sql/2026-05-30-block-system-spine.sql`.
+- `profile-app/src/Block.php` (skeleton — block SETS + header-ceiling
+  `effectiveVisibility`/`gateDecision`, stubbed).
+- `profile-app/web/_render_blocks.php` (skeleton render loop + members-gate).
+- `profile-app/bin/migrate-crib-slice4.php` (skeleton; exits 2, refuses to write).
+
+**Key reuse insight:** the existing `profile_sections(key, visibility, data jsonb,
+sort_order)` already holds per-block pmp — blocks map onto it; header vis lives in
+a `key='header'` row (DECISION C). DB enum is `members` (plural) vs posts' `member`
+(singular) — `Block::normalizeVis` bridges; keep the DB literal.
+
+### Open decisions blocking the schema apply (Ian)
+A. two-coord geo facet (coarse approx + exact). B. tighten approximate enum to
+(public,members). C. header-vis home (sections row vs column). + vocab + header
+default. See plan §1 / checklist top.
 
 ### Mockups (cookie-gated; `/var/www/dev/mockups/`, throwaway design artifacts)
 - `profile-composer.html` — sidebar-palette block editor (the centerpiece).
