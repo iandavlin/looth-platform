@@ -17,8 +17,8 @@
   --lg-amber:      #ecb351;
   --lg-rust:       #c66845;
   --lg-charcoal:   #1a1d1a;
-  --lg-ink:        #323532;
-  --lg-mute:       #6b6f6b;
+  --lg-ink:        #262925;  /* a little darker */
+  --lg-mute:       #565a55;  /* a little darker */
   --lg-line:       #e3ddd0;
   --lg-card-bg:    #efece6;  /* flipped: containers take the former page tone */
   --lg-font-serif: "Lora", Georgia, serif;
@@ -30,7 +30,7 @@
   --bg-sticky:   #fff7e6;
   --bg-closed:   #f4f1ea;
   --fg:          #1a1814;
-  --fg-muted:    #6b6760;
+  --fg-muted:    #524e48;  /* a little darker */
   --fg-soft:     #98938b;
   --border:      #e8e2d6;
   --border-soft: #f0ebe1;
@@ -1105,7 +1105,7 @@ body.nav-open .nav-overlay { display: block; }
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #fff;
+  background: var(--bg-card);  /* match the cards */
   border: 1px solid var(--lg-line);
   border-radius: 12px;
   padding: var(--s8) var(--s3) var(--s8) var(--s4);
