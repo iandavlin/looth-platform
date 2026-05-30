@@ -68,6 +68,29 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## /u/<slug> block render + View-as toggle (2026-05-30, WRITE-ONLY)
+
+The spine is now VISIBLE: `web/u.php` rewired from the slice-3.5
+`Profile::renderForViewer`/`looth_render_public` path to the block model
+`looth_render_profile_blocks()` (header-ceiling gate + per-block renderers), shared
+chrome (`_chrome.php`) + footer kept, block CSS inlined in u.php (no new nginx route).
+
+- **View-as (owner only): Public / Member / Me** — `?view=public|member|me` sets the
+  effective role and drives the SAME `looth_render_profile_blocks` (no forked render).
+  Non-owners never see the control. The old owner→`/profile/edit` redirect was REMOVED
+  so the owner can view + preview their own page; an "Edit profile" button in the
+  View-as bar links to the editor.
+- **Header default = member** (RULED) flows through `Block::gateDecision`: logged-out /
+  `view=public` on a member-header profile → the members-gate; public blocks peek
+  through a public header. Member/Me see the blocks (Me adds vis chips + avatar cam).
+- Avatar single-source + initials fallback already lives in the header renderer.
+
+Files: `profile-app/web/u.php` (rewritten), `PHASE-1-CHECKLIST.md` (updated).
+⚠️ **FLAG — subject tier badge:** passed `null`. The subject's tier isn't on the
+spine (dropped slice-3) — the header tier pill needs a membership-tier lookup for an
+arbitrary user; deferred. ⚠️ Block CSS is inlined in u.php for now (no new served
+asset/route); can move to a routed stylesheet later. `config.php`/`Whoami.php` untouched.
+
 ## Spine build · increment 3 — craft + socials blocks (2026-05-30, WRITE-ONLY)
 
 Two more spine blocks, same pattern. **NO new schema** (block data uses existing

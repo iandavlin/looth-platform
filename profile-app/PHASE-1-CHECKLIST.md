@@ -59,10 +59,24 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [ ] **Ruling needed:** socials render in BOTH the inc-1 header (inline row) and the new
       socials block — keep both, or drop the header's inline row? (didn't touch header.)
 
+## /u/<slug> block render + View-as — DONE (write-only)
+- [x] `web/u.php` rewired to `looth_render_profile_blocks()` (block model), replacing
+      the slice-3.5 `Profile::renderForViewer`/`looth_render_public` path. Shared chrome
+      (`_chrome.php`) + footer kept; block CSS inlined (no new nginx route).
+- [x] **View-as (owner only): Public / Member / Me** — `?view=` drives the SAME
+      `looth_render_profile_blocks` with the effective role (no forked render). Non-owners
+      never see it. Owner→`/profile/edit` bounce REMOVED so the owner can view+preview.
+- [x] Header default = member wired via `Block::gateDecision` (logged-out → members-gate;
+      public blocks peek through a public header). Avatar single-source + initials fallback
+      (in the header renderer).
+- [ ] **Coordinator: browser-check `/u/profileapp-test`** — the 3 View-as states + the
+      logged-out members-gate (see report test steps).
+- [ ] **FLAG:** subject **tier badge** passed `null` (the subject's tier isn't on the spine
+      post tier-drop — needs a membership-tier lookup). Header renders no badge for now.
+
 ## Spine blocks — next increments
 - [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
 - [ ] connect block → then the migration crib (profiles-only, practices greenfield).
-- [ ] "View as: Public / Member / Me" owner toggle (render layer).
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 
 ## Remaining spine blocks (additive)
