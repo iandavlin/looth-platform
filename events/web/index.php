@@ -39,7 +39,7 @@ $ctx    = [
     'msg_unread'    => null,
     'notif_unread'  => null,
     'logo_url'      => LG_EVENTS_LOGO,
-    'profile_url'   => '/members/me/',
+    'profile_url'   => '/profile/edit',
     'active_nav'    => 'events',                                   // coord §0a
     'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
 ];

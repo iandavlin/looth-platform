@@ -115,7 +115,7 @@ function lg_membership_chrome_viewer_ctx(): array {
 		'capabilities'  => $caps,
 		'msg_unread'    => null,   // lazy-load via REST
 		'notif_unread'  => null,   // lazy-load via REST
-		'profile_url'   => '/members/me/',
+		'profile_url'   => '/profile/edit',
 		'logout_url'    => wp_logout_url( '/' ),
 		'logo_url'      => $logo_url,
 	];

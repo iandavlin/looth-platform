@@ -41,14 +41,6 @@ if ($is_member) {
     if ($_display_name === '') $_display_name = 'Account';
 }
 
-// archive-poc-specific "Front page" back-link (sits between logo and nav).
-// Only shown in grid view (CSS: body.view-grid .lg-chrome__back { display:inline-flex }).
-$_back_link = '<a class="lg-chrome__back" href="/front-page/" aria-label="Back to front page">'
-    . '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
-    . ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-    . '<path d="M19 12H5"/><polyline points="12 19 5 12 12 5"/>'
-    . '</svg> Front page</a>';
-
 lg_shared_render_site_header([
     'authenticated'      => $is_member,
     'tier'               => $_viewer_tier,
@@ -60,6 +52,9 @@ lg_shared_render_site_header([
     'logo_url'           => LG_ARCHIVE_POC_LOGO_URL,
     'search_id'          => 'chrome-q',    // archive.js listens for #chrome-q
     'search_placeholder' => 'Search the archive…',
-    'profile_url'        => '/members/me/',
-    'before_nav'         => $_back_link,
+    'profile_url'        => '/profile/edit',
+    // Which nav item to suppress (you don't link to the page you're on). The
+    // /archive/ search page sets 'archive'; the front page sets '' so the
+    // Archive button shows. Defaults to 'archive' if a caller doesn't set it.
+    'active_nav'         => $lg_active_nav ?? 'archive',
 ]);

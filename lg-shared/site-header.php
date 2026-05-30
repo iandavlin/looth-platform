@@ -19,7 +19,7 @@
  *       // 'logo_url'   => 'https://…/logo.png',     // optional override
  *       // 'search_id'  => 'chrome-q',               // optional; id of the <input>
  *       // 'search_placeholder' => 'Search…',        // optional
- *       // 'profile_url'        => '/members/me/',   // optional; default /members/me/
+ *       // 'profile_url'        => '/profile/edit',   // optional; default /profile/edit
  *       // 'logout_url'         => wp_logout_url(),  // optional; WP callers pass nonce'd URL
  *   ]);
  *
@@ -79,8 +79,11 @@ function lg_shared_render_site_header(array $ctx): void
     $caps          = (array)($ctx['capabilities'] ?? []);
     $msg_unread    = $ctx['msg_unread']   ?? null;   // null = lazy-load
     $notif_unread  = $ctx['notif_unread'] ?? null;   // null = lazy-load
-    $profile_url   = (string)($ctx['profile_url'] ?? '/members/me/');
+    $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');
     $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
+    // P9 hooks: msg/notif icon hrefs. Default to BB paths for now; P9 modals will override.
+    $msg_url       = (string)($ctx['msg_url']   ?? '/members/me/messages/');
+    $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
     $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'forum'|'events'|'members'
@@ -115,6 +118,13 @@ function lg_shared_render_site_header(array $ctx): void
     $h = 'lg_shared_h';
 
     ?>
+<style>
+/* Overrides for WP/BB theme pages where 3rd-party CSS loads after site-header.css.
+   Inline body <style> wins the cascade over <head> stylesheets at equal specificity. */
+.lg-chrome ul.lg-chrome__menu,
+.lg-chrome ul.lg-chrome__account-menu,
+.lg-chrome ul.lg-chrome__account-menu li { list-style: none !important; }
+</style>
 <a href="#lg-main" class="skip-link">Skip to content</a>
 
 <header class="lg-chrome" id="site-header">
@@ -172,7 +182,7 @@ function lg_shared_render_site_header(array $ctx): void
         <?php endif; ?>
 
         <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-           href="/members/me/messages/"
+           href="<?= $h($msg_url) ?>"
            aria-label="Messages"
            data-lg-msg-link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -188,7 +198,7 @@ function lg_shared_render_site_header(array $ctx): void
         </a>
 
         <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-           href="/members/me/notifications/"
+           href="<?= $h($notif_url) ?>"
            aria-label="Notifications"
            data-lg-notif-link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
