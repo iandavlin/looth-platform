@@ -186,6 +186,41 @@ block-level pmp + the member baseline tangible — set a block's visibility, fli
 the toggle, watch the effect. (iter-2's viewer-switch becomes a real product
 feature.) Applies to both `/u/` and `/p/`.
 
+## Schema — RESOLVED dev-final (2026-05-30, Ian)
+
+The four flagged build-plan decisions, settled → the spine schema is **dev-final**.
+1. **Header visibility = the profile/practice's OWN visibility = the section cap.**
+   Not "a block among equals" — the header's vis IS the entity's vis, capping every
+   block in that section (effective block vis = more-restrictive(header, block)).
+   Stored on the header `profile_sections` row; **NO new column.**
+2. **Location: keep EXACT `lat/lng` (gated pin); coarse "near me" + map coords come
+   from the city/state CENTROID the directory geocoder already returns — NO separate
+   approx column.** Exact resolves only to permitted viewers.
+3. **`members` DB literal kept (plural); map to "member" in UI/JSON.** No enum rename.
+4. **Three adds:** `users.at_a_glance` · `users.location_exact_visibility` ·
+   `practices.type` (set by the user at creation — see practices-greenfield below).
+   - **`at_a_glance` = the single-source author BIO (Ian).** It fills WordPress's
+     "about author" field AND is the bio shown on ANY content the person authors
+     (byline / author box) — same single-source pattern as the avatar. Built INTO
+     the header block. **Backfill from WP user `description`.** Part of the
+     author-identity card (`STRANGLER-COORDINATION.md` → avatar / author-identity).
+   - **`location_exact_visibility`** = a separate privacy toggle for the exact
+     address vs the city (city can be member-visible while exact stays private).
+
+**Migration default — EVERYONE backfills to MEMBERS-ONLY at cut (Ian).** No one's
+profile or location is public at cutover — the member baseline applies to the whole
+migrated population (they were on a logged-in site; don't expose them to the open
+web at the flip). Opt-up-to-public is per-block, post-cut, via the editor. (Location:
+approximate → member, exact → private.)
+
+**Practices are NOT backfilled — greenfield, user-created (Ian, 2026-05-30).** Only
+the PERSON (profile) migrates — name, location, socials, avatar, bio. The BUSINESS
+is built fresh by the user in the new system: they create their `/p/` from scratch,
+enter their own practice details + `type`. So the crib is **profiles-only**;
+`practices.type` is set at creation, never backfilled; no `brand_*`/business sweep.
+The member-only migration default applies to the migrated PROFILE population — a new
+practice's visibility is the owner's choice at creation (storefronts lean public/findable).
+
 ## Avatar = single source of profile-image truth (2026-05-29, Ian)
 
 The profile spine owns the avatar for the WHOLE platform — every surface (shared
@@ -252,6 +287,14 @@ via the editor: gallery = `{title, images[], captions}`; carousel =
 post-cutover, pilot #2+.)
 
 ## JSON authoring layer + LLM skill
+
+**CONFIRMED in scope (Ian, 2026-05-30):** ship a **downloadable skill + JSON upload**
+for profiles so a user can have an LLM draft their profile. Flow: user downloads the
+skill (LLM instructions + the validated profile JSON schema) → LLM drafts profile
+JSON from their material → user **uploads the JSON** → it populates their profile
+(maps into the spine + storefront block region) → user reviews/edits before publish.
+Mirrors `write-article-v2`. This is the onboarding-friction killer + a migration
+accelerator. Details below.
 
 - A **versioned, validated JSON profile schema** = the authoring/draft contract
   (NOT storage for the spine — that stays relational; the JSON maps INTO the

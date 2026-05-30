@@ -314,6 +314,14 @@ alongside `/whoami` in the same profile-app slice.
 
 One avatar per user, identical on every surface, editable in exactly one place.
 
+**The author-identity CARD = avatar + `display_name` + bio (`at_a_glance`)** — all
+single-source from the profile spine, all read together via `/whoami` (viewer) + the
+batch `users` lookup (authors). `at_a_glance` is the bio: it fills WP's "about author"
+field and is the bio shown on **any content the person authors** (post author-header/
+footer bylines, author box) — same single-source rule as the avatar. Edit once on the
+profile, updates everywhere. (Below is written avatar-first; the same delivery +
+backfill model carries the bio and display_name.)
+
 - **Source of truth = the profile spine** (`users.avatar_url`, profile-app) —
   NOT WordPress/BuddyBoss, NOT Gravatar. Those are legacy we read ONCE to seed,
   then decommission; truth can't live in the thing we're turning off. profile-app

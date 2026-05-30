@@ -44,18 +44,24 @@ you're about to change. (One migration, not two.)
   (approximate public|member / exact member|private|on_request; coarse-coord geo).
 - **Pilot blocks: identity + location** (`spec-block-identity-location.md`),
   then craft / socials / practices spine blocks.
-- **Migration crib (slice-4), into the final spine, ONE pass:** xprofile field
-  **1 (name) → profile name ONLY** (Ian 2026-05-30: field 2 business is NOT merged
-  into the profile name — business fills at the **practice** level; literal
-  backfill, don't auto-split mingled name+business strings, editor self-corrects) ·
-  field 96 (→ location_address + city/region extract) ·
-  field 266 + ACF `author_*` socials (final mapping, three-tier precedence) ·
-  **avatar IMAGE** (BB-uploaded `uploads/avatars/<id>/` file → profile-app's own
-  avatar store + `users.avatar_url`/version; Gravatar-only users = one-time fetch
-  or initials) → all into the dev-final spine. `brand_*` NOT swept (practice-side,
-  separate). **Avatar is single-source for the whole platform** — store+serve+
-  version+editor, read by every surface via `/whoami` + the batch users lookup;
-  see `STRANGLER-COORDINATION.md` "Avatar / author-identity — SINGLE SOURCE."
+- **Migration crib (slice-4) — PROFILES ONLY, into the final spine, ONE pass.**
+  Practices are NOT backfilled (greenfield, user-created — Ian 2026-05-30). Person
+  data only:
+  - xprofile field **1 (name) → profile name ONLY** (field 2 business NOT merged —
+    business fills at the practice level, which the user builds from scratch;
+    literal backfill, don't auto-split mingled name+business strings, editor self-corrects).
+  - field 96 (→ location_address + city/region extract).
+  - field 266 + ACF `author_*` socials (final mapping, three-tier precedence).
+  - **avatar IMAGE** (BB-uploaded `uploads/avatars/<id>/` → profile-app avatar store
+    + `users.avatar_url`/version; Gravatar-only = one-time fetch or initials).
+  - **bio → `users.at_a_glance`** from WP user `description` (the "about author"
+    field). at_a_glance is the single-source author bio (see avatar contract).
+  - **Everyone defaults to MEMBERS-ONLY at cut** — no profile/location public at the
+    flip (member baseline; location approx→member, exact→private). Opt-up post-cut.
+  - `brand_*` / business NOT swept (practice-side, greenfield).
+  **Avatar + bio + display_name = the single-source author-identity card** — read by
+  every surface via `/whoami` + the batch users lookup; see
+  `STRANGLER-COORDINATION.md` "Avatar / author-identity — SINGLE SOURCE."
 
 ### Phase 2 — COMPOSABLE STOREFRONT.
 - **Block engine:** crib lg-layout-v2's FE-editing *model* (palette, drag-drop,
