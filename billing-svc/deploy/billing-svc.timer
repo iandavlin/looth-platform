@@ -1,0 +1,17 @@
+# systemd timer driving the billing-svc poll loop.
+#
+# ⚠ NOT INSTALLED this milestone (file only). Pairs with billing-svc.service.
+# Cadence mirrors today's WP poll cron — coordinator confirms the interval at
+# step 1 against the live cron schedule before enabling.
+
+[Unit]
+Description=Run billing-svc tier poll periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

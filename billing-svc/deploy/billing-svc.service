@@ -1,0 +1,40 @@
+# systemd unit for billing-svc's poll loop (Patreon now, Stripe dormant).
+#
+# ⚠ NOT INSTALLED this milestone. File only — proves the deploy shape. The live
+#   poll cron still runs inside the WP plugin; this unit installs at step 1.
+#
+# Install (coordinator, step 1):
+#   sudo cp deploy/billing-svc.service /etc/systemd/system/billing-svc.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now billing-svc.timer
+#
+# Runs as a DEDICATED OS user `billing-svc` (design §5b-B: separate user, so a
+# billing-svc compromise cannot read profile-app's JWT key / identity tables /
+# DMs). The user owns ONLY this service dir + its secret files.
+
+[Unit]
+Description=billing-svc tier poll loop (Patreon source reader + Arbiter)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=billing-svc
+Group=billing-svc
+
+# DSN via peer auth (no password in the unit); Patreon token read from a
+# mode-600 secret file by the poll script itself, never an env var here.
+Environment=LG_BILLING_SVC_DSN=pgsql:host=/var/run/postgresql;dbname=looth
+
+ExecStart=/usr/bin/php /srv/billing-svc/bin/poll.php
+
+# Hardening — billing-svc touches money-adjacent state; lock it down.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/billing-svc/logs
+# Stripe creds + Patreon token live in /etc/billing-svc/ (mode 600), read by
+# the service user only — NOT reachable by profile-app's user (§5b-B).
+
+[Install]
+WantedBy=multi-user.target
