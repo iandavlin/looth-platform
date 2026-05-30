@@ -87,7 +87,7 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
 
     echo '<section class="block lg-block lg-block--craft" data-block="craft">';
     echo '<h3 class="lg-bh">Craft';
-    if ($isOwner) echo ' ' . looth_vchip((string)$craft['vis']);
+    if ($isOwner) echo ' ' . looth_pmp_control('craft', (string)$craft['vis'], $headerVis);
     echo '</h3><div class="lg-chips">';
     foreach ($chips as $c) echo '<span class="lg-chip">' . looth_h($c) . '</span>';
     echo '</div></section>';
@@ -110,7 +110,7 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
 
     echo '<section class="block lg-block lg-block--socials" data-block="socials">';
     echo '<h3 class="lg-bh">Links';
-    if ($isOwner) echo ' ' . looth_vchip((string)$soc['vis']);
+    if ($isOwner) echo ' ' . looth_pmp_control('socials', (string)$soc['vis'], $headerVis);
     echo '</h3><div class="lg-socrow">';
     if ($website) {
         $label = preg_replace('#^https?://#i', '', (string)$website);
@@ -131,6 +131,44 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
 function looth_vchip(string $visUi): string
 {
     return '<span class="lg-vchip lg-vchip--' . looth_h($visUi) . '">' . looth_h(ucfirst($visUi)) . '</span>';
+}
+
+/** DB-literal → human label for a pmp value. */
+function looth_pmp_label(string $visDb): string
+{
+    return ['public' => 'Public', 'members' => 'Member', 'private' => 'Private', 'on_request' => 'On request'][$visDb]
+        ?? ucfirst($visDb);
+}
+
+/**
+ * Owner-only INTERACTIVE pmp control (Me view). Renders the visibility chip as a
+ * <button> carrying the block id, its stored vis, and the header ceiling — the
+ * JS in u.php opens a menu and persists via the existing /me endpoints. Server
+ * stays the source of truth (validation + the gate); this is just the affordance.
+ *
+ * @param string $block      'header'|'craft'|'socials'|'location-approx'|'location-exact'
+ * @param string $visNorm    the block's stored vis, NORMALIZED ('member')
+ * @param string $ceilingDb  header ceiling as DB literal; '' for the header itself (no cap)
+ */
+function looth_pmp_control(string $block, string $visNorm, string $ceilingDb): string
+{
+    $visDb = Block::denormalizeVis($visNorm);                       // back to DB literal
+    $css   = Block::normalizeVis($visDb);                           // 'member' for the CSS class
+    $capped = $ceilingDb !== '' && Block::effectiveVisibility($ceilingDb, $visDb) !== $visDb;
+
+    $title = 'Change who can see this';
+    if ($capped) {
+        $eff = Block::effectiveVisibility($ceilingDb, $visDb);
+        $title = 'Your header is ' . looth_pmp_label($ceilingDb) . '-only — viewers see this as ' . looth_pmp_label($eff);
+    }
+
+    return '<button type="button" class="lg-vchip lg-pmp lg-vchip--' . looth_h($css) . ($capped ? ' lg-pmp--capped' : '') . '"'
+         . ' data-pmp-block="' . looth_h($block) . '"'
+         . ' data-pmp-vis="' . looth_h($visDb) . '"'
+         . ' data-pmp-ceiling="' . looth_h($ceilingDb) . '"'
+         . ' aria-haspopup="true" title="' . looth_h($title) . '">'
+         . looth_h(looth_pmp_label($visDb))
+         . ' <span class="lg-pmp__caret" aria-hidden="true">' . ($capped ? '⚠▾' : '▾') . '</span></button>';
 }
 
 /**
@@ -164,7 +202,7 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         $line = trim(implode(', ', array_filter([$a['city'], $a['region'], $a['country']])));
         if ($line === '') $line = (string)($loc['text'] ?? '');
         echo '<div class="lg-loc__line">📍 ' . looth_h($line);
-        if ($isOwner) echo ' ' . looth_vchip((string)$a['vis']);
+        if ($isOwner) echo ' ' . looth_pmp_control('location-approx', (string)$a['vis'], $headerVis);
         echo '</div>';
         if ($a['lat'] !== null) {
             // town-level coarse dot for "near me" / map — never the exact pin.
@@ -176,12 +214,12 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
     if ($canExact) {
         echo '<div class="lg-loc__exact">🏠 ' . looth_h((string)($e['address'] ?: 'Exact location'));
         if (!empty($e['postcode'])) echo ' · ' . looth_h((string)$e['postcode']);
-        if ($isOwner) echo ' ' . looth_vchip((string)$e['vis']);
+        if ($isOwner) echo ' ' . looth_pmp_control('location-exact', (string)$e['vis'], $headerVis);
         echo '</div>';
         echo '<div class="lg-loc__pin" data-precision="' . looth_h((string)$loc['precision']) . '"'
            . ' data-lat="' . looth_h((string)$e['lat']) . '" data-lng="' . looth_h((string)$e['lng']) . '"></div>';
     } elseif ($isOwner && $hasExact) {
-        echo '<div class="lg-loc__exact-note">🏠 Exact address ' . looth_vchip((string)$e['vis']) . ' — hidden from viewers</div>';
+        echo '<div class="lg-loc__exact-note">🏠 Exact address ' . looth_pmp_control('location-exact', (string)$e['vis'], $headerVis) . ' — hidden from viewers</div>';
     } elseif ($canApprox && $hasExact) {
         $who = ((string)$e['vis'] === 'on_request') ? 'on request' : 'to ' . looth_h((string)$e['vis']) . 's';
         echo '<div class="lg-loc__exact-note">Exact address available ' . $who . '</div>';
@@ -203,7 +241,8 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     echo '<section class="block lg-block lg-block--header" data-block="profile-header">';
 
     if ($isOwner) {
-        echo '<span class="lg-vchip lg-vchip--' . looth_h($visUi) . '">' . looth_h(ucfirst($visUi)) . '</span>';
+        // The header IS the ceiling → no cap on itself ('' ceiling).
+        echo looth_pmp_control('header', $visUi, '');
     }
 
     echo '<div class="lg-idrow">';

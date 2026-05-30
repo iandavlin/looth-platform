@@ -74,6 +74,24 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [ ] **FLAG:** subject **tier badge** passed `null` (the subject's tier isn't on the spine
       post tier-drop — needs a membership-tier lookup). Header renders no badge for now.
 
+## Inline pmp control (per-block privacy editing) — DONE (write-only)
+- [x] `_render_blocks.php` — `looth_pmp_control()` turns the read-only vis chips into
+      `<button.lg-pmp>` carrying `data-pmp-block / -vis / -ceiling`. Wired at all 5
+      sites: header, craft, socials, location-approx, location-exact. Owner/Me only
+      (rendered inside the existing `$isOwner` branches).
+- [x] `web/u.php` — pmp menu JS + CSS. Click a chip → menu of tiers → persists via
+      the existing endpoints (header/craft PATCH `visibility`; socials PUT `visibility`;
+      location PUT `location_visibility` / `location_exact_visibility`); on success
+      `location.reload()` so the server re-derives ceilings + the gate (View-as honest).
+- [x] **Header ceiling surfaced:** options more-public than the header are marked
+      "limited by header" in the menu; a capped chip shows ⚠ + a tooltip
+      (`Block::effectiveVisibility` / `isCappedByHeader` server-side). Block CAN still
+      store the more-open value (plan's allow-but-cap model) — the gate enforces effective.
+- [x] Vocab: JS sends DB-literal values (`public/members/private/on_request`) — the set
+      every endpoint accepts (location-approx's validator wants plural `members`).
+- [ ] **Coordinator: CDP as owner 1918** — click each block's chip, change vis, confirm
+      persist + reload + View-as reflects it; header-ceiling edge cases below.
+
 ## Spine blocks — next increments
 - [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
 - [ ] connect block → then the migration crib (profiles-only, practices greenfield).

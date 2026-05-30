@@ -130,6 +130,24 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gate__signin{border:1px solid var(--lg-line);color:var(--lg-ink);text-decoration:none;font:700 14px/1 var(--lg-font-sans);border-radius:999px;padding:12px 22px}
 
 .lg-report{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--lg-mute)}
+
+/* interactive pmp control (owner/Me view) */
+.lg-pmp{cursor:pointer;border:0;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+.lg-pmp:hover{filter:brightness(.95)}
+.lg-pmp:focus-visible{outline:2px solid var(--lg-sage);outline-offset:1px}
+.lg-pmp__caret{font-size:8px;opacity:.8}
+.lg-pmp--capped{box-shadow:inset 0 0 0 1px var(--lg-rust)}
+.lg-pmp-menu{position:absolute;z-index:60;min-width:210px;background:#fff;border:1px solid var(--lg-line);
+  border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);padding:6px}
+.lg-pmp-menu__head{font:700 10px/1.3 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-mute);padding:7px 9px 5px}
+.lg-pmp-menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;
+  border:0;background:none;cursor:pointer;padding:8px 9px;border-radius:7px;text-align:left;
+  font:600 13px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-pmp-menu button:hover{background:var(--lg-sage-tint)}
+.lg-pmp-menu button[aria-current="true"]{font-weight:800;color:var(--lg-sage-d)}
+.lg-pmp-menu button[aria-current="true"]::after{content:"✓";color:var(--lg-sage-d)}
+.lg-pmp-menu .cap{font:600 10px/1.2 var(--lg-font-sans);color:var(--lg-rust)}
+
 @media(max-width:560px){.lg-idrow{flex-direction:column;text-align:center;align-items:center}}
 </style>
 </head>
@@ -172,6 +190,99 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
     body: JSON.stringify({target_type:'profile', target_id: <?= $subjectId ?>, reason: reason, body: body})})
     .then(function(r){return r.json();}).then(function(d){ alert(d.ok ? 'Thanks — report logged.' : ('Error: ' + (d.error||'?'))); });
 });
+</script>
+<?php endif; ?>
+
+<?php if ($isOwner): ?>
+<script>
+/* Inline per-block privacy (pmp) control — owner/Me view. The chips rendered by
+   looth_pmp_control() are <button.lg-pmp> carrying the block id, current vis, and
+   the header ceiling. Clicking opens a menu; selecting persists via the existing
+   /me endpoints, then reloads so the server re-derives ceilings + the gate (keeps
+   View-as honest). Server stays the source of truth (validation + the gate). */
+(function () {
+  var BASE = '/profile-api/v0';
+  // endpoint + method + payload key per block.
+  var EP = {
+    'header':          { url: BASE + '/me/header',   m: 'PATCH', k: 'visibility' },
+    'craft':           { url: BASE + '/me/craft',    m: 'PATCH', k: 'visibility' },
+    'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
+    'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
+    'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }
+  };
+  // tiers per block, as DB-literal values (what every endpoint accepts).
+  var TIERS = {
+    'location-exact': ['members', 'private', 'on_request'],
+    '_default':       ['public', 'members', 'private']
+  };
+  var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private', 'on_request': 'On request' };
+  // restrictiveness rank; on_request is treated as restrictive as private for capping.
+  var RANK = { 'public': 0, 'members': 1, 'private': 2, 'on_request': 2 };
+
+  var openMenu = null;
+  function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
+  document.addEventListener('click', function (e) {
+    if (openMenu && !openMenu.contains(e.target) && !e.target.closest('.lg-pmp')) closeMenu();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+
+  function tiersFor(block) { return TIERS[block] || TIERS._default; }
+
+  function buildMenu(btn) {
+    var block   = btn.getAttribute('data-pmp-block');
+    var current = btn.getAttribute('data-pmp-vis');
+    var ceiling = btn.getAttribute('data-pmp-ceiling') || '';
+    var menu = document.createElement('div');
+    menu.className = 'lg-pmp-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = '<div class="lg-pmp-menu__head">Who can see this</div>';
+    tiersFor(block).forEach(function (tier) {
+      var capped = ceiling && RANK[tier] < RANK[ceiling];   // more open than the header allows
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitemradio');
+      if (tier === current) b.setAttribute('aria-current', 'true');
+      b.innerHTML = '<span>' + LABEL[tier] + '</span>' +
+        (capped ? '<span class="cap">limited by header</span>' : '');
+      b.addEventListener('click', function () {
+        if (tier === current) { closeMenu(); return; }
+        save(btn, block, tier);
+      });
+      menu.appendChild(b);
+    });
+    return menu;
+  }
+
+  function save(btn, block, tier) {
+    var ep = EP[block]; if (!ep) return;
+    var body = {}; body[ep.k] = tier;
+    btn.disabled = true;
+    fetch(ep.url, { method: ep.m, credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok) { location.reload(); }
+        else { btn.disabled = false; alert('Could not change visibility: ' + (res.j && res.j.error || '?')); }
+      })
+      .catch(function () { btn.disabled = false; alert('Network error.'); });
+  }
+
+  document.querySelectorAll('.lg-pmp').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var wasOpenFor = openMenu && openMenu._owner === btn;
+      closeMenu();
+      if (wasOpenFor) return;
+      var menu = buildMenu(btn);
+      menu._owner = btn;
+      document.body.appendChild(menu);
+      var r = btn.getBoundingClientRect();
+      menu.style.top  = (window.scrollY + r.bottom + 6) + 'px';
+      menu.style.left = (window.scrollX + Math.min(r.left, document.documentElement.clientWidth - 230)) + 'px';
+      openMenu = menu;
+    });
+  });
+})();
 </script>
 <?php endif; ?>
 </body>

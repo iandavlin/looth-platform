@@ -68,6 +68,29 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Inline per-block pmp control (2026-05-30, WRITE-ONLY)
+
+The read-only vis chips are now interactive privacy controls (owner/Me view only):
+- `_render_blocks.php` → `looth_pmp_control($block, $visNorm, $ceilingDb)` renders the
+  chip as a `<button.lg-pmp>` with `data-pmp-block/-vis/-ceiling`; swapped in at all 5
+  sites (header, craft, socials, location-approx, location-exact). `looth_vchip` kept
+  but now unused.
+- `web/u.php` → pmp menu JS + CSS (gated `$isOwner`). Click → tier menu → persist via
+  the EXISTING endpoints (header/craft PATCH `visibility`; socials PUT `visibility`;
+  location PUT `location_visibility`/`location_exact_visibility`) → `location.reload()`
+  so the server re-derives ceilings + the gate (View-as stays honest). Server remains
+  source of truth (validation + the gate; nothing loosened).
+- **Header ceiling surfaced** per the plan's allow-but-cap model: a block can still be
+  STORED more-open than the header, but the menu marks those options "limited by header"
+  and a capped chip shows ⚠ + a tooltip (`Block::effectiveVisibility`). The gate enforces
+  the effective (capped) vis for viewers.
+- **Vocab:** JS sends DB-literal values (`public/members/private/on_request`) — the set
+  every endpoint accepts (location-approx's validator requires plural `members`; the
+  header/craft/socials validators accept either via `visFromInput`).
+
+Files: `_render_blocks.php`, `web/u.php`, `PHASE-1-CHECKLIST.md`. `config.php`/`Whoami.php`
+untouched. No schema, no new endpoints (reused inc1–3). Coordinator CDP-tests as owner 1918.
+
 ## /u/<slug> block render + View-as toggle (2026-05-30, WRITE-ONLY)
 
 The spine is now VISIBLE: `web/u.php` rewired from the slice-3.5
