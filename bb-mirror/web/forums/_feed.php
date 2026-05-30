@@ -324,9 +324,11 @@ function feed_ctx(array $card): string
     $title = htmlspecialchars($card['forum_title'] ?? '', ENT_QUOTES, 'UTF-8');
     $parent = $card['parent_forum_title'] ?? null;
     if ($parent) {
-        return htmlspecialchars($parent, ENT_QUOTES, 'UTF-8') . ' &rsaquo; ' . $title;
+        return '<span class="feed-card__ctx-parent">' . htmlspecialchars($parent, ENT_QUOTES, 'UTF-8') . '</span>'
+             . ' <span class="feed-card__ctx-sep">&rsaquo;</span> '
+             . '<span class="feed-card__ctx-forum">' . $title . '</span>';
     }
-    return $title;
+    return '<span class="feed-card__ctx-parent">' . $title . '</span>';
 }
 
 function feed_topic_url(array $card): string

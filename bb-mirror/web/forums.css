@@ -11,7 +11,7 @@
   /* ── Shared Looth Group design tokens — mirrors archive-poc ── */
   --lg-cream:      #fbfbf8;
   --lg-sage:       #87986a;
-  --lg-sage-d:     #6b7c52;
+  --lg-sage-d:     #586b3f;  /* brand dark-sage */
   --lg-sage-3:     #d4e0b8;
   --lg-sage-tint:  #eef2e3;
   --lg-amber:      #ecb351;
@@ -19,23 +19,23 @@
   --lg-charcoal:   #1a1d1a;
   --lg-ink:        #262925;  /* a little darker */
   --lg-mute:       #565a55;  /* a little darker */
-  --lg-line:       #e3ddd0;
-  --lg-card-bg:    #efece6;  /* flipped: containers take the former page tone */
+  --lg-line:       #e4e7d8;  /* sage-tinted hairline */
+  --lg-card-bg:    #ffffff;  /* cream-sage: white cards */
   --lg-font-serif: "Lora", Georgia, serif;
   --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* ── Legacy bb-mirror tokens (kept for backward-compat) ── */
   --bg:          #faf8f4;
-  --bg-card:     #efece6;  /* flipped with page bg (was #fff) */
+  --bg-card:     #ffffff;  /* cream-sage: white cards/nav/searchbar */
   --bg-sticky:   #fff7e6;
   --bg-closed:   #f4f1ea;
   --fg:          #1a1814;
   --fg-muted:    #524e48;  /* a little darker */
   --fg-soft:     #98938b;
-  --border:      #e8e2d6;
+  --border:      #e4e7d8;
   --border-soft: #f0ebe1;
-  --accent:      #8c4a2b;
-  --accent-2:    #c4631e;
+  --accent:      #586b3f;  /* brand dark-sage */
+  --accent-2:    #b8842b;  /* brand gold */
   --gate-lite:   #b8860b;
   --gate-pro:    #6b2c91;
   --online:      #2f9a4a;
@@ -72,7 +72,7 @@ html, body { margin: 0; padding: 0; }
 body {
   font: 16px/1.5 var(--font-body);
   color: var(--fg);
-  background: #ffffff; /* flipped: page now white, containers tinted */
+  background: #f4f2ec; /* cream-sage page */
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -2308,3 +2308,33 @@ body.ntm-active { overflow: hidden; }
   .post__body            { font-size: 16px; line-height: 1.6; }
   .topic-header__title   { font-size: 26px; }
 }
+
+
+/* ── cream-sage: forum-parent prominence (brand-accent left bar + colored
+      parent label + category icon). 9 categories map onto the 3 brand accent
+      families (sage / amber-gold / charcoal). ── */
+.feed-card { --ca:#323532; --cb:#586b3f; }
+.feed-card[data-cat="repair"],
+.feed-card[data-cat="business"],
+.feed-card[data-cat="looths"]   { --ca:#586b3f; --cb:#87986a; }  /* sage */
+.feed-card[data-cat="acoustic"],
+.feed-card[data-cat="sponsors"],
+.feed-card[data-cat="market"]   { --ca:#b8842b; --cb:#ecb351; }  /* amber-gold */
+.feed-card[data-cat="builds"],
+.feed-card[data-cat="tools"],
+.feed-card[data-cat="general"]  { --ca:#323532; --cb:#586b3f; }  /* charcoal */
+
+.feed-card--topic      { border-left: 5px solid var(--cb); }
+.feed-card__ctx-parent { color: var(--ca); font-weight: 800; }
+.feed-card__ctx-sep,
+.feed-card__ctx-forum  { color: var(--lg-mute); }
+
+.feed-card[data-cat="repair"]   .feed-card__ctx-parent::before { content:"🛠 "; }
+.feed-card[data-cat="builds"]   .feed-card__ctx-parent::before { content:"🔨 "; }
+.feed-card[data-cat="acoustic"] .feed-card__ctx-parent::before { content:"🎸 "; }
+.feed-card[data-cat="tools"]    .feed-card__ctx-parent::before { content:"🧰 "; }
+.feed-card[data-cat="business"] .feed-card__ctx-parent::before { content:"💼 "; }
+.feed-card[data-cat="market"]   .feed-card__ctx-parent::before { content:"🏷 "; }
+.feed-card[data-cat="general"]  .feed-card__ctx-parent::before { content:"💬 "; }
+.feed-card[data-cat="sponsors"] .feed-card__ctx-parent::before { content:"⭐ "; }
+.feed-card[data-cat="looths"]   .feed-card__ctx-parent::before { content:"📍 "; }
