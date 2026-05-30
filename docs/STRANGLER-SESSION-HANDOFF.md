@@ -29,34 +29,54 @@ section below is still canon; this is what's new + the live process state.
   `/etc/looth/jwt-private.pem` is `looth-dev`-group; the DB is `profile-app`-peer;
   no user has both). → **shim-replacement's `/mint-token` now gates testing the
   WHOLE profile `/me` surface.** Relayed `reply-to-shim-mint-dev-priority.md`.
-- **Increment 2 = location block** (user-managed pin) — NEXT, currently HELD to
-  serialize the profile-app tree with the social turn.
+### Profile spine — increment 2 (LOCATION) DONE + tested; schema APPLIED (2026-05-30)
+- **Location block built end-to-end + logic-tested GREEN**, committed `f8d91b2`,
+  schema applied. Two-tier: **approximate** (city/region + coarse-from-city dot —
+  `Block::coarsen` rounds the stored pin, NO approx column) governed by
+  `location_visibility`; **exact** (gated `lat/lng` pin + address) governed by
+  `location_exact_visibility`. **User-managed pin**: placement + `location_pin_precision`
+  (exact|neighborhood|city — `precision='city'` folds the exact tier away) + per-tier vis.
+  Ceiling-capped via `Block::effectiveVisibility`, now **fail-closed** (`on_request`→private).
+  Built ON existing `me-location.php` (+GET, +exact/precision/pin). Tested: loadLocation
+  two-tier assemble, truth table, render public/member/me, precision=city fold. Fixture user 3.
+- **One new idempotent col** `location_pin_precision` (NOT NULL default `exact`, CHECK) —
+  `profile-app/sql/2026-05-30-location-pin-precision.sql`, APPLIED. Separate file from the
+  increment-1 migration (never edited the applied one).
+- **Note:** `Block.php` still self-`require`d — needs adding to `config.php`'s require list
+  (config.php is shim-shared, so left untouched by the write-only lane; coordinator's call).
+- **BLOCKED (same as inc1): authed HTTP round-trip** on shim `/mint-token`. Logic tested
+  via `sudo -u profile-app php`; HTTP pass closes when shim unblocks.
 
-### Social lane — CONFIRMED (e9fd24ab) + ruled + a turn IN FLIGHT
+### Social lane — CONFIRMED (e9fd24ab) + ruled + LANDED
 - Schema finalized + grounded vs live BB (friends **10,978**, `wp_bp_follow` EXISTS
   9,002, messages 1,881/370/219, notifications 49,603).
 - **4 decisions RULED (Ian):** drop follow (mutual-only; auto-on-connect; don't
   migrate wp_bp_follow) · DM **connections-only** · notifications start-fresh +
   seed-unread · counts 9+ badge + 30-day prune, dedicated `me-social-counts`.
   Canon: STRANGLER-COORDINATION "Social decisions RULED."
-- **⚠️ A social BACKGROUND TURN IS IN FLIGHT** (`bywl7ob3o`): drop-follow→dev-final,
-  scaffold `Notifications.php` + `me-notifications.php`. When it pings: commit its
-  output by pathspec, THEN launch increment 2. **Never two profile-app turns at once.**
+- **✅ Social turn (`bywl7ob3o`) LANDED** — committed `ff23ba4` (drop-follow→dev-final,
+  scaffold `Notifications.php` + `me-notifications.php`). Tree freed → increment 2 ran after.
 
 ### Live process state (successor: READ THIS)
 - Lane turns: `claude --resume <id> --print --permission-mode acceptEdits` via Bash
   `run_in_background`. WRITE-ONLY (sandbox blocks their git/apply/`php -l`/screenshot).
   **Coordinator commits by pathspec + applies schema + tests after** = the "tested" gate.
-- **idle-hold `/tmp/no-idle-shutdown` is currently SET** (for the social turn) — `rm`
-  it once that turn lands.
+- **idle-hold `/tmp/no-idle-shutdown` currently NOT set** (released after inc2). `touch`
+  it before launching a lane turn, `rm` after it lands.
+- **Resume gotcha:** `claude --resume` with `--print` needs the FULL session UUID, not the
+  short id — the lane "ids" in this doc (`1c98b564`) are UUID prefixes. Full UUID lives at
+  `~/.claude/projects/-home-ubuntu-projects/<uuid>.jsonl` (e.g. profile-2.0 =
+  `1c98b564-ae29-4bc2-af2d-b06f80498aa4`). Short id errors out.
 - Apply/test recipe: `sudo -u profile-app psql -d profile_app -f <sql>`; run PHP as
   `sudo -u profile-app php` (peer-auth DB). me/* routes in
   `/etc/nginx/snippets/strangler-profile-app.conf` (repo copy DRIFTED — don't deploy-clobber).
 
 ### Open / next
 - Ian: **header default** (member vs public) — last visibility knob.
-- Spine: increment 2 (location) → craft/socials → crib (profiles-only, gated dev-final).
-- shim: unblock dev `/mint-token` → then close the profile `/me` HTTP tests.
+- Spine: inc1 (header) ✅ + inc2 (location) ✅ → **NEXT: craft + socials blocks** →
+  crib (profiles-only, gated dev-final) → View-as toggle render.
+- Coordinator chore: add `Block.php` to `config.php`'s require list (config.php shim-shared).
+- shim: unblock dev `/mint-token` → then close the profile `/me` HTTP tests (inc1 + inc2).
 - Backlog: tutorial/tour modal (lg-shell).
 
 ---
