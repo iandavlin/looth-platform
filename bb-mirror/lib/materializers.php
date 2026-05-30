@@ -126,7 +126,7 @@ function bb_mirror_upsert_forum(int $id, PDO $db): void {
     $db->prepare($sql)->execute([
         $id, $slug,
         _bb_mirror_decode($p->post_title),
-        _bb_mirror_decode($p->post_content),
+        wp_kses_post(_bb_mirror_decode($p->post_content)),
         (int)$p->post_parent ?: null, (int)$p->menu_order,
         _bb_mirror_first_group_id($m['_bbp_group_ids'] ?? null),
         $m['_bbp_forum_type']       ?? 'forum',
@@ -267,7 +267,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
     $sql = bb_mirror_upsert_sql('topic', $cols);
     $db->prepare($sql)->execute([
         $id, $forum_id, $p->post_name, _bb_mirror_decode($p->post_title),
-        _bb_mirror_decode($p->post_content), $body_text, $featured_url,
+        wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text, $featured_url,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
         $m['_bbp_topic_status'] ?? $p->post_status,
@@ -306,7 +306,7 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $sql = bb_mirror_upsert_sql('reply', $cols);
     $db->prepare($sql)->execute([
         $id, $topic_id, $forum_id, (int)($m['_bbp_reply_to'] ?? 0) ?: null,
-        _bb_mirror_decode($p->post_content), $body_text,
+        wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
         $p->post_status,
