@@ -199,6 +199,8 @@
         body.hidden = true;
         const excerpt = card.querySelector('.feed-card__op-excerpt');
         if (excerpt) excerpt.style.display = '';
+        const embC = card.querySelector('.feed-card__embed');
+        if (embC) embC.hidden = false;   // restore inline embed
         btn.textContent = 'Read more ▾';
         btn.dataset.state = 'collapsed';
         return;
@@ -236,6 +238,8 @@
       // hide excerpt — use style.display, not hidden, because display:-webkit-box overrides [hidden]
       const excerpt = card.querySelector('.feed-card__op-excerpt');
       if (excerpt) excerpt.style.display = 'none';
+      const embE = card.querySelector('.feed-card__embed');
+      if (embE) embE.hidden = true;   // full body re-embeds it; avoid duplicate
       body.hidden = false;
       btn.textContent = 'Read less ▲';
       btn.dataset.state = 'expanded';
@@ -412,6 +416,33 @@
 
   // Initial scan of any rendered bodies present at load (single-topic pages).
   document.querySelectorAll('.post__body, .feed-card__full-body[data-loaded]').forEach(bbProcessEmbeds);
+
+  // ── 2e. Lazy provider-URL embeds in feed cards ──────────────────────────────
+  // The feed shows the plain excerpt; provider posts (IG/YouTube/Vimeo/X) get an
+  // inline embed for their first provider URL. Built via IntersectionObserver so
+  // we don't pull every provider script up front.
+  (function () {
+    var slots = document.querySelectorAll('.feed-card__embed[data-embed-url]');
+    if (!slots.length) return;
+    function fill(slot) {
+      if (slot.dataset.embedded) return;
+      slot.dataset.embedded = '1';
+      var em = bbBuildEmbed(slot.dataset.embedUrl);
+      if (em) slot.appendChild(em);
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      slots.forEach(fill);
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        io.unobserve(en.target);
+        fill(en.target);
+      });
+    }, { rootMargin: '300px' });
+    slots.forEach(function (s) { io.observe(s); });
+  })();
 
   // ── 3a. Topic-list page: fetch unread IDs + mark them ───────────────────
   const topicList = document.querySelector('.topic-list');

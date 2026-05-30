@@ -2360,3 +2360,8 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 /* Search results reuse the activity-card shell (brand accent + clickable) */
 .feed-card--search .feed-card__op-excerpt b { background: rgba(196,99,30,0.18); font-weight: 700; padding: 0 2px; border-radius: 2px; }
 .feed-card__kind-badge { display: inline-block; margin-left: 6px; font: 600 10px/1.4 var(--font-body); text-transform: uppercase; letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3); border-radius: 6px; padding: 1px 6px; vertical-align: middle; }
+
+/* Inline provider embed in a feed card (lazily built by forums.js §2e) */
+.feed-card__embed { margin-top: var(--s3); max-width: 540px; }
+.feed-card__embed:empty { margin: 0; }   /* keep box so IntersectionObserver can fire */
+.feed-card__embed .bb-embed { margin: 0; }

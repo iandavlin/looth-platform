@@ -322,6 +322,15 @@ if ($topics) {
 // the shared partial so the lazy ?replies endpoint emits identical markup.
 require_once __DIR__ . '/_reply-render.php';
 
+function feed_first_embed_url(?string $html): ?string
+{
+    if (!$html) return null;
+    // First standalone provider URL (YouTube / youtu.be / Vimeo / Instagram / X).
+    // Stops at whitespace, quote, or '<' so legacy glue (e.g. "<div>") is excluded.
+    $re = '~https?://(?:www\\.|m\\.)?(?:youtube\\.com/(?:watch\\?[^\\s"<]*v=|shorts/|embed/)|youtu\\.be/|vimeo\\.com/(?:video/)?\\d|instagram\\.com/(?:p|reel|tv)/|(?:twitter\\.com|x\\.com)/\\w+/status/)[^\\s"<]+~i';
+    return preg_match($re, $html, $m) ? $m[0] : null;
+}
+
 function feed_ctx(array $card): string
 {
     $title = htmlspecialchars($card['forum_title'] ?? '', ENT_QUOTES, 'UTF-8');
@@ -497,6 +506,7 @@ $header_cat = $scoped_forum
       $full_html     = (string)($topic['content_html'] ?? '');
       $plain_full    = strip_tags($full_html);
       $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
+      $embed_url     = feed_first_embed_url($full_html);
     ?>
     <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>">
       <div class="feed-card__meta-top">
@@ -528,6 +538,9 @@ $header_cat = $scoped_forum
               <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
               <span>Started by <a class="feed-card__op-author" href="<?= $turl ?>"><?= $author ?></a> &middot; <?= $start_time ?></span>
             </div>
+          <?php endif; ?>
+          <?php if ($embed_url): ?>
+            <div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div>
           <?php endif; ?>
           <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
         </div>
