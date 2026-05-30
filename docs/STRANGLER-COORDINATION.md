@@ -348,16 +348,30 @@ Implications:
 - **Message history is a migration target** — `wp_bp_messages_*` (threads +
   recipients) carries into the new store; users expect their DMs to survive the cut.
 - **Storage = app-owned** (per the media/single-source direction), not wp-content.
-- **Owner = TBD** — no natural fit in current lanes; likely a dedicated messaging
-  service. **Timing = TBD** — Ian to call **cut-day-required vs fast-follow** (it's
-  secondary to the forum, so it *could* be a fast-follow, but history must migrate
-  whenever it lands).
+- **Home = profile-app (DECIDED, Ian 2026-05-30: "kinda going to live in profile").**
+  It already owns identity (`/whoami`, `looth_id`, the spine); connections +
+  messaging are people-to-people, so they live where the people do.
+  **UI lives in TWO surfaces (matching BB, Ian):** the **Connect + Message buttons
+  on the profile page** (`/u/`, rendered by profile-app natively) and the **header
+  modals** (messages / notifications / friends — lg-shell's P9 work). **Both call
+  the one profile-app social backend** — profile-app owns the data + the on-profile
+  buttons; lg-shell owns the header-modal UI; no double ownership. profile-app's
+  scope thus grows: spine + blocks + **connections + messaging + their migrations**.
+- **Timing = CUT-DAY-REQUIRED (DECIDED, Ian: "has to be there when we turn on the
+  lights").** NOT a fast-follow — on the critical path alongside the profile spine.
+  So the `wp_bp_friends` + `wp_bp_messages_*` migrations join the pre-cut crib
+  scope, and the social layer is a **cutover-eligibility (P-list) blocker.**
 
 **It's the whole social LAYER, not just DMs (Ian, 2026-05-30):** scope = the
 BuddyPress social cluster — **connections** (friends / follow / requests) +
 **messaging** + the lg-shell modals (friends / follow / messages / notifications).
-- **Connections = the easy half:** simple relational (`connections(a, b, status)`),
-  no realtime; ties to directory + profile; often gates who-can-DM-whom. Build it.
+- **Connections = the easy half:** build the STORE ourselves on postgres (better
+  DB — `connections(a, b, status[pending|accepted|blocked], type[friend|follow])`
+  keyed on `looth_id`, queryable next to the directory; can't stay in BB, it's being
+  decommissioned). **SEED it from BB** one-pass in the crib — `wp_bp_friends`
+  (+ follow table if present) → `connections` — so existing friend graphs survive
+  the cut. Same build-thin-store + migrate-history pattern as messaging. No realtime;
+  ties to directory + profile; gates who-can-DM-whom (and the optional contact-reveal).
 - **Build vs adopt for messaging (Ian asked re: an OTS server to skin):** decided
   by VOLUME — ~5 msgs/day, async 1:1, NOT realtime chat.
   - SaaS drop-in (Sendbird/CometChat/Stream): fastest skin, but DMs live with a
