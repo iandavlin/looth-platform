@@ -621,6 +621,80 @@
 
     var frmNonce = null, frmName = 'You', frmState = 'idle', frmCard = null;
 
+    var frmEditorEl = document.getElementById('frm-editor');
+    var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
+    var frmMediaIds = [];       // bbp_media upload_ids for this reply
+
+    function frmFocus() { if (frmQuill) frmQuill.focus(); else if (frmContent) frmContent.focus(); }
+
+    // Lazy-init Quill; fall back to the plain textarea if the CDN didn't load.
+    function frmInitEditor() {
+      if (frmQuill || !frmEditorEl) return;
+      if (typeof Quill === 'undefined') {
+        if (frmContent) frmContent.hidden = false;
+        frmEditorEl.style.display = 'none';
+        return;
+      }
+      frmQuill = new Quill(frmEditorEl, {
+        theme: 'snow',
+        placeholder: 'Share your thoughts…',
+        modules: { toolbar: {
+          container: [
+            [{ header: [2, 3, false] }],
+            ['bold', 'italic', 'underline'],
+            ['blockquote', 'code-block'],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            ['link', 'image'],
+            ['clean'],
+          ],
+          handlers: { image: frmImageHandler },
+        } },
+      });
+    }
+
+    // Image button → upload to BB media → track id + inline preview (mirrors ntm).
+    function frmImageHandler() {
+      var input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        frmStatus.textContent = 'Uploading image…';
+        var fd = new FormData(); fd.append('file', file);
+        fetch(frmRestBase + '/media/upload', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'X-WP-Nonce': frmNonce }, body: fd,
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok || !res.j.upload_id) {
+              frmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error'); return;
+            }
+            frmMediaIds.push(res.j.upload_id);
+            frmStatus.textContent = 'Image attached.';
+            var range = frmQuill.getSelection(true);
+            frmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
+          })
+          .catch(function (err) { frmStatus.textContent = 'Upload error: ' + err.message; });
+      };
+      input.click();
+    }
+
+    // Body HTML from Quill (or textarea), stripping preview <img> — the real
+    // images ride along as bbp_media and are rendered by the mirror.
+    function frmGetContent() {
+      var html = frmQuill ? frmQuill.root.innerHTML : (frmContent.value || '').trim();
+      if (html === '<p><br></p>') html = '';
+      html = html.replace(/<img[^>]*>/gi, '').replace(/<p>\s*<\/p>/gi, '').trim();
+      return html;
+    }
+
+    function frmResetEditor() {
+      frmMediaIds = [];
+      if (frmQuill) frmQuill.setText('');
+      else if (frmContent) frmContent.value = '';
+    }
+
     function frmSetState(s) {
       frmState = s;
       frmLoading.hidden = (s !== 'loading');
@@ -635,7 +709,8 @@
           if (!d.authenticated) { frmSetState('anon'); return; }
           frmNonce = d.nonce; frmName = d.display_name || 'You';
           frmSetState('authed');
-          setTimeout(function () { frmContent.focus(); }, 30);
+          frmInitEditor();
+          setTimeout(frmFocus, 30);
         })
         .catch(function () { frmSetState('anon'); });
     }
@@ -649,10 +724,11 @@
       if (frmCtxTitle && title) { frmCtxTitle.textContent = title; frmContext.hidden = false; }
       else if (frmContext) { frmContext.hidden = true; }
       frmStatus.textContent = '';
+      frmResetEditor();
       frmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
       if (frmState !== 'authed') frmLoadAuth();
-      else setTimeout(function () { frmContent.focus(); }, 30);
+      else { frmInitEditor(); setTimeout(frmFocus, 30); }
     }
     function frmClose() {
       frmOverlay.hidden = true;
@@ -675,16 +751,19 @@
     frmForm.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!frmNonce) { frmStatus.textContent = 'Not signed in.'; return; }
-      var content = (frmContent.value || '').trim();
+      var content = frmGetContent();
       var topicId = parseInt(frmTopicId.value, 10);
       var forumId = parseInt(frmForumId.value, 10);
-      if (!content) { frmStatus.textContent = "Reply can't be empty."; frmContent.focus(); return; }
+      if (!content && !frmMediaIds.length) { frmStatus.textContent = "Reply can't be empty."; frmFocus(); return; }
       if (!topicId) { frmStatus.textContent = 'Missing topic.'; return; }
       frmSubmit.disabled = true; frmStatus.textContent = 'Posting…';
+      var frmPayload = { topic_id: topicId, forum_id: forumId };
+      if (content) frmPayload.content = content;
+      if (frmMediaIds.length) frmPayload.bbp_media = frmMediaIds;
       fetch(frmRestBase + '/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
-        body: JSON.stringify({ content: content, topic_id: topicId, forum_id: forumId }),
+        body: JSON.stringify(frmPayload),
       })
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
@@ -692,8 +771,8 @@
             frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.code)) || 'failed');
             frmSubmit.disabled = false; return;
           }
-          frmAppendOptimistic(frmCard, frmName, content);
-          frmContent.value = '';
+          frmAppendOptimistic(frmCard, frmName, content || (frmMediaIds.length ? '🖼 image' : ''));
+          frmResetEditor();
           frmSubmit.disabled = false;
           frmClose();
         })

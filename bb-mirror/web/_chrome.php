@@ -342,9 +342,11 @@ function bb_mirror_new_topic_modal(): void
           data-rest-base="<?= htmlspecialchars($rest_base) ?>">
       <input type="hidden" id="frm-topic-id" name="topic_id" value="">
       <input type="hidden" id="frm-forum-id" name="forum_id" value="">
-      <label class="ntm-label" for="frm-content">Your reply</label>
-      <textarea class="ntm-textarea" id="frm-content" name="content" rows="5" required
-                placeholder="Share your thoughts…"></textarea>
+      <label class="ntm-label">Your reply <span class="ntm-label__opt">(formatting, images &amp; links)</span></label>
+      <!-- Quill mounts here (same editor as the new-topic modal); falls back to the textarea -->
+      <div class="ntm-editor" id="frm-editor"></div>
+      <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"
+                placeholder="Share your thoughts…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
