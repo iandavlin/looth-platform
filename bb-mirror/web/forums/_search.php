@@ -14,8 +14,10 @@
 declare(strict_types=1);
 
 require __DIR__ . '/../_chrome.php';
+require __DIR__ . '/_reply-render.php';
 
 $db = bb_mirror_db();
+$cat_map = bb_mirror_build_cat_map($db->query("SELECT id, slug, parent_forum_id FROM forum WHERE visibility='public' AND status IN ('open','closed')")->fetchAll());
 $q = trim((string)($_GET['q'] ?? ''));
 
 bb_mirror_chrome_header('Search: ' . ($q ?: 'forums'));
@@ -41,10 +43,11 @@ $stmt = $db->prepare("
              ts_rank(t.search_doc, q.tsq) * 2.0 AS rank,
              ts_headline('english', COALESCE(t.content_text,''), q.tsq,
                          'MaxWords=24, MinWords=10, ShortWord=2') AS snippet,
-             f.slug AS forum_slug, f.title AS forum_title
+             f.slug AS forum_slug, f.title AS forum_title, f.id AS forum_id, pf.title AS parent_title
         FROM topic t
         CROSS JOIN q
         JOIN forum f ON f.id = t.forum_id
+        LEFT JOIN forum pf ON pf.id = f.parent_forum_id
        WHERE t.status IN ('publish','closed')
          AND f.visibility = 'public'
          AND t.search_doc @@ q.tsq
@@ -55,11 +58,12 @@ $stmt = $db->prepare("
              ts_rank(r.search_doc, q.tsq) AS rank,
              ts_headline('english', COALESCE(r.content_text,''), q.tsq,
                          'MaxWords=24, MinWords=10, ShortWord=2') AS snippet,
-             f.slug AS forum_slug, f.title AS forum_title
+             f.slug AS forum_slug, f.title AS forum_title, f.id AS forum_id, pf.title AS parent_title
         FROM reply r
         CROSS JOIN q
         JOIN topic t ON t.id = r.topic_id
         JOIN forum f ON f.id = r.forum_id
+        LEFT JOIN forum pf ON pf.id = f.parent_forum_id
        WHERE r.status = 'publish'
          AND t.status IN ('publish','closed')
          AND f.visibility = 'public'
@@ -91,29 +95,44 @@ function fmt_ts_search($ts): string {
   <?php if (!$rows): ?>
     <p class="bb-mirror__empty">No matches. Try fewer words or a different phrasing.</p>
   <?php else: ?>
-    <ul class="search-results" role="list">
+    <div class="feed">
       <?php foreach ($rows as $r):
         $href = LG_BB_MIRROR_PUBLIC_PATH . '/' . $r['forum_slug'] . '/' . $r['topic_slug'] . '/';
         if ($r['kind'] === 'reply') $href .= '#reply-' . (int)$r['id'];
+        $scat    = $cat_map[(int)$r['forum_id']] ?? 'general';
+        $sparent = trim((string)($r['parent_title'] ?? ''));
       ?>
-        <li class="search-result search-result--<?= htmlspecialchars($r['kind']) ?>">
-          <a class="search-result__link" href="<?= htmlspecialchars($href) ?>">
-            <h3 class="search-result__title">
-              <?= htmlspecialchars($r['title']) ?>
-              <?php if ($r['kind'] === 'reply'): ?>
-                <span class="search-result__badge">reply</span>
+        <article class="feed-card feed-card--topic feed-card--search" data-cat="<?= htmlspecialchars($scat) ?>" data-href="<?= htmlspecialchars($href) ?>">
+          <div class="feed-card__meta-top">
+            <span class="feed-card__forum-ctx">
+              <?php if ($sparent !== ''): ?>
+                <span class="feed-card__ctx-parent"><?= htmlspecialchars($sparent) ?></span>
+                <span class="feed-card__ctx-sep">&rsaquo;</span>
+                <span class="feed-card__ctx-forum"><?= htmlspecialchars($r['forum_title']) ?></span>
+              <?php else: ?>
+                <span class="feed-card__ctx-parent"><?= htmlspecialchars($r['forum_title']) ?></span>
               <?php endif; ?>
-            </h3>
-            <p class="search-result__snippet"><?= $r['snippet'] /* ts_headline returns marked-up HTML */ ?></p>
-            <p class="search-result__meta">
-              in <span class="search-result__forum"><?= htmlspecialchars($r['forum_title']) ?></span>
-              · by <?= htmlspecialchars($r['author_name'] ?: '—') ?>
-              · <?= htmlspecialchars(fmt_ts_search($r['created_at'])) ?>
-            </p>
-          </a>
-        </li>
+            </span>
+            <time class="feed-card__time"><?= htmlspecialchars(fmt_ts_search($r['created_at'])) ?></time>
+          </div>
+          <div class="feed-card__header">
+            <div class="feed-card__header-body">
+              <h2 class="feed-card__title">
+                <a href="<?= htmlspecialchars($href) ?>"><?= htmlspecialchars($r['title']) ?></a>
+                <?php if ($r['kind'] === 'reply'): ?><span class="feed-card__kind-badge">reply</span><?php endif; ?>
+              </h2>
+              <div class="feed-card__op">
+                <p class="feed-card__op-excerpt"><?= $r['snippet'] /* ts_headline marked HTML */ ?></p>
+                <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
+                  <?= bb_mirror_avatar($r['author_name'] ?: 'A', $r['author_name'] ?: 'anon', 36) ?>
+                  <span>by <a class="feed-card__op-author" href="<?= htmlspecialchars($href) ?>"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></a></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
       <?php endforeach; ?>
-    </ul>
+    </div>
   <?php endif; ?>
 </div>
 
