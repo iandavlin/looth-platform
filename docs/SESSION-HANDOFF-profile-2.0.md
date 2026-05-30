@@ -68,6 +68,40 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Spine build · increment 2 — location block (2026-05-30, WRITE-ONLY)
+
+Two-tier location block, built ON the existing `api/v0/me-location.php` (not
+duplicated), mirroring increment 1. Coordinator applies + tests next.
+
+- **Approximate tier:** city/region + a town-level **coarse-from-city** coord
+  (derived by rounding the stored pin — NO approx column; `Block::coarsen`),
+  governed by `users.location_visibility`. Drives "near me"/map.
+- **Exact tier:** the user-placed `users.lat/lng` pin at the chosen display
+  **precision**, + address/postcode, governed by `users.location_exact_visibility`
+  (members|private|on_request; default private, from inc 1). Never the open web.
+- **User-managed pin:** placement (`pin:{lat,lng}`), precision selector
+  (exact→neighborhood→city, NEW col `users.location_pin_precision`), per-tier vis.
+  precision='city' folds the exact tier away (coarse only) = "fuzz to town-level".
+- **Ceiling applies per tier:** effective vis = more-restrictive(header, tier vis)
+  via `Block::effectiveVisibility`; `visRank` FAILS CLOSED on unknowns so
+  'on_request' gates like private (never under-exposes).
+
+Files (write-only, nothing applied/committed):
+- `profile-app/src/Block.php` — +`loadLocation`/`coarsen`/`exactVisFromInput`/
+  `visRank` + `EXACT_VIS_VALUES`/`PRECISION_VALUES`; `effectiveVisibility` now fail-closed.
+- `profile-app/api/v0/me-location.php` — +GET assembled block; +exact vis/precision/pin
+  writes (conflict-guarded); PUT returns re-assembled block.
+- `profile-app/web/_render_blocks.php` — +`looth_render_location_block` + `looth_vchip`.
+- `profile-app/src/Profile.php` — location address/exact_visibility/pin_precision in `loadFull`.
+- `profile-app/sql/2026-05-30-location-pin-precision.sql` — NEW idempotent add (NOT applied).
+- `profile-app/PHASE-1-INCREMENT-2-TEST.md` — truth-table + render + SQL-sim round-trip.
+- `profile-app/PHASE-1-CHECKLIST.md` — updated.
+
+⚠️ HTTP authed round-trip BLOCKED on shim `/mint-token` (can't mint a `looth_id` on
+dev yet) — test the block LOGIC directly via `sudo -u profile-app php` (see test §5).
+config.php gap (inc-1 flag) still stands: `me-location.php` `require_once`s Block.php
+itself; add Block.php to config.php's require list when convenient.
+
 ## Spine build · increment 1 — profile-header block (2026-05-30, WRITE-ONLY)
 
 Schema is **dev-final** (canon: plan "Schema — RESOLVED dev-final"). Built the

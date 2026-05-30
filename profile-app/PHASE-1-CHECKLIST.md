@@ -30,9 +30,23 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [x] Test plan: `PHASE-1-INCREMENT-1-TEST.md`.
 - [ ] **Coordinator: apply schema + run the test plan.**
 
+## Pilot block — location (two-tier, user-managed pin), increment 2 — DONE (write-only)
+- [x] `src/Block.php` — `loadLocation` (two tiers from spine), `coarsen` (no approx
+      column — round stored pin), `EXACT_VIS_VALUES`/`PRECISION_VALUES`,
+      `exactVisFromInput`, `visRank` fail-closed (on_request → private).
+- [x] `api/v0/me-location.php` — built ON the existing endpoint: + GET (assembled
+      block), + `location_exact_visibility`, + `precision`, + user-managed `pin`
+      placement (conflict-guarded), PUT returns the re-assembled block.
+- [x] `web/_render_blocks.php` — `looth_render_location_block` (ceiling-capped per
+      tier; exact hidden to non-permitted; coarse approx dot; precision-aware pin).
+- [x] `src/Profile.php` — address/exact_visibility/pin_precision in `loadFull`.
+- [x] New idempotent schema: `sql/2026-05-30-location-pin-precision.sql` (NOT applied).
+- [x] Test plan: `PHASE-1-INCREMENT-2-TEST.md` (HTTP authed pass noted BLOCKED on shim mint).
+- [ ] **Coordinator: apply precision schema + run the test plan.**
+
 ## Pilot block — next increments
 - [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
-- [ ] location two-tier: city tier (member) + exact tier vis; exact = gated pin.
+- [ ] craft + socials spine blocks → then the migration crib (profiles-only).
 - [ ] "View as: Public / Member / Me" owner toggle (render layer).
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 

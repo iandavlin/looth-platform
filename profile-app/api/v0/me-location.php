@@ -1,15 +1,26 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // not in config.php's require list (yet)
 
 use Looth\ProfileApp\Auth;
+use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Profile;
 
-if ($_SERVER['REQUEST_METHOD'] !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
+$user   = Auth::requireUser();
+$method = $_SERVER['REQUEST_METHOD'];
 
-$user = Auth::requireUser();
-$in   = json_decode(file_get_contents('php://input') ?: '', true);
+// GET → the assembled two-tier location block (mirrors me-header GET).
+if ($method === 'GET') {
+    $block = Block::loadLocation((int)$user['id']);
+    if ($block === null) profile_app_json(404, ['error' => 'not_found']);
+    profile_app_json(200, $block);
+}
+
+if ($method !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
+
+$in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
 
 // Three accepted shapes — at most one per call:
@@ -79,12 +90,58 @@ if (is_string($visibility)) {
     $params[':vis'] = $visibility;
 }
 
+// --- increment 2: the location block's exact tier + user-managed pin ---
+//
+//   4. Exact-tier visibility (single-field autosave; members|private|on_request,
+//      accepts the UI 'member'):  { location_exact_visibility: 'member'|'private'|'on_request' }
+//   5. Display precision (exact → neighborhood → city):  { precision: '...' }
+//   6. User-MANAGED pin placement (drag/drop the exact point):  { pin: { lat, lng } }
+//      Conflicts with nominatim/text_only (all touch lat/lng) — at most one per call.
+
+if (array_key_exists('location_exact_visibility', $in)) {
+    $ev = Block::exactVisFromInput($in['location_exact_visibility']);   // → DB literal
+    if ($ev === null) {
+        profile_app_json(400, ['error' => 'invalid_exact_visibility', 'allowed' => ['member', 'private', 'on_request']]);
+    }
+    $set[] = 'location_exact_visibility = :evis';
+    $params[':evis'] = $ev;
+}
+
+if (array_key_exists('precision', $in)) {
+    if (!in_array($in['precision'], Block::PRECISION_VALUES, true)) {
+        profile_app_json(400, ['error' => 'invalid_precision', 'allowed' => Block::PRECISION_VALUES]);
+    }
+    $set[] = 'location_pin_precision = :prec';
+    $params[':prec'] = $in['precision'];
+}
+
+if (array_key_exists('pin', $in)) {
+    if ($nominatim !== null || (is_string($textOnly) && trim($textOnly) !== '')) {
+        profile_app_json(400, ['error' => 'conflicting_fields']);   // pin + place/text all set lat/lng
+    }
+    $pin = $in['pin'];
+    if (!is_array($pin) || !isset($pin['lat'], $pin['lng']) || !is_numeric($pin['lat']) || !is_numeric($pin['lng'])) {
+        profile_app_json(400, ['error' => 'invalid_pin']);
+    }
+    $plat = (float)$pin['lat'];
+    $plng = (float)$pin['lng'];
+    if ($plat < -90 || $plat > 90 || $plng < -180 || $plng > 180) {
+        profile_app_json(400, ['error' => 'pin_out_of_range']);
+    }
+    $set[] = 'lat = :plat';
+    $set[] = 'lng = :plng';
+    $params[':plat'] = $plat;
+    $params[':plng'] = $plng;
+}
+
 if (empty($set)) profile_app_json(400, ['error' => 'no_fields']);
 
 $sql = 'UPDATE users SET ' . implode(', ', $set) . ' WHERE id = :id';
 Db::pg()->prepare($sql)->execute($params);
 
-profile_app_json(200, ['ok' => true]);
+// Return the re-assembled block so the editor (and the round-trip test) can read
+// back both tiers in one call.
+profile_app_json(200, ['ok' => true, 'location' => Block::loadLocation((int)$user['id'])]);
 
 
 /**

@@ -222,6 +222,9 @@ final class Profile
                 'postcode'     => $user['location_postcode'],
                 'place_result' => $user['place_result'] ? json_decode($user['place_result'], true) : null,
                 'visibility'   => $user['location_visibility'] ?? 'members',
+                'address'          => $user['location_address']           ?? null,   // exact tier (increment 1)
+                'exact_visibility' => $user['location_exact_visibility']  ?? 'private',
+                'pin_precision'    => $user['location_pin_precision']     ?? 'exact', // increment 2
             ],
             'sections'      => $sections,
             'socials'       => $socials,

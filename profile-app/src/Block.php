@@ -77,11 +77,17 @@ final class Block
      */
     public static function effectiveVisibility(string $headerVis, string $blockVis): string
     {
-        $h = array_search($headerVis, self::VIS_ORDER, true);
-        $b = array_search($blockVis,  self::VIS_ORDER, true);
-        if ($h === false) $h = 1;   // default members
-        if ($b === false) $b = 1;
-        return self::VIS_ORDER[max($h, $b)];   // higher rank = more restrictive
+        return self::VIS_ORDER[max(self::visRank($headerVis), self::visRank($blockVis))];
+    }
+
+    /**
+     * Restrictiveness rank on VIS_ORDER. Unknown values (e.g. the exact-tier
+     * 'on_request') FAIL CLOSED to the most restrictive rank — never under-gate.
+     */
+    public static function visRank(string $vis): int
+    {
+        $i = array_search($vis, self::VIS_ORDER, true);
+        return $i === false ? count(self::VIS_ORDER) - 1 : $i;   // unknown → private rank
     }
 
     /**
@@ -216,5 +222,100 @@ final class Block
         }
 
         return self::loadHeader($userId) ?? [];
+    }
+
+    // ---------- pilot block: location (two-tier, user-managed pin) ----------
+
+    /** Exact-tier visibility values (never 'public' — a precise pin can't be open web). */
+    public const EXACT_VIS_VALUES = ['members', 'private', 'on_request'];
+
+    /** User-managed display precision for the pin (canon: exact → neighborhood → city). */
+    public const PRECISION_VALUES  = ['exact', 'neighborhood', 'city'];
+    public const PRECISION_DEFAULT = 'exact';
+
+    /** Coarsening decimal places per precision (~111km/dp). Approximate tier is town-level. */
+    private const DP_NEIGHBORHOOD = 2;   // ~1.1 km
+    private const DP_CITY         = 1;   // ~11 km
+    private const DP_APPROX       = 1;   // the always-coarse "near me"/map tier (town-level)
+
+    /** Round a coordinate to $dp decimals (the no-stored-column coarsening). Null-safe. */
+    public static function coarsen($coord, int $dp)
+    {
+        return $coord === null ? null : round((float)$coord, $dp);
+    }
+
+    /**
+     * Assemble the location block from the spine — both tiers. The render layer
+     * gates each tier; this returns the full editor shape (vis normalized to 'member').
+     *
+     *   approximate ← users.location_city/region/country + COARSE coord
+     *                 (city-centroid derived by rounding the stored point; NO approx
+     *                 column) + users.location_visibility.
+     *   exact       ← users.lat/lng (the user-placed pin), at the chosen display
+     *                 PRECISION, + users.location_address/postcode +
+     *                 users.location_exact_visibility. Folds to null when the user
+     *                 set precision='city' (no precise pin exposed).
+     */
+    public static function loadLocation(int $userId): ?array
+    {
+        $pg = Db::pg();
+        $s = $pg->prepare('SELECT location_text, lat, lng, location_country, location_region,
+                                  location_city, location_postcode, location_address,
+                                  location_visibility, location_exact_visibility, location_pin_precision
+                           FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $r = $s->fetch();
+        if (!$r) return null;
+
+        $approxVis = $r['location_visibility']       ?: 'members';
+        $exactVis  = $r['location_exact_visibility'] ?: 'private';
+        $precision = $r['location_pin_precision']    ?: self::PRECISION_DEFAULT;
+
+        $lat = $r['lat'] !== null ? (float)$r['lat'] : null;
+        $lng = $r['lng'] !== null ? (float)$r['lng'] : null;
+
+        // Exact-tier coord at the user's chosen display precision. 'city' = no
+        // precise pin (fold to approximate only).
+        $exactLat = $exactLng = null;
+        if ($lat !== null && $lng !== null) {
+            if ($precision === 'exact') {
+                $exactLat = $lat;            $exactLng = $lng;
+            } elseif ($precision === 'neighborhood') {
+                $exactLat = self::coarsen($lat, self::DP_NEIGHBORHOOD);
+                $exactLng = self::coarsen($lng, self::DP_NEIGHBORHOOD);
+            } // 'city' → leave null
+        }
+        $hasExact = $exactLat !== null;
+
+        return [
+            'block'   => 'location',
+            'subject' => 'person',
+            'text'    => $r['location_text'],          // legacy/escape-hatch display string
+            'precision' => $precision,
+            'approximate' => [
+                'vis'     => self::normalizeVis($approxVis),
+                'city'    => $r['location_city'],
+                'region'  => $r['location_region'],
+                'country' => $r['location_country'],
+                'lat'     => self::coarsen($lat, self::DP_APPROX),   // town-level, never the pin
+                'lng'     => self::coarsen($lng, self::DP_APPROX),
+            ],
+            'exact' => [
+                'vis'      => self::normalizeVis($exactVis),
+                'present'  => $hasExact,
+                'address'  => $r['location_address'],
+                'postcode' => $r['location_postcode'],
+                'lat'      => $exactLat,   // already at display precision; null if folded to city
+                'lng'      => $exactLng,
+            ],
+        ];
+    }
+
+    /** Validate an incoming exact-tier vis ('member'|'private'|'on_request'); DB literal or null. */
+    public static function exactVisFromInput($vis): ?string
+    {
+        if (!is_string($vis)) return null;
+        $db = self::denormalizeVis($vis);   // 'member' → 'members'
+        return in_array($db, self::EXACT_VIS_VALUES, true) ? $db : null;
     }
 }

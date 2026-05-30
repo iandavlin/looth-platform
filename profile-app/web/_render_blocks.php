@@ -54,10 +54,75 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_header_block($header, $role, $headerVis, $tierBadge);
 
-    // TODO(next increments): foreach composed block (location, craft, connect, …)
-    //   $eff = Block::effectiveVisibility($headerVis, $blockVis);
+    // increment 2: the location block (two-tier, ceiling-capped per tier).
+    looth_render_location_block($userId, $role, $headerVis);
+
+    // TODO(next increments): craft, connect, socials, practices — same shape:
     //   if (Block::canSee($role, $headerVis, $blockVis)) looth_render_block(...);
     //   owner also sees a capped-by-header hint where Block::isCappedByHeader().
+}
+
+/** Owner-only per-block/tier visibility chip (vis already normalized to 'member'). */
+function looth_vchip(string $visUi): string
+{
+    return '<span class="lg-vchip lg-vchip--' . looth_h($visUi) . '">' . looth_h(ucfirst($visUi)) . '</span>';
+}
+
+/**
+ * The location block — two tiers, each ceiling-capped. The approximate tier
+ * (city/region + a town-level coarse dot) is governed by location_visibility; the
+ * exact tier (the user-placed pin at the chosen precision + address) by
+ * location_exact_visibility. Effective vis = more-restrictive(header, tier) via
+ * Block::canSee. The map only ever plots the MANAGED pin (exact at precision, or
+ * the coarse approximate dot) — never a precise pin the viewer isn't permitted.
+ */
+function looth_render_location_block(int $userId, string $role, string $headerVis): void
+{
+    $loc = Block::loadLocation($userId);
+    if ($loc === null) return;
+    $a = $loc['approximate'];
+    $e = $loc['exact'];
+
+    $hasApprox = ($a['city'] || $a['region'] || $loc['text']);
+    $hasExact  = !empty($e['present']);
+    if (!$hasApprox && !$hasExact) return;                 // empty location → no block
+
+    $isOwner   = ($role === 'me');
+    $canApprox = Block::canSee($role, $headerVis, Block::denormalizeVis((string)$a['vis']));
+    $canExact  = $hasExact && Block::canSee($role, $headerVis, Block::denormalizeVis((string)$e['vis']));
+    if (!$canApprox && !$canExact && !$isOwner) return;    // gated entirely
+
+    echo '<section class="block lg-block lg-block--location" data-block="location">';
+    echo '<h3 class="lg-bh">Location</h3>';
+
+    if (($canApprox || $isOwner) && $hasApprox) {
+        $line = trim(implode(', ', array_filter([$a['city'], $a['region'], $a['country']])));
+        if ($line === '') $line = (string)($loc['text'] ?? '');
+        echo '<div class="lg-loc__line">📍 ' . looth_h($line);
+        if ($isOwner) echo ' ' . looth_vchip((string)$a['vis']);
+        echo '</div>';
+        if ($a['lat'] !== null) {
+            // town-level coarse dot for "near me" / map — never the exact pin.
+            echo '<div class="lg-loc__map" data-precision="approx"'
+               . ' data-lat="' . looth_h((string)$a['lat']) . '" data-lng="' . looth_h((string)$a['lng']) . '"></div>';
+        }
+    }
+
+    if ($canExact) {
+        echo '<div class="lg-loc__exact">🏠 ' . looth_h((string)($e['address'] ?: 'Exact location'));
+        if (!empty($e['postcode'])) echo ' · ' . looth_h((string)$e['postcode']);
+        if ($isOwner) echo ' ' . looth_vchip((string)$e['vis']);
+        echo '</div>';
+        echo '<div class="lg-loc__pin" data-precision="' . looth_h((string)$loc['precision']) . '"'
+           . ' data-lat="' . looth_h((string)$e['lat']) . '" data-lng="' . looth_h((string)$e['lng']) . '"></div>';
+    } elseif ($isOwner && $hasExact) {
+        echo '<div class="lg-loc__exact-note">🏠 Exact address ' . looth_vchip((string)$e['vis']) . ' — hidden from viewers</div>';
+    } elseif ($canApprox && $hasExact) {
+        $who = ((string)$e['vis'] === 'on_request') ? 'on request' : 'to ' . looth_h((string)$e['vis']) . 's';
+        echo '<div class="lg-loc__exact-note">Exact address available ' . $who . '</div>';
+    }
+
+    echo '</section>';
 }
 
 /** The profile-header (identity) block — the author-identity card. */
