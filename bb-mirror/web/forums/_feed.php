@@ -508,7 +508,7 @@ $header_cat = $scoped_forum
       $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
       $embed_url     = feed_first_embed_url($full_html);
     ?>
-    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>">
+    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>">
       <div class="feed-card__meta-top">
         <span class="feed-card__forum-ctx"><?= $ctx ?></span>
         <time class="feed-card__time" title="<?= htmlspecialchars((string)$topic['event_time']) ?>"><?= $rtime ?></time>

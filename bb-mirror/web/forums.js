@@ -111,43 +111,44 @@
   // The feed ships only ONE teaser reply per card (perf). The full threaded
   // list is fetched on first expand from <FORUM_BASE>/?replies=<id> and injected
   // into .feed-card__replies-full, then toggled.
-  document.querySelectorAll('.feed-card__expand').forEach(btn => {
-    btn.dataset.collapseLabel = btn.dataset.collapseLabel || btn.textContent;
+  // Delegated: works for expand buttons added dynamically after an inline reply.
+  document.addEventListener('click', async function (ev) {
+    const btn = ev.target.closest('.feed-card__expand');
+    if (!btn) return;
+    if (!btn.dataset.collapseLabel) btn.dataset.collapseLabel = btn.textContent;
+    const card = btn.closest('.feed-card');
+    const full = card && card.querySelector('.feed-card__replies-full');
+    if (!full) return;
+    const expanded = card.classList.contains('replies-expanded');
 
-    btn.addEventListener('click', async () => {
-      const card = btn.closest('.feed-card');
-      const full = card.querySelector('.feed-card__replies-full');
-      const expanded = card.classList.contains('replies-expanded');
+    if (expanded) {                       // collapse
+      card.classList.remove('replies-expanded');
+      full.hidden = true;
+      btn.textContent = btn.dataset.collapseLabel;
+      return;
+    }
 
-      if (expanded) {                       // collapse
-        card.classList.remove('replies-expanded');
-        full.hidden = true;
-        btn.textContent = btn.dataset.collapseLabel;
+    // lazy-fetch the full thread once
+    if (!full.dataset.loaded) {
+      const orig = btn.textContent;
+      btn.textContent = 'Loading…';
+      btn.disabled = true;
+      try {
+        const res = await fetch(FORUM_BASE + '/?replies=' + btn.dataset.topicId);
+        if (!res.ok) throw new Error('fetch failed');
+        full.innerHTML = await res.text();
+        full.dataset.loaded = '1';
+      } catch (err) {
+        btn.textContent = orig;
+        btn.disabled = false;
         return;
       }
+      btn.disabled = false;
+    }
 
-      // lazy-fetch the full thread once
-      if (!full.dataset.loaded) {
-        const orig = btn.textContent;
-        btn.textContent = 'Loading…';
-        btn.disabled = true;
-        try {
-          const res = await fetch(FORUM_BASE + '/?replies=' + btn.dataset.topicId);
-          if (!res.ok) throw new Error('fetch failed');
-          full.innerHTML = await res.text();
-          full.dataset.loaded = '1';
-        } catch (e) {
-          btn.textContent = orig;
-          btn.disabled = false;
-          return;
-        }
-        btn.disabled = false;
-      }
-
-      card.classList.add('replies-expanded');
-      full.hidden = false;
-      btn.textContent = 'Hide replies ▲';
-    });
+    card.classList.add('replies-expanded');
+    full.hidden = false;
+    btn.textContent = 'Hide replies ▲';
   });
 
   // ── 2c. Reply stub inline expand ("… more") ──────────────────────────────
@@ -898,7 +899,30 @@
           '<time class="reply-stub__time">now</time>' +
         '</div>' +
         '<div class="reply-stub__body">' + textHtml + imgsHtml + '</div>';
+      // Make the new reply the single teaser (drop prior teaser stubs so they
+      // don't stack), then bump the count and ensure the "View N replies" button
+      // so the thread stays navigable — the bug where inline replies never
+      // triggered the expand button.
+      Array.prototype.forEach.call(wrapEl.querySelectorAll(':scope > .reply-stub'), function (s) { s.remove(); });
       wrapEl.insertBefore(stub, wrapEl.firstChild);
+
+      var full = wrapEl.querySelector('.feed-card__replies-full');
+      if (!full) { full = document.createElement('div'); full.className = 'feed-card__replies-full'; full.hidden = true; wrapEl.appendChild(full); }
+      full.dataset.loaded = ''; full.innerHTML = '';   // stale: re-fetch (incl. new reply) on next expand
+      card.classList.remove('replies-expanded'); full.hidden = true;
+
+      // Keep the thread expandable if there was already an expand button. topic
+      // reply_count lags in pg, so don't trust a count — if a button exists,
+      // leave it (it lazy-loads the real thread, which includes the new reply).
+      if (!wrapEl.querySelector('.feed-card__expand')) {
+        // none yet: the new reply may be the only one, OR pg just hasn't surfaced
+        // the count. Add a generic opener — expanding fetches the true thread.
+        var exp = document.createElement('button');
+        exp.className = 'feed-card__expand'; exp.type = 'button';
+        exp.dataset.topicId = card.dataset.topicId || '';
+        exp.textContent = 'View replies \u25be';
+        wrapEl.appendChild(exp);
+      }
     }
   }
 
