@@ -20,13 +20,13 @@
   --lg-ink:        #323532;
   --lg-mute:       #6b6f6b;
   --lg-line:       #e3ddd0;
-  --lg-card-bg:    #ffffff;
+  --lg-card-bg:    #efece6;  /* flipped: containers take the former page tone */
   --lg-font-serif: "Lora", Georgia, serif;
   --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* ── Legacy bb-mirror tokens (kept for backward-compat) ── */
   --bg:          #faf8f4;
-  --bg-card:     #ffffff;
+  --bg-card:     #efece6;  /* flipped with page bg (was #fff) */
   --bg-sticky:   #fff7e6;
   --bg-closed:   #f4f1ea;
   --fg:          #1a1814;
@@ -72,7 +72,7 @@ html, body { margin: 0; padding: 0; }
 body {
   font: 16px/1.5 var(--font-body);
   color: var(--fg);
-  background: #efece6; /* matches archive-poc */
+  background: #ffffff; /* flipped: page now white, containers tinted */
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -1253,7 +1253,7 @@ body.nav-open .nav-overlay { display: block; }
 
 /* Base card — styled to match archive-poc .dcard aesthetic */
 .feed-card {
-  background: #fff;
+  background: var(--bg-card);  /* match the forum search-bar header */
   border: 1px solid var(--lg-line);
   border-radius: 8px;
   padding: var(--s4);
