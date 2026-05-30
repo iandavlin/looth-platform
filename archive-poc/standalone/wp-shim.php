@@ -209,3 +209,11 @@ if (!function_exists('wp_strip_all_tags')) {
  *                              in the PoC blob (see RENDER-STANDALONE-POC.md
  *                              §"What the materializer still owns").
  */
+
+// WP_Query stub — standalone render has no related-posts DB; return empty.
+if (!class_exists("WP_Query")) {
+    class WP_Query {
+        public array $posts = [];
+        public function __construct(array $args = []) { $this->posts = []; }
+    }
+}
