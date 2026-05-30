@@ -4,28 +4,32 @@ declare(strict_types=1);
 namespace Looth\ProfileApp;
 
 /**
- * Block model for profile-2.0 — the block sets + the header-ceiling visibility
- * rule. ⚠️ SKELETON (Phase 1 scaffold) — method bodies are stubs / TODO. Do not
- * wire into render until docs/plan-profile-2.0-phase1-build.md is approved.
+ * Block model for profile-2.0 — block sets + the header-as-CEILING visibility
+ * rule, and the establishing pilot block (profile-header / identity).
  *
- * The ONE load-bearing rule: effective block visibility = the MORE RESTRICTIVE
- * of (header, block). The header is the profile's front door / ceiling; a block
- * can lock down further but never open past the header. (Ian, FINAL 2026-05-29 —
- * plan-profile-block-system.md "Visibility model — FINAL".)
+ * THE load-bearing rule (Ian, FINAL — plan-profile-block-system.md "Visibility
+ * model — FINAL" + "Schema — RESOLVED dev-final"): the header's visibility IS the
+ * profile/practice's own visibility = the section CAP. Effective block visibility
+ * = the MORE RESTRICTIVE of (header, block). Stored on the header
+ * `profile_sections` row (key='header'.visibility) — no dedicated column.
  *
- * Vocabulary: DB literal is 'members' (plural); the platform/posts vocabulary is
- * 'member' (singular). normalizeVis() maps to the canonical singular for JSON/UI;
- * persistence keeps the existing 'members' literal (build plan §0).
+ * Visibility vocabulary: the DB literal is 'members' (plural). normalizeVis()
+ * maps to the platform/JSON/UI 'member' (singular). This class is the ONE
+ * normalize point — persistence keeps the existing literal, callers speak 'member'.
  */
 final class Block
 {
-    /** Tri-state, ordered open→closed. Index = restrictiveness rank. */
-    public const VIS_ORDER = ['public', 'members', 'private'];
+    /** DB-literal tri-state, ordered open→closed; index = restrictiveness rank. */
+    public const VIS_ORDER  = ['public', 'members', 'private'];
+    public const VIS_VALUES = ['public', 'members', 'private'];
+
+    /** Header section key (where the ceiling vis lives) and its default. */
+    public const HEADER_KEY     = 'header';
+    public const HEADER_DEFAULT = 'members';   // Ian's deferred default; member-baseline
 
     /**
-     * Block registry. Which block keys belong to which entity palette — mirrors
-     * the composer (shared + entity-specific). Storefront = practice-only.
-     * 'header' is the required, non-removable ceiling block per entity.
+     * Block registry — which keys belong to which entity palette (mirrors the
+     * composer: shared + entity-specific). storefront = practice-only.
      */
     public const SETS = [
         'shared'   => ['location', 'about', 'gallery'],
@@ -33,85 +37,184 @@ final class Block
         'practice' => ['practice-header', 'hours', 'services', 'turnaround', 'staff'],
     ];
 
-    /** The required header block key for each entity. */
+    /** The required header block key per entity. */
     public const HEADER = ['profile' => 'profile-header', 'practice' => 'practice-header'];
 
-    /** Palette for an entity = shared + that entity's own. */
+    /** Palette for an entity = header first, then shared, then entity-own. */
     public static function paletteFor(string $entity): array
     {
-        // TODO: return SETS['shared'] ∪ SETS[$entity], header first.
-        return [];
+        if (!isset(self::SETS[$entity])) return [];
+        return array_merge([self::HEADER[$entity]], self::SETS['shared'], self::SETS[$entity]);
     }
 
-    /** Canonical singular vocabulary for JSON/UI ('members' → 'member'). */
+    // ---------- the single normalize point: DB 'members' <-> UI 'member' ----------
+
+    /** DB literal → UI/JSON canonical ('members' → 'member'). */
     public static function normalizeVis(string $vis): string
     {
         return $vis === 'members' ? 'member' : $vis;
     }
 
-    /** DB literal from canonical ('member' → 'members'). */
+    /** UI/JSON canonical → DB literal ('member' → 'members'). */
     public static function denormalizeVis(string $vis): string
     {
         return $vis === 'member' ? 'members' : $vis;
     }
 
+    /** Validate an incoming UI vis ('public'|'member'|'private'); returns DB literal or null. */
+    public static function visFromInput($vis): ?string
+    {
+        if (!is_string($vis)) return null;
+        $db = self::denormalizeVis($vis);
+        return in_array($db, self::VIS_VALUES, true) ? $db : null;
+    }
+
+    // ---------- the header-ceiling rule ----------
+
     /**
-     * THE header-ceiling rule. effective = more restrictive of (header, block).
-     * Returns the closed-most of the two on VIS_ORDER. One function, every path.
+     * Effective block visibility = MORE RESTRICTIVE of (header, block).
+     * Inputs + output are DB literals. One function, every render path.
      */
     public static function effectiveVisibility(string $headerVis, string $blockVis): string
     {
         $h = array_search($headerVis, self::VIS_ORDER, true);
-        $b = array_search($blockVis, self::VIS_ORDER, true);
-        if ($h === false) $h = 1; // default members
+        $b = array_search($blockVis,  self::VIS_ORDER, true);
+        if ($h === false) $h = 1;   // default members
         if ($b === false) $b = 1;
-        return self::VIS_ORDER[max($h, $b)];   // max rank = more restrictive
+        return self::VIS_ORDER[max($h, $b)];   // higher rank = more restrictive
     }
 
     /**
-     * Read the entity's header (ceiling) visibility. Per DECISION C the header
-     * vis lives in a profile_sections / practice_sections row key='header'.
-     * @param string $entity 'profile'|'practice'
+     * The entity's header/ceiling visibility (DB literal). Lives on the
+     * profile_sections row key='header'. Falls back to HEADER_DEFAULT.
      */
-    public static function headerCeiling(int $subjectId, string $entity): string
+    public static function headerCeiling(int $userId): string
     {
-        // TODO: SELECT visibility FROM {entity}_sections WHERE owner=$subjectId AND key='header'
-        //       fallback 'members' (the locked baseline default — Ian rules the
-        //       member-vs-public default on the next mockup; non-blocking).
-        return 'members';
+        $s = Db::pg()->prepare(
+            "SELECT visibility FROM profile_sections WHERE user_id = :u AND key = :k"
+        );
+        $s->execute([':u' => $userId, ':k' => self::HEADER_KEY]);
+        $vis = $s->fetchColumn();
+        return ($vis && in_array($vis, self::VIS_VALUES, true)) ? (string)$vis : self::HEADER_DEFAULT;
     }
 
     /**
      * Whole-profile gate decision from header vis + viewer role.
-     * Returns one of: 'render' | 'gate' (join/sign-in) | 'private' (404/owner-only).
-     *   header private → 'private' (nothing renders but to owner)
-     *   header member  → logged-out 'gate'; member/owner 'render'
-     *   header public  → 'render' (blocks then peek-through per their own vis)
-     * @param string $role 'me'|'member'|'public' (friend folds to member)
+     *   'private' → owner-only; nothing renders to others.
+     *   'gate'    → members-only; a logged-out visitor gets the join/sign-in gate.
+     *   'render'  → render; blocks then refine DOWN per their own effective vis.
+     * @param string $role 'me'|'member'|'friend'|'public'
      */
     public static function gateDecision(string $role, string $headerVis): string
     {
-        // TODO: implement the 3-branch ruling above.
-        return 'render';
+        if ($role === 'me') return 'render';
+        switch ($headerVis) {
+            case 'private': return 'private';                       // owner only
+            case 'members': return $role === 'public' ? 'gate' : 'render';
+            case 'public':  return 'render';                        // public peeks through
+            default:        return $role === 'public' ? 'gate' : 'render';
+        }
     }
 
     /**
-     * Can a viewer of $role see a block whose RAW vis is $blockVis, under a header
-     * of $headerVis? Applies the ceiling then the role check.
+     * Can a viewer of $role see a block of raw vis $blockVis, beneath a header of
+     * $headerVis? Applies the ceiling, then the existing role check.
      */
     public static function canSee(string $role, string $headerVis, string $blockVis): bool
     {
-        $eff = self::effectiveVisibility($headerVis, $blockVis);
-        return Profile::canSee($role, $eff);
+        return Profile::canSee($role, self::effectiveVisibility($headerVis, $blockVis));
     }
 
     /**
-     * UX helper: is the header overriding (capping) this block's chosen vis?
-     * Drives the editor tooltip "Header is members-only, so this block is limited
-     * to members." True when block is set MORE OPEN than the header allows.
+     * UX: is the header capping this block's chosen vis? (block set more open than
+     * the header allows) → drives the editor tooltip "Header is members-only, so
+     * this block is limited to members."
      */
     public static function isCappedByHeader(string $headerVis, string $blockVis): bool
     {
         return self::effectiveVisibility($headerVis, $blockVis) !== $blockVis;
+    }
+
+    // ---------- pilot block: profile-header (identity) ----------
+
+    /**
+     * Assemble the profile-header block from the relational spine. The
+     * establishing pattern: JSON shape ↔ relational mapping ↔ block-level (here
+     * ceiling) pmp. Returns null if the user doesn't exist.
+     *
+     *   users.display_name / avatar_url / at_a_glance  → fields
+     *   profile_socials (kind='web')                    → website
+     *   profile_socials (other kinds)                   → socials[]
+     *   profile_sections key='header' .visibility       → block vis (the ceiling)
+     *   tier_badge: 'auto' — DERIVED at render from /whoami, never stored/drafted.
+     *
+     * `vis` is returned NORMALIZED ('member'); persistence stays 'members'.
+     */
+    public static function loadHeader(int $userId): ?array
+    {
+        $pg = Db::pg();
+        $u = $pg->prepare('SELECT display_name, avatar_url, at_a_glance FROM users WHERE id = :i');
+        $u->execute([':i' => $userId]);
+        $row = $u->fetch();
+        if (!$row) return null;
+
+        $website = null;
+        $socials = [];
+        $sq = $pg->prepare('SELECT kind, value FROM profile_socials WHERE user_id = :u ORDER BY sort_order, id');
+        $sq->execute([':u' => $userId]);
+        while ($s = $sq->fetch()) {
+            if ($s['kind'] === 'web' && $website === null) {
+                $website = $s['value'];
+            } else {
+                $socials[] = ['kind' => $s['kind'], 'url' => $s['value']];
+            }
+        }
+
+        return [
+            'block'   => 'profile-header',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(self::headerCeiling($userId)),
+            'fields'  => [
+                'display_name' => $row['display_name'],
+                'avatar'       => $row['avatar_url'],          // null → initials fallback at render
+                'at_a_glance'  => $row['at_a_glance'],         // single-source author bio
+                'website'      => $website,
+                'socials'      => $socials,                    // kind + url only (block-level pmp)
+            ],
+            'tier_badge' => 'auto',   // derived from /whoami at render; never stored
+        ];
+    }
+
+    /**
+     * Write the header's editable fields + the ceiling visibility. Returns the
+     * persisted shape. $fields keys (all optional): at_a_glance (string|null),
+     * visibility ('public'|'member'|'private' — the ceiling).
+     * display_name stays in me-name; avatar in the avatar endpoint; socials in
+     * me-socials — this writes the header-specific bits.
+     */
+    public static function saveHeader(int $userId, array $fields): array
+    {
+        $pg = Db::pg();
+
+        if (array_key_exists('at_a_glance', $fields)) {
+            $bio = $fields['at_a_glance'];
+            $bio = ($bio === null || $bio === '') ? null : (string)$bio;
+            $pg->prepare('UPDATE users SET at_a_glance = :b WHERE id = :u')
+               ->execute([':b' => $bio, ':u' => $userId]);
+        }
+
+        if (array_key_exists('visibility', $fields)) {
+            $vis = self::visFromInput($fields['visibility']);   // → DB literal
+            if ($vis !== null) {
+                $pg->prepare("
+                    INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                    VALUES (:u, 'header', :v, '{}'::jsonb, 0)
+                    ON CONFLICT (user_id, key) DO UPDATE
+                       SET visibility = EXCLUDED.visibility, updated_at = now()
+                ")->execute([':u' => $userId, ':v' => $vis]);
+            }
+        }
+
+        return self::loadHeader($userId) ?? [];
     }
 }

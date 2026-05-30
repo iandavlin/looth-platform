@@ -1,29 +1,38 @@
--- profile-app — Phase 1 block-system SPINE schema deltas.
+-- profile-app — Phase 1 block-system SPINE schema deltas.  DEV-FINAL.
 --
--- ⚠️ STUB — NOT YET APPLIED. The spine is the ONE migration target and must be
--- reviewed dev-FINAL before the slice-4 crib runs (one migration, never two).
--- Do not run until Ian approves docs/plan-profile-2.0-phase1-build.md §1.
+-- ⚠️ WRITE-ONLY THIS TURN — apply-ready but NOT YET APPLIED. The spine is the ONE
+-- migration target; coordinator applies + tests after review. Idempotent
+-- (IF NOT EXISTS / DROP-then-ADD constraint) → safe to re-run.
 --
--- Confirmed adds (spec-block-identity-location.md "Schema adds"):
---   1. users.at_a_glance              — header summary line (person)
---   2. users.location_exact_visibility — exact-address tier vis
---   3. practices.type                 — repair|build|touring_tech|retail|…
+-- Resolved schema (canon: plan-profile-block-system.md "Schema — RESOLVED
+-- dev-final", 2026-05-30, Ian). THREE adds:
+--   1. users.at_a_glance               — single-source author BIO (header field;
+--                                         fills WP "about author" + every byline;
+--                                         backfilled from WP user `description`).
+--   2. users.location_exact_visibility — exact-address tier vis (default private;
+--                                         city tier stays users.location_visibility).
+--   3. practices.type                  — practice kind, set by user at creation
+--                                         (practices are GREENFIELD — never backfilled).
+--
+-- NOT in this migration (resolved OUT):
+--   • Header visibility = the profile's OWN vis = the section CAP, stored on the
+--     header `profile_sections` row (key='header'.visibility). NO new column.
+--   • NO approximate-coords column — coarse "near me"/map coords come from the
+--     city/state CENTROID the directory geocoder already returns; exact lat/lng
+--     (existing) stays the gated pin.
+--   • `members` DB literal KEPT (plural). UI/JSON maps to "member" at one
+--     normalize point (Looth\ProfileApp\Block::normalizeVis). No enum rename.
 --
 -- Already shipped by the retiring chat (commit 23fe81b) — DO NOT REDO:
 --   users.location_address, profile_socials kind 'linktree'.
---
--- Avatar single-source: users.avatar_version (bump-on-edit, drives cache-bust +
---   identity purge). Store layout in the build plan §5.
---
--- DECISION A/B/C are flagged inline for Ian — see build plan §1.
 
 BEGIN;
 
--- 1. Header summary line (person). Practice uses practices.tagline (exists).
+-- 1. Single-source author bio. Person-level; practice uses practices.tagline.
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS at_a_glance text;
 
--- 2. Exact-address tier visibility. Approximate tier stays users.location_visibility.
+-- 2. Exact-address tier visibility (separate from the city tier). Default private.
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS location_exact_visibility text NOT NULL DEFAULT 'private';
 ALTER TABLE users
@@ -31,26 +40,10 @@ ALTER TABLE users
 ALTER TABLE users
     ADD CONSTRAINT users_location_exact_visibility_ck
     CHECK (location_exact_visibility IN ('members','private','on_request'));
--- exact must never be looser than approximate (location_visibility). Enforced in
--- app-validation (Block.php) — a CHECK across two columns needs a trigger; defer.
--- -- DECISION B: tighten location_visibility enum to ('public','members')? Today
--- -- it allows 'private' too. Left as-is; approximate-vis clamp done in app layer.
+-- exact must never be looser than the city tier (location_visibility) — enforced
+-- in the app layer (Block) since a cross-column CHECK would need a trigger.
 
--- 3. Avatar single-source version (cache-bust + identity-purge trigger).
-ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS avatar_version integer NOT NULL DEFAULT 0;
-
--- -- DECISION A: two coordinate pairs for the geo facet.
--- -- Repurpose users.lat/lng as EXACT (gated by location_exact_visibility, never
--- -- indexed); add coarse city-centroid pair for proximity search ("near me"),
--- -- gated by location_visibility. Uncomment once Ian rules.
--- ALTER TABLE users
---     ADD COLUMN IF NOT EXISTS location_approx_lat numeric(9,6),
---     ADD COLUMN IF NOT EXISTS location_approx_lng numeric(9,6);
--- CREATE INDEX IF NOT EXISTS idx_users_approx_geo ON users (location_approx_lat, location_approx_lng);
-
--- 4. Typed practices. Required at creation (app-enforced); existing dev rows need
---    a one-time backfill value before a NOT NULL is added (flag: few on dev).
+-- 3. Typed practices (greenfield; user sets type at creation, never backfilled).
 ALTER TABLE practices
     ADD COLUMN IF NOT EXISTS type text;
 ALTER TABLE practices
@@ -58,14 +51,10 @@ ALTER TABLE practices
 ALTER TABLE practices
     ADD CONSTRAINT practices_type_ck
     CHECK (type IS NULL OR type IN ('repair','build','touring_tech','retail','teaching','other'));
--- (After backfilling existing rows, a follow-up can SET NOT NULL.)
-ALTER TABLE practices
-    ADD COLUMN IF NOT EXISTS avatar_version integer NOT NULL DEFAULT 0;
-
--- DECISION C: header visibility (the ceiling) is stored as a profile_sections /
--- practice_sections row key='header' — NO new column (keeps the vis model schema-
--- unchanged per the relay). If Ian prefers a dedicated column instead:
---   ALTER TABLE users     ADD COLUMN header_visibility text NOT NULL DEFAULT 'members';
---   ALTER TABLE practices ADD COLUMN header_visibility text NOT NULL DEFAULT 'members';
 
 COMMIT;
+
+-- Header-visibility (the ceiling) needs NO DDL: it lives on the existing
+-- profile_sections(user_id, key='header', visibility) row, written by the
+-- profile-header /me endpoint. Migration default at cut = everyone members-only
+-- (handled by the profiles-only crib, a later turn — not here).

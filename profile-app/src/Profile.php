@@ -205,6 +205,7 @@ final class Profile
             'business_name' => $user['business_name'] ?? null,
             'slug'          => $user['slug'] ?: ((string)(int)$user['id']),
             'avatar_url'    => $user['avatar_url'],
+            'at_a_glance'   => $user['at_a_glance'] ?? null,   // single-source author bio (spine add)
             'emails' => [
                 'primary' => $user['primary_email'],
                 'billing' => $user['billing_email'],

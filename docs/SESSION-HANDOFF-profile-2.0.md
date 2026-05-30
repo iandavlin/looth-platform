@@ -68,6 +68,38 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Spine build · increment 1 — profile-header block (2026-05-30, WRITE-ONLY)
+
+Schema is **dev-final** (canon: plan "Schema — RESOLVED dev-final"). Built the
+profile-header (identity) block end-to-end, **write-only** — coordinator applies
+the schema + runs the test plan next.
+
+Resolved schema reflected: 3 adds (`users.at_a_glance` = single-source author bio,
+backfill from WP `description`; `users.location_exact_visibility` default private;
+`practices.type`, greenfield/user-set, NOT backfilled). Header vis = the profile's
+OWN vis = section cap on `profile_sections` key='header' — NO column. NO approx-coord
+column (centroid from geocoder). `members` DB literal kept; `Block::normalizeVis` is
+the one DB↔UI ('members'↔'member') point. Migration default = everyone members-only
+at cut (crib is a later turn, profiles-only).
+
+Files written/finalized:
+- `profile-app/sql/2026-05-30-block-system-spine.sql` — apply-ready, idempotent, NOT applied.
+- `profile-app/src/Block.php` — block sets + header-ceiling rule
+  (`effectiveVisibility`=more-restrictive, `headerCeiling`, `gateDecision`, `canSee`,
+  `isCappedByHeader`) + `loadHeader`/`saveHeader` (pilot block from spine).
+- `profile-app/web/_render_blocks.php` — `looth_render_profile_blocks` gate +
+  `looth_render_header_block` (author-identity card) + members-gate.
+- `profile-app/api/v0/me-header.php` — GET assembled header / PATCH at_a_glance +
+  ceiling vis; WP `description` mirror + whoami purge (best-effort).
+- `profile-app/src/Profile.php` — `at_a_glance` added to `loadFull` (additive).
+- `profile-app/PHASE-1-INCREMENT-1-TEST.md` — apply cmd + truth-table/gate/round-trip tests.
+
+⚠️ **config.php gap (flag):** config.php `require_once`s each src class but is
+shared w/ shim-replacement (hard stop — didn't edit). `me-header.php` +
+`_render_blocks.php` therefore `require_once .../src/Block.php` themselves.
+Coordinator should add `Block.php` (and later social classes) to config.php's
+require list for consistency, then the per-file requires can drop.
+
 ## Social-layer round — PLAN + SCAFFOLD + mockup iter3 (2026-05-30)
 
 Ian locked the **social LAYER** (connections + messaging) into profile-app's scope

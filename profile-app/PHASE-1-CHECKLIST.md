@@ -4,31 +4,35 @@ Plan: `docs/plan-profile-2.0-phase1-build.md`. The spine is the migration target
 **steps 1–8 must be dev-FINAL before step 9 (the crib) runs.** Surface each step
 for reaction. Nothing here is executed yet (scaffold turn).
 
-## Decisions to settle with Ian first (block the schema apply)
-- [ ] **A.** Two-coord geo facet — add `location_approx_lat/lng` (coarse) + repurpose
-      `lat/lng` as exact? (stub has it commented `-- DECISION A`)
-- [ ] **B.** Tighten `location_visibility` enum to `(public,members)`, or clamp in app only?
-- [ ] **C.** Header vis home — `*_sections` row `key='header'` (recommended, no schema
-      change) vs a dedicated `header_visibility` column?
-- [ ] **Vocab.** Keep DB `members` literal + map to `member` in JSON/UI (recommended)?
-- [ ] **Header default** — member vs public out-of-box (the one open knob; decide on
-      next mockup; NON-BLOCKING for the schema).
+## Decisions — RESOLVED dev-final (plan-profile-block-system.md "Schema — RESOLVED")
+- [x] **A.** NO approx-coord column — coarse "near me" comes from the city/state
+      centroid the geocoder already returns; exact `lat/lng` stays the gated pin.
+- [x] **B.** No enum tighten — approximate-vis clamp is app-layer (Block).
+- [x] **C.** Header vis = the profile's OWN vis = section cap, on `profile_sections`
+      key='header' row. NO column.
+- [x] **Vocab.** `members` DB literal kept; one normalize point `Block::normalizeVis`.
+- [ ] **Header default** (member vs public) — still Ian's open knob; NON-BLOCKING.
 
-## Schema (review → apply on dev)
-- [ ] Review `sql/2026-05-30-block-system-spine.sql` (NOT yet applied).
-- [ ] `users.at_a_glance`, `users.location_exact_visibility`, `users.avatar_version`.
-- [ ] `practices.type` (+ CHECK), `practices.avatar_version`.
-- [ ] (Decision A) approx coords + index, if approved.
-- [ ] Backfill `practices.type` for existing dev rows before any NOT NULL.
-- [ ] Apply on dev; `\d users` / `\d practices` verify.
+## Schema (review → apply on dev) — increment 1
+- [x] `sql/2026-05-30-block-system-spine.sql` finalized to the resolved schema
+      (3 adds; members literal; no approx col; idempotent). **NOT applied — coordinator runs it.**
+- [x] Adds: `users.at_a_glance`, `users.location_exact_visibility` (default private),
+      `practices.type` (+ CHECK). (avatar_version deferred to the avatar-edit increment.)
+- [ ] Apply on dev; `\d users` / `\d practices` verify (test plan §0–1).
 
-## Pilot blocks (identity → headers + location)
-- [ ] `src/Block.php` — fill `paletteFor`, `headerCeiling`, `gateDecision` (stubs).
-- [ ] Header-ceiling unit checks: `effectiveVisibility` = min(header, block) truth table.
-- [ ] `web/_render_blocks.php` — header gate + block loop + members-gate.
-- [ ] profile-header maps users.{display_name,avatar_url,at_a_glance} + socials.
+## Pilot block — profile-header (identity), increment 1 — DONE (write-only)
+- [x] `src/Block.php` — block sets, normalize point, `effectiveVisibility`,
+      `headerCeiling`, `gateDecision`, `canSee`, `isCappedByHeader`, `loadHeader`, `saveHeader`.
+- [x] `web/_render_blocks.php` — header-as-ceiling gate + profile-header card + members-gate.
+- [x] `api/v0/me-header.php` — GET assembled header; PATCH at_a_glance + ceiling vis
+      (+ WP `description` mirror, whoami purge). `members`→`member` normalize wired.
+- [x] `at_a_glance` added to `Profile::loadFull` read shape.
+- [x] Test plan: `PHASE-1-INCREMENT-1-TEST.md`.
+- [ ] **Coordinator: apply schema + run the test plan.**
+
+## Pilot block — next increments
 - [ ] practice-header maps practices.{name,avatar_url,tagline,website,type}.
-- [ ] location two-tier: approx vis + exact vis; exact never in search index.
+- [ ] location two-tier: city tier (member) + exact tier vis; exact = gated pin.
 - [ ] "View as: Public / Member / Me" owner toggle (render layer).
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 
