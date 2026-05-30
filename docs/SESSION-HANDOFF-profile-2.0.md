@@ -68,6 +68,43 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Social-layer round — PLAN + SCAFFOLD + mockup iter3 (2026-05-30)
+
+Ian locked the **social LAYER** (connections + messaging) into profile-app's scope
+(`STRANGLER-COORDINATION.md` social block) + finalized the visibility model. This
+turn = plan + scaffold + mockup only (same hard stops). Scope: build-thin in-house
+on postgres, home = profile-app, **CUT-DAY-REQUIRED** (P-list blocker with the
+spine), seed history from `wp_bp_friends` + `wp_bp_messages_*`. UI split: Connect/
+Message buttons on `/u/` (profile-app) + header modals (lg-shell P9) → one
+profile-app backend.
+
+Deliverables:
+- Plan: `docs/plan-profile-2.0-social-layer.md` (connections + threads/messages/
+  recipients schema, crib, API, gating, build order).
+- Checklist: `profile-app/SOCIAL-LAYER-CHECKLIST.md`.
+- Schema stub (NOT applied): `profile-app/sql/2026-05-30-social-layer.sql`.
+- `src/Connections.php`, `src/Messaging.php` (skeletons).
+- API stubs (501): `api/v0/me-connections.php`, `me-messages.php`, `me-thread.php`,
+  `me-social-counts.php`.
+- Crib skeleton: `bin/migrate-social-from-bb.php` (exits 2, refuses to write).
+- Mockup iter3: `profile-block.html` now shows Connect + Message buttons,
+  View-as Public/Member/Me, a **header-ceiling toggle (Member vs Public)** to
+  compare Ian's deferred default, and **peek-through** (public header → public
+  blocks peek + "members see more — join"); effective vis = more-restrictive
+  (header, block).
+
+### Visibility model — FINAL (commit `0641744`, render/UI logic; schema unchanged)
+Header is the CEILING; effective block vis = more-restrictive of (header, block).
+header private→profile private; header member→members-only (logged-out join-gate,
+'public' block caps to member); header public→public blocks peek through.
+**Header DEFAULT (member vs public) = the one deferred knob** — Ian rules on the
+mockup; non-blocking.
+
+### Social-layer open decisions (Ian)
+who-can-DM (any-member vs connections-only) · ship follow now? (verify
+`wp_bp_follow` on live) · header counts via dedicated `me-social-counts` (rec.)
+vs `/whoami` (shared — needs sign-off) · contact-reveal hybrid pilot timing.
+
 ## Locked decisions carried forward (don't regress)
 - Block-level pmp (no per-row socials vis). **Baseline now MEMBER** (changed this
   iteration; was public for identity).
