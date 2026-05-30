@@ -512,11 +512,15 @@ archive-poc. Solving it doesn't require ditching BB entirely — it
 requires ditching the BB *theme* while keeping BB *plugin* features that
 are still in use.
 
+> **RULED 2026-05-30 (Ian): BB groups pages DROPPED from cut scope entirely.**
+> No reskin, no group-as-forum-with-decoration at cutover. Groups are deferred
+> post-cut. Removes a cutover dependency.
+
 ### Group inventory (dev, 2026-05-27)
 
 | Pattern | Groups | Real usage? | Disposition |
 |---|---|---|---|
-| **Regional "Local Looths"** (9) | SoCal (770), Tri State NYC (772), DMV (284), SW Ontario (282), PNW (285), Middle TN (279), Basque Country (268), Ohio (11), Ireland (10) | **Yes — only real group usage on the site** | Reskin at cutover. Long-term: durable communities, eventually overlap with profile-app location data (auto-derive membership?) — but well post-cutover. |
+| **Regional "Local Looths"** (9) | SoCal (770), Tri State NYC (772), DMV (284), SW Ontario (282), PNW (285), Middle TN (279), Basque Country (268), Ohio (11), Ireland (10) | **Yes — only real group usage on the site** | ~~Reskin at cutover~~ **DROPPED from cut scope (2026-05-30)** — post-cut. |
 | **Auto-enroll topic groups** (5) | Business, Market Place, New Builds, Repair & Restoration, Tools/Spaces/Robots/Widgets — all ~1784 members | **No — vestigial from an old per-forum activity-feed display scheme** | Delete after cutover. Frees ~9000 junk memberships. |
 | **Small conversational topic** (4) | General Chat (97), Dank Memes (53), Music (36), Charla General (14) | Light | Reskin at cutover; revisit later. |
 | **Internal/admin** (2) | The Jannies (2, hidden), Looth Group Partners (5, private) | Internal | Reskin or leave. Negligible. |
@@ -883,6 +887,13 @@ and profile-app pages from one menu without merging codebases.
   shell — the header dropdown is the account nav now.
 
 ## 3e. Stripe poller out of WordPress (post-cutover)
+
+> **NOW A FULL PLAN (2026-05-30, Ian "pull the trigger"):** this section's
+> direction is superseded/expanded by **`design-membership-rebuild.md`** — the
+> approved plan to relocate the Arbiter out of WP + move tier authority into
+> profile-app so WP stops being the entitlement authority. Owned by the
+> **billing-rebuild** lane (`bootstrap-billing-rebuild.md`). Includes a stern
+> security review (§5b there). Below is the original sketch, kept for context.
 
 The poller currently lives partly in WP (`lg-patreon-stripe-poller`
 plugin) and partly in `/srv/lg-stripe-billing/`. The WP-side piece
