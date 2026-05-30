@@ -178,7 +178,7 @@ foreach ($forums as $f) {
         (int)$f->ID,
         (string)$f->post_name,
         decode_entities((string)$f->post_title),
-        decode_entities((string)$f->post_content),
+        wp_kses_post(decode_entities((string)$f->post_content)),  // sanitize in (match materializers.php)
         (int)$f->post_parent ?: null,
         (int)$f->menu_order,
         first_group_id_from_meta($m['_bbp_group_ids'] ?? null),  // real link
@@ -243,7 +243,7 @@ foreach ($topics as $t) {
     $stmt_topic->execute([
         (int)$t->ID, $fid,
         (string)$t->post_name, decode_entities((string)$t->post_title),
-        decode_entities((string)$t->post_content), $body_text,
+        wp_kses_post(decode_entities((string)$t->post_content)), $body_text,  // sanitize in (match materializers.php)
         $featured_url,
         $author_id ?: null, '', '',
         $m['_bbp_anonymous_name'] ?? null,
@@ -327,7 +327,7 @@ foreach ($replies as $r) {
     $stmt_reply->execute([
         (int)$r->ID, $tid, $fid,
         (int)($m['_bbp_reply_to'] ?? 0) ?: null,
-        decode_entities((string)$r->post_content), $body_text,
+        wp_kses_post(decode_entities((string)$r->post_content)), $body_text,  // sanitize in (match materializers.php)
         $author_id ?: null, '', '',
         $m['_bbp_anonymous_name'] ?? null,
         (string)$r->post_status,

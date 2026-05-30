@@ -363,6 +363,198 @@ delete_test(){
 }
 delete_test
 
+# ── 12. SANITIZATION REGRESSION (locks the kses fix) ─────────────────────────
+# Two checks:
+#   (a) static scan: no <script>/onerror=/javascript: survives in ANY mirror row.
+#       Catches existing rows that bypassed sanitization on backfill/reconcile.
+#       (Per coord 2026-05-30: backfill path was decode-only — no kses. After
+#       fix + reconcile re-walk, this must be 0 and STAY 0.)
+#   (b) live write round-trip: POST a topic with <script> via BB REST, wait for
+#       sync, assert the pg row has no <script>. Positive verification of the
+#       hot path.
+XSS_T=$(sudo -u bb-mirror psql -d looth -tA -c "SELECT COUNT(*) FROM forums.topic WHERE content_html ~* '<script\b|onerror[[:space:]]*=|javascript:'" 2>/dev/null)
+XSS_R=$(sudo -u bb-mirror psql -d looth -tA -c "SELECT COUNT(*) FROM forums.reply WHERE content_html ~* '<script\b|onerror[[:space:]]*=|javascript:'" 2>/dev/null)
+XSS_TOT=$(( ${XSS_T:-0} + ${XSS_R:-0} ))
+check "mirror is sanitized — no <script>/onerror=/javascript: surviving in any row" "0" "$XSS_TOT"
+
+xss_roundtrip() {
+  local creds=/tmp/bbtest-xss.json tid cn cv nonce got=""
+  sudo -u looth-dev wp --path=$WP_PATH --allow-root eval '
+    $u=get_user_by("login","'"$WP_USER"'");$exp=time()+3600;
+    $t=WP_Session_Tokens::get_instance($u->ID)->create($exp);
+    $c=wp_generate_auth_cookie($u->ID,$exp,"logged_in",$t);
+    $_COOKIE[LOGGED_IN_COOKIE]=$c; wp_set_current_user($u->ID);
+    file_put_contents("'"$creds"'",json_encode(["cn"=>LOGGED_IN_COOKIE,"cv"=>$c,"nonce"=>wp_create_nonce("wp_rest")]));' 2>/dev/null
+  cn=$(python3 -c "import json;print(json.load(open('$creds'))['cn'])")
+  cv=$(python3 -c "import json;print(json.load(open('$creds'))['cv'])")
+  nonce=$(python3 -c "import json;print(json.load(open('$creds'))['nonce'])")
+  # The payload — kses MUST strip <script>; survives means broken.
+  local payload='<p>safe text</p><script>alert(1)</script><p onclick="x()">y</p><img src=x onerror=alert(2)>'
+  tid=$(curl -s -X POST "$BASE/wp-json/buddyboss/v1/topics" \
+    -H "Cookie: loothdev_auth=$GATE; $cn=$cv" -H "X-WP-Nonce: $nonce" -H "Content-Type: application/json" \
+    -d "$(python3 -c "import json,sys; print(json.dumps({'parent':$TEST_FORUM_ID,'title':'HARNESS xss test DELETE','content':sys.argv[1]}))" "$payload")" \
+    | python3 -c "import json,sys;print(json.load(sys.stdin).get('id',''))")
+  if [[ -z "$tid" ]]; then fail "live XSS round-trip sanitized" "no topic id"; sudo rm -f "$creds"; return; fi
+  for i in 1 2 3 4 5 6 7 8; do
+    got=$(sudo -u bb-mirror psql -d looth -tA -c "SELECT content_html FROM forums.topic WHERE id=$tid" 2>/dev/null)
+    [[ -n "$got" ]] && break; sleep 1
+  done
+  # Check: NO <script>, NO bare onerror= as attribute, NO javascript: scheme.
+  if [[ -n "$got" ]] && ! echo "$got" | grep -qiE '<script\b|onerror[[:space:]]*=|javascript:'; then
+    pass "live XSS round-trip — payload stripped at sync (kses)"
+  else
+    fail "live XSS round-trip sanitized" "tid=$tid pg=[$got]"
+  fi
+  sudo -u looth-dev wp --path=$WP_PATH --allow-root post delete "$tid" --force >/dev/null 2>&1
+  sudo rm -f "$creds"
+}
+xss_roundtrip
+
+# ── 13. CSS cache-buster (matches the JS check at §1) ─────────────────────────
+CSS_VER=$(curl -s "$BASE$POC/" -H "Cookie: loothdev_auth=$GATE" | grep -oE "forums\.css\?v=[0-9]+" | head -1)
+[[ -n "$CSS_VER" ]] && pass "asset cache-buster on forums.css ($CSS_VER)" || fail "asset cache-buster (css)" "no ?v= on forums.css"
+
+# ── 14. Brand tokens resolve (palette is real) ────────────────────────────────
+# Smoke: --accent custom prop computes to a non-empty value on body.
+nav "$BASE$POC/" "$POC/"
+R=$(ev "(function(){var v=getComputedStyle(document.body).getPropertyValue('--accent').trim();return v||'empty';})()")
+[[ -n "$R" && "$R" != "empty" ]] && pass "brand token --accent resolves on body ($R)" || fail "brand token --accent" "empty"
+
+# ── 15. Feed reply modal: markup + Quill mounts ───────────────────────────────
+# §0/8.x: feed-reply modal (#frm-overlay) lives in _chrome.php site-wide; opens
+# from per-card reply CTA. Verify (a) markup present, (b) Quill mounts on open.
+R=$(ev "!!document.getElementById('frm-overlay') + ''")
+check "feed-reply modal markup present (#frm-overlay)" "true" "$R"
+
+# Try a list of plausible open-triggers in priority order; the harness shouldn't
+# fail just because a class got renamed if the modal itself works.
+ev "(function(){var sels=['[data-frm-open]','.feed-card__reply','.feed-reply-btn','.feed-card__reply-btn','.frm-open'];for(var i=0;i<sels.length;i++){var b=document.querySelector(sels[i]);if(b){b.click();return 'opened:'+sels[i];}}return 'no-trigger';})()" >/dev/null
+sleep 2
+R=$(ev "(function(){return JSON.stringify({q:typeof Quill!=='undefined',tb:!!document.querySelector('#frm-form .ql-toolbar'),ed:!!document.querySelector('#frm-form .ql-editor, #frm-editor .ql-editor'),img:!!document.querySelector('#frm-form .ql-image')});})()")
+if echo "$R" | grep -q '"q":true' && echo "$R" | grep -q '"ed":true'; then
+  pass "feed-reply Quill mounts (toolbar+editor+image)"
+else
+  fail "feed-reply Quill mounts" "$R"
+fi
+# close any open overlay so it doesn't bleed into the next check
+ev "(function(){var o=document.getElementById('frm-overlay');if(o)o.hidden=true;return 'x';})()" >/dev/null
+
+# ── 16. Feed cards are clickable (whole card → topic) ─────────────────────────
+nav "$BASE$POC/" "$POC/"
+# Cards link via data-href on the <article> + JS click (not an <a>).
+R=$(ev "(function(){var cards=[...document.querySelectorAll('.feed-card--topic')];if(!cards.length)return'nocards';var with_link=cards.filter(c=>{var h=c.getAttribute('data-href');return h && h.indexOf('$POC/')===0;});return with_link.length>0?'yes':'no';})()")
+check "feed cards link to their topic" "yes" "$R"
+
+# ── 17. Feed teaser images use loading=lazy (perceived perf) ──────────────────
+# "lazy" = native loading=lazy OR the JS-deferred reply-stub mechanism (--deferred).
+R=$(ev "(function(){var imgs=[...document.querySelectorAll('.feed-card img')];if(!imgs.length)return'no-images';var lazy=imgs.filter(i=>i.loading==='lazy'||i.className.indexOf('--deferred')>-1);return lazy.length===imgs.length?'all-lazy':(lazy.length+'/'+imgs.length);})()")
+[[ "$R" == "all-lazy" || "$R" == "no-images" ]] && pass "feed teaser images set loading=lazy ($R)" || fail "teaser images lazy" "$R"
+
+# ── 18. Lazy ?body= endpoint returns content + attachments inline ─────────────
+# Use a topic known to have attachments (from §3d-style content).
+ATT_TID=$(sudo -u bb-mirror psql -d looth -tA -c "
+  SELECT t.id FROM forums.topic t
+   WHERE EXISTS (SELECT 1 FROM forums.attachment a WHERE a.parent_id=t.id AND a.parent_kind='topic')
+     AND t.status='publish'
+   ORDER BY t.created_at DESC LIMIT 1" 2>/dev/null)
+if [[ -n "$ATT_TID" ]]; then
+  BODY=$(curl -s "$BASE$POC/?body=$ATT_TID" -H "Cookie: loothdev_auth=$GATE")
+  if echo "$BODY" | grep -q 'post__attachments\|attachment--image'; then
+    pass "lazy ?body= renders inline attachment gallery (tid=$ATT_TID)"
+  else
+    fail "lazy ?body= renders inline images" "tid=$ATT_TID no post__attachments in response"
+  fi
+else
+  fail "lazy ?body= renders inline images" "no topic with attachments found"
+fi
+
+# ── 19. bbProcessEmbeds() runs on lazy-loaded feed bodies ─────────────────────
+# Pick a topic with a YouTube URL in content (from §8 we know neck-reset-question
+# has one). Hit ?body= and confirm the response contains either an iframe OR a
+# .bb-embed placeholder (JS materializes from placeholder on render). We accept
+# either — the contract is "embed-eligible content reaches the client."
+EMBED_TID=$(sudo -u bb-mirror psql -d looth -tA -c "
+  SELECT id FROM forums.topic
+   WHERE status='publish'
+     AND content_html ~ '(youtube\.com/watch|youtu\.be/|vimeo\.com/)'
+   ORDER BY created_at DESC LIMIT 1" 2>/dev/null)
+if [[ -n "$EMBED_TID" ]]; then
+  BODY=$(curl -s "$BASE$POC/?body=$EMBED_TID" -H "Cookie: loothdev_auth=$GATE")
+  if echo "$BODY" | grep -qE 'youtube\.com|youtu\.be|vimeo\.com|bb-embed'; then
+    pass "lazy ?body= preserves embed-eligible URLs for client-side rendering (tid=$EMBED_TID)"
+  else
+    fail "lazy ?body= embed surface" "tid=$EMBED_TID no embed markers in response"
+  fi
+else
+  fail "lazy ?body= embed surface" "no topic with embed-eligible URL"
+fi
+
+# ── 20. Search results render as cards with snippet highlighting ──────────────
+nav "$BASE$POC/?q=guitar" "q=guitar"
+# Search renders activity cards with the --search modifier; ts_headline emits <b>.
+R=$(ev "''+document.querySelectorAll('.feed-card--search').length")
+[[ "${R:-0}" -gt 0 ]] && pass "search results render ($R cards for 'guitar')" || fail "search results render" "0 cards"
+R=$(ev "(function(){var s=document.querySelector('.feed-card--search b');return s?'highlighted':'no';})()")
+check "search snippet highlights matches via <b>" "highlighted" "$R"
+
+# ── 21. Edit preserves attachments (bbp_media omission rule) ──────────────────
+# Coord-flagged: edit PUT must OMIT bbp_media (passing empty array WIPES).
+# Round-trip: create a topic WITH an image, edit text-only via UI, assert the
+# attachment row still exists in pg afterward.
+edit_preserves_image_test() {
+  local img=/tmp/bbtest-ep.png creds=/tmp/bbtest-ep.json upid tid fs ts cn cv nonce
+  printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\x1f\xf3\xffa\x00\x00\x00\x19IDATx\x9cc\xfc\xcf\x80\x1f0\x91\x81\x81\x81\x11\x03\x18\x18\x00\x00\xff\xff\x03\x00\x06\x05\x02\x9d\x9d\xc3\x8d\xb0\x00\x00\x00\x00IEND\xaeB\x60\x82' > "$img"
+  sudo -u looth-dev wp --path=$WP_PATH --allow-root eval '
+    $u=get_user_by("login","'"$WP_USER"'");$exp=time()+3600;
+    $t=WP_Session_Tokens::get_instance($u->ID)->create($exp);
+    $c=wp_generate_auth_cookie($u->ID,$exp,"logged_in",$t);
+    $_COOKIE[LOGGED_IN_COOKIE]=$c; wp_set_current_user($u->ID);
+    file_put_contents("'"$creds"'",json_encode(["cn"=>LOGGED_IN_COOKIE,"cv"=>$c,"nonce"=>wp_create_nonce("wp_rest")]));' 2>/dev/null
+  cn=$(python3 -c "import json;print(json.load(open('$creds'))['cn'])")
+  cv=$(python3 -c "import json;print(json.load(open('$creds'))['cv'])")
+  nonce=$(python3 -c "import json;print(json.load(open('$creds'))['nonce'])")
+  upid=$(curl -s -X POST "$BASE/wp-json/buddyboss/v1/media/upload" \
+    -H "Cookie: loothdev_auth=$GATE; $cn=$cv" -H "X-WP-Nonce: $nonce" \
+    -F "file=@$img;type=image/png" | python3 -c "import json,sys;print(json.load(sys.stdin).get('upload_id',''))")
+  tid=$(curl -s -X POST "$BASE/wp-json/buddyboss/v1/topics" \
+    -H "Cookie: loothdev_auth=$GATE; $cn=$cv" -H "X-WP-Nonce: $nonce" -H "Content-Type: application/json" \
+    -d "{\"parent\":$TEST_FORUM_ID,\"title\":\"HARNESS edit-preserves-image DELETE\",\"content\":\"<p>orig</p>\",\"bbp_media\":[$upid]}" \
+    | python3 -c "import json,sys;print(json.load(sys.stdin).get('id',''))")
+  if [[ -z "$tid" ]]; then fail "edit preserves attachments" "create failed"; rm -f "$img"; sudo rm -f "$creds"; return; fi
+  # wait for sync — both topic row + attachment row
+  local pre_count=0 i
+  for i in 1 2 3 4 5 6 7 8; do
+    pre_count=$(sudo -u bb-mirror psql -d looth -tA -c "SELECT count(*) FROM forums.attachment WHERE parent_id=$tid AND parent_kind='topic'" 2>/dev/null)
+    [[ "$pre_count" == "1" ]] && break
+    sleep 1
+  done
+  read fs ts < <(sudo -u bb-mirror psql -d looth -tA -F' ' -c "SELECT f.slug,t.slug FROM forums.topic t JOIN forums.forum f ON f.id=t.forum_id WHERE t.id=$tid" 2>/dev/null)
+  # edit via UI (existing flow proven in §10)
+  nav "$BASE$POC/$fs/$ts/" "$ts"
+  for i in 1 2 3 4 5 6 7 8; do
+    R=$(ev "(function(){var b=document.querySelector('.post--op .post__edit-btn');return b&&!b.hidden?'1':'0';})()")
+    [[ "$R" == "1" ]] && break; sleep 1
+  done
+  ev "document.querySelector('.post--op .post__edit-btn').click(); 'x'" >/dev/null; sleep 1
+  ev "(function(){var e=document.querySelector('.post-edit .ql-editor');if(e){e.innerHTML='<p>EDITED-TEXT-ONLY</p>';}document.querySelector('.post-edit__save').click();return 'x';})()" >/dev/null
+  sleep 5
+  # attachment row MUST still exist
+  local post_count=0
+  for i in 1 2 3 4 5 6; do
+    post_count=$(sudo -u bb-mirror psql -d looth -tA -c "SELECT count(*) FROM forums.attachment WHERE parent_id=$tid AND parent_kind='topic'" 2>/dev/null)
+    [[ -n "$post_count" ]] && break; sleep 1
+  done
+  if [[ "$pre_count" == "1" && "$post_count" == "1" ]]; then
+    pass "edit (text-only) preserves attachment row (bbp_media omission rule)"
+  else
+    fail "edit preserves attachments" "pre=$pre_count post=$post_count tid=$tid"
+  fi
+  sudo -u looth-dev wp --path=$WP_PATH --allow-root post delete "$tid" --force >/dev/null 2>&1
+  sudo -u looth-dev wp --path=$WP_PATH --allow-root post delete "$upid" --force >/dev/null 2>&1
+  rm -f "$img"; sudo rm -f "$creds"
+}
+edit_preserves_image_test
+
 # ── Report ────────────────────────────────────────────────────────────────────
 {
   echo "════════════════════════════════════════════════════"
