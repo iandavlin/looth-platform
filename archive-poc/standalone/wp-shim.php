@@ -217,3 +217,8 @@ if (!class_exists("WP_Query")) {
         public function __construct(array $args = []) { $this->posts = []; }
     }
 }
+
+// get_post_type() — returns the CPT slug baked into post_context.
+if (!function_exists('get_post_type')) {
+    function get_post_type($post = null): string { return (string) (lg_pc()['post_type'] ?? 'post-imgcap'); }
+}
