@@ -367,8 +367,29 @@ BuddyPress social cluster — **connections** (friends / follow / requests) +
     overkill for the volume. (Tinode = closest "server you skin" if we go this way.)
   - **Build thin on the existing stack** (postgres + profile-app pattern): identity
     solved (`/whoami`/`looth_id`), history imports SQL→SQL, consistent with all lanes.
-  - **Coordinator lean = build thin.** OTS earns its keep only for high-scale
-    realtime or zero-UI — neither applies. Ian's call; flagged, non-blocking.
+  - **DECIDED (Ian, 2026-05-30): build thin, in-house.** A `threads` / `messages` /
+    `recipients` schema on postgres (profile-app pattern), identity via `/whoami`
+    + `looth_id`, history imports SQL→SQL from `wp_bp_messages_*`. No OTS server, no
+    SaaS. (OTS/SaaS/WhatsApp analysis below kept as the recorded rationale.)
+  - **WhatsApp / consumer apps considered (Ian) — NOT a backend fit:** WhatsApp
+    Business API is business→customer, can't broker member↔member DMs (needs phone
+    numbers + opt-ins + per-msg fees; hands DMs + history to Meta → breaks
+    own-our-data + the history migration). Legit lighter roles only: an opt-in
+    **"WhatsApp" contact field** on profiles (≈ a social link, zero infra) and/or
+    **WhatsApp/SMS as a notification channel** for in-house DMs (fast-follow). If
+    the goal is "don't build it," the category is chat-as-a-service SDKs
+    (Sendbird/CometChat/Stream), not WhatsApp.
+  - **"Connection-gated contact exchange" (Ian's angle):** uses NO WhatsApp API
+    (the API has no introduce-two-users / number-lookup / deliver-an-account
+    primitive — business→customer only). Pattern: member stores WhatsApp as a
+    PRIVATE contact field; **connecting reveals it** (or a `wa.me` link) between
+    accepted connections; chat happens on WhatsApp, platform just brokers the intro.
+    Cheap, but pure handoff = NOT hosting messaging: abandons the 1,881-msg history,
+    no on-platform experience, needs members to share personal numbers, and loses
+    the keep-it-on-platform crowd. **Lean = HYBRID:** the **connection doubles as a
+    contact-reveal gate** (WhatsApp / email / phone — member's choice, connections
+    only) AND a thin in-house DM preserves history + serves on-platform users. The
+    connection graph powers both.
 
 **Cookie fast-path (optional):**
 - `lg_tier` cookie keeps current archive-poc behavior — a fast hint so the
