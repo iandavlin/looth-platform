@@ -216,7 +216,8 @@ function looth_social_url(string $kind, string $value): string
 /** One editable link row (owner). data-value = raw stored value → round-trips to me-socials. */
 function looth_link_row(string $kind, string $value): string
 {
-    return '<div class="lg-link" data-kind="' . looth_h($kind) . '" data-value="' . looth_h($value) . '">'
+    return '<div class="lg-link" draggable="true" data-kind="' . looth_h($kind) . '" data-value="' . looth_h($value) . '">'
+         . '<span class="lg-link__grip" aria-hidden="true">⠿</span>'
          . '<span class="lg-link__kind">' . looth_h($kind) . '</span>'
          . '<span class="lg-link__val">' . looth_h(preg_replace('#^https?://#i', '', $value)) . '</span>'
          . '<button type="button" class="lg-link__rm" aria-label="Remove">×</button></div>';
@@ -226,11 +227,10 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
 {
     $soc = Block::loadSocials($userId);
     if ($soc === null) return;
-    $website = $soc['fields']['website'] ?? null;
-    $links   = $soc['fields']['links']   ?? [];
+    $ordered = $soc['fields']['ordered'] ?? [];   // every link in stored order (incl. web) → reorderable
     $isOwner = ($role === 'me');
 
-    if (!$website && !$links && !$isOwner) return;         // empty → no block for visitors
+    if (!$ordered && !$isOwner) return;                    // empty → no block for visitors
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$soc['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--socials" data-block="socials">';
@@ -239,10 +239,9 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
     echo '</h3>';
 
     if ($isOwner) {
-        // Editable list: website (kind=web) first, then the other links, + Add.
-        echo '<div class="lg-links" id="lg-links-edit">';
-        if ($website) echo looth_link_row('web', (string)$website);
-        foreach ($links as $l) {
+        // Editable list in stored order — drag to reorder, × to remove, + to add.
+        echo '<div class="lg-links lg-links--edit" id="lg-links-edit">';
+        foreach ($ordered as $l) {
             $url = (string)($l['url'] ?? '');
             if ($url !== '') echo looth_link_row((string)($l['kind'] ?? ''), $url);
         }
@@ -250,19 +249,20 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
         echo '</div>';
     } else {
         echo '<div class="lg-socrow">';
-        if ($website) {
-            $label = preg_replace('#^https?://#i', '', (string)$website);
-            echo '<a class="lg-socrow__a" href="' . looth_h(looth_social_url('web', (string)$website)) . '" rel="me noopener" target="_blank" title="website">'
-               . looth_h($label) . ' ↗</a>';
-        }
-        foreach ($links as $l) {
+        foreach ($ordered as $l) {
             $kind = (string)($l['kind'] ?? '');
             $url  = (string)($l['url'] ?? '');
             if ($url === '') continue;
             $href = looth_social_url($kind, $url);
             if ($href === '') continue;
-            echo '<a class="lg-socrow__a" href="' . looth_h($href) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
-               . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
+            if ($kind === 'web') {
+                $label = preg_replace('#^https?://#i', '', $url);
+                echo '<a class="lg-socrow__a" href="' . looth_h($href) . '" rel="me noopener" target="_blank" title="website">'
+                   . looth_h($label) . ' ↗</a>';
+            } else {
+                echo '<a class="lg-socrow__a" href="' . looth_h($href) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
+                   . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
+            }
         }
         echo '</div>';
     }

@@ -138,7 +138,11 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-socrow__a:hover{background:var(--lg-sage-3)}
 /* links editor (owner) */
 .lg-links{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
-.lg-link{display:inline-flex;align-items:center;gap:10px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:7px 8px 7px 12px}
+.lg-link{display:inline-flex;align-items:center;gap:10px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:7px 8px 7px 10px}
+.lg-link[draggable="true"]{cursor:grab}
+.lg-link--dragging{opacity:.45;cursor:grabbing}
+.lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
+.lg-links--edit .lg-link:not([draggable]) .lg-link__grip,.lg-socrow .lg-link__grip{display:none}
 .lg-link__kind{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:5px;padding:3px 6px}
 .lg-link__val{font:600 13px/1 var(--lg-font-sans);color:var(--lg-ink)}
 .lg-link__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
@@ -548,7 +552,10 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
   function stripScheme(v) { return String(v).replace(/^https?:\/\//i, ''); }
   function rowEl(kind, value) {
     var row = document.createElement('div'); row.className = 'lg-link';
+    row.setAttribute('draggable', 'true');
     row.setAttribute('data-kind', kind); row.setAttribute('data-value', value);
+    var grip = document.createElement('span'); grip.className = 'lg-link__grip'; grip.setAttribute('aria-hidden', 'true'); grip.textContent = '⠿';
+    row.appendChild(grip);
     var k = document.createElement('span'); k.className = 'lg-link__kind'; k.textContent = kind;
     var v = document.createElement('span'); v.className = 'lg-link__val'; v.textContent = stripScheme(value);
     var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm';
@@ -556,13 +563,13 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
     row.appendChild(k); row.appendChild(v); row.appendChild(rm);
     return row;
   }
-  // Re-render rows in place from the server's canonical list — no full-page reload (keeps scroll/place).
+  // Re-render rows in place from the server's canonical ordered list — no full-page
+  // reload (keeps scroll/place), and reflects the persisted drag order.
   function render(socials) {
     var addBtn = document.getElementById('lg-link-add');
     Array.prototype.forEach.call(wrap.querySelectorAll('.lg-link, .lg-link-form'), function (el) { el.remove(); });
     var f = (socials && socials.fields) || {};
-    if (f.website) wrap.insertBefore(rowEl('web', f.website), addBtn);
-    (f.links || []).forEach(function (l) { wrap.insertBefore(rowEl(l.kind, l.url), addBtn); });
+    (f.ordered || []).forEach(function (l) { wrap.insertBefore(rowEl(l.kind, l.url), addBtn); });
   }
   function put(items) {
     fetch('/profile-api/v0/me/socials', { method: 'PUT', credentials: 'include',
@@ -596,6 +603,38 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
       put(items);
     });
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') ok.click(); else if (e.key === 'Escape') cancel.click(); });
+  });
+
+  /* Drag-to-reorder (owner). Native HTML5 DnD; the dragged row follows the cursor and
+     the new order is persisted (PUT the whole list) on drop. */
+  var dragging = null;
+  function afterRow(y) {
+    var rows = Array.prototype.slice.call(wrap.querySelectorAll('.lg-link:not(.lg-link--dragging)'));
+    var best = { off: -Infinity, el: null };
+    rows.forEach(function (row) {
+      var box = row.getBoundingClientRect(), off = y - box.top - box.height / 2;
+      if (off < 0 && off > best.off) best = { off: off, el: row };
+    });
+    return best.el;
+  }
+  wrap.addEventListener('dragstart', function (e) {
+    var row = e.target.closest('.lg-link'); if (!row) return;
+    dragging = row; row.classList.add('lg-link--dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', row.getAttribute('data-value') || ''); } catch (_) {}
+  });
+  wrap.addEventListener('dragover', function (e) {
+    if (!dragging) return;
+    e.preventDefault();
+    var ref = afterRow(e.clientY);
+    wrap.insertBefore(dragging, ref || document.getElementById('lg-link-add'));
+  });
+  wrap.addEventListener('drop', function (e) { if (dragging) e.preventDefault(); });
+  wrap.addEventListener('dragend', function () {
+    if (!dragging) return;
+    var moved = dragging; dragging = null;
+    moved.classList.remove('lg-link--dragging');
+    put(collect());   // persist new order
   });
 })();
 </script>

@@ -504,11 +504,13 @@ final class Block
 
         $website = null;
         $links   = [];
+        $all     = [];   // every row in stored order (incl. web) — drives the block + reordering
         $q = $pg->prepare('SELECT kind, value FROM profile_socials WHERE user_id = :u ORDER BY sort_order, id');
         $q->execute([':u' => $userId]);
         while ($r = $q->fetch()) {
+            $all[] = ['kind' => $r['kind'], 'url' => $r['value']];
             if ($r['kind'] === 'web' && $website === null) {
-                $website = $r['value'];
+                $website = $r['value'];           // first web → header idrow convenience
             } else {
                 $links[] = ['kind' => $r['kind'], 'url' => $r['value']];
             }
@@ -518,7 +520,7 @@ final class Block
             'block'   => 'socials',
             'subject' => 'person',
             'vis'     => self::normalizeVis(self::blockVisibility($userId, self::SOCIALS_KEY, 'members')),
-            'fields'  => ['website' => $website, 'links' => $links],
+            'fields'  => ['website' => $website, 'links' => $links, 'ordered' => $all],
         ];
     }
 
