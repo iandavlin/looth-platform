@@ -184,9 +184,40 @@ function lg_materialize_build_blob(int $post_id): ?array {
         if ($sp) $sponsor = $sp;
     }
 
+    // ── Related posts (footer carousel) — pre-resolved cards ───────────────
+    //    Standalone can't run WP_Query/RelatedPosts at render, so bake the cards
+    //    here using the same primary-category + CPT fallback the footer block uses.
+    //    Up to 6; the block caps to its related_count at render.
+    $related = [];
+    if ($post_id > 0) {
+        $cats   = get_the_terms($post_id, 'category');
+        $cat_id = is_array($cats) && $cats ? (int) $cats[0]->term_id : 0;
+        $rq = new WP_Query([
+            'post_type'      => $post->post_type ?: 'post-imgcap',
+            'post_status'    => 'publish',
+            'posts_per_page' => 6,
+            'post__not_in'   => [$post_id],
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'fields'         => 'ids',
+            'tax_query'      => $cat_id ? [['taxonomy' => 'category', 'terms' => [$cat_id]]] : [],
+        ]);
+        foreach (array_map('intval', (array) $rq->posts) as $rid) {
+            if (!$rid) continue;
+            $r_auth = (int) get_post_field('post_author', $rid);
+            $related[] = [
+                'url'         => (string) get_permalink($rid),
+                'title'       => (string) get_the_title($rid),
+                'img'         => (string) (get_the_post_thumbnail_url($rid, 'medium_large') ?: ''),
+                'author_name' => $r_auth ? (string) get_the_author_meta('display_name', $r_auth) : '',
+            ];
+        }
+    }
+
     $post_context = [
         'post_id'       => $post_id,
         'sponsor'       => $sponsor,
+        'related'       => $related,
         'title'         => (string) get_the_title($post_id),
         'permalink'     => (string) get_permalink($post_id),
         'date'          => (string) get_the_date('', $post_id),

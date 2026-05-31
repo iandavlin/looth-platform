@@ -159,6 +159,26 @@ if ($show_related && $post_id > 0) {
     }
 }
 
+/* Uniform related-card list. Standalone serves pre-baked cards from the blob
+   (no WP_Query at render); WP resolves each id per-post. Either source yields the
+   same {url,title,img,author_name} shape the carousel below renders. */
+$related_cards = [];
+if (isset($GLOBALS['LG_PC']['related']) && is_array($GLOBALS['LG_PC']['related'])) {
+    $related_cards = array_slice($GLOBALS['LG_PC']['related'], 0, $related_count);
+} else {
+    foreach ($related_ids as $rid) {
+        $rid = (int) $rid;
+        if (!$rid) continue;
+        $r_auth = (int) get_post_field('post_author', $rid);
+        $related_cards[] = [
+            'url'         => (string) get_permalink($rid),
+            'title'       => (string) get_the_title($rid),
+            'img'         => (string) (get_the_post_thumbnail_url($rid, 'medium_large') ?: ''),
+            'author_name' => $r_auth ? (string) get_the_author_meta('display_name', $r_auth) : '',
+        ];
+    }
+}
+
 /* ── Editor-mode hook on the related heading ────────────────────── */
 $editorMode  = !empty($ctx['editor_mode']);
 $headEdit    = $editorMode ? ' data-lg-edit-prop="related_heading"' : '';
@@ -240,19 +260,17 @@ if ($can_edit && $author_id) {
 <?= $ind ?>  </aside>
 <?php endif; ?>
 
-<?php if ($show_related && ($related_ids || $editorMode)): ?>
+<?php if ($show_related && ($related_cards || $editorMode)): ?>
 <?= $ind ?>  <p class="lg-post-footer__related-h"<?= $headEdit ?>><?= $safeHead ?></p>
 <?= $ind ?>  <div class="lg-post-footer__carousel" data-lg-carousel>
 <?= $ind ?>    <button type="button" class="lg-post-footer__carousel-btn lg-post-footer__carousel-btn--prev" data-lg-carousel-prev aria-label="Previous">&lsaquo;</button>
 <?= $ind ?>    <div class="lg-post-footer__related-grid" data-lg-carousel-track>
-<?php foreach ($related_ids as $rid):
-    $rid    = (int) $rid;
-    if (!$rid) continue;
-    $url    = (string) get_permalink($rid);
-    $title  = (string) get_the_title($rid);
-    $img    = (string) (get_the_post_thumbnail_url($rid, 'medium_large') ?: '');
-    $r_auth = (int) get_post_field('post_author', $rid);
-    $r_name = $r_auth ? (string) get_the_author_meta('display_name', $r_auth) : '';
+<?php foreach ($related_cards as $rc):
+    $url    = (string) ($rc['url'] ?? '');
+    if ($url === '') continue;
+    $title  = (string) ($rc['title'] ?? '');
+    $img    = (string) ($rc['img'] ?? '');
+    $r_name = (string) ($rc['author_name'] ?? '');
 ?>
 <?= $ind ?>      <a class="lg-post-footer__card" href="<?= Renderer::attr($url) ?>">
 <?php if ($img !== ''): ?>
