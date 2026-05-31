@@ -83,9 +83,19 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
     if (!$images && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$g['vis'])) && !$isOwner) return;
 
+    $title = trim((string)($g['title'] ?? ''));
     echo '<section class="block lg-block lg-block--gallery" data-block="gallery">';
-    echo '<h3 class="lg-bh">Gallery';
-    if ($isOwner) echo ' ' . looth_pmp_control('gallery', (string)$g['vis'], $headerVis);
+    echo '<h3 class="lg-bh">';
+    if ($isOwner) {
+        // Editable block title — reuses the generic lg-edit inline editor (PUT me-gallery {title}).
+        $hasT = $title !== '';
+        echo '<span class="lg-edit lg-btitle' . ($hasT ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="title" data-edit-url="/profile-api/v0/me/gallery" data-edit-method="PUT"'
+           . ' data-edit-type="text" data-edit-placeholder="Gallery">' . looth_h($hasT ? $title : '') . '</span>';
+        echo ' ' . looth_pmp_control('gallery', (string)$g['vis'], $headerVis);
+    } else {
+        echo looth_h($title !== '' ? $title : 'Gallery');
+    }
     echo '</h3>';
     echo '<div class="lg-gallery' . ($isOwner ? ' lg-gallery--edit' : '') . '" id="lg-gallery">';
     foreach ($images as $im) {

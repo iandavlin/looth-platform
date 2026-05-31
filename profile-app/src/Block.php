@@ -428,8 +428,10 @@ final class Block
         $s->execute([':u' => $userId]);
         $r = $s->fetch();
         $images = [];
+        $title  = '';
         if ($r) {
             $d = json_decode((string)$r['data'], true) ?: [];
+            $title = (string)($d['title'] ?? '');
             foreach (($d['images'] ?? []) as $im) {
                 if (is_array($im) && !empty($im['url'])) {
                     $images[] = ['url' => (string)$im['url'], 'caption' => (string)($im['caption'] ?? '')];
@@ -440,6 +442,7 @@ final class Block
             'block'   => 'gallery',
             'subject' => 'person',
             'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'title'   => $title,
             'images'  => $images,
         ];
     }
@@ -448,7 +451,7 @@ final class Block
      * Persist the gallery image list (used for add/remove/reorder/caption). Sanitizes
      * to URLs under THIS user's gallery dir (no foreign URLs). visInput optional.
      */
-    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null): array
+    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null, ?string $title = null): array
     {
         $uuid   = self::userUuid($userId);
         $prefix = self::GALLERY_URL_BASE . '/' . $uuid . '/';
@@ -460,7 +463,13 @@ final class Block
             $clean[] = ['url' => $url, 'caption' => mb_substr((string)($im['caption'] ?? ''), 0, 200)];
             if (count($clean) >= self::GALLERY_MAX) break;
         }
-        $data = json_encode(['images' => $clean], JSON_UNESCAPED_SLASHES);
+        // Title: null = keep whatever's stored (so photo add/remove + vis changes don't wipe it).
+        $finalTitle = ($title === null)
+            ? self::loadGallery($userId)['title']
+            : mb_substr(trim($title), 0, 80);
+        $payload = ['images' => $clean];
+        if ($finalTitle !== '') $payload['title'] = $finalTitle;
+        $data = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
         if ($visInput !== null && self::visFromInput($visInput) !== null) {
             Db::pg()->prepare("

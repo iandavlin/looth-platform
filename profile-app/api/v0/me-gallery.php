@@ -62,7 +62,11 @@ if ($method !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
 
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
-$images = is_array($in['images'] ?? null) ? $in['images'] : [];
+// images only replaced when the key is present; a vis-only / title-only PUT keeps the photos.
+$images = array_key_exists('images', $in) && is_array($in['images'])
+    ? $in['images']
+    : Block::loadGallery($uid)['images'];
 $vis    = array_key_exists('visibility', $in) ? $in['visibility'] : null;
-$gallery = Block::saveGalleryImages($uid, $images, $vis);
+$title  = array_key_exists('title', $in) ? (string) $in['title'] : null;  // null = keep existing
+$gallery = Block::saveGalleryImages($uid, $images, $vis, $title);
 profile_app_json(200, ['ok' => true, 'gallery' => $gallery]);

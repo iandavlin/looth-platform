@@ -545,11 +545,30 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
       return { kind: el.getAttribute('data-kind'), value: el.getAttribute('data-value'), sort_order: i };
     });
   }
+  function stripScheme(v) { return String(v).replace(/^https?:\/\//i, ''); }
+  function rowEl(kind, value) {
+    var row = document.createElement('div'); row.className = 'lg-link';
+    row.setAttribute('data-kind', kind); row.setAttribute('data-value', value);
+    var k = document.createElement('span'); k.className = 'lg-link__kind'; k.textContent = kind;
+    var v = document.createElement('span'); v.className = 'lg-link__val'; v.textContent = stripScheme(value);
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm';
+    rm.setAttribute('aria-label', 'Remove'); rm.textContent = '×';
+    row.appendChild(k); row.appendChild(v); row.appendChild(rm);
+    return row;
+  }
+  // Re-render rows in place from the server's canonical list — no full-page reload (keeps scroll/place).
+  function render(socials) {
+    var addBtn = document.getElementById('lg-link-add');
+    Array.prototype.forEach.call(wrap.querySelectorAll('.lg-link, .lg-link-form'), function (el) { el.remove(); });
+    var f = (socials && socials.fields) || {};
+    if (f.website) wrap.insertBefore(rowEl('web', f.website), addBtn);
+    (f.links || []).forEach(function (l) { wrap.insertBefore(rowEl(l.kind, l.url), addBtn); });
+  }
   function put(items) {
     fetch('/profile-api/v0/me/socials', { method: 'PUT', credentials: 'include',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) { if (res.ok) location.reload(); else alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .then(function (res) { if (res.ok) render(res.j && res.j.socials); else alert('Save failed: ' + (res.j && res.j.error || '?')); })
       .catch(function () { alert('Network error.'); });
   }
 
