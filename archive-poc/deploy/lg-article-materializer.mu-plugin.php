@@ -70,6 +70,21 @@ add_action('wp_after_insert_post', function ($post_id, $post = null, $update = n
     lg_materializer_dispatch((int) $post_id, 'upsert');
 }, 99, 4);
 
+/* THE FE-EDIT WIRE. The front-end editor (EditorRest) saves the layout via a bare
+   update_post_meta(_lg_layout_v2) — which does NOT fire wp_after_insert_post. Without
+   this, an inline FE edit writes to WP but never re-bakes the blob, so the standalone
+   page (what front-end users see) shows stale content. Re-bake on the meta write
+   itself. Dispatcher de-dupes per (post,action)/request, so a full save that fires
+   both hooks still bakes once. */
+$lg_mat_meta_rebake = function ($meta_id, $post_id, $meta_key) {
+    if ($meta_key === '_lg_layout_v2'
+        || (defined('LG_LAYOUT_V2_META_KEY') && $meta_key === LG_LAYOUT_V2_META_KEY)) {
+        lg_materializer_dispatch((int) $post_id, 'upsert');
+    }
+};
+add_action('updated_post_meta', $lg_mat_meta_rebake, 99, 3);
+add_action('added_post_meta',   $lg_mat_meta_rebake, 99, 3);
+
 /* A `tier` term change alters gating (post_tier + the tier chip) without
    touching post meta — re-materialize so the blob's gating stays correct. */
 add_action('set_object_terms', function ($object_id, $terms, $tt_ids, $taxonomy) {
