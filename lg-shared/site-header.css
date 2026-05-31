@@ -343,6 +343,9 @@ body.lg-sm-open { overflow: hidden; }
   position: fixed; inset: 0; z-index: 300;
   display: flex; align-items: flex-start; justify-content: flex-end;
 }
+/* The display:flex above overrides the UA [hidden]{display:none}, so the
+   modal would show on load despite the hidden attr. Re-assert hidden. */
+.lg-social-modal[hidden] { display: none; }
 .lg-social-modal__backdrop {
   position: absolute; inset: 0;
   background: rgba(26,29,26,0.45);
