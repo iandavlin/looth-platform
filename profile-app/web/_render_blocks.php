@@ -91,12 +91,15 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     // layout drives in Phase 1 (presence still per-renderer). data-block on each <section>
     // is the DOM order-source the owner's drag-reorder collects from.
     $renderers = [
-        'about'    => static fn() => looth_render_about_block($userId, $role, $headerVis),
-        'location' => static fn() => looth_render_location_block($userId, $role, $headerVis),
-        'craft'    => static fn() => looth_render_craft_block($userId, $role, $headerVis),
-        'gallery'  => static fn() => looth_render_gallery_block($userId, $role, $headerVis),
-        'connect'  => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
-        'socials'  => static fn() => looth_render_socials_block($userId, $role, $headerVis),
+        'about'       => static fn() => looth_render_about_block($userId, $role, $headerVis),
+        'location'    => static fn() => looth_render_location_block($userId, $role, $headerVis),
+        'skills'      => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'skills'),
+        'services'    => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'services'),
+        'instruments' => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'instruments'),
+        'music'       => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'music'),
+        'gallery'     => static fn() => looth_render_gallery_block($userId, $role, $headerVis),
+        'connect'     => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
+        'socials'     => static fn() => looth_render_socials_block($userId, $role, $headerVis),
     ];
     foreach (Block::profileLayout($userId) as $key) {
         if (isset($renderers[$key])) ($renderers[$key])();
@@ -177,6 +180,45 @@ function looth_render_about_block(int $userId, string $role, string $headerVis):
  * The craft block — instruments / skills / highlights as search-fuel chips, one
  * block-level vis, ceiling-capped via Block::canSee.
  */
+/**
+ * Generic catalog-chip block (Skills / Services / Instruments / Music). Owner gets removable
+ * chips + an "+ Add" that opens the catalog search-multiselect (looth-cat-picker JS in u.php);
+ * visitors see read-only chips. Block vis on profile_sections key=$key. data-block/data-kind
+ * tell the picker which block + catalog it drives.
+ */
+function looth_render_catalog_block(int $userId, string $role, string $headerVis, string $key): void
+{
+    $block = Block::loadCatalogBlock($userId, $key);
+    if ($block === null) return;
+    $items   = $block['items'];
+    $isOwner = ($role === 'me');
+    $label   = Block::LAYOUT_BLOCKS[$key]['label'] ?? ucfirst($key);
+    $kind    = Block::CATALOG_BLOCKS[$key]['kind'] ?? $key;
+
+    if (!$items && !$isOwner) return;                                  // empty + visitor → no block
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$block['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--' . looth_h($key) . '" data-block="' . looth_h($key) . '">';
+    echo '<h3 class="lg-bh">' . looth_h($label);
+    if ($isOwner) echo ' ' . looth_pmp_control($key, (string)$block['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-chips lg-cat-edit" data-block="' . looth_h($key) . '" data-kind="' . looth_h($kind) . '">';
+        foreach ($items as $it) {
+            echo '<span class="lg-chip lg-chip--edit" data-id="' . (int)$it['id'] . '">'
+               . looth_h((string)$it['name']) . '<button type="button" class="lg-chip__rm" aria-label="Remove">×</button></span>';
+        }
+        echo '<button type="button" class="lg-link__add lg-cat-add">+ Add ' . looth_h(strtolower($label)) . '</button>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-chips">';
+        foreach ($items as $it) echo '<span class="lg-chip">' . looth_h((string)$it['name']) . '</span>';
+        echo '</div>';
+    }
+    echo '</section>';
+}
+
 function looth_render_craft_block(int $userId, string $role, string $headerVis): void
 {
     $craft = Block::loadCraft($userId);

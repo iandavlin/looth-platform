@@ -225,6 +225,15 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-craft-results .t{font:700 9px/1 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-mute)}
 .lg-craft-results .added{font:700 9px/1 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-sage-d)}
 .lg-craft-results .none{padding:8px 10px;color:var(--lg-mute);font-size:12.5px}
+/* catalog picker: result rows (pick + admin delete) and the admin "add new" affordance */
+.lg-craft-results__row{display:flex;align-items:center}
+.lg-craft-results__row .pick{flex:1}
+.lg-craft-results .del{width:auto!important;border:0;background:none;cursor:pointer;color:var(--lg-mute);padding:6px 9px;font-size:12px;flex:0 0 auto}
+.lg-craft-results .del:hover{color:var(--lg-rust)}
+.lg-craft-results .lg-cat-new{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;border-top:1px solid var(--lg-line);
+  background:var(--lg-sage-tint);cursor:pointer;padding:9px 12px;text-align:left}
+.lg-craft-results .lg-cat-new span:first-child{color:var(--lg-sage-d);font-weight:700;font-size:13px}
+.lg-craft-results .lg-cat-new:hover{background:var(--lg-sage-3)}
 
 /* connect block */
 .lg-connect__count{display:inline-block;background:var(--lg-sage-tint);color:var(--lg-sage-d);font:800 11px/1 var(--lg-font-sans);border-radius:999px;padding:3px 9px;margin-left:4px;vertical-align:middle}
@@ -925,89 +934,118 @@ window.lgSortable = function (container, opts) {
 </script>
 
 <script>
-/* Craft editor (owner/Me) — removable chips + a search MULTISELECT over the skill
-   + instrument catalogs. Click results to add (chips appear instantly, picker stays
-   open); ✕ on a chip removes. Each change PUTs the full list to me-skills / me-instruments. */
+/* Catalog chip pickers (owner/Me) — Skills / Services / Instruments / Music. Each .lg-cat-edit
+   block searches its catalog (data-kind), click a result to add / ✕ a chip to remove → PUT the
+   id list to /me/catalog/<block>. ADMINS additionally get, in the dropdown: "＋ Add '<term>'"
+   to create a not-found catalog item, and a 🗑 on each result to deactivate it for everyone. */
 (function () {
-  var wrap = document.getElementById('lg-craft-edit');
-  if (!wrap) return;
-  var addBtn = document.getElementById('lg-craft-add');
-  var CATALOG = null;
-
-  function idsOf(type) {
-    return Array.prototype.map.call(wrap.querySelectorAll('.lg-chip--edit[data-type="' + type + '"]'),
-      function (el) { return parseInt(el.getAttribute('data-id'), 10); });
-  }
-  function put(type) {
-    var url = type === 'skill' ? '/profile-api/v0/me/skills' : '/profile-api/v0/me/instruments';
-    var key = type === 'skill' ? 'skill_id' : 'instrument_id';
-    var items = idsOf(type).map(function (id, i) { var o = {}; o[key] = id; o.sort_order = i; return o; });
-    return fetch(url, { method: 'PUT', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
-      .then(function (r) { return r.ok; });
-  }
-  function makeChip(type, id, name) {
-    var s = document.createElement('span'); s.className = 'lg-chip lg-chip--edit';
-    s.setAttribute('data-type', type); s.setAttribute('data-id', id); s.textContent = name;
-    var b = document.createElement('button'); b.type = 'button'; b.className = 'lg-chip__rm';
-    b.setAttribute('aria-label', 'Remove'); b.textContent = '×'; s.appendChild(b);
-    return s;
-  }
-  function loadCatalog() {
-    if (CATALOG) return Promise.resolve(CATALOG);
-    return Promise.all([
-      fetch('/profile-api/v0/catalogs/skills', { credentials: 'include' }).then(function (r) { return r.json(); }),
-      fetch('/profile-api/v0/catalogs/instruments', { credentials: 'include' }).then(function (r) { return r.json(); })
-    ]).then(function (res) {
-      var map = function (arr, t) { return (arr || []).map(function (x) { return { type: t, id: x.id, name: x.name, lc: (x.name || '').toLowerCase() }; }); };
-      CATALOG = map(res[0].items, 'skill').concat(map(res[1].items, 'instrument'));
-      return CATALOG;
-    });
-  }
-
-  wrap.addEventListener('click', function (e) {
-    var rm = e.target.closest('.lg-chip__rm'); if (!rm) return;
-    var chip = rm.closest('.lg-chip--edit'); var type = chip.getAttribute('data-type');
-    chip.remove();
-    put(type).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
-  });
-
-  addBtn.addEventListener('click', function () {
-    if (document.querySelector('.lg-craft-search')) return;
-    var box = document.createElement('span'); box.className = 'lg-craft-search';
-    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search skills & instruments…';
-    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
-    box.appendChild(inp); box.appendChild(res);
-    addBtn.parentNode.insertBefore(box, addBtn);
-    addBtn.style.display = 'none'; inp.focus();
-
-    function has(type, id) { return idsOf(type).indexOf(id) !== -1; }
-    function render() {
-      loadCatalog().then(function (cat) {
-        var q = inp.value.trim().toLowerCase();
-        res.innerHTML = '';
-        if (q === '') { res.style.display = 'none'; return; }
-        var matches = cat.filter(function (c) { return c.lc.indexOf(q) !== -1; }).slice(0, 40);
-        if (!matches.length) { res.innerHTML = '<div class="none">No matches</div>'; res.style.display = 'block'; return; }
-        matches.forEach(function (m) {
-          var added = has(m.type, m.id);
-          var b = document.createElement('button'); b.type = 'button';
-          b.innerHTML = '<span>' + m.name + '</span><span class="' + (added ? 'added' : 't') + '">' + (added ? '✓ added' : m.type) + '</span>';
-          if (!added) b.addEventListener('click', function () {
-            var chip = makeChip(m.type, m.id, m.name);
-            box.parentNode.insertBefore(chip, box);
-            put(m.type).then(function (ok) { if (!ok) { chip.remove(); alert('Add failed'); } });
-            render(); inp.focus();
-          });
-          res.appendChild(b);
-        });
-        res.style.display = 'block';
-      });
+  var IS_ADMIN = <?= Auth::isAdmin() ? 'true' : 'false' ?>;
+  var catalogs = {};   // kind → Promise<[{id,name,lc}]>
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function loadCatalog(kind) {
+    if (!catalogs[kind]) {
+      catalogs[kind] = fetch('/profile-api/v0/catalogs/' + kind, { credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { return (j.items || []).map(function (x) { return { id: x.id, name: x.name, lc: (x.name || '').toLowerCase() }; }); });
     }
-    inp.addEventListener('input', render);
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') { box.remove(); addBtn.style.display = ''; } });
-    document.addEventListener('click', function onDoc(e) {
-      if (!box.contains(e.target) && e.target !== addBtn) { box.remove(); addBtn.style.display = ''; document.removeEventListener('click', onDoc); }
+    return catalogs[kind];
+  }
+
+  document.querySelectorAll('.lg-cat-edit').forEach(function (wrap) {
+    var block  = wrap.getAttribute('data-block');
+    var kind   = wrap.getAttribute('data-kind');
+    var addBtn = wrap.querySelector('.lg-cat-add');
+    if (!addBtn) return;
+
+    function ids() {
+      return Array.prototype.map.call(wrap.querySelectorAll('.lg-chip--edit'),
+        function (el) { return parseInt(el.getAttribute('data-id'), 10); });
+    }
+    function put() {
+      return fetch('/profile-api/v0/me/catalog/' + block, { method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids() }) })
+        .then(function (r) { return r.ok; });
+    }
+    function makeChip(id, name) {
+      var s = document.createElement('span'); s.className = 'lg-chip lg-chip--edit';
+      s.setAttribute('data-id', id); s.textContent = name;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'lg-chip__rm';
+      b.setAttribute('aria-label', 'Remove'); b.textContent = '×'; s.appendChild(b);
+      return s;
+    }
+    function addItem(id, name) {
+      if (ids().indexOf(id) !== -1) return;
+      var chip = makeChip(id, name);
+      wrap.insertBefore(chip, wrap.querySelector('.lg-craft-search') || addBtn);
+      put().then(function (ok) { if (!ok) { chip.remove(); alert('Add failed'); } });
+    }
+
+    wrap.addEventListener('click', function (e) {
+      var rm = e.target.closest('.lg-chip__rm'); if (!rm) return;
+      var chip = rm.closest('.lg-chip--edit'); chip.remove();
+      put().then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
+    });
+
+    addBtn.addEventListener('click', function () {
+      if (wrap.querySelector('.lg-craft-search')) return;
+      var box = document.createElement('span'); box.className = 'lg-craft-search';
+      var inp = document.createElement('input'); inp.type = 'text';
+      inp.placeholder = 'Search ' + addBtn.textContent.replace(/^\+\s*Add\s*/i, '') + '…';
+      var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
+      box.appendChild(inp); box.appendChild(res);
+      addBtn.parentNode.insertBefore(box, addBtn); addBtn.style.display = 'none'; inp.focus();
+
+      function has(id) { return ids().indexOf(id) !== -1; }
+      function render() {
+        loadCatalog(kind).then(function (cat) {
+          var q = inp.value.trim(), ql = q.toLowerCase();
+          res.innerHTML = '';
+          if (ql === '') { res.style.display = 'none'; return; }
+          var matches = cat.filter(function (c) { return c.lc.indexOf(ql) !== -1; }).slice(0, 40);
+          var exact   = cat.some(function (c) { return c.lc === ql; });
+          matches.forEach(function (m) {
+            var row = document.createElement('div'); row.className = 'lg-craft-results__row';
+            var added = has(m.id);
+            var pick = document.createElement('button'); pick.type = 'button'; pick.className = 'pick';
+            pick.innerHTML = '<span>' + esc(m.name) + '</span><span class="' + (added ? 'added' : 't') + '">' + (added ? '✓ added' : '') + '</span>';
+            if (!added) pick.addEventListener('click', function () { addItem(m.id, m.name); render(); inp.focus(); });
+            row.appendChild(pick);
+            if (IS_ADMIN) {
+              var del = document.createElement('button'); del.type = 'button'; del.className = 'del';
+              del.title = 'Remove from catalog (admin)'; del.textContent = '🗑';
+              del.addEventListener('click', function () {
+                if (!confirm('Remove “' + m.name + '” from the catalog for everyone?')) return;
+                fetch('/profile-api/v0/catalogs/' + kind + '/' + m.id, { method: 'DELETE', credentials: 'include' })
+                  .then(function (r) { if (r.ok) { delete catalogs[kind]; render(); } else alert('Catalog remove failed (admin only).'); });
+              });
+              row.appendChild(del);
+            }
+            res.appendChild(row);
+          });
+          if (IS_ADMIN && q && !exact) {                       // admin: create a not-found item
+            var add = document.createElement('button'); add.type = 'button'; add.className = 'lg-cat-new';
+            add.innerHTML = '<span>＋ Add “' + esc(q) + '” to catalog</span><span class="t">new</span>';
+            add.addEventListener('click', function () {
+              fetch('/profile-api/v0/catalogs/' + kind, { method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: q }) })
+                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (x) {
+                  if (x.ok && x.j.item) { delete catalogs[kind]; addItem(x.j.item.id, x.j.item.name); inp.value = ''; render(); inp.focus(); }
+                  else alert('Add to catalog failed (admin only).');
+                });
+            });
+            res.appendChild(add);
+          } else if (!matches.length) {
+            res.innerHTML = '<div class="none">No matches</div>';
+          }
+          res.style.display = 'block';
+        });
+      }
+      inp.addEventListener('input', render);
+      inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') { box.remove(); addBtn.style.display = ''; } });
+      document.addEventListener('click', function onDoc(e) {
+        if (!box.contains(e.target) && e.target !== addBtn) { box.remove(); addBtn.style.display = ''; document.removeEventListener('click', onDoc); }
+      });
     });
   });
 })();

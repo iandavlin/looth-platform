@@ -56,12 +56,27 @@ final class Block
      * lets us pin a block later (all true for now). Array order = the Phase-1 default.
      */
     public const LAYOUT_BLOCKS = [
-        'about'    => ['label' => 'About',                'removable' => true],
-        'location' => ['label' => 'Location',             'removable' => true],
-        'craft'    => ['label' => 'Skills & Instruments', 'removable' => true],
-        'gallery'  => ['label' => 'Gallery',              'removable' => true],
-        'connect'  => ['label' => 'Connections',          'removable' => true],
-        'socials'  => ['label' => 'Links',                'removable' => true],
+        'about'       => ['label' => 'About',       'removable' => true],
+        'location'    => ['label' => 'Location',    'removable' => true],
+        'skills'      => ['label' => 'Skills',      'removable' => true],
+        'services'    => ['label' => 'Services',    'removable' => true],
+        'instruments' => ['label' => 'Instruments', 'removable' => true],
+        'music'       => ['label' => 'Music',       'removable' => true],
+        'gallery'     => ['label' => 'Gallery',     'removable' => true],
+        'connect'     => ['label' => 'Connections', 'removable' => true],
+        'socials'     => ['label' => 'Links',       'removable' => true],
+    ];
+
+    /**
+     * Catalog-backed chip blocks (Skills/Services/Instruments/Music) — each picks rows from a
+     * catalog table into a per-user link table. One generic loader/saver/renderer/picker drives
+     * all four. (Identifiers here are constants, never user input — safe to interpolate in SQL.)
+     */
+    public const CATALOG_BLOCKS = [
+        'skills'      => ['catalog' => 'skill_catalog',      'link' => 'profile_skills',      'fk' => 'skill_id',      'kind' => 'skills'],
+        'services'    => ['catalog' => 'service_catalog',    'link' => 'profile_services',    'fk' => 'service_id',    'kind' => 'services'],
+        'instruments' => ['catalog' => 'instrument_catalog', 'link' => 'profile_instruments', 'fk' => 'instrument_id', 'kind' => 'instruments'],
+        'music'       => ['catalog' => 'genre_catalog',      'link' => 'profile_genres',      'fk' => 'genre_id',      'kind' => 'genres'],
     ];
 
     /**
@@ -74,7 +89,10 @@ final class Block
         switch ($key) {
             case 'about':    $a = self::loadAbout($userId);    return $a !== null && trim((string)($a['text'] ?? '')) !== '';
             case 'location': $l = self::loadLocation($userId); return $l !== null && !empty($l['has']);
-            case 'craft':    $c = self::loadCraft($userId);    return $c !== null && (!empty($c['fields']['instruments']) || !empty($c['fields']['skills']));
+            case 'skills':
+            case 'services':
+            case 'instruments':
+            case 'music':    $b = self::loadCatalogBlock($userId, $key); return $b !== null && !empty($b['items']);
             case 'gallery':  return !empty(self::loadGallery($userId)['images']);
             case 'connect':  $c = self::loadConnect($userId, $userId); return $c !== null && (int)($c['fields']['count'] ?? 0) > 0;
             case 'socials':  $s = self::loadSocials($userId);  return $s !== null && !empty($s['fields']['ordered']);
@@ -103,15 +121,82 @@ final class Block
         return array_values(array_filter(array_keys(self::LAYOUT_BLOCKS), static fn($k) => !isset($present[$k])));
     }
 
+    // ---------- generic catalog-chip blocks (skills / services / instruments / music) ----------
+
+    /**
+     * Assemble a catalog-chip block — the user's picked rows (active catalog only), plus the
+     * block-level vis (profile_sections key=$key). Returns null for an unknown user/key.
+     */
+    public static function loadCatalogBlock(int $userId, string $key): ?array
+    {
+        $cfg = self::CATALOG_BLOCKS[$key] ?? null;
+        if ($cfg === null) return null;
+        $pg = Db::pg();
+        $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
+        $e->execute([':i' => $userId]);
+        if (!$e->fetchColumn()) return null;
+
+        // $cfg values are constants from CATALOG_BLOCKS — safe to interpolate as identifiers.
+        $st = $pg->prepare(
+            "SELECT c.id, c.slug, c.name
+             FROM {$cfg['link']} l JOIN {$cfg['catalog']} c ON c.id = l.{$cfg['fk']}
+             WHERE l.user_id = :u AND c.active = true
+             ORDER BY l.sort_order, c.name"
+        );
+        $st->execute([':u' => $userId]);
+        $items = array_map(static fn($r) => [
+            'id' => (int) $r['id'], 'slug' => $r['slug'], 'name' => $r['name'],
+        ], $st->fetchAll());
+
+        return [
+            'block' => $key,
+            'vis'   => self::normalizeVis(self::blockVisibility($userId, $key, 'members')),
+            'items' => $items,
+        ];
+    }
+
+    /** Replace a user's selection for a catalog block (validated ⊂ active catalog, order preserved). */
+    public static function saveCatalogSelection(int $userId, string $key, array $ids): ?array
+    {
+        $cfg = self::CATALOG_BLOCKS[$key] ?? null;
+        if ($cfg === null) return null;
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn($x) => $x > 0)));
+
+        $pg = Db::pg();
+        $pg->beginTransaction();
+        try {
+            $pg->prepare("DELETE FROM {$cfg['link']} WHERE user_id = :u")->execute([':u' => $userId]);
+            if ($ids) {
+                $ph    = implode(',', array_fill(0, count($ids), '?'));
+                $vstmt = $pg->prepare("SELECT id FROM {$cfg['catalog']} WHERE active = true AND id IN ($ph)");
+                $vstmt->execute($ids);
+                $valid = array_map('intval', $vstmt->fetchAll(\PDO::FETCH_COLUMN));
+                $rank  = array_flip($ids);                                  // preserve caller's order
+                usort($valid, static fn($a, $b) => ($rank[$a] ?? 0) <=> ($rank[$b] ?? 0));
+                $ins = $pg->prepare("INSERT INTO {$cfg['link']} (user_id, {$cfg['fk']}, sort_order) VALUES (:u, :x, :s) ON CONFLICT DO NOTHING");
+                foreach ($valid as $i => $id) $ins->execute([':u' => $userId, ':x' => $id, ':s' => $i]);
+            }
+            $pg->commit();
+        } catch (\Throwable $e) {
+            $pg->rollBack();
+            throw $e;
+        }
+        return self::loadCatalogBlock($userId, $key);
+    }
+
     /** Filter an arbitrary key list to known layout keys, in order, de-duped. */
     private static function normalizeLayout(array $order): array
     {
         $seen = [];
         $out  = [];
         foreach ($order as $k) {
-            if (is_string($k) && isset(self::LAYOUT_BLOCKS[$k]) && !isset($seen[$k])) {
-                $seen[$k] = true;
-                $out[]    = $k;
+            if (!is_string($k)) continue;
+            // back-compat: the old combined 'craft' block became Skills + Instruments.
+            foreach ($k === 'craft' ? ['skills', 'instruments'] : [$k] as $kk) {
+                if (isset(self::LAYOUT_BLOCKS[$kk]) && !isset($seen[$kk])) {
+                    $seen[$kk] = true;
+                    $out[]     = $kk;
+                }
             }
         }
         return $out;

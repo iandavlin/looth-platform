@@ -15,6 +15,7 @@ final class Auth
     private static bool    $cacheBuilt  = false;
     private static ?string $publicKey   = null;
     private static ?array  $lastClaims  = null;
+    private static ?bool   $isAdmin     = null;
 
     /** Returns the JWT claims or null if absent/invalid. */
     public static function claims(): ?array
@@ -70,6 +71,33 @@ final class Auth
             exit;
         }
         return $u;
+    }
+
+    /**
+     * Whether the bearer is a WordPress administrator. Gates front-end catalog management
+     * (admins add/deactivate catalog rows from the picker). The looth_id token carries no
+     * role claim today, so this checks wp_capabilities in the WP DB via the peer-auth MySQL
+     * socket (same access pattern as me-name's wp_users mirror). Cached per request.
+     */
+    public static function isAdmin(): bool
+    {
+        if (self::$isAdmin !== null) return self::$isAdmin;
+        self::$isAdmin = false;
+        $claims = self::claims();
+        $wpId   = (int) ($claims['wp_user_id'] ?? 0);
+        if ($wpId < 1) return false;
+        try {
+            $u  = posix_getpwuid(posix_geteuid())['name'] ?? 'profile-app';
+            $my = new \PDO('mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=' . LG_PROFILE_APP_MYSQL_DB,
+                $u, '', [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+            $s = $my->prepare("SELECT meta_value FROM wp_usermeta WHERE user_id = ? AND meta_key = 'wp_capabilities'");
+            $s->execute([$wpId]);
+            $caps = (string) $s->fetchColumn();
+            self::$isAdmin = $caps !== '' && strpos($caps, '"administrator"') !== false;
+        } catch (\Throwable $e) {
+            error_log('[Auth::isAdmin] cap check failed: ' . $e->getMessage());
+        }
+        return self::$isAdmin;
     }
 
     private static function readToken(): ?string
