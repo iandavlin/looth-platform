@@ -64,10 +64,43 @@ final class Block
         'socials'  => ['label' => 'Links',                'removable' => true],
     ];
 
-    /** Default block order when the user has no explicit layout (Phase 1 = the full set). */
-    public static function defaultLayout(): array
+    /**
+     * Whether a block currently holds content. Drives the opt-in default (below) and lets
+     * the caddy show which available blocks would come back populated. Runs only when a
+     * profile has no explicit layout yet (never-touched), so the extra loads are rare.
+     */
+    public static function blockHasContent(int $userId, string $key): bool
     {
-        return array_keys(self::LAYOUT_BLOCKS);
+        switch ($key) {
+            case 'about':    $a = self::loadAbout($userId);    return $a !== null && trim((string)($a['text'] ?? '')) !== '';
+            case 'location': $l = self::loadLocation($userId); return $l !== null && !empty($l['has']);
+            case 'craft':    $c = self::loadCraft($userId);    return $c !== null && (!empty($c['fields']['instruments']) || !empty($c['fields']['skills']));
+            case 'gallery':  return !empty(self::loadGallery($userId)['images']);
+            case 'connect':  $c = self::loadConnect($userId, $userId); return $c !== null && (int)($c['fields']['count'] ?? 0) > 0;
+            case 'socials':  $s = self::loadSocials($userId);  return $s !== null && !empty($s['fields']['ordered']);
+        }
+        return false;
+    }
+
+    /**
+     * Default block order when the user has no explicit layout — opt-in / start-minimal:
+     * every block that already HAS content, in canonical order (empties live in the caddy).
+     * A brand-new empty profile seeds with just 'about' so there's a place to begin.
+     */
+    public static function defaultLayout(int $userId): array
+    {
+        $out = [];
+        foreach (array_keys(self::LAYOUT_BLOCKS) as $key) {
+            if (self::blockHasContent($userId, $key)) $out[] = $key;
+        }
+        return $out ?: ['about'];
+    }
+
+    /** Block keys not currently on the profile — the caddy's "available to add" set, in canonical order. */
+    public static function availableBlocks(int $userId): array
+    {
+        $present = array_flip(self::profileLayout($userId));
+        return array_values(array_filter(array_keys(self::LAYOUT_BLOCKS), static fn($k) => !isset($present[$k])));
     }
 
     /** Filter an arbitrary key list to known layout keys, in order, de-duped. */
@@ -94,9 +127,9 @@ final class Block
         $s = Db::pg()->prepare('SELECT profile_layout FROM users WHERE id = :i');
         $s->execute([':i' => $userId]);
         $raw = $s->fetchColumn();
-        if ($raw === false) return [];                         // unknown user
+        if ($raw === false) return [];                              // unknown user
         $order = is_string($raw) ? json_decode($raw, true) : null;
-        if (!is_array($order)) return self::defaultLayout();   // NULL / never-set → default
+        if (!is_array($order)) return self::defaultLayout($userId); // NULL / never-set → opt-in default
         return self::normalizeLayout($order);
     }
 

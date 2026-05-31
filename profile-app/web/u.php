@@ -20,6 +20,7 @@ require_once __DIR__ . '/_render_blocks.php';   // looth_render_profile_blocks +
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Social;
+use Looth\ProfileApp\Block;   // composable-layout caddy (availableBlocks + LAYOUT_BLOCKS)
 
 $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
@@ -146,6 +147,34 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-block__grip{display:inline-block;cursor:grab;color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;vertical-align:middle;margin-right:8px;user-select:none}
 .lg-block__grip:hover{color:var(--lg-sage-d)}
 .lg-block.lg-sort-dragging{cursor:grabbing;outline:2px dashed var(--lg-sage-3);outline-offset:2px}
+/* per-block remove (owner) — injected next to the grip */
+.lg-block__rm{display:inline-block;border:0;background:none;cursor:pointer;color:var(--lg-mute);font:700 15px/1 var(--lg-font-sans);padding:0 4px;vertical-align:middle;margin-left:2px}
+.lg-block__rm:hover{color:var(--lg-rust)}
+/* drop indicator while dragging a caddy block onto the profile */
+.lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
+.lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
+/* ✚ Blocks toggle in the View-as bar */
+.lg-viewas__caddy{background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:6px 14px;font:800 12px/1 var(--lg-font-sans);cursor:pointer}
+.lg-viewas__caddy:hover{filter:brightness(1.06)}
+/* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
+.lg-caddy{position:fixed;top:0;right:0;height:100vh;width:300px;max-width:86vw;background:#fff;border-left:1px solid var(--lg-line);
+  box-shadow:-12px 0 36px rgba(0,0,0,.14);transform:translateX(102%);transition:transform .22s ease;z-index:1200;display:flex;flex-direction:column;padding:18px}
+.lg-caddy.is-open{transform:none}
+.lg-caddy__backdrop{position:fixed;inset:0;background:rgba(20,22,18,.34);z-index:1190;opacity:0;transition:opacity .22s}
+.lg-caddy__backdrop.is-open{opacity:1}
+.lg-caddy__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.lg-caddy__head strong{font:800 16px/1 var(--lg-font-serif);color:var(--lg-charcoal)}
+.lg-caddy__close{border:0;background:none;font-size:24px;line-height:1;color:var(--lg-mute);cursor:pointer}
+.lg-caddy__close:hover{color:var(--lg-ink)}
+.lg-caddy__hint{font:500 11.5px/1.5 var(--lg-font-sans);color:var(--lg-mute);margin:0 0 14px}
+.lg-caddy__list{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.lg-caddy__item{display:flex;align-items:center;gap:8px;text-align:left;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;
+  padding:11px 12px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-ink);cursor:grab}
+.lg-caddy__item:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-caddy__item.lg-sort-dragging{opacity:.45}
+.lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
+.lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
+.lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
 .lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
 .lg-links--edit .lg-link:not([draggable]) .lg-link__grip,.lg-socrow .lg-link__grip{display:none}
 .lg-link__kind{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:5px;padding:3px 6px}
@@ -250,8 +279,9 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
           <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
         </span>
+        <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">✚ Blocks</button>
         <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
-        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. “Edit details (legacy)” is the old form, still needed for fields that aren’t inline yet (location, skills, links).</span>
+        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. Drag the ⠿ on a block to reorder; <b>✚ Blocks</b> adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
       </div>
     <?php endif; ?>
 
@@ -262,6 +292,25 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
     <?php endif; ?>
   </div>
 </main>
+
+<?php if ($isOwner): $available = Block::availableBlocks($subjectId); ?>
+  <div class="lg-caddy__backdrop" id="lg-caddy-backdrop" hidden></div>
+  <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
+    <div class="lg-caddy__head">
+      <strong>Add a block</strong>
+      <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
+    </div>
+    <p class="lg-caddy__hint">Tap a block to add it — or drag it onto your profile. Drag the ⠿ on a block to reorder; ✕ removes it back here.</p>
+    <div class="lg-caddy__list" id="lg-caddy-list">
+      <?php foreach ($available as $key): $b = Block::LAYOUT_BLOCKS[$key]; ?>
+        <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
+          <span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($b['label']) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span>
+        </button>
+      <?php endforeach; ?>
+      <span class="lg-caddy__empty"<?= $available ? ' hidden' : '' ?>>All blocks added ✓</span>
+    </div>
+  </aside>
+<?php endif; ?>
 
 <?php lg_shared_render_site_footer(); ?>
 
@@ -373,47 +422,152 @@ window.lgSortable = function (container, opts) {
 </script>
 
 <script>
-/* Whole-block drag-to-reorder (owner/Me). Injects a ⠿ grip into each body block's
-   heading, then lgSortable over the blocks (the header stays pinned/excluded). On drop,
-   the new data-block order is persisted to /me/layout (order/presence only — no data moves). */
+/* Owner layout controls — whole-block reorder (⠿ grip), per-block remove (✕), and the
+   ✚ Blocks caddy (tap-to-add, or drag a block from the caddy onto the profile). Order
+   persists to /me/layout with NO reload; add & remove reload so the server re-renders the
+   affected block(s) + the caddy (and so a newly added block's inline editors wire up). */
 (function () {
   var profile = document.querySelector('.lg-profile');
   if (!profile) return;
-  var blocks = Array.prototype.slice.call(profile.querySelectorAll('.lg-block:not(.lg-block--header)'));
-  if (blocks.length < 2) return;   // nothing to reorder
 
-  blocks.forEach(function (b) {
-    var host = b.querySelector('.lg-bh') || b;
-    if (host.querySelector('.lg-block__grip')) return;
-    var grip = document.createElement('span');
-    grip.className = 'lg-block__grip';
-    grip.setAttribute('title', 'Drag to reorder');
-    grip.setAttribute('aria-hidden', 'true');
-    grip.textContent = '⠿';
-    host.insertBefore(grip, host.firstChild);
-  });
-
-  function order() {
-    return Array.prototype.map.call(
-      profile.querySelectorAll('.lg-block:not(.lg-block--header)'),
-      function (s) { return s.getAttribute('data-block'); }
-    ).filter(Boolean);
+  function bodyBlocks() {
+    return Array.prototype.slice.call(profile.querySelectorAll('.lg-block:not(.lg-block--header)'));
   }
-  function save() {
+  function order() {
+    return bodyBlocks().map(function (s) { return s.getAttribute('data-block'); }).filter(Boolean);
+  }
+  function putLayout(arr, then) {
     fetch('/profile-api/v0/me/layout', {
       method: 'PUT', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: order() })
+      body: JSON.stringify({ order: arr })
     })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .then(function (res) { if (res.ok) { if (then) then(); } else alert('Save failed: ' + (res.j && res.j.error || '?')); })
       .catch(function () { alert('Network error.'); });
   }
 
+  // Inject a ⠿ grip + a remove ✕ into each body block's heading.
+  bodyBlocks().forEach(function (b) {
+    var host = b.querySelector('.lg-bh') || b;
+    if (!host.querySelector('.lg-block__grip')) {
+      var grip = document.createElement('span');
+      grip.className = 'lg-block__grip'; grip.setAttribute('title', 'Drag to reorder');
+      grip.setAttribute('aria-hidden', 'true'); grip.textContent = '⠿';
+      host.insertBefore(grip, host.firstChild);
+    }
+    if (!host.querySelector('.lg-block__rm')) {
+      var rm = document.createElement('button');
+      rm.type = 'button'; rm.className = 'lg-block__rm';
+      rm.setAttribute('title', 'Remove this block'); rm.setAttribute('aria-label', 'Remove block');
+      rm.textContent = '✕';
+      var grip2 = host.querySelector('.lg-block__grip');
+      host.insertBefore(rm, grip2 ? grip2.nextSibling : host.firstChild);
+    }
+  });
+
+  // Remove a block → drop its key from the layout, reload (it returns to the caddy; data kept).
+  profile.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-block__rm');
+    if (!rm) return;
+    var block = rm.closest('.lg-block:not(.lg-block--header)');
+    if (!block) return;
+    var key = block.getAttribute('data-block');
+    putLayout(order().filter(function (k) { return k !== key; }), function () { location.reload(); });
+  });
+
+  // Reorder = no reload.
   lgSortable(profile, {
     itemSelector: '.lg-block:not(.lg-block--header)',
     handleSelector: '.lg-block__grip',
-    onDrop: save
+    onDrop: function () { putLayout(order()); }
+  });
+
+  /* ---- caddy: open / close ---- */
+  var caddy    = document.getElementById('lg-caddy');
+  var toggle   = document.getElementById('lg-caddy-toggle');
+  var backdrop = document.getElementById('lg-caddy-backdrop');
+  function openCaddy() {
+    if (!caddy) return;
+    caddy.classList.add('is-open'); caddy.setAttribute('aria-hidden', 'false');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    if (backdrop) { backdrop.hidden = false; requestAnimationFrame(function () { backdrop.classList.add('is-open'); }); }
+  }
+  function closeCaddy() {
+    if (!caddy) return;
+    caddy.classList.remove('is-open'); caddy.setAttribute('aria-hidden', 'true');
+    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+    if (backdrop) { backdrop.classList.remove('is-open'); setTimeout(function () { backdrop.hidden = true; }, 220); }
+  }
+  if (toggle && caddy) {
+    toggle.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
+    var closeBtn = document.getElementById('lg-caddy-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeCaddy);
+    if (backdrop) backdrop.addEventListener('click', closeCaddy);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && caddy.classList.contains('is-open')) closeCaddy(); });
+    if (location.hash === '#caddy') openCaddy();   // kept open across an add (see addBlock)
+  }
+
+  /* ---- caddy: add a block (tap appends; drag drops at a position) ---- */
+  function addBlock(key, atIndex) {
+    var cur = order().filter(function (k) { return k !== key; });
+    if (typeof atIndex !== 'number' || atIndex < 0 || atIndex > cur.length) atIndex = cur.length;
+    cur.splice(atIndex, 0, key);
+    putLayout(cur, function () { location.hash = 'caddy'; location.reload(); });
+  }
+  var list = document.getElementById('lg-caddy-list');
+  if (list) {
+    list.addEventListener('click', function (e) {
+      var item = e.target.closest('.lg-caddy__item');
+      if (item) addBlock(item.getAttribute('data-block'));      // tap-to-add (appends)
+    });
+  }
+
+  /* ---- caddy → profile drag (desktop): drop a caddy block among the blocks to add there ---- */
+  var caddyDragKey = null, pendingIndex = null;
+  function clearDropMarks() {
+    Array.prototype.forEach.call(profile.querySelectorAll('.lg-block--drop-before,.lg-block--drop-after'), function (el) {
+      el.classList.remove('lg-block--drop-before', 'lg-block--drop-after');
+    });
+  }
+  function dropIndex(y) {
+    var blocks = bodyBlocks();
+    for (var i = 0; i < blocks.length; i++) {
+      var box = blocks[i].getBoundingClientRect();
+      if (y < box.top + box.height / 2) { blocks[i].classList.add('lg-block--drop-before'); return i; }
+    }
+    if (blocks.length) blocks[blocks.length - 1].classList.add('lg-block--drop-after');
+    return blocks.length;
+  }
+  if (list) {
+    list.addEventListener('dragstart', function (e) {
+      var item = e.target.closest('.lg-caddy__item');
+      if (!item) return;
+      caddyDragKey = item.getAttribute('data-block');
+      item.classList.add('lg-sort-dragging');
+      e.dataTransfer.effectAllowed = 'copy';
+      try { e.dataTransfer.setData('text/plain', caddyDragKey); } catch (_) {}
+    });
+    list.addEventListener('dragend', function () {
+      caddyDragKey = null; clearDropMarks();
+      Array.prototype.forEach.call(list.querySelectorAll('.lg-sort-dragging'), function (el) { el.classList.remove('lg-sort-dragging'); });
+    });
+  }
+  // Only handle caddy drags here; block-reorder drags are owned by lgSortable (its dragover
+  // early-returns when no block is being dragged, so the two never collide).
+  profile.addEventListener('dragover', function (e) {
+    if (!caddyDragKey) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    clearDropMarks();
+    pendingIndex = dropIndex(e.clientY);
+  });
+  profile.addEventListener('drop', function (e) {
+    if (!caddyDragKey) return;
+    e.preventDefault();
+    var key = caddyDragKey, idx = pendingIndex;
+    caddyDragKey = null; clearDropMarks();
+    addBlock(key, idx);
   });
 })();
 </script>
