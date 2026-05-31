@@ -186,6 +186,15 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
 .lg-about{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
+/* gallery block */
+.lg-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.lg-gphoto{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--lg-sage-tint)}
+.lg-gphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.lg-gphoto figcaption{position:absolute;bottom:0;left:0;right:0;font:600 11px/1.3 var(--lg-font-sans);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:16px 8px 6px}
+.lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1}
+.lg-gphoto__rm:hover{background:var(--lg-rust)}
+.lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-d);font:700 12.5px/1.3 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px}
+.lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
 
 /* members-only gate */
 .lg-gate{text-align:center;background:#fff;border:1px solid var(--lg-line);border-radius:18px;padding:48px 30px;margin:0 0 16px}
@@ -302,6 +311,7 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
     'craft':           { url: BASE + '/me/craft',    m: 'PATCH', k: 'visibility' },
     'connect':         { url: BASE + '/me/connect',  m: 'PATCH', k: 'visibility' },
     'about':           { url: BASE + '/me/about',    m: 'PATCH', k: 'visibility' },
+    'gallery':         { url: BASE + '/me/gallery',  m: 'PUT',   k: 'visibility' },
     'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
     'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
     'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }
@@ -656,6 +666,54 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
     document.addEventListener('click', function onDoc(e) {
       if (!box.contains(e.target) && e.target !== addBtn) { box.remove(); addBtn.style.display = ''; document.removeEventListener('click', onDoc); }
     });
+  });
+})();
+</script>
+
+<script>
+/* Gallery editor (owner/Me) — multi-upload (POST me-gallery) + remove (PUT list). */
+(function () {
+  var wrap = document.getElementById('lg-gallery');
+  if (!wrap) return;
+  var addBtn = document.getElementById('lg-gallery-add');
+
+  function currentImages() {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-gphoto'), function (el) {
+      var cap = el.querySelector('figcaption');
+      return { url: el.getAttribute('data-url'), caption: cap ? cap.textContent : '' };
+    });
+  }
+  function putList(images) {
+    return fetch('/profile-api/v0/me/gallery', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ images: images }) })
+      .then(function (r) { return r.ok; });
+  }
+
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-gphoto__rm'); if (!rm) return;
+    rm.closest('.lg-gphoto').remove();
+    putList(currentImages()).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
+  });
+
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp'; input.multiple = true;
+  input.style.display = 'none'; document.body.appendChild(input);
+  addBtn && addBtn.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(input.files || []); input.value = '';
+    if (!files.length) return;
+    addBtn.textContent = 'Uploading…';
+    var i = 0;
+    (function next() {
+      if (i >= files.length) { location.reload(); return; }
+      var f = files[i++];
+      if (f.size > 5 * 1024 * 1024) { alert(f.name + ' is over 5 MB — skipped'); next(); return; }
+      var fd = new FormData(); fd.append('image', f);
+      fetch('/profile-api/v0/me/gallery', { method: 'POST', credentials: 'include', body: fd })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
+        .catch(function () { alert('Network error on ' + f.name); next(); });
+    })();
   });
 })();
 </script>

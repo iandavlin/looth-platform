@@ -407,6 +407,77 @@ final class Block
         ];
     }
 
+    // ---------- block: gallery (image grid; shared, profile + practice) ----------
+
+    public const GALLERY_KEY      = 'gallery';
+    public const GALLERY_URL_BASE = '/profile-media/gallery';
+    public const GALLERY_MAX      = 24;
+
+    private static function userUuid(int $userId): ?string
+    {
+        $s = Db::pg()->prepare('SELECT uuid FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $u = $s->fetchColumn();
+        return $u === false ? null : strtolower((string)$u);
+    }
+
+    /** Assemble the gallery block — image list + block vis (profile_sections key='gallery'). */
+    public static function loadGallery(int $userId): array
+    {
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'gallery'");
+        $s->execute([':u' => $userId]);
+        $r = $s->fetch();
+        $images = [];
+        if ($r) {
+            $d = json_decode((string)$r['data'], true) ?: [];
+            foreach (($d['images'] ?? []) as $im) {
+                if (is_array($im) && !empty($im['url'])) {
+                    $images[] = ['url' => (string)$im['url'], 'caption' => (string)($im['caption'] ?? '')];
+                }
+            }
+        }
+        return [
+            'block'   => 'gallery',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'images'  => $images,
+        ];
+    }
+
+    /**
+     * Persist the gallery image list (used for add/remove/reorder/caption). Sanitizes
+     * to URLs under THIS user's gallery dir (no foreign URLs). visInput optional.
+     */
+    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null): array
+    {
+        $uuid   = self::userUuid($userId);
+        $prefix = self::GALLERY_URL_BASE . '/' . $uuid . '/';
+        $clean  = [];
+        foreach ($images as $im) {
+            if (!is_array($im)) continue;
+            $url = (string)($im['url'] ?? '');
+            if ($uuid === null || strpos($url, $prefix) !== 0) continue;     // only this user's images
+            $clean[] = ['url' => $url, 'caption' => mb_substr((string)($im['caption'] ?? ''), 0, 200)];
+            if (count($clean) >= self::GALLERY_MAX) break;
+        }
+        $data = json_encode(['images' => $clean], JSON_UNESCAPED_SLASHES);
+
+        if ($visInput !== null && self::visFromInput($visInput) !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, 'gallery', :v, :d::jsonb, 40)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':v' => self::visFromInput($visInput), ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, 'gallery', 'members', :d::jsonb, 40)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':d' => $data]);
+        }
+        return self::loadGallery($userId);
+    }
+
     // ---------- block: socials / links (website + platforms) ----------
 
     /**

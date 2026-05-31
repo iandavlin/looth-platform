@@ -62,11 +62,43 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
 
     // increment 3: craft (search-fuel) + socials/links blocks.
     looth_render_craft_block($userId, $role, $headerVis);
+    // gallery (image grid) — shared block.
+    looth_render_gallery_block($userId, $role, $headerVis);
     // connect block (built on the social-layer Connections backend).
     looth_render_connect_block($userId, $role, $headerVis, $viewerUserId);
     looth_render_socials_block($userId, $role, $headerVis);
 
     // TODO(next increments): practices block — same shape.
+}
+
+/**
+ * The gallery block — image grid in the app-owned media store. Shared (profile +
+ * practice). Owner uploads/removes; block-level pmp on profile_sections key='gallery'.
+ */
+function looth_render_gallery_block(int $userId, string $role, string $headerVis): void
+{
+    $g       = Block::loadGallery($userId);
+    $images  = $g['images'];
+    $isOwner = ($role === 'me');
+    if (!$images && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$g['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--gallery" data-block="gallery">';
+    echo '<h3 class="lg-bh">Gallery';
+    if ($isOwner) echo ' ' . looth_pmp_control('gallery', (string)$g['vis'], $headerVis);
+    echo '</h3>';
+    echo '<div class="lg-gallery' . ($isOwner ? ' lg-gallery--edit' : '') . '" id="lg-gallery">';
+    foreach ($images as $im) {
+        $url = (string)($im['url'] ?? '');
+        $cap = (string)($im['caption'] ?? '');
+        echo '<figure class="lg-gphoto" data-url="' . looth_h($url) . '">'
+           . '<img src="' . looth_h($url) . '" alt="' . looth_h($cap) . '" loading="lazy">';
+        if ($isOwner) echo '<button type="button" class="lg-gphoto__rm" aria-label="Remove">×</button>';
+        if ($cap !== '') echo '<figcaption>' . looth_h($cap) . '</figcaption>';
+        echo '</figure>';
+    }
+    if ($isOwner) echo '<button type="button" class="lg-gphoto__add" id="lg-gallery-add">＋ Add photos</button>';
+    echo '</div></section>';
 }
 
 /**
