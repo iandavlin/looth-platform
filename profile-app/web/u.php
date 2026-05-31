@@ -75,7 +75,13 @@ $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$
 <style>
 /* Block-model /u/ render. Tokens (--lg-*) come from site-header.css. */
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
+.lg-shell{max-width:760px;margin:0 auto}
 .lg-profile{max-width:760px;margin:0 auto;padding:24px 20px 48px}
+/* desktop: profile + a PERMANENT block sidebar, centered as a group (mobile keeps the off-canvas drawer) */
+@media(min-width:1100px){
+  .lg-shell--owner{display:flex;gap:28px;max-width:1108px;align-items:flex-start}
+  .lg-shell--owner .lg-profile{flex:1 1 760px;min-width:0;max-width:760px;margin:0}
+}
 
 /* View-as toggle (owner only) */
 .lg-viewas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lg-charcoal);color:#cfd3cb;
@@ -175,6 +181,15 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
 .lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
+/* desktop: caddy becomes a permanent sticky sidebar column (overrides the off-canvas drawer) */
+@media(min-width:1100px){
+  .lg-shell--owner .lg-caddy{position:sticky;top:24px;right:auto;flex:0 0 280px;width:280px;height:auto;
+    max-height:calc(100vh - 48px);transform:none;border:1px solid var(--lg-line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
+  .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
+  .lg-caddy__backdrop{display:none}
+}
 .lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
 .lg-links--edit .lg-link:not([draggable]) .lg-link__grip,.lg-socrow .lg-link__grip{display:none}
 .lg-link__kind{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:5px;padding:3px 6px}
@@ -269,6 +284,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 <?php require __DIR__ . '/_chrome.php'; ?>
 
 <main class="main" id="lg-main">
+  <div class="lg-shell<?= $isOwner ? ' lg-shell--owner' : '' ?>">
   <div class="lg-profile">
 
     <?php if ($isOwner): ?>
@@ -291,25 +307,29 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       <a class="lg-report" href="#" id="report-link">Report this profile</a>
     <?php endif; ?>
   </div>
+
+  <?php if ($isOwner): $available = Block::availableBlocks($subjectId); ?>
+    <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
+      <div class="lg-caddy__head">
+        <strong>Add a block</strong>
+        <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
+      </div>
+      <p class="lg-caddy__hint">Tap a block to add it — or drag it onto your profile. Drag the ⠿ on a block to reorder; ✕ removes it back here.</p>
+      <div class="lg-caddy__list" id="lg-caddy-list">
+        <?php foreach ($available as $key): $b = Block::LAYOUT_BLOCKS[$key]; ?>
+          <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
+            <span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($b['label']) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span>
+          </button>
+        <?php endforeach; ?>
+        <span class="lg-caddy__empty"<?= $available ? ' hidden' : '' ?>>All blocks added ✓</span>
+      </div>
+    </aside>
+  <?php endif; ?>
+  </div><!-- /lg-shell -->
 </main>
 
-<?php if ($isOwner): $available = Block::availableBlocks($subjectId); ?>
+<?php if ($isOwner): ?>
   <div class="lg-caddy__backdrop" id="lg-caddy-backdrop" hidden></div>
-  <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
-    <div class="lg-caddy__head">
-      <strong>Add a block</strong>
-      <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
-    </div>
-    <p class="lg-caddy__hint">Tap a block to add it — or drag it onto your profile. Drag the ⠿ on a block to reorder; ✕ removes it back here.</p>
-    <div class="lg-caddy__list" id="lg-caddy-list">
-      <?php foreach ($available as $key): $b = Block::LAYOUT_BLOCKS[$key]; ?>
-        <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
-          <span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($b['label']) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span>
-        </button>
-      <?php endforeach; ?>
-      <span class="lg-caddy__empty"<?= $available ? ' hidden' : '' ?>>All blocks added ✓</span>
-    </div>
-  </aside>
 <?php endif; ?>
 
 <?php lg_shared_render_site_footer(); ?>
@@ -499,13 +519,26 @@ window.lgSortable = function (container, opts) {
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
     if (backdrop) { backdrop.classList.remove('is-open'); setTimeout(function () { backdrop.hidden = true; }, 220); }
   }
+  // ≥1100px the caddy is a permanent sticky sidebar (CSS); below, it's an off-canvas drawer.
+  var deskMq = window.matchMedia('(min-width:1100px)');
+  function syncCaddyMode() {
+    if (!caddy) return;
+    if (deskMq.matches) {                              // permanent: always visible, never a drawer
+      caddy.classList.remove('is-open'); caddy.setAttribute('aria-hidden', 'false');
+      if (backdrop) { backdrop.classList.remove('is-open'); backdrop.hidden = true; }
+    } else if (!caddy.classList.contains('is-open')) {  // drawer, closed
+      caddy.setAttribute('aria-hidden', 'true');
+    }
+  }
   if (toggle && caddy) {
     toggle.addEventListener('click', function () { caddy.classList.contains('is-open') ? closeCaddy() : openCaddy(); });
     var closeBtn = document.getElementById('lg-caddy-close');
     if (closeBtn) closeBtn.addEventListener('click', closeCaddy);
     if (backdrop) backdrop.addEventListener('click', closeCaddy);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && caddy.classList.contains('is-open')) closeCaddy(); });
-    if (location.hash === '#caddy') openCaddy();   // kept open across an add (see addBlock)
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !deskMq.matches && caddy.classList.contains('is-open')) closeCaddy(); });
+    if (deskMq.addEventListener) deskMq.addEventListener('change', syncCaddyMode);
+    if (!deskMq.matches && location.hash === '#caddy') openCaddy();   // re-open the drawer across a mobile add
+    syncCaddyMode();
   }
 
   /* ---- caddy: add a block (tap appends; drag drops at a position) ---- */
