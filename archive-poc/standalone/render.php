@@ -43,19 +43,24 @@ $IS_CLI = (PHP_SAPI === 'cli');
 /* ── Routing ─────────────────────────────────────────────────────────── */
 $postType = (string) ($_SERVER['LG_POST_TYPE'] ?? getenv('LG_POST_TYPE') ?? '');
 $slug     = (string) ($_SERVER['LG_SLUG']      ?? getenv('LG_SLUG')      ?? '');
+$postId   = (int)    ($_SERVER['LG_POST_ID']   ?? getenv('LG_POST_ID')   ?? 0);
 $slug     = preg_replace('/[^a-z0-9\-]/i', '', $slug);
 
-if ($postType === '' || $slug === '') {
-    lg_standalone_fail($IS_CLI, 404, 'missing post_type or slug');
+if ($postType === '' || ($slug === '' && $postId <= 0)) {
+    lg_standalone_fail($IS_CLI, 404, 'missing post_type + (slug or id)');
 }
 
 /* ── Blob lookup ─────────────────────────────────────────────────────── */
+/* By post_id when the permalink is id-based (e.g. /document/<id>/); else by slug. */
 try {
-    $db   = lg_archive_poc_pdo();
-    $stmt = $db->prepare(
-        'SELECT blob FROM article_blobs WHERE post_type = :pt AND slug = :sl LIMIT 1'
-    );
-    $stmt->execute([':pt' => $postType, ':sl' => $slug]);
+    $db = lg_archive_poc_pdo();
+    if ($postId > 0) {
+        $stmt = $db->prepare('SELECT blob FROM article_blobs WHERE post_type = :pt AND post_id = :id LIMIT 1');
+        $stmt->execute([':pt' => $postType, ':id' => $postId]);
+    } else {
+        $stmt = $db->prepare('SELECT blob FROM article_blobs WHERE post_type = :pt AND slug = :sl LIMIT 1');
+        $stmt->execute([':pt' => $postType, ':sl' => $slug]);
+    }
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (\Throwable $e) {
     error_log('lg-render: db error: ' . $e->getMessage());
@@ -63,7 +68,7 @@ try {
 }
 
 if (!$row) {
-    lg_standalone_fail($IS_CLI, 404, "not found: $postType/$slug");
+    lg_standalone_fail($IS_CLI, 404, "not found: $postType/" . ($postId > 0 ? "#$postId" : $slug));
 }
 
 $blob = json_decode((string) $row['blob'], true);
