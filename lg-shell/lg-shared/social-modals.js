@@ -378,16 +378,12 @@ function sendReply() {
     .then(function () { if (input) { input.disabled = false; input.focus(); } });
 }
 
-/* lg:open-dm dispatched by Social::renderProfileActions() on /u/ pages.
-   detail.uuid = TARGET USER uuid (Social.php:117) — resolve to a thread. */
+/* lg:open-dm dispatched by Social::renderProfileActions() on /u/ pages AND by the
+   per-connection Message button below. detail.uuid = TARGET USER uuid (Social.php:117).
+   Open the unified modal on the Messages tab and resolve to that thread. */
 document.addEventListener('lg:open-dm', function (e) {
-  openModal('lg-messages-modal');
   var peerUuid = e && e.detail && e.detail.uuid;
-  if (peerUuid) {
-    openDmWithUser(String(peerUuid));
-  } else {
-    loadThreadList();
-  }
+  openSocialModal('messages', peerUuid ? { dmUuid: String(peerUuid) } : null);
 });
 
 /* ── connections / friends ── */
@@ -488,14 +484,60 @@ function respondToRequest(id, action) {
     .catch(function () {});
 }
 
+/* ── unified social modal: Messages + Connections tabs ── */
+var loadedTabs = { messages: false, connections: false };
+
+/* Show one pane, mark its tab active, lazy-load it (once per open session).
+   opts.dmUuid → jump straight into that thread on the Messages tab. */
+function activateTab(tab, opts) {
+  opts = opts || {};
+  document.querySelectorAll('[data-lg-pane]').forEach(function (p) {
+    p.hidden = p.getAttribute('data-lg-pane') !== tab;
+  });
+  document.querySelectorAll('[data-lg-tab]').forEach(function (t) {
+    var on = t.getAttribute('data-lg-tab') === tab;
+    t.classList.toggle('is-active', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+
+  if (tab === 'messages') {
+    if (opts.dmUuid) {
+      loadedTabs.messages = true;
+      openDmWithUser(opts.dmUuid);          /* opens the thread detail directly */
+    } else if (!loadedTabs.messages) {
+      loadedTabs.messages = true;
+      loadThreadList();
+    }
+  } else if (tab === 'connections' && !loadedTabs.connections) {
+    loadedTabs.connections = true;
+    loadConnections();
+  }
+
+  /* back button only when the Messages pane is showing thread detail */
+  var back   = document.querySelector('[data-lg-thread-back]');
+  var detail = document.getElementById('lg-msg-detail');
+  if (back) back.hidden = !(tab === 'messages' && detail && !detail.hidden);
+}
+
+/* Open the modal fresh on a given tab (header icons + lg:open-dm). */
+function openSocialModal(tab, opts) {
+  loadedTabs = { messages: false, connections: false };   /* fresh data each open */
+  openModal('lg-social-modal');
+  activateTab(tab || 'messages', opts);
+}
+
+document.querySelectorAll('[data-lg-tab]').forEach(function (t) {
+  t.addEventListener('click', function () { activateTab(t.getAttribute('data-lg-tab')); });
+});
+
 /* ── button hookup ── */
 var notifBtn = document.querySelector('[data-lg-notif-link]');
 var msgBtn   = document.querySelector('[data-lg-msg-link]');
 var connBtn  = document.querySelector('[data-lg-conn-link]');
 
-if (notifBtn) notifBtn.addEventListener('click', function (e) { e.preventDefault(); openModal('lg-notif-modal');       loadNotifications(); });
-if (msgBtn)   msgBtn.addEventListener  ('click', function (e) { e.preventDefault(); openModal('lg-messages-modal');    loadThreadList();    });
-if (connBtn)  connBtn.addEventListener ('click', function (e) { e.preventDefault(); openModal('lg-connections-modal'); loadConnections();   });
+if (notifBtn) notifBtn.addEventListener('click', function (e) { e.preventDefault(); openModal('lg-notif-modal'); loadNotifications(); });
+if (msgBtn)   msgBtn.addEventListener  ('click', function (e) { e.preventDefault(); openSocialModal('messages');    });
+if (connBtn)  connBtn.addEventListener ('click', function (e) { e.preventDefault(); openSocialModal('connections'); });
 
 /* "Mark all read" (notifications) */
 var notifReadAllBtn = document.querySelector('[data-lg-notif-readall]');

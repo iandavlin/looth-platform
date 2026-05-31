@@ -460,9 +460,9 @@ function lg_shared_render_site_header(array $ctx): void
   </div>
 </div>
 
-<!-- Messages modal -->
-<div class="lg-social-modal" id="lg-messages-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages">
+<!-- Unified social modal: Messages + Connections tabs -->
+<div class="lg-social-modal" id="lg-social-modal"
+     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages and connections">
   <div class="lg-social-modal__backdrop"></div>
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
@@ -472,7 +472,10 @@ function lg_shared_render_site_header(array $ctx): void
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
-      <h2 class="lg-social-modal__title">Messages</h2>
+      <div class="lg-social-tabs" role="tablist" aria-label="Social">
+        <button class="lg-social-tab" data-lg-tab="messages" role="tab" aria-selected="true">Messages</button>
+        <button class="lg-social-tab" data-lg-tab="connections" role="tab" aria-selected="false">Connections</button>
+      </div>
       <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
@@ -480,52 +483,43 @@ function lg_shared_render_site_header(array $ctx): void
         </svg>
       </button>
     </div>
-    <!-- Thread list view -->
-    <div class="lg-social-modal__body" id="lg-msg-list"></div>
-    <!-- Thread detail view -->
-    <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div class="lg-msg__messages" id="lg-msg-messages"></div>
-      <div class="lg-msg__compose" id="lg-msg-compose">
-        <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                  placeholder="Reply... (Enter to send, Shift+Enter for newline)"
-                  rows="2"></textarea>
-        <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- Connections / Friends modal -->
-<div class="lg-social-modal" id="lg-connections-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Connections">
-  <div class="lg-social-modal__backdrop"></div>
-  <div class="lg-social-modal__panel">
-    <div class="lg-social-modal__head">
-      <h2 class="lg-social-modal__title">Connections</h2>
-      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+    <!-- Messages pane -->
+    <div class="lg-social-pane" data-lg-pane="messages" role="tabpanel">
+      <!-- Thread list view -->
+      <div class="lg-social-modal__body" id="lg-msg-list"></div>
+      <!-- Thread detail view -->
+      <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="lg-msg__messages" id="lg-msg-messages"></div>
+        <div class="lg-msg__compose" id="lg-msg-compose">
+          <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
+                    placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                    rows="2"></textarea>
+          <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="lg-social-modal__body">
-      <div id="lg-conn-pending-section" hidden>
-        <h3 class="lg-conn__section-h">Pending requests</h3>
-        <div id="lg-conn-pending"></div>
+
+    <!-- Connections pane -->
+    <div class="lg-social-pane" data-lg-pane="connections" role="tabpanel" hidden>
+      <div class="lg-social-modal__body">
+        <div id="lg-conn-pending-section" hidden>
+          <h3 class="lg-conn__section-h">Pending requests</h3>
+          <div id="lg-conn-pending"></div>
+        </div>
+        <h3 class="lg-conn__section-h">Your connections</h3>
+        <div class="lg-conn__search-wrap">
+          <input type="search" id="lg-conn-search" class="lg-conn__search"
+                 placeholder="Search connections…" aria-label="Search your connections" autocomplete="off">
+        </div>
+        <div id="lg-conn-accepted"></div>
       </div>
-      <h3 class="lg-conn__section-h">Your connections</h3>
-      <div class="lg-conn__search-wrap">
-        <input type="search" id="lg-conn-search" class="lg-conn__search"
-               placeholder="Search connections…" aria-label="Search your connections" autocomplete="off">
-      </div>
-      <div id="lg-conn-accepted"></div>
     </div>
   </div>
 </div>

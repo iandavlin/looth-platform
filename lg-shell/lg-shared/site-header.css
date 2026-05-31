@@ -393,6 +393,20 @@ body.lg-sm-open { overflow: hidden; }
 }
 .lg-social-modal__action:hover { background: var(--lg-sage-tint, #eef2e3); }
 
+/* Tab nav (unified Messages | Connections) */
+.lg-social-tabs { display: flex; gap: 4px; flex: 1; }
+.lg-social-tab {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  padding: 7px 12px; border-radius: 8px;
+  font: 700 14px/1.2 var(--lg-font-sans, system-ui);
+  color: var(--lg-mute, #6b6f6b);
+}
+.lg-social-tab:hover { color: var(--lg-ink, #323532); }
+.lg-social-tab.is-active { color: var(--lg-ink, #323532); background: var(--lg-sage-tint, #eef2e3); }
+/* Panes fill the panel; only the active one shows (display:flex beats UA [hidden]) */
+.lg-social-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.lg-social-pane[hidden] { display: none; }
+
 /* Scrollable body */
 .lg-social-modal__body {
   flex: 1; overflow-y: auto;
