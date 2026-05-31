@@ -26,6 +26,36 @@ Big push night — 7 lanes advanced, all committed + tested on dev. Pushed to ma
   layouts are good. CPT-conversions bootstrap doc: `docs/bootstrap-cpt-conversions.md`
   (needs Ian on per-type block shape / layout quality).
 
+#### layout-standalone — 2026-05-31 PM session (now a SEPARATE standalone chat; coordinator stays out of those files)
+- **All 6 intercepted CPT permalink routes are now LIVE** (post-imgcap, loothprint,
+  loothcuts, useful_links, member-benefit, document) — the "5 types no route" gap above
+  is CLOSED.
+- **Increment A (block parity):** sponsor brand-kit baked → `post_context.sponsor` + shim
+  `get_field` (ef0b261); related-posts cards baked (ce6a748); oEmbed/Vimeo = N/A (0 Vimeo,
+  YT/IG faced). **Bonus bug:** flatten nested `{props:{}}` block wrapper (99ee8dc) — 1 post
+  had props the engine never read.
+- **Increment B (FE edit) — Ian-verified round-trip:** Edit button for admins/authors
+  (d75ad4a) → nginx `?lg_edit=1`→WP branch (live) → WP plugin editor → save → **re-bake on
+  `_lg_layout_v2` meta write** (b59a9f8, THE missing wire) → standalone reflects.
+- **`_materialize` 502 FIXED** (alias + `try_files`/`$request_filename` footgun → `include
+  fastcgi.conf` + absolute SCRIPT_FILENAME). This gates save-triggered re-bake. Live-only.
+- **Perf/nav (increment 0):** CSS bundle externalized (133KB→30KB cacheable), images lazy,
+  feed cards same-tab, all post links → archive-poc (`/archive/?tag=|tier=|author=`).
+- **Dash mods pulled from live + applied** (block_styles/brand_palette/gate_cta) → dash-theme.json
+  auto-refreshed → standalone styling matches live.
+- **IN FLIGHT (standalone chat owns):** comments modal — count baked + WP comments-only view
+  (`?lg_comments=1`, mu-plugin `lg-comments-frame.php`) + nginx branch (post-imgcap) all
+  deployed+tested; remaining = the standalone button/modal markup (uncommitted render.php
+  edits) + fan-out + test. Logged-out = teaser. Plus: exit-refresh polish (lg-layout-v2 lane).
+- **Live nginx changes NOT in repo** (drifted copies): `docs/live-nginx-changes-archive-poc-2026-05-31.md`.
+
+#### Coordinator open relays (mine, via Ian)
+- **→ lg-shell:** (a) nav surfacing for the standalone CPT pages; (b) the **social skin**
+  (header connections/messages/notifications modals over the live endpoints). Coordinator
+  to spec; profile-app `/u/` social bits coordinated separately (Ian driving that tree).
+- **Onboarding matrix** (built × blob × routed × feed-linked × in-nav) — to be probed from
+  dev, not trusted from notes, then drive the route+nav close-out.
+
 ### profile-2.0 — practice pages + avatar + social slot (5a5f0fc, +avatar commit)
 - **practice-header block + `/p/<slug>` page** + View-as toggle. Fixture practice
   `monte-guitar-works` (owner user 3). CDP-verified.
