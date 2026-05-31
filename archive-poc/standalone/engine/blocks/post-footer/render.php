@@ -78,8 +78,8 @@ $pub_name = function_exists('get_bloginfo') ? (string) get_bloginfo('name') : ''
 $cta_url = '';
 if ($author_id) {
     $cta_url = trim((string) (get_user_meta($author_id, 'author_looth_group_profile', true) ?: ''));
-    if ($cta_url === '' && function_exists('get_author_posts_url')) {
-        $cta_url = (string) (get_author_posts_url($author_id) ?: '');
+    if ($cta_url === '' && $author_id) {
+        $cta_url = '/archive/?author=' . (int) $author_id;
     }
 }
 $cta_label = $author_name !== ''
@@ -121,8 +121,7 @@ if ($author_id) {
             ];
         }
     }
-    $archive_url = (string) get_author_posts_url($author_id);
-    $archive_url = (string) apply_filters('lg_layout_v2_author_archive_url', $archive_url, $author_id);
+    $archive_url = '/archive/?author=' . (int) $author_id;
     if ($archive_url !== '') {
         $author_links[] = [
             'url'   => $archive_url,

@@ -114,7 +114,10 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
     if (is_array($tier_raw)) {
         foreach ($tier_raw as $t) {
             if (!is_object($t)) continue;
-            $tier_terms[] = ['name' => (string) $t->name, 'slug' => (string) $t->slug, 'url' => (string) (get_term_link($t) ?: '#')];
+            // Tier chip browses archive-poc (/archive/?tier=<vocab>); the facet
+            // vocab is lite|pro|public, so strip the WP taxonomy's "looth-" prefix.
+            $tslug = preg_replace('/^looth-/', '', (string) $t->slug);
+            $tier_terms[] = ['name' => (string) $t->name, 'slug' => (string) $t->slug, 'url' => '/archive/?tier=' . rawurlencode((string) $tslug)];
         }
     }
 
@@ -161,8 +164,9 @@ if ($author_id) {
    (Plugin.php points that at the Search & Filter result page). */
 $author_archive_url = '';
 if ($author_id) {
-    $author_archive_url = (string) get_author_posts_url($author_id);
-    $author_archive_url = (string) apply_filters('lg_layout_v2_author_archive_url', $author_archive_url, $author_id);
+    // Author "all posts" browses archive-poc (/archive/?author=<id>), not WP's
+    // legacy /author/ or Search-&-Filter archive.
+    $author_archive_url = '/archive/?author=' . (int) $author_id;
 }
 
 /* ── Author links: 4 slots, each backed by a user-meta key + SVG icon.
