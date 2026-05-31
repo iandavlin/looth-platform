@@ -158,11 +158,11 @@ function loadThreadList() {
         return;
       }
       list.innerHTML = threads.map(function (t) {
-        var p      = t.other_participant || t.participant || {};
+        var p      = (t.peers && t.peers[0]) || t.other_participant || t.participant || {};
         var unread = t.unread_count || 0;
-        var prev   = (t.last_message && t.last_message.content) || t.preview || '';
+        var prev   = t.last_snippet || (t.last_message && t.last_message.content) || t.preview || '';
         return '<div class="lg-msg__thread' + (unread ? ' lg-msg__thread--unread' : '') +
-          '" data-thread-id="' + esc(t.id || t.uuid) + '" tabindex="0" role="button">'
+          '" data-thread-id="' + esc(t.uuid || t.id) + '" tabindex="0" role="button">'
           + '<div class="lg-msg__av">' + avatarEl(p, 36) + '</div>'
           + '<div class="lg-msg__meta">'
             + '<div class="lg-msg__name">' + esc(p.display_name || p.name || 'Unknown') + '</div>'
@@ -201,8 +201,13 @@ function openThread(uuid) {
         msgs.innerHTML = '<p class="lg-sm__empty">No messages in this thread.</p>';
         return;
       }
+      // No is_mine flag on the wire — peers are the OTHER participants, so a
+      // sender not among peers is me.
+      var peerSet = {};
+      (d.peers || []).forEach(function (p) { if (p && p.uuid) peerSet[p.uuid] = 1; });
       msgs.innerHTML = messages.map(function (m) {
-        var mine = m.is_mine || m.sent_by_me;
+        var mine = m.is_mine || m.sent_by_me ||
+                   (m.sender_uuid ? !peerSet[m.sender_uuid] : false);
         return '<div class="lg-msg__msg' + (mine ? ' lg-msg__msg--mine' : '') + '">'
           + '<p class="lg-msg__msg-text">' + esc(m.content || m.body || '') + '</p>'
           + '<span class="lg-msg__msg-time">' + relTime(m.created_at || m.sent_at) + '</span>'
@@ -228,7 +233,7 @@ function sendReply() {
     method:      'POST',
     credentials: 'include',
     headers:     { 'Content-Type': 'application/json' },
-    body:        JSON.stringify({ content: text }),
+    body:        JSON.stringify({ body: text }),
   })
     .then(function (r) {
       if (!r.ok) throw new Error(r.status);
@@ -259,8 +264,8 @@ function loadConnections() {
       return Promise.all(rs.map(function (r) { return r.ok ? r.json() : []; }));
     })
     .then(function (results) {
-      var conns = extractArray(results[0], ['connections', 'data', 'users']);
-      var reqs  = extractArray(results[1], ['requests',    'data', 'pending']);
+      var conns = extractArray(results[0], ['accepted', 'connections', 'data', 'users']);
+      var reqs  = extractArray(results[1], ['pending_in', 'requests', 'data', 'pending']);
 
       accepted.innerHTML = conns.length
         ? conns.map(function (c) {

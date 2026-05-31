@@ -525,7 +525,7 @@ function lg_shared_render_site_header(array $ctx): void
   </div>
 </div>
 
-<script src="/lg-shared/social-modals.js" defer></script>
+<script src="/lg-shared/social-modals.js?v=<?= @filemtime(__DIR__ . '/social-modals.js') ?: '1' ?>" defer></script>
 <?php endif; ?>
 <?php
 } // end function
