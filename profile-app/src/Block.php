@@ -380,8 +380,8 @@ final class Block
             'subject' => 'person',
             'vis'     => self::normalizeVis($vis),
             'fields'  => [
-                'instruments' => $pick($full['instruments'] ?? [], ['slug', 'name']),
-                'skills'      => $pick($full['skills']      ?? [], ['slug', 'name', 'note']),
+                'instruments' => $pick($full['instruments'] ?? [], ['id', 'slug', 'name']),
+                'skills'      => $pick($full['skills']      ?? [], ['id', 'slug', 'name', 'note']),
                 'highlights'  => $pick($full['highlights']  ?? [], ['kind', 'slug', 'name']),
             ],
         ];

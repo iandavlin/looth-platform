@@ -74,23 +74,38 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
 {
     $craft = Block::loadCraft($userId);
     if ($craft === null) return;
-    $f = $craft['fields'];
-    $chips = array_merge(
-        array_map(fn($i) => (string)($i['name'] ?? ''), $f['skills']      ?? []),
-        array_map(fn($i) => (string)($i['name'] ?? ''), $f['instruments'] ?? [])
-    );
-    $chips = array_values(array_filter($chips, fn($c) => $c !== ''));
-    if (!$chips) return;                                   // empty craft → no block
-
+    $f       = $craft['fields'];
+    $skills  = $f['skills']      ?? [];
+    $insts   = $f['instruments'] ?? [];
     $isOwner = ($role === 'me');
+
+    if (!$skills && !$insts && !$isOwner) return;          // empty craft → no block for visitors
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$craft['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--craft" data-block="craft">';
     echo '<h3 class="lg-bh">Craft';
     if ($isOwner) echo ' ' . looth_pmp_control('craft', (string)$craft['vis'], $headerVis);
-    echo '</h3><div class="lg-chips">';
-    foreach ($chips as $c) echo '<span class="lg-chip">' . looth_h($c) . '</span>';
-    echo '</div></section>';
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-chips lg-craft-edit" id="lg-craft-edit">';
+        foreach ($skills as $s) {
+            echo '<span class="lg-chip lg-chip--edit" data-type="skill" data-id="' . (int)($s['id'] ?? 0) . '">'
+               . looth_h((string)($s['name'] ?? '')) . '<button type="button" class="lg-chip__rm" aria-label="Remove">×</button></span>';
+        }
+        foreach ($insts as $i) {
+            echo '<span class="lg-chip lg-chip--edit" data-type="instrument" data-id="' . (int)($i['id'] ?? 0) . '">'
+               . looth_h((string)($i['name'] ?? '')) . '<button type="button" class="lg-chip__rm" aria-label="Remove">×</button></span>';
+        }
+        echo '<button type="button" class="lg-link__add" id="lg-craft-add">+ Add skill / instrument</button>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-chips">';
+        foreach ($skills as $s) echo '<span class="lg-chip">' . looth_h((string)($s['name'] ?? '')) . '</span>';
+        foreach ($insts  as $i) echo '<span class="lg-chip">' . looth_h((string)($i['name'] ?? '')) . '</span>';
+        echo '</div>';
+    }
+    echo '</section>';
 }
 
 /**

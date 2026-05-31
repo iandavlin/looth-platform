@@ -150,6 +150,20 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-link-form button{border:0;border-radius:8px;padding:8px 14px;font:700 12.5px/1 var(--lg-font-sans);cursor:pointer}
 .lg-link-form .ok{background:var(--lg-sage);color:#fff}
 .lg-link-form .cancel{background:var(--lg-cream);border:1px solid var(--lg-line);color:var(--lg-ink)}
+/* craft editor (owner) — removable chips + search multiselect */
+.lg-chip--edit{display:inline-flex;align-items:center;gap:6px;padding-right:7px}
+.lg-chip__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:15px;line-height:1;padding:0 2px}
+.lg-chip__rm:hover{color:var(--lg-rust)}
+.lg-craft-search{position:relative;display:inline-block;margin:0 0 8px}
+.lg-craft-search input{border:1px solid var(--lg-sage);border-radius:999px;padding:7px 14px;font:600 13px/1 var(--lg-font-sans);min-width:250px;outline:none}
+.lg-craft-results{position:absolute;z-index:1000;top:calc(100% + 4px);left:0;min-width:290px;max-height:300px;overflow:auto;
+  background:#fff;border:1px solid var(--lg-line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);padding:6px}
+.lg-craft-results button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;background:none;cursor:pointer;
+  padding:8px 10px;border-radius:7px;text-align:left;font:600 13px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-craft-results button:hover{background:var(--lg-sage-tint)}
+.lg-craft-results .t{font:700 9px/1 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-mute)}
+.lg-craft-results .added{font:700 9px/1 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-sage-d)}
+.lg-craft-results .none{padding:8px 10px;color:var(--lg-mute);font-size:12.5px}
 
 /* connect block */
 .lg-connect__count{display:inline-block;background:var(--lg-sage-tint);color:var(--lg-sage-d);font:800 11px/1 var(--lg-font-sans);border-radius:999px;padding:3px 9px;margin-left:4px;vertical-align:middle}
@@ -548,6 +562,95 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
       put(items);
     });
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') ok.click(); else if (e.key === 'Escape') cancel.click(); });
+  });
+})();
+</script>
+
+<script>
+/* Craft editor (owner/Me) — removable chips + a search MULTISELECT over the skill
+   + instrument catalogs. Click results to add (chips appear instantly, picker stays
+   open); ✕ on a chip removes. Each change PUTs the full list to me-skills / me-instruments. */
+(function () {
+  var wrap = document.getElementById('lg-craft-edit');
+  if (!wrap) return;
+  var addBtn = document.getElementById('lg-craft-add');
+  var CATALOG = null;
+
+  function idsOf(type) {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-chip--edit[data-type="' + type + '"]'),
+      function (el) { return parseInt(el.getAttribute('data-id'), 10); });
+  }
+  function put(type) {
+    var url = type === 'skill' ? '/profile-api/v0/me/skills' : '/profile-api/v0/me/instruments';
+    var key = type === 'skill' ? 'skill_id' : 'instrument_id';
+    var items = idsOf(type).map(function (id, i) { var o = {}; o[key] = id; o.sort_order = i; return o; });
+    return fetch(url, { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+      .then(function (r) { return r.ok; });
+  }
+  function makeChip(type, id, name) {
+    var s = document.createElement('span'); s.className = 'lg-chip lg-chip--edit';
+    s.setAttribute('data-type', type); s.setAttribute('data-id', id); s.textContent = name;
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'lg-chip__rm';
+    b.setAttribute('aria-label', 'Remove'); b.textContent = '×'; s.appendChild(b);
+    return s;
+  }
+  function loadCatalog() {
+    if (CATALOG) return Promise.resolve(CATALOG);
+    return Promise.all([
+      fetch('/profile-api/v0/catalogs/skills', { credentials: 'include' }).then(function (r) { return r.json(); }),
+      fetch('/profile-api/v0/catalogs/instruments', { credentials: 'include' }).then(function (r) { return r.json(); })
+    ]).then(function (res) {
+      var map = function (arr, t) { return (arr || []).map(function (x) { return { type: t, id: x.id, name: x.name, lc: (x.name || '').toLowerCase() }; }); };
+      CATALOG = map(res[0].items, 'skill').concat(map(res[1].items, 'instrument'));
+      return CATALOG;
+    });
+  }
+
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-chip__rm'); if (!rm) return;
+    var chip = rm.closest('.lg-chip--edit'); var type = chip.getAttribute('data-type');
+    chip.remove();
+    put(type).then(function (ok) { if (!ok) { alert('Remove failed'); location.reload(); } });
+  });
+
+  addBtn.addEventListener('click', function () {
+    if (document.querySelector('.lg-craft-search')) return;
+    var box = document.createElement('span'); box.className = 'lg-craft-search';
+    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search skills & instruments…';
+    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
+    box.appendChild(inp); box.appendChild(res);
+    addBtn.parentNode.insertBefore(box, addBtn);
+    addBtn.style.display = 'none'; inp.focus();
+
+    function has(type, id) { return idsOf(type).indexOf(id) !== -1; }
+    function render() {
+      loadCatalog().then(function (cat) {
+        var q = inp.value.trim().toLowerCase();
+        res.innerHTML = '';
+        if (q === '') { res.style.display = 'none'; return; }
+        var matches = cat.filter(function (c) { return c.lc.indexOf(q) !== -1; }).slice(0, 40);
+        if (!matches.length) { res.innerHTML = '<div class="none">No matches</div>'; res.style.display = 'block'; return; }
+        matches.forEach(function (m) {
+          var added = has(m.type, m.id);
+          var b = document.createElement('button'); b.type = 'button';
+          b.innerHTML = '<span>' + m.name + '</span><span class="' + (added ? 'added' : 't') + '">' + (added ? '✓ added' : m.type) + '</span>';
+          if (!added) b.addEventListener('click', function () {
+            var chip = makeChip(m.type, m.id, m.name);
+            box.parentNode.insertBefore(chip, box);
+            put(m.type).then(function (ok) { if (!ok) { chip.remove(); alert('Add failed'); } });
+            render(); inp.focus();
+          });
+          res.appendChild(b);
+        });
+        res.style.display = 'block';
+      });
+    }
+    inp.addEventListener('input', render);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') { box.remove(); addBtn.style.display = ''; } });
+    document.addEventListener('click', function onDoc(e) {
+      if (!box.contains(e.target) && e.target !== addBtn) { box.remove(); addBtn.style.display = ''; document.removeEventListener('click', onDoc); }
+    });
   });
 })();
 </script>
