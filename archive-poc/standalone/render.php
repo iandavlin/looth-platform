@@ -75,7 +75,7 @@ $blob = json_decode((string) $row['blob'], true);
 if (!is_array($blob) || !is_array($blob['layout'] ?? null) || !is_array($blob['post_context'] ?? null)) {
     lg_standalone_fail($IS_CLI, 500, 'blob malformed');
 }
-$layout      = $blob['layout'];
+$layout      = lg_standalone_normalize_blocks($blob['layout']);
 $postContext = $blob['post_context'];
 
 /* ── Proof mode (CLI only) ───────────────────────────────────────────── */
@@ -185,6 +185,31 @@ function lg_standalone_theme(): array {
     }
     $cache = [Theme::resolve($brand), $styles];
     return $cache;
+}
+
+/** Defensive layout normalization: the engine reads block props flattened onto the
+ *  block node ($args = $block), but a few posts store them under a nested {props:{…}}
+ *  wrapper the engine never looks inside (so variant/tagline/etc. silently vanish).
+ *  Flatten any such wrapper here so both formats render identically. No-op for the
+ *  already-flattened majority. Recurses into container children (blocks / columns). */
+function lg_standalone_normalize_blocks(array $layout): array {
+    $walk = function (array $blocks) use (&$walk): array {
+        foreach ($blocks as &$b) {
+            if (!is_array($b)) continue;
+            if (isset($b['props']) && is_array($b['props'])) { $b += $b['props']; unset($b['props']); }
+            if (isset($b['blocks']) && is_array($b['blocks'])) $b['blocks'] = $walk($b['blocks']);
+            if (isset($b['columns']) && is_array($b['columns'])) {
+                foreach ($b['columns'] as &$col) {
+                    if (is_array($col) && isset($col['blocks']) && is_array($col['blocks'])) $col['blocks'] = $walk($col['blocks']);
+                }
+                unset($col);
+            }
+        }
+        unset($b);
+        return $blocks;
+    };
+    if (isset($layout['blocks']) && is_array($layout['blocks'])) $layout['blocks'] = $walk($layout['blocks']);
+    return $layout;
 }
 
 /** Externalize the engine CSS bundle to a content-hashed, cacheable file under
