@@ -42,7 +42,7 @@ if (!function_exists('looth_initials')) {
  * @param string $role    'me'|'member'|'friend'|'public'
  * @param string|null $tierBadge derived tier label from /whoami (e.g. 'Pro'); null = none
  */
-function looth_render_profile_blocks(int $userId, string $role, ?string $tierBadge = null): void
+function looth_render_profile_blocks(int $userId, string $role, ?string $tierBadge = null, string $headerActions = ''): void
 {
     $headerVis = Block::headerCeiling($userId);                 // DB literal
     switch (Block::gateDecision($role, $headerVis)) {
@@ -52,7 +52,7 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
 
     $header = Block::loadHeader($userId);
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
-    looth_render_header_block($header, $role, $headerVis, $tierBadge);
+    looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions);
 
     // increment 2: the location block (two-tier, ceiling-capped per tier).
     looth_render_location_block($userId, $role, $headerVis);
@@ -229,7 +229,7 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
 }
 
 /** The profile-header (identity) block — the author-identity card. */
-function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge): void
+function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = ''): void
 {
     $f       = $header['fields'];
     $name    = (string)($f['display_name'] ?? 'Member');
@@ -260,7 +260,11 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';
     echo '</h1>';
     if ($glance !== '') echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
-    echo '</div></div></section>';
+    echo '</div></div>';                                   // close __body + idrow
+    // Social actions slot (Connect / Message) — server-rendered widget; empty for
+    // owner/self. Sits below the identity row, inside the header card.
+    if ($headerActions !== '') echo $headerActions;
+    echo '</section>';
 }
 
 /** Members-only interstitial — shown when a member-ceiling profile is hit logged-out. */

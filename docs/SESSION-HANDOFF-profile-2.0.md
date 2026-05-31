@@ -68,6 +68,28 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Avatar single-source upload + social-actions slot (2026-05-31, WRITE-ONLY)
+
+**Avatar single-source:** profile-app now stores the bytes + serves a versioned URL.
+- `sql/2026-05-31-avatar-version.sql` — `users.avatar_version int NOT NULL DEFAULT 0`
+  (deferred inc-1 column; new idempotent file).
+- `api/v0/me-avatar.php` — POST multipart; validates jpeg/png/webp ≤5MB (getimagesize),
+  writes `<store>/<uuid>/<v>.<ext>`, bumps `avatar_version`, sets `avatar_url` =
+  `/profile-media/avatars/<uuid>/<v>.<ext>?v=<v>`, purges /whoami (reuses
+  `Cache::purgeWhoami` — NO new hook). Store = `/srv/profile-app-media/avatars` (const).
+- `web/u.php` — header 📷 affordance wired → file picker → POST → reload.
+- **Coordinator provisions:** the store dir (mkdir+chown to FPM user, 0775); nginx serve
+  `^~ /profile-media/avatars/` (alias store, cookie-gated); nginx route+allowlist for
+  `me-avatar` (mirror me-craft). `LG_AVATAR_*` are endpoint consts (config.php shim-shared).
+
+**Social actions slot:** `web/u.php` renders the social lane's
+`Social::renderProfileActions($viewer.uuid, $row.uuid)` and threads it through
+`looth_render_profile_blocks(…, $headerActions)` → `looth_render_header_block` echoes it
+inside the header card (below the identity row). Self-suppresses for owner/self;
+auth-gated logged-out. `Social` is in config.php's require list.
+
+`config.php`/`Whoami.php` untouched.
+
 ## practice-header block + /p/ page + Leaflet fix (2026-05-30, WRITE-ONLY)
 
 Built the `practice-header` block (the /p/ equivalent of profile-header) end-to-end,

@@ -19,6 +19,7 @@ require_once __DIR__ . '/_render_blocks.php';   // looth_render_profile_blocks +
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Social;
 
 $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
@@ -55,6 +56,11 @@ $tierBadge = null;
 $displayName = (string)($row['display_name'] ?: 'Member');
 $slugSafe    = (string)($row['slug'] ?: (string)$subjectId);
 $viewLink = fn(string $v): string => '/u/' . rawurlencode($slugSafe) . '?view=' . $v;
+
+// Social actions (Connect / Message) — server-rendered widget from the social lane.
+// Self-suppresses for the owner viewing their own page; auth-gated when logged out.
+// Rendered inside the header card (threaded through the block renderer).
+$socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$row['uuid']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -172,7 +178,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       </div>
     <?php endif; ?>
 
-    <?php looth_render_profile_blocks($subjectId, $role, $tierBadge); ?>
+    <?php looth_render_profile_blocks($subjectId, $role, $tierBadge, $socialActions); ?>
 
     <?php if (!$isOwner): ?>
       <a class="lg-report" href="#" id="report-link">Report this profile</a>
@@ -307,6 +313,39 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
       menu.style.left = (window.scrollX + Math.min(r.left, document.documentElement.clientWidth - 230)) + 'px';
       openMenu = menu;
     });
+  });
+})();
+</script>
+
+<script>
+/* Avatar single-source uploader (owner/Me). The header renders a 📷 affordance
+   (.lg-idrow__cam); clicking opens a file picker → POST the image to
+   /me/avatar → the endpoint stores bytes, bumps avatar_version, sets the versioned
+   served URL, and purges /whoami so mirrors re-pull. Reload to show the new image. */
+(function () {
+  var cam = document.querySelector('.lg-idrow__cam');
+  if (!cam) return;
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  cam.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); input.click(); });
+  input.addEventListener('change', function () {
+    if (!input.files || !input.files[0]) return;
+    var f = input.files[0];
+    if (f.size > 5 * 1024 * 1024) { alert('Image too large (max 5 MB).'); input.value = ''; return; }
+    var fd = new FormData();
+    fd.append('avatar', f);
+    cam.textContent = '…';
+    fetch('/profile-api/v0/me/avatar', { method: 'POST', credentials: 'include', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok) { location.reload(); }
+        else { cam.textContent = '📷'; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
+      })
+      .catch(function () { cam.textContent = '📷'; alert('Network error.'); });
   });
 })();
 </script>

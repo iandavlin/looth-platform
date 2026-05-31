@@ -121,12 +121,27 @@ for reaction. Nothing here is executed yet (scaffold turn).
 ## Remaining spine blocks (additive)
 - [ ] craft (catalogs), socials, practices-card (`/u/`), staff/bench (`/p/`).
 
-## Avatar single-source + media store
-- [ ] Decide store layout `media/avatars/<uuid>/<version>.<ext>` (build plan §5).
-- [ ] Editor upload → write bytes + bump `avatar_version` + fire identity-purge.
-- [ ] Serve via profile-app pool (not wp-content). Initials fallback intact.
-- [ ] ⚠️ Coordinate with shim-replacement (`d9380b73`) before any `/whoami` shape
-      or `config.php` change — flag the coordinator.
+## Avatar single-source + media store — DONE (write-only)
+- [x] Store layout `<LG_AVATAR_STORE>/<uuid>/<version>.<ext>` =
+      `/srv/profile-app-media/avatars/<uuid>/<v>.<ext>` (app-owned, NOT wp-content).
+- [x] Schema: `sql/2026-05-31-avatar-version.sql` — `users.avatar_version int NOT NULL
+      DEFAULT 0` (the deferred inc-1 column). New idempotent file.
+- [x] `api/v0/me-avatar.php` — POST multipart, validates jpeg/png/webp ≤5MB via
+      getimagesize, writes bytes, bumps `avatar_version`, sets `avatar_url` to the
+      versioned served URL (`/profile-media/avatars/<uuid>/<v>.<ext>?v=<v>`), purges
+      /whoami (reuses `Cache::purgeWhoami` — no new hook). Initials fallback unchanged.
+- [x] `web/u.php` — wired the header 📷 affordance → file picker → POST `/me/avatar` → reload.
+- [ ] **Coordinator provisions:** (1) `mkdir -p /srv/profile-app-media/avatars` + chown to
+      the profile-app FPM user (0775); (2) nginx serve `^~ /profile-media/avatars/` (alias
+      the store dir, cookie-gated); (3) nginx route + allowlist for `me-avatar` (mirror me-craft).
+- [ ] ⚠️ `LG_AVATAR_*` are consts in the endpoint (config.php is shim-shared — didn't touch);
+      move to config.php when convenient.
+
+## Social actions slot on /u/ — DONE (write-only)
+- [x] `web/u.php` computes `Social::renderProfileActions($viewer['uuid']??null, $row['uuid'])`
+      and threads it through `looth_render_profile_blocks(... , $headerActions)` →
+      `looth_render_header_block` echoes it inside the header card (below the identity row).
+      Self-suppresses for owner/self; auth-gated when logged out (the widget owns its state).
 
 ## Spine sign-off
 - [ ] Coordinator declares the spine dev-FINAL. Only then →
