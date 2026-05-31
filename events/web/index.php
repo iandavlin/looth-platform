@@ -83,7 +83,7 @@ $render_bucket = static function (bool $past) use ($active_region, $h): void {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Events — The Looth Group</title>
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="<?= $h(LG_EVENTS_PUBLIC_PATH) ?>/events.css?v=<?= $h($asset_v) ?>">
 </head>
 <body class="lg-events-landing-page">

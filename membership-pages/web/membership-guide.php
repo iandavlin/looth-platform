@@ -49,7 +49,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/membership-guide.css') ?: '1');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Membership Guide — The Looth Group</title>
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="<?= $h(LG_MEMBERSHIP_PUBLIC_PATH) ?>/membership-guide.css?v=<?= $h($asset_v) ?>">
 </head>
 <body class="lg-membership-page <?= $h($body_class) ?>">

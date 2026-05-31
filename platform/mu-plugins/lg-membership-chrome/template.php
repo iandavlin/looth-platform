@@ -39,7 +39,7 @@ $viewer = lg_membership_chrome_viewer();
 <meta charset="<?php bloginfo( 'charset' ); ?>">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?php echo esc_html( wp_get_document_title() ); ?></title>
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <?php wp_head(); ?>
 </head>
 <body <?php body_class( 'lg-membership-chrome' ); ?>>
