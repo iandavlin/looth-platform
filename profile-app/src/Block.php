@@ -109,6 +109,9 @@ final class Block
     {
         $out = [];
         foreach (array_keys(self::LAYOUT_BLOCKS) as $key) {
+            // Curation blocks (Skills / Services / Instruments / Music) are always opt-in:
+            // they start in the caddy with nothing set, never auto-placed even if populated.
+            if (isset(self::CATALOG_BLOCKS[$key])) continue;
             if (self::blockHasContent($userId, $key)) $out[] = $key;
         }
         return $out ?: ['about'];
