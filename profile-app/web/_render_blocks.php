@@ -227,58 +227,55 @@ function looth_pmp_control(string $block, string $visNorm, string $ceilingDb): s
          . ' <span class="lg-pmp__caret" aria-hidden="true">' . ($capped ? '⚠▾' : '▾') . '</span></button>';
 }
 
+/** One precision-picker button (Members see / Public sees). */
+function looth_prec_control(string $audience, string $value): string
+{
+    $label = ['private' => 'Private', 'state' => 'State', 'city' => 'City', 'street' => 'Street address'][$value] ?? ucfirst($value);
+    return '<button type="button" class="lg-prec" data-prec-aud="' . looth_h($audience) . '" data-prec="' . looth_h($value) . '"'
+         . ' title="What ' . looth_h($audience) . ' see of your location">'
+         . looth_h($label) . ' <span class="lg-pmp__caret" aria-hidden="true">▾</span></button>';
+}
+
 /**
- * The location block — two tiers, each ceiling-capped. The approximate tier
- * (city/region + a town-level coarse dot) is governed by location_visibility; the
- * exact tier (the user-placed pin at the chosen precision + address) by
- * location_exact_visibility. Effective vis = more-restrictive(header, tier) via
- * Block::canSee. The map only ever plots the MANAGED pin (exact at precision, or
- * the coarse approximate dot) — never a precise pin the viewer isn't permitted.
+ * The location block — Ian's model: ONE address; the display precision follows the
+ * AUDIENCE. members_precision / public_precision (private|state|city|street) decide
+ * what a member vs the public sees; the owner always sees street + sets both knobs.
+ * One map, plotted at the viewer's precision. Header ceiling still gates upstream.
  */
 function looth_render_location_block(int $userId, string $role, string $headerVis): void
 {
     $loc = Block::loadLocation($userId);
-    if ($loc === null) return;
-    $a = $loc['approximate'];
-    $e = $loc['exact'];
+    if ($loc === null || empty($loc['has'])) return;
+    $isOwner = ($role === 'me');
 
-    $hasApprox = ($a['city'] || $a['region'] || $loc['text']);
-    $hasExact  = !empty($e['present']);
-    if (!$hasApprox && !$hasExact) return;                 // empty location → no block
+    // Precision for THIS viewer.
+    if ($isOwner)               $prec = 'street';
+    elseif ($role === 'public') $prec = (string)$loc['public_precision'];
+    else                        $prec = (string)$loc['members_precision'];   // member / friend
 
-    $isOwner   = ($role === 'me');
-    $canApprox = Block::canSee($role, $headerVis, Block::denormalizeVis((string)$a['vis']));
-    $canExact  = $hasExact && Block::canSee($role, $headerVis, Block::denormalizeVis((string)$e['vis']));
-    if (!$canApprox && !$canExact && !$isOwner) return;    // gated entirely
+    $disp = Block::locationDisplay($loc['place'], $prec);
+    if ($disp === null && !$isOwner) return;                                  // private for this audience
 
     echo '<section class="block lg-block lg-block--location" data-block="location">';
     echo '<h3 class="lg-bh">Location</h3>';
 
-    if (($canApprox || $isOwner) && $hasApprox) {
-        $line = trim(implode(', ', array_filter([$a['city'], $a['region'], $a['country']])));
-        if ($line === '') $line = (string)($loc['text'] ?? '');
-        echo '<div class="lg-loc__line">📍 ' . looth_h($line);
-        if ($isOwner) echo ' ' . looth_pmp_control('location-approx', (string)$a['vis'], $headerVis);
-        echo '</div>';
-        if ($a['lat'] !== null) {
-            // town-level coarse dot for "near me" / map — never the exact pin.
-            echo '<div class="lg-loc__map" data-precision="approx"'
-               . ' data-lat="' . looth_h((string)$a['lat']) . '" data-lng="' . looth_h((string)$a['lng']) . '"></div>';
-        }
+    if ($disp !== null && $disp['text'] !== '') {
+        echo '<div class="lg-loc__line">📍 ' . looth_h((string)$disp['text']) . '</div>';
+    }
+    if ($disp !== null && $disp['lat'] !== null) {
+        echo '<div class="lg-loc__map" data-kind="' . looth_h((string)$disp['kind']) . '"'
+           . ' data-zoom="' . (int)$disp['zoom'] . '"'
+           . ' data-lat="' . looth_h((string)$disp['lat']) . '" data-lng="' . looth_h((string)$disp['lng']) . '"></div>';
     }
 
-    if ($canExact) {
-        echo '<div class="lg-loc__exact">🏠 ' . looth_h((string)($e['address'] ?: 'Exact location'));
-        if (!empty($e['postcode'])) echo ' · ' . looth_h((string)$e['postcode']);
-        if ($isOwner) echo ' ' . looth_pmp_control('location-exact', (string)$e['vis'], $headerVis);
-        echo '</div>';
-        echo '<div class="lg-loc__pin" data-precision="' . looth_h((string)$loc['precision']) . '"'
-           . ' data-lat="' . looth_h((string)$e['lat']) . '" data-lng="' . looth_h((string)$e['lng']) . '"></div>';
-    } elseif ($isOwner && $hasExact) {
-        echo '<div class="lg-loc__exact-note">🏠 Exact address ' . looth_pmp_control('location-exact', (string)$e['vis'], $headerVis) . ' — hidden from viewers</div>';
-    } elseif ($canApprox && $hasExact) {
-        $who = ((string)$e['vis'] === 'on_request') ? 'on request' : 'to ' . looth_h((string)$e['vis']) . 's';
-        echo '<div class="lg-loc__exact-note">Exact address available ' . $who . '</div>';
+    // Owner controls: two audience knobs.
+    if ($isOwner) {
+        echo '<div class="lg-loc__aud">'
+           . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">👥 Members see</span> '
+           . looth_prec_control('members', (string)$loc['members_precision']) . '</span>'
+           . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">🌐 Public sees</span> '
+           . looth_prec_control('public', (string)$loc['public_precision']) . '</span>'
+           . '</div>';
     }
 
     echo '</section>';
@@ -312,10 +309,26 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     echo '</div>';
 
     echo '<div class="lg-idrow__body">';
-    echo '<h1 class="lg-idrow__name">' . looth_h($name);
+    echo '<h1 class="lg-idrow__name">';
+    if ($isOwner) {
+        // click-to-edit → PATCH /me/name {display_name}
+        echo '<span class="lg-edit" data-edit-field="display_name" data-edit-url="/profile-api/v0/me/name"'
+           . ' data-edit-method="PATCH" data-edit-type="text">' . looth_h($name) . '</span>';
+    } else {
+        echo looth_h($name);
+    }
     if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';
     echo '</h1>';
-    if ($glance !== '') echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
+    if ($isOwner) {
+        // click-to-edit (even when empty → placeholder) → PATCH /me/header {at_a_glance}
+        $hasG = $glance !== '';
+        echo '<p class="lg-idrow__glance lg-edit' . ($hasG ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="at_a_glance" data-edit-url="/profile-api/v0/me/header" data-edit-method="PATCH"'
+           . ' data-edit-type="text" data-edit-placeholder="Add a one-line bio…">'
+           . ($hasG ? looth_h($glance) : 'Add a one-line bio…') . '</p>';
+    } elseif ($glance !== '') {
+        echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
+    }
     echo '</div></div>';                                   // close __body + idrow
     // Social actions slot (Connect / Message) — server-rendered widget; empty for
     // owner/self. Sits below the identity row, inside the header card.

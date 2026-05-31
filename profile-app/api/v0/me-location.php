@@ -115,6 +115,22 @@ if (array_key_exists('precision', $in)) {
     $params[':prec'] = $in['precision'];
 }
 
+// Per-audience precision (Ian's model): private|state|city|street.
+if (array_key_exists('members_precision', $in)) {
+    if (Block::precisionFromInput($in['members_precision']) === null) {
+        profile_app_json(400, ['error' => 'invalid_members_precision', 'allowed' => Block::LOCATION_PRECISION]);
+    }
+    $set[] = 'location_members_precision = :mprec';
+    $params[':mprec'] = $in['members_precision'];
+}
+if (array_key_exists('public_precision', $in)) {
+    if (Block::precisionFromInput($in['public_precision']) === null) {
+        profile_app_json(400, ['error' => 'invalid_public_precision', 'allowed' => Block::LOCATION_PRECISION]);
+    }
+    $set[] = 'location_public_precision = :pprec';
+    $params[':pprec'] = $in['public_precision'];
+}
+
 if (array_key_exists('pin', $in)) {
     if ($nominatim !== null || (is_string($textOnly) && trim($textOnly) !== '')) {
         profile_app_json(400, ['error' => 'conflicting_fields']);   // pin + place/text all set lat/lng

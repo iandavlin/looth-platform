@@ -114,9 +114,18 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
 .lg-loc__exact{font-size:14.5px;color:var(--lg-ink);margin-top:8px}
 .lg-loc__exact-note{font-size:13px;color:var(--lg-mute);margin-top:8px;font-style:italic}
-.lg-loc__map,.lg-loc__pin{margin-top:12px;height:160px;border-radius:12px;border:1px solid var(--lg-line);
-  overflow:hidden;background:var(--lg-sage-tint)}
+.lg-loc__map,.lg-loc__pin{margin-top:12px;height:200px;border-radius:12px;border:1px solid var(--lg-line);
+  overflow:hidden;background:var(--lg-sage-tint);
+  position:relative;isolation:isolate;z-index:0}   /* contain Leaflet's z-index so it can't cover the header or menus */
 .lg-loc__map .leaflet-container,.lg-loc__pin .leaflet-container{height:100%;border-radius:12px;font:inherit}
+/* location audience precision controls (owner) */
+.lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
+.lg-loc__aud{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--lg-line)}
+.lg-loc__audrow{display:inline-flex;align-items:center;gap:8px}
+.lg-loc__audlabel{font:700 12px/1 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-prec{cursor:pointer;border:1px solid var(--lg-line);background:#fff;border-radius:999px;padding:6px 13px;
+  font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-ink);display:inline-flex;align-items:center;gap:5px}
+.lg-prec:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
 
 /* craft chips */
 .lg-chips{display:flex;flex-wrap:wrap;gap:0}
@@ -139,6 +148,15 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-connect__av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 .lg-connect__empty{margin:0;font-size:13.5px;color:var(--lg-mute)}
 
+/* inline content editing (owner/Me view) */
+.lg-edit{cursor:text;border-radius:6px;outline:none;transition:background .12s,box-shadow .12s;padding:0 4px;margin:0 -4px}
+.lg-edit:hover{background:var(--lg-sage-tint);box-shadow:0 0 0 3px var(--lg-sage-tint)}
+.lg-edit:hover::after{content:" ✎";font-size:.7em;color:var(--lg-sage-d);opacity:.7}
+.lg-edit--empty{color:var(--lg-mute);font-style:italic;font-weight:500}
+.lg-edit.editing{background:#fff;box-shadow:0 0 0 2px var(--lg-sage);font-style:normal;color:var(--lg-ink)}
+.lg-edit.editing::after{content:none}
+.lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
+
 /* members-only gate */
 .lg-gate{text-align:center;background:#fff;border:1px solid var(--lg-line);border-radius:18px;padding:48px 30px;margin:0 0 16px}
 .lg-gate__lock{width:64px;height:64px;border-radius:50%;background:var(--lg-sage-tint);display:grid;place-items:center;margin:0 auto 16px;font-size:28px}
@@ -156,7 +174,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-pmp:focus-visible{outline:2px solid var(--lg-sage);outline-offset:1px}
 .lg-pmp__caret{font-size:8px;opacity:.8}
 .lg-pmp--capped{box-shadow:inset 0 0 0 1px var(--lg-rust)}
-.lg-pmp-menu{position:absolute;z-index:60;min-width:210px;background:#fff;border:1px solid var(--lg-line);
+.lg-pmp-menu{position:absolute;z-index:1000;min-width:210px;background:#fff;border:1px solid var(--lg-line);
   border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);padding:6px}
 .lg-pmp-menu__head{font:700 10px/1.3 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.06em;color:var(--lg-mute);padding:7px 9px 5px}
 .lg-pmp-menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;
@@ -184,8 +202,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
           <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
         </span>
-        <a class="lg-viewas__edit" href="/profile/edit">Edit profile</a>
-        <span class="lg-viewas__hint">Preview how your profile looks to each audience. “Public” shows the members-gate when your header is members-only.</span>
+        <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
+        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. “Edit details (legacy)” is the old form, still needed for fields that aren’t inline yet (location, skills, links).</span>
       </div>
     <?php endif; ?>
 
@@ -200,23 +218,26 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 <?php lg_shared_render_site_footer(); ?>
 
 <script>
-/* Real maps for the location block — Leaflet + OSM tiles (CDN, no WP, no API key).
-   The renderer already emits the MANAGED coords on each map div; .lg-loc__map is
-   the coarse approximate dot (circle), .lg-loc__pin is the exact pin (marker). */
+/* Real map for the location block — Leaflet + OSM tiles (CDN, no WP, no API key).
+   ONE map per location block; data-kind="exact" plots the precise pin (marker),
+   data-kind="approx" plots the coarse town-level dot (circle). Which one renders
+   follows the viewer's permission (use View-as to preview each audience). */
 window.addEventListener('load', function () {
   if (typeof L === 'undefined') return;
-  document.querySelectorAll('.lg-loc__map[data-lat], .lg-loc__pin[data-lat]').forEach(function (el) {
+  document.querySelectorAll('.lg-loc__map[data-lat]').forEach(function (el) {
     var lat = parseFloat(el.getAttribute('data-lat')), lng = parseFloat(el.getAttribute('data-lng'));
     if (isNaN(lat) || isNaN(lng)) return;
-    var exact = el.classList.contains('lg-loc__pin');
-    var prec  = el.getAttribute('data-precision');
-    var zoom  = exact ? (prec === 'neighborhood' ? 13 : 15) : 11;
+    var exact = el.getAttribute('data-kind') === 'exact';
+    var zoom  = parseInt(el.getAttribute('data-zoom'), 10) || (exact ? 15 : 11);
     var map = L.map(el, { zoomControl: false, scrollWheelZoom: false, dragging: false,
       doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([lat, lng], zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-    if (exact) L.marker([lat, lng]).addTo(map);
-    else L.circle([lat, lng], { radius: 1500, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
+    if (exact) { L.marker([lat, lng]).addTo(map); }
+    else {
+      var rad = zoom <= 8 ? 35000 : 1500;   // state-level vs town-level blur
+      L.circle([lat, lng], { radius: rad, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
+    }
     setTimeout(function () { map.invalidateSize(); }, 80);   // standalone-shell sizing fix
   });
 });
@@ -330,6 +351,52 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
 </script>
 
 <script>
+/* Location precision pickers (owner/Me) — "Members see" / "Public sees", each set
+   to private|state|city|street, persisted via PUT /me/location, then reload. */
+(function () {
+  var LEVELS = ['private', 'state', 'city', 'street'];
+  var LABEL = { private: 'Private', state: 'State', city: 'City', street: 'Street address' };
+  var open = null;
+  function close() { if (open) { open.remove(); open = null; } }
+  document.addEventListener('click', function (e) {
+    if (open && !open.contains(e.target) && !e.target.closest('.lg-prec')) close();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+
+  function save(aud, value) {
+    var body = {}; body[aud + '_precision'] = value;
+    fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (res.ok) location.reload(); else alert('Failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+
+  document.querySelectorAll('.lg-prec').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var wasOpen = open && open._owner === btn; close(); if (wasOpen) return;
+      var aud = btn.getAttribute('data-prec-aud'), cur = btn.getAttribute('data-prec');
+      var menu = document.createElement('div'); menu.className = 'lg-pmp-menu'; menu.setAttribute('role', 'menu');
+      menu.innerHTML = '<div class="lg-pmp-menu__head">What ' + aud + ' see</div>';
+      LEVELS.forEach(function (lv) {
+        var b = document.createElement('button'); b.type = 'button';
+        if (lv === cur) b.setAttribute('aria-current', 'true');
+        b.innerHTML = '<span>' + LABEL[lv] + '</span>';
+        b.addEventListener('click', function () { if (lv === cur) { close(); return; } save(aud, lv); });
+        menu.appendChild(b);
+      });
+      menu._owner = btn; document.body.appendChild(menu);
+      var r = btn.getBoundingClientRect();
+      menu.style.top = (window.scrollY + r.bottom + 6) + 'px';
+      menu.style.left = (window.scrollX + Math.min(r.left, document.documentElement.clientWidth - 230)) + 'px';
+      open = menu;
+    });
+  });
+})();
+</script>
+
+<script>
 /* Avatar single-source uploader (owner/Me). The header renders a 📷 affordance
    (.lg-idrow__cam); clicking opens a file picker → POST the image to
    /me/avatar → the endpoint stores bytes, bumps avatar_version, sets the versioned
@@ -358,6 +425,67 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
         else { cam.textContent = '📷'; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
       })
       .catch(function () { cam.textContent = '📷'; alert('Network error.'); });
+  });
+})();
+</script>
+
+<script>
+/* Inline content editing (owner/Me view) — the start of the composer. Click any
+   .lg-edit field → it becomes contentEditable → Enter/blur saves via the field's
+   own /me/* endpoint (already green); Esc cancels. Empty fields show a placeholder. */
+(function () {
+  function caretEnd(el) {
+    var r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  function restorePlaceholder(el) {
+    var ph = el.getAttribute('data-edit-placeholder') || '';
+    if (ph && el.textContent.trim() === '') { el.textContent = ph; el.classList.add('lg-edit--empty'); }
+  }
+  function finish(el) { el.contentEditable = 'false'; el.classList.remove('editing'); }
+
+  function save(el, val, orig) {
+    var field = el.getAttribute('data-edit-field');
+    if (field === 'display_name' && val === '') { el.textContent = orig; finish(el); return; } // name required
+    var body = {}; body[field] = val;
+    fetch(el.getAttribute('data-edit-url'), {
+      method: el.getAttribute('data-edit-method') || 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        finish(el);
+        if (res.ok) { el.classList.add('saved'); setTimeout(function () { el.classList.remove('saved'); }, 900); }
+        else { el.textContent = orig; alert('Save failed: ' + (res.j && res.j.error || '?')); }
+        restorePlaceholder(el);
+      })
+      .catch(function () { finish(el); el.textContent = orig; restorePlaceholder(el); alert('Network error.'); });
+  }
+
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+    else if (e.key === 'Escape') {
+      e.preventDefault(); var el = e.target;
+      el.removeEventListener('keydown', onKey);
+      el.textContent = el.dataset.orig || ''; finish(el); restorePlaceholder(el);
+    }
+  }
+
+  document.querySelectorAll('.lg-edit[data-edit-field]').forEach(function (el) {
+    el.setAttribute('title', 'Click to edit');
+    el.addEventListener('click', function () {
+      if (el.classList.contains('editing')) return;
+      var wasEmpty = el.classList.contains('lg-edit--empty');
+      el.dataset.orig = wasEmpty ? '' : el.textContent.trim();
+      if (wasEmpty) { el.textContent = ''; el.classList.remove('lg-edit--empty'); }
+      el.classList.add('editing'); el.contentEditable = 'true'; el.focus(); caretEnd(el);
+      el.addEventListener('keydown', onKey);
+      el.addEventListener('blur', function onBlur(e) {
+        el.removeEventListener('keydown', onKey); el.removeEventListener('blur', onBlur);
+        var val = el.textContent.trim(), orig = el.dataset.orig || '';
+        if (val === orig) { finish(el); restorePlaceholder(el); } else { save(el, val, orig); }
+      });
+    });
   });
 })();
 </script>

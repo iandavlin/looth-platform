@@ -242,59 +242,80 @@ final class Block
      *                 users.location_exact_visibility. Folds to null when the user
      *                 set precision='city' (no precise pin exposed).
      */
+    /** Per-AUDIENCE precision levels (Ian's model): one address, two audience knobs. */
+    public const LOCATION_PRECISION = ['private', 'state', 'city', 'street'];
+
+    /**
+     * Load the stored address + the two audience precision knobs. One address;
+     * `members_precision` / `public_precision` each ∈ private|state|city|street
+     * decide how precise the DISPLAY is for that audience. Owner always sees street.
+     */
     public static function loadLocation(int $userId): ?array
     {
-        $pg = Db::pg();
-        $s = $pg->prepare('SELECT location_text, lat, lng, location_country, location_region,
-                                  location_city, location_postcode, location_address,
-                                  location_visibility, location_exact_visibility, location_pin_precision
-                           FROM users WHERE id = :i');
+        $s = Db::pg()->prepare('SELECT location_text, lat, lng, location_country, location_region,
+                                       location_city, location_postcode, location_address,
+                                       location_members_precision, location_public_precision
+                                FROM users WHERE id = :i');
         $s->execute([':i' => $userId]);
         $r = $s->fetch();
         if (!$r) return null;
 
-        $approxVis = $r['location_visibility']       ?: 'members';
-        $exactVis  = $r['location_exact_visibility'] ?: 'private';
-        $precision = $r['location_pin_precision']    ?: self::PRECISION_DEFAULT;
-
         $lat = $r['lat'] !== null ? (float)$r['lat'] : null;
         $lng = $r['lng'] !== null ? (float)$r['lng'] : null;
-
-        // Exact-tier coord at the user's chosen display precision. 'city' = no
-        // precise pin (fold to approximate only).
-        $exactLat = $exactLng = null;
-        if ($lat !== null && $lng !== null) {
-            if ($precision === 'exact') {
-                $exactLat = $lat;            $exactLng = $lng;
-            } elseif ($precision === 'neighborhood') {
-                $exactLat = self::coarsen($lat, self::DP_NEIGHBORHOOD);
-                $exactLng = self::coarsen($lng, self::DP_NEIGHBORHOOD);
-            } // 'city' → leave null
-        }
-        $hasExact = $exactLat !== null;
+        $place = [
+            'address'  => $r['location_address'],
+            'postcode' => $r['location_postcode'],
+            'city'     => $r['location_city'],
+            'region'   => $r['location_region'],
+            'country'  => $r['location_country'],
+            'lat'      => $lat,
+            'lng'      => $lng,
+            'text'     => $r['location_text'],
+        ];
+        $clean = fn($p, $d) => (is_string($p) && in_array($p, self::LOCATION_PRECISION, true)) ? $p : $d;
 
         return [
             'block'   => 'location',
             'subject' => 'person',
-            'text'    => $r['location_text'],          // legacy/escape-hatch display string
-            'precision' => $precision,
-            'approximate' => [
-                'vis'     => self::normalizeVis($approxVis),
-                'city'    => $r['location_city'],
-                'region'  => $r['location_region'],
-                'country' => $r['location_country'],
-                'lat'     => self::coarsen($lat, self::DP_APPROX),   // town-level, never the pin
-                'lng'     => self::coarsen($lng, self::DP_APPROX),
-            ],
-            'exact' => [
-                'vis'      => self::normalizeVis($exactVis),
-                'present'  => $hasExact,
-                'address'  => $r['location_address'],
-                'postcode' => $r['location_postcode'],
-                'lat'      => $exactLat,   // already at display precision; null if folded to city
-                'lng'      => $exactLng,
-            ],
+            'has'     => (bool)($place['address'] || $place['city'] || $place['region'] || $place['text'] || $lat !== null),
+            'members_precision' => $clean($r['location_members_precision'] ?? null, 'city'),
+            'public_precision'  => $clean($r['location_public_precision']  ?? null, 'private'),
+            'place'   => $place,
         ];
+    }
+
+    /**
+     * What to DISPLAY at a given precision level. Null for 'private' / no data.
+     * Else [text, lat, lng, zoom, kind] — kind 'exact' (marker) | 'coarse' (circle).
+     * street = full address + exact pin · city = City, Region + town dot ·
+     * state = Region, Country + region-level dot.
+     */
+    public static function locationDisplay(array $place, string $precision): ?array
+    {
+        if ($precision === 'private') return null;
+        $lat = $place['lat']; $lng = $place['lng'];
+        $city = (string)($place['city'] ?? ''); $region = (string)($place['region'] ?? '');
+        $country = (string)($place['country'] ?? '');
+
+        if ($precision === 'street') {
+            $text = (string)($place['address'] ?: $place['text'] ?: trim(implode(', ', array_filter([$city, $region]))));
+            if (!empty($place['postcode'])) $text = ($text !== '' ? $text . ' · ' : '') . $place['postcode'];
+            if ($text === '' && $lat === null) return null;
+            return ['text' => $text, 'lat' => $lat, 'lng' => $lng, 'zoom' => 15, 'kind' => 'exact'];
+        }
+        if ($precision === 'city') {
+            $text = trim(implode(', ', array_filter([$city, $region]))) ?: (string)($place['text'] ?? '');
+            return ['text' => $text, 'lat' => self::coarsen($lat, 1), 'lng' => self::coarsen($lng, 1), 'zoom' => 11, 'kind' => 'coarse'];
+        }
+        // state
+        $text = trim(implode(', ', array_filter([$region, $country])));
+        return ['text' => $text, 'lat' => self::coarsen($lat, 0), 'lng' => self::coarsen($lng, 0), 'zoom' => 6, 'kind' => 'coarse'];
+    }
+
+    /** Validate an incoming precision level; returns it or null. */
+    public static function precisionFromInput($p): ?string
+    {
+        return (is_string($p) && in_array($p, self::LOCATION_PRECISION, true)) ? $p : null;
     }
 
     /** Validate an incoming exact-tier vis ('member'|'private'|'on_request'); DB literal or null. */
