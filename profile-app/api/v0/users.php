@@ -8,41 +8,77 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     profile_app_json(405, ['error' => 'method_not_allowed']);
 }
 
-// Batch user lookup by uuid list. Used by strangler surfaces that need to
-// resolve author identity for many users at once (e.g. BB-mirror rendering
-// a forum thread). Single round-trip, cap at 100.
-$raw = $_GET['uuids'] ?? '';
-if (!is_string($raw) || $raw === '') profile_app_json(400, ['error' => 'uuids_required']);
+// Batch user lookup. Resolves author identity for many users at once (BB-mirror
+// threads, author bylines, etc.). Single round-trip, cap at 100.
+//
+//   ?uuids=<csv of uuid>    → key by uuid (original; for surfaces holding uuids)
+//   ?wp_ids=<csv of int>    → key by wp_user_id, resolved via wp_user_bridge, and
+//                             each item ECHOES wp_user_id so WP-side consumers (which
+//                             only know the post author's wp id, not its uuid) can map
+//                             results back. Unblocks author-bio single-source inside WP.
+//
+// uuids wins if both are present.
+$rawUuids = $_GET['uuids']  ?? '';
+$rawWpIds = $_GET['wp_ids'] ?? '';
+$byWp     = (!is_string($rawUuids) || $rawUuids === '') && is_string($rawWpIds) && $rawWpIds !== '';
 
-$uuids = [];
-foreach (explode(',', $raw) as $u) {
-    $u = strtolower(trim($u));
-    if ($u !== '' && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $u)) {
-        $uuids[$u] = true;
-    }
-}
-$uuids = array_keys($uuids);
-
-if (!$uuids)                 profile_app_json(400, ['error' => 'no_valid_uuids']);
-if (count($uuids) > 100)     profile_app_json(400, ['error' => 'too_many', 'cap' => 100]);
-
-$ph = implode(',', array_fill(0, count($uuids), '?'));
-$st = Db::pg()->prepare("
-    SELECT uuid, slug, display_name, avatar_url, at_a_glance
-    FROM users
-    WHERE uuid IN ($ph) AND archived_at IS NULL
-");
-$st->execute($uuids);
-
-$items = [];
-while ($r = $st->fetch()) {
-    $items[] = [
+$shape = static function (array $r) use ($byWp): array {
+    $item = [
         'uuid'         => $r['uuid'],
         'slug'         => $r['slug'] ?: null,
         'display_name' => $r['display_name'] ?? null,
         'avatar_url'   => $r['avatar_url'] ?? null,
         'bio'          => $r['at_a_glance'] ?? null,   // single-source author bio → bylines/author box
     ];
+    if ($byWp) $item['wp_user_id'] = (int) $r['wp_user_id'];   // map back to the post author
+    return $item;
+};
+
+if ($byWp) {
+    $wpIds = [];
+    foreach (explode(',', $rawWpIds) as $w) {
+        $w = trim($w);
+        if ($w !== '' && ctype_digit($w)) $wpIds[(int) $w] = true;
+    }
+    $wpIds = array_keys($wpIds);
+    if (!$wpIds)             profile_app_json(400, ['error' => 'no_valid_wp_ids']);
+    if (count($wpIds) > 100) profile_app_json(400, ['error' => 'too_many', 'cap' => 100]);
+
+    $ph = implode(',', array_fill(0, count($wpIds), '?'));
+    $st = Db::pg()->prepare("
+        SELECT b.wp_user_id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance
+        FROM users u
+        JOIN wp_user_bridge b ON b.user_id = u.id
+        WHERE b.wp_user_id IN ($ph) AND u.archived_at IS NULL
+    ");
+    $st->execute($wpIds);
+} else {
+    $raw = $rawUuids;
+    if (!is_string($raw) || $raw === '') profile_app_json(400, ['error' => 'uuids_or_wp_ids_required']);
+
+    $uuids = [];
+    foreach (explode(',', $raw) as $u) {
+        $u = strtolower(trim($u));
+        if ($u !== '' && preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $u)) {
+            $uuids[$u] = true;
+        }
+    }
+    $uuids = array_keys($uuids);
+    if (!$uuids)             profile_app_json(400, ['error' => 'no_valid_uuids']);
+    if (count($uuids) > 100) profile_app_json(400, ['error' => 'too_many', 'cap' => 100]);
+
+    $ph = implode(',', array_fill(0, count($uuids), '?'));
+    $st = Db::pg()->prepare("
+        SELECT uuid, slug, display_name, avatar_url, at_a_glance
+        FROM users
+        WHERE uuid IN ($ph) AND archived_at IS NULL
+    ");
+    $st->execute($uuids);
+}
+
+$items = [];
+while ($r = $st->fetch()) {
+    $items[] = $shape($r);
 }
 
 profile_app_json(200, ['items' => $items, 'count' => count($items)]);
