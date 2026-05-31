@@ -47,6 +47,68 @@ final class Block
         return array_merge([self::HEADER[$entity]], self::SETS['shared'], self::SETS[$entity]);
     }
 
+    // ---------- composable profile layout (owner-arranged blocks on /u/) ----------
+
+    /**
+     * The blocks an owner can order / add / remove on their profile. Keys MUST match
+     * the `data-block` attribute each renderer emits (the DOM order-source for reorder).
+     * `header` is pinned first + excluded. `label` drives the caddy chip; `removable`
+     * lets us pin a block later (all true for now). Array order = the Phase-1 default.
+     */
+    public const LAYOUT_BLOCKS = [
+        'about'    => ['label' => 'About',                'removable' => true],
+        'location' => ['label' => 'Location',             'removable' => true],
+        'craft'    => ['label' => 'Skills & Instruments', 'removable' => true],
+        'gallery'  => ['label' => 'Gallery',              'removable' => true],
+        'connect'  => ['label' => 'Connections',          'removable' => true],
+        'socials'  => ['label' => 'Links',                'removable' => true],
+    ];
+
+    /** Default block order when the user has no explicit layout (Phase 1 = the full set). */
+    public static function defaultLayout(): array
+    {
+        return array_keys(self::LAYOUT_BLOCKS);
+    }
+
+    /** Filter an arbitrary key list to known layout keys, in order, de-duped. */
+    private static function normalizeLayout(array $order): array
+    {
+        $seen = [];
+        $out  = [];
+        foreach ($order as $k) {
+            if (is_string($k) && isset(self::LAYOUT_BLOCKS[$k]) && !isset($seen[$k])) {
+                $seen[$k] = true;
+                $out[]    = $k;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * The owner's chosen block order (header excluded — pinned at render). Reads
+     * users.profile_layout; NULL → defaultLayout(). An explicit empty array (user
+     * removed every block) is honoured as header-only.
+     */
+    public static function profileLayout(int $userId): array
+    {
+        $s = Db::pg()->prepare('SELECT profile_layout FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return [];                         // unknown user
+        $order = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($order)) return self::defaultLayout();   // NULL / never-set → default
+        return self::normalizeLayout($order);
+    }
+
+    /** Persist the owner's block order (validated ⊂ registry, de-duped). Returns it normalized. */
+    public static function saveProfileLayout(int $userId, array $order): array
+    {
+        $clean = self::normalizeLayout($order);
+        Db::pg()->prepare('UPDATE users SET profile_layout = :v::jsonb, updated_at = now() WHERE id = :i')
+            ->execute([':v' => json_encode($clean), ':i' => $userId]);
+        return $clean;
+    }
+
     // ---------- the single normalize point: DB 'members' <-> UI 'member' ----------
 
     /** DB literal → UI/JSON canonical ('members' → 'member'). */

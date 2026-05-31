@@ -140,7 +140,12 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-links{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .lg-link{display:inline-flex;align-items:center;gap:10px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:7px 8px 7px 10px}
 .lg-link[draggable="true"]{cursor:grab}
-.lg-link--dragging{opacity:.45;cursor:grabbing}
+.lg-sort-dragging{opacity:.45}
+.lg-link.lg-sort-dragging{cursor:grabbing}
+/* whole-block reorder grip (owner/Me) */
+.lg-block__grip{display:inline-block;cursor:grab;color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;vertical-align:middle;margin-right:8px;user-select:none}
+.lg-block__grip:hover{color:var(--lg-sage-d)}
+.lg-block.lg-sort-dragging{cursor:grabbing;outline:2px dashed var(--lg-sage-3);outline-offset:2px}
 .lg-link__grip{color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;cursor:grab;user-select:none}
 .lg-links--edit .lg-link:not([draggable]) .lg-link__grip,.lg-socrow .lg-link__grip{display:none}
 .lg-link__kind{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:5px;padding:3px 6px}
@@ -301,6 +306,118 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
 <?php endif; ?>
 
 <?php if ($isOwner): ?>
+<script>
+/* lgSortable — tiny reusable drag-to-reorder over native HTML5 DnD. Used for links,
+   whole blocks, and (later) gallery photos + craft chips.
+     container       — the element holding the sortable items
+     opts.itemSelector   — CSS for the draggable items
+     opts.handleSelector — optional; if set, a drag only starts from this handle
+                           (items are non-draggable until the handle is pressed) so
+                           clicks/selection inside rich items aren't hijacked
+     opts.tailSelector   — optional trailing element to keep last (e.g. a + Add button)
+     opts.onDrop(el)     — called after a reorder settles (persist the new order)
+   The dragged item follows the cursor live; onDrop fires once on dragend. */
+window.lgSortable = function (container, opts) {
+  if (!container) return;
+  var DCLASS = 'lg-sort-dragging';
+  var dragging = null;
+  function items() {
+    return Array.prototype.slice.call(container.querySelectorAll(opts.itemSelector + ':not(.' + DCLASS + ')'));
+  }
+  function afterEl(y) {
+    var best = { off: -Infinity, el: null };
+    items().forEach(function (el) {
+      var box = el.getBoundingClientRect(), off = y - box.top - box.height / 2;
+      if (off < 0 && off > best.off) best = { off: off, el: el };
+    });
+    return best.el;
+  }
+  function clearHandleFlags() {
+    Array.prototype.forEach.call(container.querySelectorAll(opts.itemSelector + '[draggable="true"]'), function (el) {
+      if (!el.classList.contains(DCLASS)) el.removeAttribute('draggable');
+    });
+  }
+  if (opts.handleSelector) {
+    // Handle-gated: items become draggable only while the handle is pressed.
+    container.addEventListener('mousedown', function (e) {
+      var h = e.target.closest(opts.handleSelector);
+      if (!h || !container.contains(h)) return;
+      var el = h.closest(opts.itemSelector);
+      if (el) el.setAttribute('draggable', 'true');
+    });
+    container.addEventListener('mouseup', clearHandleFlags);
+  }
+  container.addEventListener('dragstart', function (e) {
+    var el = e.target.closest(opts.itemSelector);
+    if (!el || !container.contains(el)) return;
+    dragging = el; el.classList.add(DCLASS);
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+  });
+  container.addEventListener('dragover', function (e) {
+    if (!dragging) return;
+    e.preventDefault();
+    var ref = afterEl(e.clientY);
+    var tail = opts.tailSelector ? container.querySelector(opts.tailSelector) : null;
+    container.insertBefore(dragging, ref || tail);
+  });
+  container.addEventListener('drop', function (e) { if (dragging) e.preventDefault(); });
+  container.addEventListener('dragend', function () {
+    if (!dragging) return;
+    var moved = dragging; dragging = null;
+    moved.classList.remove(DCLASS);
+    if (opts.handleSelector) clearHandleFlags();
+    if (opts.onDrop) opts.onDrop(moved);
+  });
+};
+</script>
+
+<script>
+/* Whole-block drag-to-reorder (owner/Me). Injects a ⠿ grip into each body block's
+   heading, then lgSortable over the blocks (the header stays pinned/excluded). On drop,
+   the new data-block order is persisted to /me/layout (order/presence only — no data moves). */
+(function () {
+  var profile = document.querySelector('.lg-profile');
+  if (!profile) return;
+  var blocks = Array.prototype.slice.call(profile.querySelectorAll('.lg-block:not(.lg-block--header)'));
+  if (blocks.length < 2) return;   // nothing to reorder
+
+  blocks.forEach(function (b) {
+    var host = b.querySelector('.lg-bh') || b;
+    if (host.querySelector('.lg-block__grip')) return;
+    var grip = document.createElement('span');
+    grip.className = 'lg-block__grip';
+    grip.setAttribute('title', 'Drag to reorder');
+    grip.setAttribute('aria-hidden', 'true');
+    grip.textContent = '⠿';
+    host.insertBefore(grip, host.firstChild);
+  });
+
+  function order() {
+    return Array.prototype.map.call(
+      profile.querySelectorAll('.lg-block:not(.lg-block--header)'),
+      function (s) { return s.getAttribute('data-block'); }
+    ).filter(Boolean);
+  }
+  function save() {
+    fetch('/profile-api/v0/me/layout', {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order: order() })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+
+  lgSortable(profile, {
+    itemSelector: '.lg-block:not(.lg-block--header)',
+    handleSelector: '.lg-block__grip',
+    onDrop: save
+  });
+})();
+</script>
+
 <script>
 /* Inline per-block privacy (pmp) control — owner/Me view. The chips rendered by
    looth_pmp_control() are <button.lg-pmp> carrying the block id, current vis, and
@@ -605,36 +722,11 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') ok.click(); else if (e.key === 'Escape') cancel.click(); });
   });
 
-  /* Drag-to-reorder (owner). Native HTML5 DnD; the dragged row follows the cursor and
-     the new order is persisted (PUT the whole list) on drop. */
-  var dragging = null;
-  function afterRow(y) {
-    var rows = Array.prototype.slice.call(wrap.querySelectorAll('.lg-link:not(.lg-link--dragging)'));
-    var best = { off: -Infinity, el: null };
-    rows.forEach(function (row) {
-      var box = row.getBoundingClientRect(), off = y - box.top - box.height / 2;
-      if (off < 0 && off > best.off) best = { off: off, el: row };
-    });
-    return best.el;
-  }
-  wrap.addEventListener('dragstart', function (e) {
-    var row = e.target.closest('.lg-link'); if (!row) return;
-    dragging = row; row.classList.add('lg-link--dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', row.getAttribute('data-value') || ''); } catch (_) {}
-  });
-  wrap.addEventListener('dragover', function (e) {
-    if (!dragging) return;
-    e.preventDefault();
-    var ref = afterRow(e.clientY);
-    wrap.insertBefore(dragging, ref || document.getElementById('lg-link-add'));
-  });
-  wrap.addEventListener('drop', function (e) { if (dragging) e.preventDefault(); });
-  wrap.addEventListener('dragend', function () {
-    if (!dragging) return;
-    var moved = dragging; dragging = null;
-    moved.classList.remove('lg-link--dragging');
-    put(collect());   // persist new order
+  /* Drag-to-reorder the links (rows are draggable in markup; keep #lg-link-add last). */
+  lgSortable(wrap, {
+    itemSelector: '.lg-link',
+    tailSelector: '#lg-link-add',
+    onDrop: function () { put(collect()); }
   });
 })();
 </script>

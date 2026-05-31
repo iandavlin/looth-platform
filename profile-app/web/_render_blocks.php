@@ -54,19 +54,21 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions);
 
-    // about (free-text intro) — shared block.
-    looth_render_about_block($userId, $role, $headerVis);
-
-    // increment 2: the location block (two-tier, ceiling-capped per tier).
-    looth_render_location_block($userId, $role, $headerVis);
-
-    // increment 3: craft (search-fuel) + socials/links blocks.
-    looth_render_craft_block($userId, $role, $headerVis);
-    // gallery (image grid) — shared block.
-    looth_render_gallery_block($userId, $role, $headerVis);
-    // connect block (built on the social-layer Connections backend).
-    looth_render_connect_block($userId, $role, $headerVis, $viewerUserId);
-    looth_render_socials_block($userId, $role, $headerVis);
+    // Body blocks render in the owner's chosen order (Block::profileLayout); the header is
+    // pinned above. Each key maps to its existing renderer — order is the only thing the
+    // layout drives in Phase 1 (presence still per-renderer). data-block on each <section>
+    // is the DOM order-source the owner's drag-reorder collects from.
+    $renderers = [
+        'about'    => static fn() => looth_render_about_block($userId, $role, $headerVis),
+        'location' => static fn() => looth_render_location_block($userId, $role, $headerVis),
+        'craft'    => static fn() => looth_render_craft_block($userId, $role, $headerVis),
+        'gallery'  => static fn() => looth_render_gallery_block($userId, $role, $headerVis),
+        'connect'  => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
+        'socials'  => static fn() => looth_render_socials_block($userId, $role, $headerVis),
+    ];
+    foreach (Block::profileLayout($userId) as $key) {
+        if (isset($renderers[$key])) ($renderers[$key])();
+    }
 
     // TODO(next increments): practices block — same shape.
 }
