@@ -299,6 +299,9 @@ function lg_shared_render_site_header(array $ctx): void
           <ul class="lg-chrome__account-menu" id="lg-account-menu"
               role="menu" aria-label="Account menu" hidden>
             <li role="none">
+              <a role="menuitem" href="/u/me">My Profile</a>
+            </li>
+            <li role="none">
               <a role="menuitem" href="<?= $h($profile_url) ?>">Edit Profile</a>
             </li>
             <li role="none">
