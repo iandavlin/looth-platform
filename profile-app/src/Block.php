@@ -387,6 +387,26 @@ final class Block
         ];
     }
 
+    // ---------- block: about (free-text; shared, profile + practice) ----------
+
+    public const ABOUT_KEY = 'about';
+
+    /** Assemble the about block — free text + block vis (profile_sections key='about'). */
+    public static function loadAbout(int $userId): array
+    {
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'about'");
+        $s->execute([':u' => $userId]);
+        $r = $s->fetch();
+        $text = '';
+        if ($r) { $d = json_decode((string)$r['data'], true) ?: []; $text = (string)($d['text'] ?? ''); }
+        return [
+            'block'   => 'about',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'text'    => $text,
+        ];
+    }
+
     // ---------- block: socials / links (website + platforms) ----------
 
     /**

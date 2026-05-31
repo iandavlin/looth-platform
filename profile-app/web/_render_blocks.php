@@ -54,6 +54,9 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions);
 
+    // about (free-text intro) — shared block.
+    looth_render_about_block($userId, $role, $headerVis);
+
     // increment 2: the location block (two-tier, ceiling-capped per tier).
     looth_render_location_block($userId, $role, $headerVis);
 
@@ -64,6 +67,34 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     looth_render_socials_block($userId, $role, $headerVis);
 
     // TODO(next increments): practices block — same shape.
+}
+
+/**
+ * The about block — free text. Shared (profile + practice). Owner edits inline
+ * (multiline); block-level pmp on profile_sections key='about'.
+ */
+function looth_render_about_block(int $userId, string $role, string $headerVis): void
+{
+    $ab      = Block::loadAbout($userId);
+    $text    = (string)$ab['text'];
+    $isOwner = ($role === 'me');
+    if ($text === '' && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ab['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--about" data-block="about">';
+    echo '<h3 class="lg-bh">About';
+    if ($isOwner) echo ' ' . looth_pmp_control('about', (string)$ab['vis'], $headerVis);
+    echo '</h3>';
+    if ($isOwner) {
+        $has = $text !== '';
+        echo '<div class="lg-about lg-edit' . ($has ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="text" data-edit-url="/profile-api/v0/me/about" data-edit-method="PATCH"'
+           . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write a bit about your work…">'
+           . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
+    } else {
+        echo '<div class="lg-about">' . nl2br(looth_h($text)) . '</div>';
+    }
+    echo '</section>';
 }
 
 /**
