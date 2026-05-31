@@ -68,12 +68,12 @@
             $img_url = $meta['has_image'] ? $it['image_url'] : '';
             ob_start();
 ?>
-        <a class="acard acard--<?= h($meta['variant']) ?> acard--kind-<?= h($target['kind'] ?? 'misc') ?><?= $extra ?><?= $gated_class ?>" href="<?= h($href) ?>" target="_blank" rel="noopener">
+        <a class="acard acard--<?= h($meta['variant']) ?> acard--kind-<?= h($target['kind'] ?? 'misc') ?><?= $extra ?><?= $gated_class ?>" href="<?= h($href) ?>">
           <?php if ($meta['is_sticky']): ?><span class="acard__pin">📌 Pinned</span><?php endif; ?>
           <?php if ($meta['has_image']): ?>
             <div class="acard__img-wrap">
               <img class="acard__img" src="<?= h($img_url) ?>" alt="" loading="lazy" width="560" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
-              <?php if ($meta['yt_id']): ?><span class="acard__play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span><?php endif; ?>
+              <?php if ($meta['yt_id']): ?><button type="button" class="acard__play" data-yt-play="<?= h($meta['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button><?php endif; ?>
               <?php if ($is_gated): ?>
                 <span class="acard__gate" aria-label="<?= h(ucfirst($tier)) ?> member content" title="<?= h(ucfirst($tier)) ?> members only">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -198,7 +198,7 @@
           <input id="q-hero" name="q" type="search" placeholder="Search or just browseâ¦">
         </form>
       </div>
-      <a class="billboard billboard--<?= h($kind) ?>" href="<?= h($it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+      <a class="billboard billboard--<?= h($kind) ?>" href="<?= h($it['url'] ?: '#') ?>">
         <img class="billboard__img" src="<?= h(thumb_url($it)) ?>" alt="" width="1280" height="640" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
         <div class="billboard__scrim"></div>
         <div class="billboard__body">
@@ -321,7 +321,7 @@
         $badge_label = $last ? ($is_stale ? 'Quiet · ' . rel_time($last) : 'Active · ' . rel_time($last)) : 'New';
         $badge_class = $is_stale ? 'dcard__badge--quiet' : 'dcard__badge--active';
 ?>
-        <a class="dcard" href="<?= h($it['url'] ?: '#') ?>" target="_blank" rel="noopener">
+        <a class="dcard" href="<?= h($it['url'] ?: '#') ?>">
           <div class="dcard__head">
             <img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.style.background='#87986a'">
             <span class="dcard__author"><?= h($author) ?></span>

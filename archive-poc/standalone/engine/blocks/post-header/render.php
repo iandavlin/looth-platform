@@ -126,9 +126,13 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
         if (is_array($terms)) {
             foreach ($terms as $t) {
                 if (!is_object($t)) continue;
+                $slug = (string) ($t->slug ?? '');
                 $tags[] = [
                     'name' => (string) $t->name,
-                    'url'  => (string) (get_term_link($t) ?: '#'),
+                    // Tag pills browse the archive-poc surface (/archive/?tag=<slug>),
+                    // not WP's legacy Search-&-Filter term archive. The blob carries
+                    // the slug; fall back to the term link only if it's somehow absent.
+                    'url'  => $slug !== '' ? '/archive/?tag=' . rawurlencode($slug) : (string) (get_term_link($t) ?: '#'),
                     'tax'  => (string) $tax,
                 ];
             }

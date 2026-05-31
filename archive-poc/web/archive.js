@@ -26,6 +26,7 @@ const state = {
   page: 1,            // 1-indexed
   offset: 0,          // derived: (page - 1) * limit
   total: 0,
+  peopleTotal: 0,     // count of authors with posts/discussions (People tab)
   facets: { kind: [], tier: [], tag: [], author: [] },
 };
 
@@ -85,7 +86,10 @@ function syncToURL() {
 async function fetchSearch() {
   const p = new URLSearchParams();
   if (state.q)    p.set('q', state.q);
-  if (state.kind) p.set('kind', state.kind);
+  // 'people' is a pseudo-kind (matching authors, not a content kind) — don't
+  // send it as kind; instead ask for the paginated people list via ?people=1.
+  if (state.kind && state.kind !== 'people') p.set('kind', state.kind);
+  if (state.kind === 'people') p.set('people', '1');
   if (state.tier.length) p.set('tier', state.tier.join(','));
   if (state.tag.length)  p.set('tag',  state.tag.join(','));
   if (state.author)      p.set('author_id', state.author);
@@ -103,8 +107,10 @@ async function fetchSearch() {
   const data = await r.json();
   const elapsed = Math.round(performance.now() - t0);
 
-  state.total   = data.total;
-  state.facets  = data.facets || { kind: [], tier: [], tag: [], author: [] };
+  state.facets      = data.facets || { kind: [], tier: [], tag: [], author: [] };
+  state.peopleTotal = data.people_total || 0;
+  // On the People tab, pagination is over people; otherwise over content.
+  state.total = (state.kind === 'people') ? (data.people_total || 0) : data.total;
 
   // Cache the active author's label so renderMeta can show it even when the
   // current page's facet list happens not to include the selected author.
@@ -121,9 +127,15 @@ async function fetchSearch() {
   renderTierPills();
   renderActiveFilters();
   renderAuthorBanner();
-  renderResults(data.items);
-  renderMeta(data, elapsed);
-  renderPagination();
+  if (state.kind === 'people') {
+    renderPeople(data.people || []);
+    renderMeta(data, elapsed, state.total);
+    renderPagination();   // people paginate too
+  } else {
+    renderResults(data.items);
+    renderMeta(data, elapsed);
+    renderPagination();
+  }
   $loadmsg.textContent = '';
 }
 
@@ -135,10 +147,47 @@ function renderTabs() {
     const f = state.facets.kind.find(x => x.v === k);
     if (f) tabs.push({ v: k, n: f.n, label: KIND_LABELS[k] || k });
   }
+  // "People" pseudo-kind — authors with posts or discussions in the current
+  // result set. Count comes from the server (people_total), so it's accurate
+  // beyond the 20-row author-facet cap.
+  const peopleN = state.peopleTotal || 0;
+  if (peopleN || state.kind === 'people') {
+    tabs.push({ v: 'people', n: peopleN, label: 'People' });
+  }
   $tabs.innerHTML = tabs.map(t => {
     const active = (t.v === state.kind);
     return `<button class="tab${active ? ' is-active' : ''}" data-kind="${t.v}">${t.label} <span class="n">${t.n}</span></button>`;
   }).join('');
+}
+
+// People view — render matching authors as cards (avatar + name + post count).
+// Clicking a card filters the archive to that author's content.
+function renderPeople(authors) {
+  $cards.innerHTML = '';
+  if (!authors.length) {
+    $cards.innerHTML = `<div class="empty">No people match. Try a different search.</div>`;
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const a of authors) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'person-card';
+    card.setAttribute('data-card-author', a.v);
+    card.setAttribute('data-card-author-name', a.label || '');
+    // Real avatar → show the photo; otherwise a sage circle with the initial.
+    const avatar = a.avatar_url
+      ? `<span class="person-card__avatar" style="background-image:url('${escapeHtml(a.avatar_url)}')"></span>`
+      : `<span class="person-card__avatar">${escapeHtml((a.label || '?').trim().charAt(0).toUpperCase())}</span>`;
+    card.innerHTML =
+      avatar +
+      `<span class="person-card__body">` +
+        `<span class="person-card__name">${escapeHtml(a.label || 'Member')}</span>` +
+        `<span class="person-card__count">${a.n} post${a.n === 1 ? '' : 's'}</span>` +
+      `</span>`;
+    frag.appendChild(card);
+  }
+  $cards.appendChild(frag);
 }
 
 function renderTagPills() {
@@ -284,7 +333,7 @@ function renderActiveFilters() {
     `<span class="chip">${label} <b>${escapeHtml(val)}</b><button class="chip__x" data-clear="${action}" aria-label="Remove ${escapeHtml(label)} filter">${X}</button></span>`;
 
   if (state.q)              chips.push(mk('', state.q, 'q'));
-  if (state.kind)           chips.push(mk('Type', KIND_LABELS[state.kind] || state.kind, 'kind'));
+  if (state.kind)           chips.push(mk('Type', state.kind === 'people' ? 'People' : (KIND_LABELS[state.kind] || state.kind), 'kind'));
   for (const slug of state.tag) {
     chips.push(`<span class="chip">Tag <b>${escapeHtml(slug)}</b><button class="chip__x" data-clear="tag:${escapeHtml(slug)}" aria-label="Remove tag ${escapeHtml(slug)}">${X}</button></span>`);
   }
@@ -337,8 +386,6 @@ function renderCard(it) {
   const a = document.createElement('a');
   a.className = 'card';
   a.href = it.url || '#';
-  a.target = '_blank';
-  a.rel = 'noopener';
 
   const thumb = (it.thumb_url && !it.thumb_broken)
     ? it.thumb_url
@@ -420,6 +467,13 @@ $cards.addEventListener('click', (e) => {
     if (id) {
       state.author = id;
       state.authorLabel = name;
+      // Picking a person from the People tab → leave that view and show ALL of
+      // their content (drop the name query, like the search modal's People links).
+      if (state.kind === 'people') {
+        state.kind = '';
+        state.q = '';
+        if ($q) $q.value = '';
+      }
       applyAndFetch();
     }
     return;
@@ -435,14 +489,22 @@ $cards.addEventListener('click', (e) => {
   }
 });
 
-function renderMeta(data, elapsed) {
+function renderMeta(data, elapsed, peopleCount) {
   const filters = [];
   if (state.q) filters.push(`q=<b>"${escapeHtml(state.q)}"</b>`);
-  if (state.kind) filters.push(`kind=<b>${escapeHtml(state.kind)}</b>`);
+  if (state.kind && state.kind !== 'people') filters.push(`kind=<b>${escapeHtml(state.kind)}</b>`);
   if (state.tier.length) filters.push(`tier=<b>${state.tier.join(',')}</b>`);
   if (state.tag.length)  filters.push(`tag=<b>${state.tag.map(escapeHtml).join(',')}</b>`);
   if (state.author)      filters.push(`author=<b>${escapeHtml(state.authorLabel || ('#' + state.author))}</b>`);
   const filtStr = filters.length ? ' · ' + filters.join(', ') : '';
+
+  // People view: count authors, not content rows, and no pagination.
+  if (state.kind === 'people') {
+    const n = peopleCount || 0;
+    $meta.innerHTML = `<b>${n.toLocaleString()}</b> ${n === 1 ? 'person' : 'people'}${filtStr} <span class="ms">· ${elapsed}ms total · ${data.meta.elapsed_ms}ms server</span>`;
+    return;
+  }
+
   const totalPages = Math.max(1, Math.ceil(data.total / state.limit));
   const pageStr = totalPages > 1 ? ` · page <b>${state.page}</b>/${totalPages}` : '';
   $meta.innerHTML = `<b>${data.total.toLocaleString()}</b> result${data.total === 1 ? '' : 's'}${filtStr}${pageStr} <span class="ms">· ${elapsed}ms total · ${data.meta.elapsed_ms}ms server</span>`;
@@ -459,17 +521,19 @@ function debounce(fn, ms) {
 }
 
 // ---- Wiring --------------------------------------------------------------
-function applyAndFetch({ resetPage = true } = {}) {
+function applyAndFetch({ resetPage = true, scroll = false } = {}) {
   if (resetPage) {
     state.page = 1;
     state.offset = 0;
-    // Result count can drop sharply on a filter change, shortening the doc
-    // and parking the user at the bottom of the new (smaller) grid. Snap to
-    // the top of the grid-layout so they see what changed.
-    const layout = document.querySelector('.grid-layout');
-    if (layout) {
-      const top = layout.getBoundingClientRect().top + window.scrollY - 80; // leave room for sticky chrome
-      window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+    // By default we DON'T scroll on filter/search changes — yanking the page up
+    // on every tab/tag/typing toggle is jarring. Pagination scrolls on its own
+    // (goToPage). Callers can opt in with scroll:true if ever needed.
+    if (scroll) {
+      const layout = document.querySelector('.grid-layout');
+      if (layout) {
+        const top = layout.getBoundingClientRect().top + window.scrollY - 80; // leave room for sticky chrome
+        window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+      }
     }
   }
   syncToURL();
@@ -541,7 +605,7 @@ $q.addEventListener('input', debounce(e => {
   enterGrid();
   if (state.q && state.sort === 'newest') { state.sort = 'relevance'; $sort.value = 'relevance'; }
   if (!state.q && state.sort === 'relevance') { state.sort = 'newest'; $sort.value = 'newest'; }
-  applyAndFetch();
+  applyAndFetch({ scroll: false });   // don't yank the page up while typing
 }, 200));
 
 $q.addEventListener('keydown', e => {
@@ -886,14 +950,14 @@ if (ssrPresent && !hasFilters) {
   // Each click fetches 10 more items via the endpoint and appends them before the button.
   let loading = false;
   let exhausted = false;
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 20;
 
   function makeLoadMoreButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'acard acard--loadmore';
     btn.setAttribute('aria-label', 'Load more activity');
-    btn.innerHTML = '<span class="acard__loadmore-inner"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg><span class="acard__loadmore-label">Load more</span></span>';
+    btn.innerHTML = '<span class="acard__loadmore-inner"><svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg><span class="acard__loadmore-label">Load more</span></span>';
     btn.addEventListener('click', loadMore);
     return btn;
   }
@@ -1060,13 +1124,11 @@ if (ssrPresent && !hasFilters) {
     if (compact) cls += ' acard--compact';
     a.className = cls;
     a.href = target.url || '#';
-    a.target = '_blank';
-    a.rel = 'noopener';
     a.innerHTML = `
       ${meta.is_sticky ? '<span class="acard__pin">📌 Pinned</span>' : ''}
       ${meta.has_image ? `<div class="acard__img-wrap">
         <img class="acard__img" src="${escapeHtml(it.image_url)}" alt="" loading="lazy" width="560" height="320">
-        ${meta.yt_id ? '<span class="acard__play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>' : ''}
+        ${meta.yt_id ? `<button type="button" class="acard__play" data-yt-play="${escapeHtml(meta.yt_id)}" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
       </div>` : ''}
       <div class="acard__body">
         ${user.name ? `<div class="acard__head">
@@ -1086,6 +1148,47 @@ if (ssrPresent && !hasFilters) {
       </div>`;
     return a;
   }
+
+  // Click-to-play: swap the YouTube thumbnail for an autoplaying iframe inline
+  // (facade → iframe only on demand). The play button sits inside the card's
+  // <a>, so cancel the card navigation when it's the click target.
+  rail.addEventListener('click', (e) => {
+    const btn = e.target.closest('.acard__play[data-yt-play]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id   = btn.getAttribute('data-yt-play');
+    const wrap = btn.closest('.acard__img-wrap');
+    if (!id || !wrap || wrap.querySelector('iframe')) return;
+    const h = wrap.offsetHeight || 220;   // keep the thumbnail's footprint
+    wrap.innerHTML =
+      `<iframe class="acard__video" style="height:${h}px" ` +
+      `src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1" ` +
+      `title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ` +
+      `allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  });
+})();
+
+// --- Click-to-play for video RAIL cards (discovery rows + rows-more) ---
+// Same facade as the activity strip: the rail card's play button swaps the
+// thumbnail for an autoplaying iframe inline and cancels the card's <a> nav.
+// Document-level since rails appear in several rows.
+(function () {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.rcard__play[data-yt-play]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const id   = btn.getAttribute('data-yt-play');
+    const wrap = btn.closest('.rcard__img-wrap');
+    if (!id || !wrap || wrap.querySelector('iframe')) return;
+    const h = wrap.offsetHeight || 270;   // keep the thumbnail's footprint
+    wrap.innerHTML =
+      `<iframe class="rcard__video" style="height:${h}px" ` +
+      `src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1" ` +
+      `title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ` +
+      `allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+  });
 })();
 
 // --- Event card: "Add to calendar" — generates an .ics blob client-side ---
@@ -1230,7 +1333,7 @@ if (ssrPresent && !hasFilters) {
       posts.forEach(it => {
         const thumb = (it.thumb_url && !it.thumb_broken) ? it.thumb_url : FALLBACK_IMG;
         const kind  = KIND_LABEL[it.kind] || it.kind || '';
-        html += `<a class="search-modal__hit" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
+        html += `<a class="search-modal__hit" href="${esc(it.url || '#')}">
           <img class="search-modal__hit-img" src="${esc(thumb)}" alt="" loading="lazy"
                onerror="this.onerror=null;this.src='${FALLBACK_IMG}'">
           <div class="search-modal__hit-body">
@@ -1254,7 +1357,7 @@ if (ssrPresent && !hasFilters) {
       html += '<div class="search-modal__section">';
       html += '<h3 class="search-modal__section-head">Discussions</h3>';
       discs.forEach(it => {
-        html += `<a class="search-modal__disc" href="${esc(it.url || '#')}" target="_blank" rel="noopener">
+        html += `<a class="search-modal__disc" href="${esc(it.url || '#')}">
           <svg class="search-modal__disc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>

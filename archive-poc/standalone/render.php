@@ -149,7 +149,24 @@ function lg_standalone_render_article(array $layout, array $pc, array $viewer, b
     [$brandTokens, $dashOverrides] = lg_standalone_theme();
     $result = Pipeline::run($layout, $brandTokens, $dashOverrides, $ctx);
     $GLOBALS['LG_STANDALONE_LAST_CSS'] = (string) ($result['css'] ?? '');
-    return (string) ($result['html'] ?? '');
+    return lg_standalone_lazyload_imgs((string) ($result['html'] ?? ''));
+}
+
+/** Mirror WP's wp_filter_content_tags: give content <img>s lazy-loading + async
+ *  decoding so the browser doesn't eagerly fetch two-dozen images on load. Only
+ *  touches imgs that don't already declare a loading strategy — so the post-header
+ *  hero (loading="eager" fetchpriority="high") and the avatar (already lazy) are
+ *  left as-is. srcset/sizes is a separate, materializer-side concern (size variants
+ *  aren't in the blob yet). */
+function lg_standalone_lazyload_imgs(string $html): string {
+    if (strpos($html, '<img') === false) return $html;
+    return (string) preg_replace_callback(
+        '~<img\b(?![^>]*\bloading=)[^>]*>~i',
+        function (array $m): string {
+            return preg_replace('~\s*/?>$~', '', $m[0]) . ' loading="lazy" decoding="async">';
+        },
+        $html
+    );
 }
 
 /** Load the dash theme snapshot → [resolved brand tokens, dash style overrides].
@@ -170,6 +187,27 @@ function lg_standalone_theme(): array {
     return $cache;
 }
 
+/** Externalize the engine CSS bundle to a content-hashed, cacheable file under
+ *  /archive-poc/assets/ and return its URL. The bundle is global + deterministic
+ *  (CssBuilder over Manifest::all() + the shared theme), so it's byte-identical for
+ *  every standalone page → written once, then served from browser cache on every
+ *  subsequent navigation. Replaces re-inlining ~105KB per page. Returns '' on write
+ *  failure so the caller can fall back to inline. */
+function lg_standalone_css_href(string $css): string {
+    if ($css === '') return '';
+    $dir  = __DIR__ . '/../web/assets';
+    $hash = substr(md5($css), 0, 16);
+    $file = "$dir/lg-v2-bundle.$hash.css";
+    $url  = "/archive-poc/assets/lg-v2-bundle.$hash.css";
+    if (is_file($file)) return $url;
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) return '';
+    // Atomic write: a concurrent reader never sees a half-written bundle.
+    $tmp = "$file.tmp." . getmypid();
+    if (@file_put_contents($tmp, $css) === false) return '';
+    if (!@rename($tmp, $file)) { @unlink($tmp); return is_file($file) ? $url : ''; }
+    return $url;
+}
+
 function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs): string {
     $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
 
@@ -185,9 +223,14 @@ function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $a
 <title><?= $title ?> — Looth Group</title>
 <meta name="robots" content="<?= $tier === 'public' ? 'index, follow' : 'noindex, follow' ?>">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
+<?php $cssHref = lg_standalone_css_href($css); ?>
+<?php if ($cssHref !== ''): ?>
+<link rel="stylesheet" href="<?= $cssHref ?>">
+<?php else: /* write failed (e.g. assets dir not writable) — fall back to inline */ ?>
 <style>
 <?= $css ?>
 </style>
+<?php endif; ?>
 <style>
 body { margin: 0; background: #f0eee8; color: #323532;
        font-family: 'Jost', system-ui, -apple-system, sans-serif; }
