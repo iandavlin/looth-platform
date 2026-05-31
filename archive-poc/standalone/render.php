@@ -96,12 +96,29 @@ if ($previewAs !== '') {
     [$viewer, $authed, $shellTier, $viewerName] = lg_standalone_viewer_from_whoami();
 }
 
+/* ── Edit affordance ─────────────────────────────────────────────────────
+   Admins/editors (edit_archive_poc cap) or the post's own author may jump to the
+   WordPress FE editor via ?lg_edit=1 — nginx routes that flagged URL to WP, where
+   the real plugin editor + capability check take over. Hidden in preview mode. */
+$editUrl = '';
+if (!$IS_CLI && $previewAs === '') {
+    $who = lg_archive_poc_whoami();   // static-cached this request — no second HTTP call
+    if (!empty($who['authenticated'])) {
+        $capEdit  = (($who['capabilities']['edit_archive_poc'] ?? false) === true);
+        $vid      = (int) ($who['wp_user_id'] ?? 0);
+        $isAuthor = $vid > 0 && $vid === (int) ($postContext['author']['id'] ?? -1);
+        if ($capEdit || $isAuthor) {
+            $editUrl = rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_edit=1';
+        }
+    }
+}
+
 /* ── Render ──────────────────────────────────────────────────────────── */
 $articleHtml = lg_standalone_render_article($layout, $postContext, $viewer, $authed);
 $css         = $GLOBALS['LG_STANDALONE_LAST_CSS'] ?? '';
 
 if (!$IS_CLI) header('Content-Type: text/html; charset=utf-8');
-echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs);
+echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl);
 
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -233,7 +250,7 @@ function lg_standalone_css_href(string $css): string {
     return $url;
 }
 
-function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs): string {
+function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = ''): string {
     $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
 
     require_once '/srv/lg-shared/site-header.php';
@@ -260,6 +277,11 @@ function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $a
 body { margin: 0; background: #f0eee8; color: #323532;
        font-family: 'Jost', system-ui, -apple-system, sans-serif; }
 .lg-standalone-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+.lg-standalone-edit { position: fixed; right: 18px; bottom: 18px; z-index: 50;
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px;
+  background: #323532; color: #f0eee8; border-radius: 999px; font-size: 14px;
+  font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+.lg-standalone-edit:hover { background: #1a1a1a; }
 </style>
 </head>
 <body>
@@ -277,6 +299,9 @@ body { margin: 0; background: #f0eee8; color: #323532;
         'profile_url'   => '/profile/edit',
     ]);
 ?>
+<?php if ($editUrl !== ''): ?>
+<a class="lg-standalone-edit" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">&#9998; Edit</a>
+<?php endif; ?>
 <main class="lg-standalone-main" id="lg-main">
 <?= $articleHtml ?>
 </main>
