@@ -81,3 +81,21 @@ add_action('set_object_terms', function ($object_id, $terms, $tt_ids, $taxonomy)
 add_action('trashed_post',       function ($post_id) { lg_materializer_dispatch((int) $post_id, 'delete'); }, 99, 1);
 add_action('before_delete_post', function ($post_id) { lg_materializer_dispatch((int) $post_id, 'delete'); }, 99, 1);
 add_action('untrashed_post',     function ($post_id) { lg_materializer_dispatch((int) $post_id, 'upsert'); }, 99, 1);
+
+/* ── Dash theme snapshot ─────────────────────────────────────────────────
+ * The standalone renderer has no WP, so it can't read the dash brand/style
+ * options live. Snapshot them to a JSON file it reads (dash-theme.json). Keep
+ * it fresh whenever the dash saves brand palette or block styles. File is
+ * looth-dev:www-data 664 → www-data (wp-admin) can rewrite it. */
+const LG_DASH_THEME_SNAPSHOT = '/home/ubuntu/projects/archive-poc/standalone/dash-theme.json';
+function lg_materializer_write_theme_snapshot() {
+    $snap = [
+        'brand'  => get_option('lg_layout_v2_brand_palette', []),
+        'styles' => get_option('lg_layout_v2_block_styles', []),
+        'epoch'  => (int) get_option('lg_layout_v2_cache_epoch', 0),
+    ];
+    @file_put_contents(LG_DASH_THEME_SNAPSHOT, json_encode($snap, JSON_UNESCAPED_SLASHES));
+}
+add_action('update_option_lg_layout_v2_block_styles',   'lg_materializer_write_theme_snapshot', 99);
+add_action('update_option_lg_layout_v2_brand_palette',  'lg_materializer_write_theme_snapshot', 99);
+add_action('update_option_lg_layout_v2_cache_epoch',    'lg_materializer_write_theme_snapshot', 99);

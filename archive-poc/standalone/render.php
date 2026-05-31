@@ -142,9 +142,32 @@ function lg_standalone_render_article(array $layout, array $pc, array $viewer, b
         'post_id'        => (int) ($pc['post_id'] ?? 0),
         'post_tier'      => (string) ($pc['post_tier'] ?? ''),
     ];
-    $result = Pipeline::run($layout, Theme::defaultValues(), [], $ctx);
+    // Brand tokens + dash style overrides from the materialized dash snapshot
+    // (dash-theme.json — global lg_layout_v2_brand_palette + _block_styles, kept
+    // fresh by the materializer / dash-save hook). The WP renderer reads these
+    // from wp_options every render; standalone reads the snapshot (no WP boot).
+    [$brandTokens, $dashOverrides] = lg_standalone_theme();
+    $result = Pipeline::run($layout, $brandTokens, $dashOverrides, $ctx);
     $GLOBALS['LG_STANDALONE_LAST_CSS'] = (string) ($result['css'] ?? '');
     return (string) ($result['html'] ?? '');
+}
+
+/** Load the dash theme snapshot → [resolved brand tokens, dash style overrides].
+ *  Falls back to engine defaults if the snapshot is missing/unreadable. */
+function lg_standalone_theme(): array {
+    static $cache = null;
+    if ($cache !== null) return $cache;
+    $brand = []; $styles = [];
+    $f = __DIR__ . '/dash-theme.json';
+    if (is_readable($f)) {
+        $j = json_decode((string) file_get_contents($f), true);
+        if (is_array($j)) {
+            $brand  = is_array($j['brand']  ?? null) ? $j['brand']  : [];
+            $styles = is_array($j['styles'] ?? null) ? $j['styles'] : [];
+        }
+    }
+    $cache = [Theme::resolve($brand), $styles];
+    return $cache;
 }
 
 function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs): string {
