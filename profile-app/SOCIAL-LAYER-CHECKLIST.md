@@ -37,24 +37,32 @@ used by slice-3 → no extension gap). Read-only inspected live BB (`looth_dev`)
 - [x] `notifications` (user/actor uuid, type, typed referents, is_read) + indexes — ADDED this turn.
 - [ ] Apply on dev; `\d` verify; confirm `users.uuid` FKs resolve.
 
-## Backend
-- [ ] `src/Connections.php` — edgeState, request/accept/decline/block, listFor,
-      pendingCount, canMessage (connections-only), areConnected (stubs → fill).
-      **follow()/unfollow()/`following`/`TYPES` REMOVED this turn (mutual-only).**
-- [ ] `src/Messaging.php` — threadsFor, thread(+markRead), send (**connection-gated
-      this turn**), unreadCount (stubs).
-- [x] `src/Notifications.php` — push(upsert/dedup), listFor, unreadCount, markRead,
-      markAllRead, prune(30d) — **SCAFFOLDED this turn** (bodies stubbed). Connections
-      + Messaging writes fire `Notifications::push`.
-- [ ] API: `me-connections`, `me-messages`, `me-thread`, `me-social-counts` (501 stubs → fill).
-- [x] `me-notifications` (GET feed + POST read/read_all) — **SCAFFOLDED this turn** (501 stub).
-- [ ] `bin/prune-notifications` cron (30-day retention) — NOT this turn.
-- [ ] Every write asserts actor is a participant / not blocked.
+## Backend — IMPLEMENTED this turn (write-only; coordinator applies + tests)
+- [x] `src/Connections.php` — edgeState, stateWithId, request/accept/decline/cancel/
+      block/blockUser, listFor (grouped), pendingCount, canMessage (connections-only),
+      areConnected. Mutual-only; request/accept fire `Notifications::push`.
+      **Divergence flag:** mutating ops are id-based (`accept(connId,uuid)` …) to serve
+      `PATCH /connections/<id>`, vs the relay's `accept(addressee,requester)` sketch.
+- [x] `src/Messaging.php` — threadsFor, thread(+markRead), send (connection-gated:
+      new DM requires accepted edge; reply re-checks 1:1 peer), markRead, unreadCount.
+      One thread per pair (findPairThread); send fans out unread + `message` notifs.
+- [x] `src/Notifications.php` — push (ON CONFLICT upsert via the two partial-unique
+      indexes), listFor (actor-hydrated), unreadCount, markRead, markAllRead, prune(30d).
+- [x] `src/Social.php` — **NEW** `renderProfileActions($viewerUuid|null,$profileUuid)`
+      → server-rendered Connect/Message widget + one-time inline JS (fetch→reload;
+      Message dispatches `lg:open-dm`). The ONE SLOT profile-2.0 drops into `web/u.php`.
+- [x] API: `me-connections` (GET grouped/?filter=pending, POST request, PATCH action),
+      `me-messages` (GET threads, POST send), `me-thread` (GET by uuid+mark-read, POST reply),
+      `me-social-counts` (true ints), `me-notifications` (GET feed+unread, POST read/read_all).
+- [ ] `bin/prune-notifications` cron (30-day retention) — NOT this turn (calls `Notifications::prune`).
+- [x] Every write asserts actor is a participant / not blocked.
 
 ## On-/u/ UI (profile-app-rendered)
-- [ ] Connect + Message buttons in the header block; state from `Connections::edgeState`.
-- [ ] Buttons respect the header ceiling (private header hides them; member header
-      join-gates the public). Mocked in `/var/www/dev/mockups/profile-block.html`.
+- [x] `Social::renderProfileActions` renders Connect/Requested+Cancel/Accept+Decline/
+      Connected+Message/(blocked→nothing)/(self→nothing)/(logged-out→auth-gated Connect).
+- [ ] profile-2.0 drops the one-line slot into `web/u.php` header card (THEIR edit).
+- [ ] Buttons respect the header ceiling — the host decides whether to render the widget
+      at all (private header hides; member header join-gates public). Widget assumes allowed.
 
 ## Header modals (lg-shell lane — CROSS-LANE, don't build here)
 - [ ] lg-shell P9 messages / notifications / friends modals call the profile-app
@@ -79,12 +87,39 @@ is additive to the existing `messages_unread`/`requests_pending` the header alre
 - [ ] Coordinator declares social schema dev-FINAL with the spine. Only then →
 
 ## Crib (one pass, after sign-off) — CUT-DAY-REQUIRED
-- [ ] Implement `bin/migrate-social-from-bb.php` (stub today).
-- [ ] Dry-run on dev; assert ≈ 1,881 msgs / 370 threads / 219 senders + 10,978
+- [x] Implement `bin/migrate-social-from-bb.php` — friends→connections (mutual, no
+      follow), `wp_bp_messages_*`→threads/messages/recipients, dry-run default,
+      idempotent (bp_* UNIQUE + pair-existence), `--seed-notifications`, `--thread N` spot-check.
+- [ ] Dry-run on dev; assert ≈ 1,881 msgs / 370 threads / 219 senders + ~10,978
       connection edges (7,346 accepted). (No follow; notifications: no history import.)
-- [ ] Spot-check one known thread end-to-end (order, sender, unread).
-- [ ] `--commit` on dev; idempotent re-run check (bp_* UNIQUE).
+- [ ] Spot-check one known thread end-to-end (`--thread <bp_thread_id>`).
+- [ ] `--commit` on dev; idempotent re-run check (counts stable, no dupes).
 - [ ] (Cutover = coordinator-timed; social layer is a P-list blocker.)
+
+## TEST STEPS (coordinator runs — write-only lane, nothing executed here)
+0. **Lint first** (php was gated in the build session): `php -l` every file under
+   Files-changed below. Then apply `sql/2026-05-30-social-layer.sql` on dev pg.
+1. **Schema applied:** `\d connections message_threads messages message_recipients
+   notifications` — confirm FKs to `users(uuid)` resolve, the 2 partial-unique notif
+   indexes exist, `connections_touch` trigger present.
+2. **Migration dry-run:** `php bin/migrate-social-from-bb.php` → counts ≈ snapshot.
+   Verify BB→connections mappable count (paste in report). Spot-check:
+   `php bin/migrate-social-from-bb.php --thread <id>`.
+3. **Migration commit + idempotency:** `--commit`, then re-run `--commit` → second run
+   inserts 0 (counts stable). Optionally `--commit --seed-notifications`.
+4. **Connections API** (cookie = a real looth_id JWT):
+   - `POST /profile-api/v0/connections {addressee_uuid}` → pending; addressee bell +1.
+   - `PATCH /profile-api/v0/connections/<id> {action:'accept'}` → accepted; requester bell +1.
+   - decline/cancel remove the pending row; block flips status + normalizes requester=blocker.
+   - `GET /profile-api/v0/me/connections` → accepted/pending_in/pending_out groups.
+5. **Messaging:** non-connected `POST /me/messages {to_uuid,body}` → 403 not_connected;
+   after accept → 200, thread created once (re-send reuses it), peer unread +1, bell +1.
+   `GET /me/messages/<uuid>` returns messages asc + marks read (unread→0).
+6. **Counts/notifs:** `GET /me/social-counts` true ints; `GET /me/notifications` feed +
+   unread; `POST {action:'read_all'}` zeroes unread.
+7. **Widget:** render `Social::renderProfileActions($viewerUuid,$profileUuid)` for each
+   state (none/pending_out/pending_in/accepted/blocked/self/logged-out) — correct buttons,
+   one `<script>` emitted once.
 
 ## Hard stops (this turn observed)
 No migration run · no schema apply/commit · no deploy · no git commit · no

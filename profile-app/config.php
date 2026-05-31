@@ -64,3 +64,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Cache.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Whoami.php';
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // profile-2.0 spine (centralized per coordinator ask)
 require_once LG_PROFILE_APP_APP_ROOT . '/src/Mint.php';    // looth_id signing (shim-replacement)
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Connections.php';   // social layer
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Messaging.php';     // social layer
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Notifications.php'; // social layer
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Social.php';        // social layer widget + counts

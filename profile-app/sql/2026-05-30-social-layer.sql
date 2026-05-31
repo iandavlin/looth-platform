@@ -94,7 +94,16 @@ CREATE TABLE notifications (
 -- unread bell count (cheap, hot path); recent-first feed for the modal.
 CREATE INDEX idx_notifications_unread ON notifications (user_uuid) WHERE is_read = false;
 CREATE INDEX idx_notifications_feed   ON notifications (user_uuid, created_at DESC);
--- Dedup is app-layer (Notifications::push upserts: collapse "new message" to one
--- unread row per (user, thread); one request/accept row per (user, connection)).
+-- Dedup targets for Notifications::push() ON CONFLICT (atomic upsert, no race):
+--   message            → ONE row per (user, thread); a re-fire bumps it unread+top.
+--   request/accept      → ONE row per (user, connection).
+CREATE UNIQUE INDEX uq_notifications_message    ON notifications (user_uuid, thread_id)     WHERE type = 'message';
+CREATE UNIQUE INDEX uq_notifications_connection ON notifications (user_uuid, connection_id) WHERE connection_id IS NOT NULL;
+
+-- RETENTION (30-day ruling, Ian 2026-05-30): a cron (bin/prune-notifications, NOT
+-- built this turn) runs this prune. The DM/connection itself persists — only the
+-- bell alert is pruned, keeping the table lean (unlike BB's unbounded growth):
+--   DELETE FROM notifications WHERE created_at < now() - interval '30 days';
+-- Implemented as Notifications::prune($days=30); coordinator schedules the job.
 
 COMMIT;
