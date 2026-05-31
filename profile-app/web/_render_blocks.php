@@ -97,34 +97,58 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
  * The socials / links block — website + platform links, one block-level vis,
  * ceiling-capped. Sole location for social links (header inline row dropped).
  */
+/** One editable link row (owner). data-value = raw stored value → round-trips to me-socials. */
+function looth_link_row(string $kind, string $value): string
+{
+    return '<div class="lg-link" data-kind="' . looth_h($kind) . '" data-value="' . looth_h($value) . '">'
+         . '<span class="lg-link__kind">' . looth_h($kind) . '</span>'
+         . '<span class="lg-link__val">' . looth_h(preg_replace('#^https?://#i', '', $value)) . '</span>'
+         . '<button type="button" class="lg-link__rm" aria-label="Remove">×</button></div>';
+}
+
 function looth_render_socials_block(int $userId, string $role, string $headerVis): void
 {
     $soc = Block::loadSocials($userId);
     if ($soc === null) return;
     $website = $soc['fields']['website'] ?? null;
     $links   = $soc['fields']['links']   ?? [];
-    if (!$website && !$links) return;                      // empty → no block
-
     $isOwner = ($role === 'me');
+
+    if (!$website && !$links && !$isOwner) return;         // empty → no block for visitors
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$soc['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--socials" data-block="socials">';
     echo '<h3 class="lg-bh">Links';
     if ($isOwner) echo ' ' . looth_pmp_control('socials', (string)$soc['vis'], $headerVis);
-    echo '</h3><div class="lg-socrow">';
-    if ($website) {
-        $label = preg_replace('#^https?://#i', '', (string)$website);
-        echo '<a class="lg-socrow__a" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank" title="website">'
-           . looth_h($label) . ' ↗</a>';
+    echo '</h3>';
+
+    if ($isOwner) {
+        // Editable list: website (kind=web) first, then the other links, + Add.
+        echo '<div class="lg-links" id="lg-links-edit">';
+        if ($website) echo looth_link_row('web', (string)$website);
+        foreach ($links as $l) {
+            $url = (string)($l['url'] ?? '');
+            if ($url !== '') echo looth_link_row((string)($l['kind'] ?? ''), $url);
+        }
+        echo '<button type="button" class="lg-link__add" id="lg-link-add">+ Add link</button>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-socrow">';
+        if ($website) {
+            $label = preg_replace('#^https?://#i', '', (string)$website);
+            echo '<a class="lg-socrow__a" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank" title="website">'
+               . looth_h($label) . ' ↗</a>';
+        }
+        foreach ($links as $l) {
+            $kind = (string)($l['kind'] ?? '');
+            $url  = (string)($l['url'] ?? '');
+            if ($url === '') continue;
+            echo '<a class="lg-socrow__a" href="' . looth_h($url) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
+               . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
+        }
+        echo '</div>';
     }
-    foreach ($links as $l) {
-        $kind = (string)($l['kind'] ?? '');
-        $url  = (string)($l['url'] ?? '');
-        if ($url === '') continue;
-        echo '<a class="lg-socrow__a" href="' . looth_h($url) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
-           . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
-    }
-    echo '</div></section>';
+    echo '</section>';
 }
 
 /**

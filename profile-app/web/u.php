@@ -136,6 +136,20 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-socrow__a{display:inline-flex;align-items:center;height:32px;padding:0 12px;border-radius:8px;background:var(--lg-sage-tint);
   color:var(--lg-sage-d);font:700 12.5px/1 var(--lg-font-sans);text-decoration:none}
 .lg-socrow__a:hover{background:var(--lg-sage-3)}
+/* links editor (owner) */
+.lg-links{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.lg-link{display:inline-flex;align-items:center;gap:10px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:7px 8px 7px 12px}
+.lg-link__kind{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:5px;padding:3px 6px}
+.lg-link__val{font:600 13px/1 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-link__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
+.lg-link__rm:hover{color:var(--lg-rust)}
+.lg-link__add{align-self:flex-start;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:6px 14px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-link__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
+.lg-link-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lg-link-form select,.lg-link-form input{border:1px solid var(--lg-line);border-radius:8px;padding:7px 10px;font:600 13px/1 var(--lg-font-sans)}
+.lg-link-form button{border:0;border-radius:8px;padding:8px 14px;font:700 12.5px/1 var(--lg-font-sans);cursor:pointer}
+.lg-link-form .ok{background:var(--lg-sage);color:#fff}
+.lg-link-form .cancel{background:var(--lg-cream);border:1px solid var(--lg-line);color:var(--lg-ink)}
 
 /* connect block */
 .lg-connect__count{display:inline-block;background:var(--lg-sage-tint);color:var(--lg-sage-d);font:800 11px/1 var(--lg-font-sans);border-radius:999px;padding:3px 9px;margin-left:4px;vertical-align:middle}
@@ -486,6 +500,54 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
         if (val === orig) { finish(el); restorePlaceholder(el); } else { save(el, val, orig); }
       });
     });
+  });
+})();
+</script>
+
+<script>
+/* Links editor (owner/Me) — add/remove links; PUT the whole list to me-socials → reload. */
+(function () {
+  var KINDS = ['web','instagram','youtube','x','facebook','tiktok','bandcamp','patreon','linktree','email','phone'];
+  var wrap = document.getElementById('lg-links-edit');
+  if (!wrap) return;
+
+  function collect() {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-link'), function (el, i) {
+      return { kind: el.getAttribute('data-kind'), value: el.getAttribute('data-value'), sort_order: i };
+    });
+  }
+  function put(items) {
+    fetch('/profile-api/v0/me/socials', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (res.ok) location.reload(); else alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-link__rm');
+    if (rm) { rm.closest('.lg-link').remove(); put(collect()); }
+  });
+
+  var addBtn = document.getElementById('lg-link-add');
+  addBtn && addBtn.addEventListener('click', function () {
+    if (document.querySelector('.lg-link-form')) return;
+    var form = document.createElement('div'); form.className = 'lg-link-form';
+    var sel = document.createElement('select');
+    KINDS.forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = k; sel.appendChild(o); });
+    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'handle or URL';
+    var ok = document.createElement('button'); ok.className = 'ok'; ok.textContent = 'Add';
+    var cancel = document.createElement('button'); cancel.className = 'cancel'; cancel.textContent = 'Cancel';
+    form.appendChild(sel); form.appendChild(inp); form.appendChild(ok); form.appendChild(cancel);
+    addBtn.parentNode.insertBefore(form, addBtn);
+    inp.focus();
+    cancel.addEventListener('click', function () { form.remove(); });
+    ok.addEventListener('click', function () {
+      var v = inp.value.trim(); if (!v) { inp.focus(); return; }
+      var items = collect(); items.push({ kind: sel.value, value: v, sort_order: items.length });
+      put(items);
+    });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') ok.click(); else if (e.key === 'Escape') cancel.click(); });
   });
 })();
 </script>
