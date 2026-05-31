@@ -384,6 +384,14 @@ body.lg-sm-open { overflow: hidden; }
 }
 .lg-social-modal__close:hover,
 .lg-social-modal__back-btn:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+/* Head text action (e.g. "Mark all read") */
+.lg-social-modal__action {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  padding: 5px 10px; border-radius: 999px; flex: 0 0 auto;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+  color: var(--lg-sage-d, #6b7c52);
+}
+.lg-social-modal__action:hover { background: var(--lg-sage-tint, #eef2e3); }
 
 /* Scrollable body */
 .lg-social-modal__body {
@@ -423,12 +431,20 @@ body.lg-sm-open { overflow: hidden; }
 
 /* ── Notifications ── */
 .lg-notif__item {
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
   padding: 12px 20px;
   border-bottom: 1px solid var(--lg-line, #e3ddd0);
   cursor: default;
 }
 .lg-notif__item--unread { background: var(--lg-sage-tint, #eef2e3); }
+.lg-notif__body { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.lg-notif__clear {
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--lg-sage-d, #6b7c52);
+}
+.lg-notif__clear:hover { background: var(--lg-line, #e3ddd0); }
 .lg-notif__text {
   font: 400 13px/1.4 var(--lg-font-sans, system-ui);
   color: var(--lg-ink, #323532); margin: 0;
@@ -544,6 +560,24 @@ body.lg-sm-open { overflow: hidden; }
 .lg-conn__decline { background: var(--lg-line, #e3ddd0); color: var(--lg-ink, #323532); }
 .lg-conn__accept:hover  { background: var(--lg-sage-d, #6b7c52); }
 .lg-conn__decline:hover { background: #d4cfc4; }
+/* Message button on an accepted connection */
+.lg-conn__msg {
+  appearance: none; border: 0; cursor: pointer;
+  padding: 5px 12px; border-radius: 999px;
+  font: 600 12px/1 var(--lg-font-sans, system-ui);
+  background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #6b7c52);
+}
+.lg-conn__msg:hover { background: var(--lg-line, #e3ddd0); }
+/* Connections search box */
+.lg-conn__search-wrap { padding: 4px 20px 8px; }
+.lg-conn__search {
+  width: 100%; box-sizing: border-box;
+  padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--lg-line, #e3ddd0); background: #fff;
+  font: 400 13px/1.3 var(--lg-font-sans, system-ui);
+  color: var(--lg-ink, #323532);
+}
+.lg-conn__search:focus { outline: none; border-color: var(--lg-sage, #87986a); }
 
 /* Mobile: full-width panel */
 @media (max-width: 480px) {

@@ -126,6 +126,28 @@ function notifText(n) {
     default:                   return esc(who);
   }
 }
+var CHECK_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"'
+  + ' stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<polyline points="20 6 9 17 4 12"/></svg>';
+
+function renderNotifItem(n) {
+  var unread = !n.is_read;
+  return '<div class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
+    '" data-notif-id="' + esc(n.id) + '">'
+    + '<div class="lg-notif__body">'
+      + '<p class="lg-notif__text">' + notifText(n) + '</p>'
+      + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
+    + '</div>'
+    + (unread
+        ? '<button class="lg-notif__clear" data-notif-clear="' + esc(n.id) +
+          '" title="Mark as read" aria-label="Mark as read">' + CHECK_SVG + '</button>'
+        : '')
+    + '</div>';
+}
+function updateReadAllBtn(show) {
+  var b = document.querySelector('[data-lg-notif-readall]');
+  if (b) b.hidden = !show;
+}
 function loadNotifications() {
   var list = document.getElementById('lg-notif-list');
   if (!list) return;
@@ -133,29 +155,67 @@ function loadNotifications() {
   fetch(API + '/me/notifications/', { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
-      var items = (d && d.items) || [];
+      /* Bell shows CONNECTION events only — skip message-type defensively
+         (the social lane is removing message notifications backend-side). */
+      var items = ((d && d.items) || []).filter(function (n) { return n.type !== 'message'; });
       if (!items.length) {
         list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+        updateReadAllBtn(false);
         return;
       }
-      list.innerHTML = items.map(function (n) {
-        return '<div class="lg-notif__item' + (n.is_read ? '' : ' lg-notif__item--unread') + '">'
-          + '<p class="lg-notif__text">' + notifText(n) + '</p>'
-          + '<span class="lg-notif__time">' + relTime(n.created_at) + '</span>'
-          + '</div>';
-      }).join('');
-      /* opening the bell marks everything read */
-      fetch(API + '/me/notifications/', {
-        method:      'POST',
-        credentials: 'include',
-        headers:     { 'Content-Type': 'application/json' },
-        body:        JSON.stringify({ action: 'read_all' }),
-      }).catch(function () {});
-      setBadge('[data-lg-notif-count]', 0);
+      list.innerHTML = items.map(renderNotifItem).join('');
+      /* NO auto-mark-read — the user controls it (per-item ✓ or "Mark all read"). */
+      updateReadAllBtn(items.some(function (n) { return !n.is_read; }));
+      list.querySelectorAll('[data-notif-clear]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          markNotifRead(btn.getAttribute('data-notif-clear'));
+        });
+      });
     })
     .catch(function () {
       list.innerHTML = '<p class="lg-sm__error">Could not load notifications.</p>';
     });
+}
+/* Per-item clear = mark-read (v1): row de-emphasized in place, stays in the list. */
+function markNotifRead(id) {
+  fetch(API + '/me/notifications/', {
+    method:      'POST',
+    credentials: 'include',
+    headers:     { 'Content-Type': 'application/json' },
+    body:        JSON.stringify({ action: 'read', id: parseInt(id, 10) }),
+  })
+    .then(function (r) {
+      if (!r.ok) return;
+      var row = document.querySelector('.lg-notif__item[data-notif-id="' + id + '"]');
+      if (row) {
+        row.classList.remove('lg-notif__item--unread');
+        var btn = row.querySelector('.lg-notif__clear');
+        if (btn) btn.remove();
+      }
+      updateReadAllBtn(!!document.querySelector('.lg-notif__item--unread'));
+      refreshCounts();
+    })
+    .catch(function () {});
+}
+function markAllNotifsRead() {
+  fetch(API + '/me/notifications/', {
+    method:      'POST',
+    credentials: 'include',
+    headers:     { 'Content-Type': 'application/json' },
+    body:        JSON.stringify({ action: 'read_all' }),
+  })
+    .then(function (r) {
+      if (!r.ok) return;
+      document.querySelectorAll('.lg-notif__item--unread').forEach(function (row) {
+        row.classList.remove('lg-notif__item--unread');
+        var btn = row.querySelector('.lg-notif__clear');
+        if (btn) btn.remove();
+      });
+      updateReadAllBtn(false);
+      refreshCounts();
+    })
+    .catch(function () {});
 }
 
 /* ── messages: thread list ── */
@@ -331,11 +391,51 @@ document.addEventListener('lg:open-dm', function (e) {
 });
 
 /* ── connections / friends ── */
+var acceptedConns = [];   /* cached accepted[] for client-side search */
+
+/* Render the accepted list, optionally filtered (client-side) by display_name. */
+function renderAccepted(filter) {
+  var accepted = document.getElementById('lg-conn-accepted');
+  if (!accepted) return;
+  if (!acceptedConns.length) {
+    accepted.innerHTML = '<p class="lg-sm__empty">No connections yet.</p>';
+    return;
+  }
+  var f = (filter || '').trim().toLowerCase();
+  var list = f
+    ? acceptedConns.filter(function (u) {
+        return String(u.display_name || '').toLowerCase().indexOf(f) > -1;
+      })
+    : acceptedConns;
+  if (!list.length) {
+    accepted.innerHTML = '<p class="lg-sm__empty">No connections match “' + esc(filter) + '”.</p>';
+    return;
+  }
+  accepted.innerHTML = list.map(function (u) {
+    return '<div class="lg-conn__item">'
+      + avatarEl(u, 36)
+      + '<a class="lg-conn__name" href="/u/' + esc(u.slug || '') + '">'
+        + esc(u.display_name || '')
+      + '</a>'
+      + '<div class="lg-conn__actions">'
+        + '<button class="lg-conn__msg" data-conn-msg="' + esc(u.uuid) + '">Message</button>'
+      + '</div></div>';
+  }).join('');
+  accepted.querySelectorAll('[data-conn-msg]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var uuid = btn.getAttribute('data-conn-msg');
+      if (uuid) document.dispatchEvent(new CustomEvent('lg:open-dm', { detail: { uuid: uuid } }));
+    });
+  });
+}
+
 function loadConnections() {
   var accepted       = document.getElementById('lg-conn-accepted');
   var pending        = document.getElementById('lg-conn-pending');
   var pendingSection = document.getElementById('lg-conn-pending-section');
+  var search         = document.getElementById('lg-conn-search');
   if (!accepted) return;
+  if (search) search.value = '';
   accepted.innerHTML = '<p class="lg-sm__status">Loading...</p>';
 
   /* one call: /me/connections/ → {accepted[], pending_in[], pending_out[]}.
@@ -343,18 +443,10 @@ function loadConnections() {
   fetch(API + '/me/connections/', { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
-      var conns = (d && d.accepted)   || [];
-      var reqs  = (d && d.pending_in) || [];
+      acceptedConns = (d && d.accepted) || [];
+      var reqs      = (d && d.pending_in) || [];
 
-      accepted.innerHTML = conns.length
-        ? conns.map(function (u) {
-            return '<div class="lg-conn__item">'
-              + avatarEl(u, 36)
-              + '<a class="lg-conn__name" href="/u/' + esc(u.slug || '') + '">'
-                + esc(u.display_name || '')
-              + '</a></div>';
-          }).join('')
-        : '<p class="lg-sm__empty">No connections yet.</p>';
+      renderAccepted('');
 
       if (reqs.length && pendingSection) {
         pendingSection.hidden = false;
@@ -404,6 +496,14 @@ var connBtn  = document.querySelector('[data-lg-conn-link]');
 if (notifBtn) notifBtn.addEventListener('click', function (e) { e.preventDefault(); openModal('lg-notif-modal');       loadNotifications(); });
 if (msgBtn)   msgBtn.addEventListener  ('click', function (e) { e.preventDefault(); openModal('lg-messages-modal');    loadThreadList();    });
 if (connBtn)  connBtn.addEventListener ('click', function (e) { e.preventDefault(); openModal('lg-connections-modal'); loadConnections();   });
+
+/* "Mark all read" (notifications) */
+var notifReadAllBtn = document.querySelector('[data-lg-notif-readall]');
+if (notifReadAllBtn) notifReadAllBtn.addEventListener('click', markAllNotifsRead);
+
+/* connections search — client-side filter of the loaded accepted[] */
+var connSearch = document.getElementById('lg-conn-search');
+if (connSearch) connSearch.addEventListener('input', function () { renderAccepted(connSearch.value); });
 
 document.addEventListener('click', function (e) {
   var t = e.target;
