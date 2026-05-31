@@ -68,6 +68,30 @@ SOURCE", `marching-orders` slice-4 image backfill):
    it's the one platform-wide image (header/forum/archive/bylines), edited only
    here. Practice "bench" notes staff faces are the same single-source avatars.
 
+## Connect block — built + tested GREEN on dev (2026-05-31, HANDS-ON)
+
+The last open spine block. Built ON the social-layer `Connections` backend; the full
+`/u/` block set (header · location · craft · socials · connect) is now complete.
+
+- `src/Block.php` — `loadConnect($userId,$viewerUserId)` (count + ≤12 preview avatars +
+  mutuals-for-visitor + owner pending in/out), `CONNECT_KEY`. Block-level pmp; no new schema
+  (reuses `connections` + `profile_sections`).
+- `api/v0/me-connect.php` — GET assembled / PATCH visibility (owner).
+- `web/_render_blocks.php` — `looth_render_connect_block` (ceiling-capped; owner pmp chip +
+  pending hint + empty-state); wired into `looth_render_profile_blocks`, viewer id threaded.
+- `web/u.php` — passes viewer id, connect CSS, `connect` in pmp endpoint map.
+- **nginx (hands-on):** added `/me/connect` rewrite + `me-connect` to the authed-/me allowlist; reloaded.
+- **Verified green end-to-end:** GET 200 (count 1, "Ian B Davlin", pending_in/out 1), PATCH
+  public/member round-trip, bad value 400, `/u/profileapp-test` renders `lg-block--connect`.
+  Test plan: `profile-app/PHASE-1-CONNECT-TEST.md`.
+- **Division flag:** Connect/Message *actions* stay in the header slot
+  (`Social::renderProfileActions`); the block is the list/count surface. Coordinator to ratify.
+
+**Mode note:** Ian put the lane in HANDS-ON (apply/provision/test/no-commit) this session.
+Option-2 "make spine run on dev" was already provisioned by coordinator + verified green;
+this connect turn applied its own nginx route hands-on. `config.php`/`Whoami.php` untouched.
+Next: spine sign-off → practice storefront blocks → fixture-only crib at/near cut.
+
 ## Avatar single-source upload + social-actions slot (2026-05-31, WRITE-ONLY)
 
 **Avatar single-source:** profile-app now stores the bytes + serves a versioned URL.

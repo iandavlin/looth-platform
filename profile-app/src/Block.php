@@ -309,6 +309,7 @@ final class Block
 
     public const CRAFT_KEY    = 'craft';
     public const SOCIALS_KEY  = 'socials';
+    public const CONNECT_KEY  = 'connect';
 
     /** Any composable block's visibility (DB literal) from its profile_sections row. */
     public static function blockVisibility(int $userId, string $key, string $default = 'members'): string
@@ -397,6 +398,82 @@ final class Block
             'subject' => 'person',
             'vis'     => self::normalizeVis(self::blockVisibility($userId, self::SOCIALS_KEY, 'members')),
             'fields'  => ['website' => $website, 'links' => $links],
+        ];
+    }
+
+    // ---------- block: connect (the person's connections surface) ----------
+
+    /** Max connection avatars previewed inline in the block. */
+    private const CONNECT_PREVIEW = 12;
+
+    /**
+     * Assemble the connect block — the person's connections surface — built ON the
+     * social-layer `Connections` backend (NOT re-implemented). Block-level pmp on
+     * profile_sections key='connect', ceiling-capped by the header at render.
+     *
+     *   count        — accepted connections (the headline)
+     *   connections  — up to CONNECT_PREVIEW hydrated {uuid,name,slug,avatar}
+     *   mutuals      — shared accepted connections with the viewer (visitor view only)
+     *   pending_in / pending_out — owner's request inbox/outbox counts (owner view only)
+     *
+     * The Connect / Message *actions* stay in the header slot (Social::renderProfileActions);
+     * this block is the connections LIST/COUNT surface (division flagged for coordinator).
+     *
+     * @param int      $userId         subject (whose profile this is)
+     * @param int|null $viewerUserId   the viewer's user id (for mutuals + owner inbox); null = anon
+     */
+    public static function loadConnect(int $userId, ?int $viewerUserId = null): ?array
+    {
+        $pg = Db::pg();
+        $u = $pg->prepare('SELECT uuid FROM users WHERE id = :i');
+        $u->execute([':i' => $userId]);
+        $subjectUuid = $u->fetchColumn();
+        if ($subjectUuid === false) return null;
+        $subjectUuid = (string)$subjectUuid;
+
+        $lists    = Connections::listFor($subjectUuid);
+        $accepted = $lists['accepted'] ?? [];
+        $isOwner  = ($viewerUserId !== null && $viewerUserId === $userId);
+
+        $shape = static fn(array $r): array => [
+            'uuid'   => $r['uuid'],
+            'name'   => $r['display_name'],
+            'slug'   => $r['slug'] ?: (string)$r['uuid'],
+            'avatar' => $r['avatar_url'],
+        ];
+
+        // Mutuals: shared accepted connections between viewer and subject (visitor view).
+        $mutuals = [];
+        if (!$isOwner && $viewerUserId !== null) {
+            $vu = $pg->prepare('SELECT uuid FROM users WHERE id = :i');
+            $vu->execute([':i' => $viewerUserId]);
+            $viewerUuid = $vu->fetchColumn();
+            if ($viewerUuid !== false) {
+                $viewerSet = [];
+                foreach (Connections::listFor((string)$viewerUuid)['accepted'] ?? [] as $r) {
+                    $viewerSet[$r['uuid']] = true;
+                }
+                foreach ($accepted as $r) {
+                    if (isset($viewerSet[$r['uuid']])) $mutuals[] = $shape($r);
+                }
+            }
+        }
+
+        $fields = [
+            'count'       => count($accepted),
+            'connections' => array_map($shape, array_slice($accepted, 0, self::CONNECT_PREVIEW)),
+            'mutuals'     => $mutuals,
+        ];
+        if ($isOwner) {
+            $fields['pending_in']  = count($lists['pending_in']  ?? []);
+            $fields['pending_out'] = count($lists['pending_out'] ?? []);
+        }
+
+        return [
+            'block'   => 'connect',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(self::blockVisibility($userId, self::CONNECT_KEY, 'members')),
+            'fields'  => $fields,
         ];
     }
 

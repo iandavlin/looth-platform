@@ -42,7 +42,7 @@ if (!function_exists('looth_initials')) {
  * @param string $role    'me'|'member'|'friend'|'public'
  * @param string|null $tierBadge derived tier label from /whoami (e.g. 'Pro'); null = none
  */
-function looth_render_profile_blocks(int $userId, string $role, ?string $tierBadge = null, string $headerActions = ''): void
+function looth_render_profile_blocks(int $userId, string $role, ?string $tierBadge = null, string $headerActions = '', ?int $viewerUserId = null): void
 {
     $headerVis = Block::headerCeiling($userId);                 // DB literal
     switch (Block::gateDecision($role, $headerVis)) {
@@ -59,11 +59,11 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
 
     // increment 3: craft (search-fuel) + socials/links blocks.
     looth_render_craft_block($userId, $role, $headerVis);
+    // connect block (built on the social-layer Connections backend).
+    looth_render_connect_block($userId, $role, $headerVis, $viewerUserId);
     looth_render_socials_block($userId, $role, $headerVis);
 
-    // TODO(next increments): connect, practices — same shape:
-    //   if (Block::canSee($role, $headerVis, $blockVis)) looth_render_block(...);
-    //   owner also sees a capped-by-header hint where Block::isCappedByHeader().
+    // TODO(next increments): practices block — same shape.
 }
 
 /**
@@ -125,6 +125,62 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
            . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
     }
     echo '</div></section>';
+}
+
+/**
+ * The connect block — the person's connections surface (count + preview avatars +
+ * mutuals for a visitor + the owner's pending-inbox hint). Built on the social-layer
+ * Connections backend via Block::loadConnect. Block-level pmp, ceiling-capped. The
+ * Connect/Message *actions* live in the header slot — this is the list/count surface.
+ */
+function looth_render_connect_block(int $userId, string $role, string $headerVis, ?int $viewerUserId = null): void
+{
+    $c = Block::loadConnect($userId, $viewerUserId);
+    if ($c === null) return;
+    $f         = $c['fields'];
+    $count     = (int)($f['count'] ?? 0);
+    $isOwner   = ($role === 'me');
+    $pendingIn = (int)($f['pending_in'] ?? 0);
+
+    if ($count === 0 && !$isOwner) return;                                  // empty + visitor → no block
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$c['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--connect" data-block="connect">';
+    echo '<h3 class="lg-bh">Connections';
+    if ($count > 0) echo ' <span class="lg-connect__count">' . $count . '</span>';
+    if ($isOwner)   echo ' ' . looth_pmp_control('connect', (string)$c['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner && $pendingIn > 0) {
+        echo '<a class="lg-connect__pending" href="/profile/edit#connections">'
+           . $pendingIn . ' pending request' . ($pendingIn === 1 ? '' : 's') . ' →</a>';
+    }
+
+    $mutuals = $f['mutuals'] ?? [];
+    if ($mutuals) {
+        $n = count($mutuals);
+        echo '<p class="lg-connect__mutual">🤝 ' . $n . ' mutual connection' . ($n === 1 ? '' : 's') . '</p>';
+    }
+
+    $people = $f['connections'] ?? [];
+    if ($people) {
+        echo '<div class="lg-connect__grid">';
+        foreach ($people as $p) {
+            $slug = (string)($p['slug'] ?? '');
+            $name = (string)($p['name'] ?? 'Member');
+            $av   = $p['avatar'] ?? null;
+            echo '<a class="lg-connect__person" href="/u/' . looth_h(rawurlencode($slug)) . '" title="' . looth_h($name) . '">'
+               . '<span class="lg-connect__av">';
+            if ($av) echo '<img src="' . looth_h((string)$av) . '" alt="' . looth_h($name) . '" width="44" height="44">';
+            else     echo looth_h(looth_initials($name));
+            echo '</span></a>';
+        }
+        echo '</div>';
+    } elseif ($isOwner) {
+        echo '<p class="lg-connect__empty">No connections yet — Connect with members from their profiles.</p>';
+    }
+
+    echo '</section>';
 }
 
 /** Owner-only per-block/tier visibility chip (vis already normalized to 'member'). */

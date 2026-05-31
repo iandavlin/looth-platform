@@ -128,6 +128,17 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   color:var(--lg-sage-d);font:700 12.5px/1 var(--lg-font-sans);text-decoration:none}
 .lg-socrow__a:hover{background:var(--lg-sage-3)}
 
+/* connect block */
+.lg-connect__count{display:inline-block;background:var(--lg-sage-tint);color:var(--lg-sage-d);font:800 11px/1 var(--lg-font-sans);border-radius:999px;padding:3px 9px;margin-left:4px;vertical-align:middle}
+.lg-connect__pending{display:inline-block;margin:0 0 10px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-rust);text-decoration:none}
+.lg-connect__mutual{margin:0 0 10px;font:600 13px/1.3 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-connect__grid{display:flex;flex-wrap:wrap;gap:8px}
+.lg-connect__person{text-decoration:none}
+.lg-connect__av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;overflow:hidden;
+  background:var(--lg-sage);color:#fff;font:700 15px/1 var(--lg-font-serif)}
+.lg-connect__av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.lg-connect__empty{margin:0;font-size:13.5px;color:var(--lg-mute)}
+
 /* members-only gate */
 .lg-gate{text-align:center;background:#fff;border:1px solid var(--lg-line);border-radius:18px;padding:48px 30px;margin:0 0 16px}
 .lg-gate__lock{width:64px;height:64px;border-radius:50%;background:var(--lg-sage-tint);display:grid;place-items:center;margin:0 auto 16px;font-size:28px}
@@ -178,7 +189,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       </div>
     <?php endif; ?>
 
-    <?php looth_render_profile_blocks($subjectId, $role, $tierBadge, $socialActions); ?>
+    <?php looth_render_profile_blocks($subjectId, $role, $tierBadge, $socialActions, $viewer ? (int)$viewer['id'] : null); ?>
 
     <?php if (!$isOwner): ?>
       <a class="lg-report" href="#" id="report-link">Report this profile</a>
@@ -238,6 +249,7 @@ document.getElementById('report-link')?.addEventListener('click', function (e) {
   var EP = {
     'header':          { url: BASE + '/me/header',   m: 'PATCH', k: 'visibility' },
     'craft':           { url: BASE + '/me/craft',    m: 'PATCH', k: 'visibility' },
+    'connect':         { url: BASE + '/me/connect',  m: 'PATCH', k: 'visibility' },
     'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
     'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
     'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }

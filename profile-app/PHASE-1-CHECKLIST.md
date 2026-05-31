@@ -114,8 +114,23 @@ for reaction. Nothing here is executed yet (scaffold turn).
 - [x] **Socials dropped from profile-header** — VERIFIED already identity-only (avatar/name/
       glance only; socials live solely in the dedicated Links block). No change needed.
 
-## Spine blocks — next increments
-- [ ] practice storefront blocks (hours/services/staff) → connect block → crib.
+## connect block — DONE + TESTED GREEN ON DEV (hands-on, 2026-05-31)
+- [x] `src/Block.php` — `loadConnect($userId, $viewerUserId)` built ON the social-layer
+      `Connections` backend (count + preview avatars + mutuals-for-visitor + owner pending
+      in/out); `CONNECT_KEY`; block-level pmp via `saveBlockVisibility`. No new schema.
+- [x] `api/v0/me-connect.php` — GET assembled / PATCH visibility (owner). Routed.
+- [x] `web/_render_blocks.php` — `looth_render_connect_block` (ceiling-capped; owner pmp chip
+      + pending hint; empty-state). Wired into `looth_render_profile_blocks` (viewer id threaded).
+- [x] `web/u.php` — passes viewer id; connect CSS; `connect` in the pmp endpoint map.
+- [x] **nginx (hands-on):** `/me/connect` rewrite + `me-connect` in the authed-/me allowlist; reloaded.
+- [x] **Verified green:** GET 200 (count:1 "Ian B Davlin", pending_in/out:1); PATCH public/member
+      200 round-trip; bad value 400; `/u/profileapp-test` renders `lg-block--connect`. `PHASE-1-CONNECT-TEST.md`.
+- [ ] **Division flag for coordinator:** the connect *actions* (Connect/Message buttons) stay in
+      the header slot (`Social::renderProfileActions`); this block is the list/count surface. Keep split?
+
+## Spine blocks — ALL CORE BLOCKS DONE → next
+- [x] header · location · craft · socials · **connect** — the full `/u/` profile block set.
+- [ ] **Spine sign-off** (coordinator) → then practice storefront blocks (hours/services/staff).
 - [ ] Match the mockups: `/var/www/dev/mockups/profile-block.html`, `practice-repair.html`.
 
 ## Remaining spine blocks (additive)
