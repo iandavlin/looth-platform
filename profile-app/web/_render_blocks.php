@@ -185,6 +185,34 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
  * The socials / links block — website + platform links, one block-level vis,
  * ceiling-capped. Sole location for social links (header inline row dropped).
  */
+/**
+ * Build an ABSOLUTE outbound URL for a stored social handle. Handles are stored cleaned
+ * (no scheme, no leading @), so emitting the bare value as an href makes the browser
+ * resolve it SAME-SITE (e.g. instagram "ianhatesguitars" → /u/ianhatesguitars). Always
+ * expand to the real platform URL here. Returns '' for an empty value.
+ */
+function looth_social_url(string $kind, string $value): string
+{
+    $v = trim($value);
+    if ($v === '') return '';
+    if ($kind === 'email') return 'mailto:' . $v;
+    if ($kind === 'phone') return 'tel:' . preg_replace('/[^\d+]/', '', $v);
+    if (preg_match('#^https?://#i', $v)) return $v;                 // already absolute (web, or pasted URL)
+    $h = ltrim($v, '@/');
+    switch ($kind) {
+        case 'web':       return 'https://' . $h;
+        case 'instagram': return 'https://instagram.com/' . $h;
+        case 'x':         return 'https://x.com/' . $h;
+        case 'youtube':   return 'https://youtube.com/@' . $h;
+        case 'facebook':  return 'https://facebook.com/' . $h;
+        case 'tiktok':    return 'https://tiktok.com/@' . $h;
+        case 'patreon':   return 'https://patreon.com/' . $h;
+        case 'linktree':  return 'https://linktr.ee/' . $h;
+        case 'bandcamp':  return strpos($h, '.') !== false ? 'https://' . $h : 'https://' . $h . '.bandcamp.com';
+        default:          return 'https://' . $h;
+    }
+}
+
 /** One editable link row (owner). data-value = raw stored value → round-trips to me-socials. */
 function looth_link_row(string $kind, string $value): string
 {
@@ -224,14 +252,16 @@ function looth_render_socials_block(int $userId, string $role, string $headerVis
         echo '<div class="lg-socrow">';
         if ($website) {
             $label = preg_replace('#^https?://#i', '', (string)$website);
-            echo '<a class="lg-socrow__a" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank" title="website">'
+            echo '<a class="lg-socrow__a" href="' . looth_h(looth_social_url('web', (string)$website)) . '" rel="me noopener" target="_blank" title="website">'
                . looth_h($label) . ' ↗</a>';
         }
         foreach ($links as $l) {
             $kind = (string)($l['kind'] ?? '');
             $url  = (string)($l['url'] ?? '');
             if ($url === '') continue;
-            echo '<a class="lg-socrow__a" href="' . looth_h($url) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
+            $href = looth_social_url($kind, $url);
+            if ($href === '') continue;
+            echo '<a class="lg-socrow__a" href="' . looth_h($href) . '" rel="me noopener" target="_blank" title="' . looth_h($kind) . '">'
                . looth_h(strtoupper(substr($kind, 0, 2))) . '</a>';
         }
         echo '</div>';
