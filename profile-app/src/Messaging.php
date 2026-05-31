@@ -202,8 +202,9 @@ final class Messaging
     }
 
     /**
-     * Insert a message, bump the thread, fan out unread + a 'message' notification
-     * to every OTHER recipient. Sender's own recipient row stays read.
+     * Insert a message, bump the thread, and fan out unread to every OTHER recipient
+     * (the message badge). Sender's own recipient row stays read. DMs do NOT raise a
+     * bell notification — the message badge is the sole DM signal (Ian, 2026-05-31).
      */
     private static function insertMessage(int $threadId, string $senderUuid, string $body): array
     {
@@ -220,15 +221,14 @@ final class Messaging
            ->execute([':t' => $threadId]);
 
         // bump unread for everyone but the sender; un-delete their view (new activity).
+        // NOTE: DMs are signalled ONLY by the message badge (messages_unread), NOT the
+        // bell (Ian, 2026-05-31: no double-notify). The bell carries connection events
+        // only — so there is intentionally no Notifications::push('message', …) here.
         $pg->prepare(
             'UPDATE message_recipients
                 SET unread_count = unread_count + 1, is_deleted = false
               WHERE thread_id = :t AND user_uuid <> :s'
         )->execute([':t' => $threadId, ':s' => $senderUuid]);
-
-        foreach (self::recipientUuids($threadId, $senderUuid) as $peer) {
-            Notifications::push($peer, 'message', $threadId, $senderUuid);
-        }
 
         return [
             'ok'         => true,
