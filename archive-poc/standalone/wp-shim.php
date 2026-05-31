@@ -222,3 +222,13 @@ if (!class_exists("WP_Query")) {
 if (!function_exists('get_post_type')) {
     function get_post_type($post = null): string { return (string) (lg_pc()['post_type'] ?? 'post-imgcap'); }
 }
+
+/* ── Comments: standalone has NO live WP comment system ──────────────────
+ * post-footer/render.php runs add_filter()+comments_template() for logged-in
+ * viewers to render WP's live comments. That path is WP-coupled and cannot run
+ * standalone (it fataled the whole authed render: add_filter undefined). Comments
+ * are a future materialized snapshot; until then these no-ops make the comments
+ * <section> render empty instead of crashing. (apply_filters already stubbed above.) */
+if (!function_exists('add_filter'))        { function add_filter($tag = '', $cb = null, $prio = 10, $args = 1) { return true; } }
+if (!function_exists('remove_filter'))     { function remove_filter($tag = '', $cb = null, $prio = 10) { return true; } }
+if (!function_exists('comments_template')) { function comments_template($file = '', $separate = false) { /* no live comments standalone */ } }
