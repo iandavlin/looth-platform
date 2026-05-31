@@ -35,6 +35,11 @@ Big push night — 7 lanes advanced, all committed + tested on dev. Pushed to ma
   nginx `/profile-media/avatars/` serve block + `me/avatar` route + allowlist; schema
   `users.avatar_version`. VERIFIED upload→200→serve image/jpeg; propagates to header chip.
 - **Social Connect/Message slot** wired into `/u/` header card (Social::renderProfileActions).
+- **Spine status (per lane handoff): header + location + craft + socials + slice-4 crib +
+  `/u/` block-render + View-as = DONE.** Next genuinely-open spine item = **connect block**,
+  then spine sign-off. (A `bootstrap-spine-increment-3.md` craft re-dispatch on 2026-05-31
+  was STALE — craft was already built; lane correctly no-op'd. Doc now banner-marked
+  SUPERSEDED. Don't re-dispatch craft/socials/crib/View-as.)
 
 ### social layer — schema applied + endpoints live + modals wired (a3120cf, ff23ba4)
 - **Schema APPLIED** (connections/message_threads/messages/message_recipients/notifications

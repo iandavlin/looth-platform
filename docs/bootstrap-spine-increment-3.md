@@ -1,3 +1,8 @@
+> ⚠️ **SUPERSEDED / DO NOT DISPATCH (2026-05-31).** Stale orient: craft was already
+> built + tested. The lane SESSION-HANDOFF-profile-2.0.md records craft + socials +
+> slice-4 crib + /u/ block-render + View-as as COMPLETE. The genuinely-open spine item
+> is the **connect block**, then spine sign-off. Kept only as a record of the misfire.
+
 # Bootstrap — profile spine, increment 3: the CRAFT block
 
 Build **increment 3 of the profile-2.0 spine: the craft block** (the person's
