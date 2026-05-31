@@ -1,9 +1,13 @@
 # Session handoff — poller lane
 
-> **Currently active task:** membership pages onto shared shell. **PoC LANDED
-> 2026-05-29** — `/membership-guide/` renders on shared chrome (anon + member);
-> see "2026-05-29 — membership-pages PoC" below. Remaining: generalize to all 11
-> slugs + BB/Elementor dequeue + `lg_member_nav` cleanup + P8.
+> **Currently active task:** membership pages onto shared shell.
+> **STANDALONE conversion in flight (2026-05-31)** per §0b — `/membership-guide/`
+> is the first slug ported out of the `template_include` mu-plugin into a real
+> standalone PHP surface following the events / archive-poc / bb-mirror pattern.
+> Files staged at `/home/ubuntu/projects/membership-pages/`; awaiting coordinator
+> deploy (DB secret + FPM pool + nginx-snippet install). See
+> "2026-05-31 — standalone conversion" below. Remaining: 10 more slugs + welcome
+> modal port + P8.
 > See [briefing-membership-pages.md](briefing-membership-pages.md) +
 > [notes-for-rotated-chat-membership-pages.md](notes-for-rotated-chat-membership-pages.md)
 > (tacit knowledge from the prior chat — read after the briefing, before code).
@@ -18,7 +22,8 @@
 
 | Date | Item | Section anchor |
 |---|---|---|
-| 2026-05-29 | **Membership-pages PoC** — `/membership-guide/` renders on shared `/srv/lg-shared/` chrome (anon + member), BB theme nav bypassed via a `template_include` mu-plugin. Executed from coordinator session (sub-agent was permission-blocked). | "2026-05-29 — membership-pages PoC" |
+| 2026-05-31 | **Standalone /membership-guide/** — first slug converted out of `template_include` into a true standalone PHP surface (no WP boot) per §0b. Pattern parity with events. Files in `/home/ubuntu/projects/membership-pages/`. Awaiting coordinator deploy (DB secret + FPM pool + nginx snippet). | "2026-05-31 — standalone conversion" |
+| 2026-05-29 | **Membership-pages PoC (template_include — superseded by standalone above)** — `/membership-guide/` renders on shared `/srv/lg-shared/` chrome (anon + member), BB theme nav bypassed via a `template_include` mu-plugin. mu-plugin remains installed as the per-slug fallback until standalone is verified for that slug. | "2026-05-29 — membership-pages PoC" |
 | 2026-05-28 | Round-trip purge live; PurgeNotifier supports loopback + Host override; 204 verified end-to-end via Arbiter | "Round-trip purge SHIPPED" |
 | 2026-05-28 | Arbiter stripe-source coexistence guard (mirrors LGPO's); uid=1805 no longer downgraded | "Arbiter stripe guard" |
 | 2026-05-28 | Patreon adapter (P2) — `PatreonSourceReader` + `RoleSourceWriter::readAllForUser` merge; provenance now `paid` for patreon users | "Patreon adapter shipped (P2)" |
@@ -687,6 +692,205 @@ P4 ✅, P2 ✅, round-trip ✅. Idle in lane.
 
 ---
 
+## 2026-05-31 — Standalone conversion (write-only, awaiting deploy)
+
+Per coord relay (§0b enforces standalone — `template_include` boots WP on
+every load, ~2.6s floor, shim doesn't fix). First slug converted out of the
+mu-plugin into a real standalone surface following the events / archive-poc
+/ bb-mirror pattern.
+
+### Files staged
+
+```
+/home/ubuntu/projects/membership-pages/
+├── README.md                ← layout + deploy checklist (sysadmin)
+├── config.php               ← env detect + PDO + esc helper
+├── lib/
+│   ├── whoami.php           ← cached /whoami loopback + §0a ctx builder
+│   └── guide-data.php       ← read-only lgms_guide_* options loader
+├── web/
+│   ├── membership-guide.php ← /membership-guide/ front controller (no WP boot)
+│   └── membership-guide.css ← lightweight styles
+└── nginx-snippet.conf       ← /etc/nginx/snippets/strangler-membership-pages.conf
+```
+
+### Pattern parity with events
+
+| Concern | events | membership-pages |
+|---|---|---|
+| Source dir | `/home/ubuntu/projects/events/` | `/home/ubuntu/projects/membership-pages/` |
+| FPM pool | `php8.3-fpm-events.sock` | `php8.3-fpm-membership.sock` (provision) |
+| DB secret | `/etc/lg-events-db` | `/etc/lg-membership-db` (fallback to events secret on dev) |
+| Header ctx builder | `lg_events_whoami()` → ctx | `lg_membership_whoami()` → `lg_membership_header_ctx('')` |
+| Data | `event` CPT rows | `lgms_guide_*` wp_options |
+| nginx | `^~ /events/` | `^~ /membership-guide/` (one block per slug, mirrors convention) |
+| Snippet location | `/etc/nginx/snippets/strangler-events.conf` | `/etc/nginx/snippets/strangler-membership-pages.conf` |
+
+### Coordinator deploy checklist (sysadmin)
+
+1. `sudo install -m 0640 -o root -g www-data /dev/null /etc/lg-membership-db` then populate with `DB_NAME=looth_dev`, `DB_USER=…`, `DB_PASSWORD=…`, `DB_HOST=localhost`. **OR skip** — `config.php` auto-falls-back to `/etc/lg-events-db` for dev (both surfaces read wp_options read-only).
+2. Provision `/etc/php/8.3/fpm/pool.d/membership.conf` mirroring `events.conf` shape (`listen = /run/php/php8.3-fpm-membership.sock`, user/group `www-data`). `sudo systemctl restart php8.3-fpm`.
+3. `sudo cp /home/ubuntu/projects/membership-pages/nginx-snippet.conf /etc/nginx/snippets/strangler-membership-pages.conf` and add `include /etc/nginx/snippets/strangler-membership-pages.conf;` to `dev.loothgroup.com.conf` near the other strangler includes (around the existing `strangler-events.conf` line). `sudo nginx -t && sudo systemctl reload nginx`.
+
+### Test steps — `/membership-guide/`
+
+**Anon (loothdev_auth cookie only, no WP login):**
+```
+curl -s -b "loothdev_auth=$TOK" https://dev.loothgroup.com/membership-guide/
+```
+Expected: HTML body containing `lgms-mg-anon` body class, shared header without avatar / "Sign in" link in account slot, "What's inside" preview cards section, Council of Elders cards (avatar + name + "VIEW BIO"), Loothalong section with "See the plans →" CTA, PoC banner at bottom.
+
+**Member (claude_admin cookies):**
+Drive via CDP per `chrome-dev-login` skill — mint WP auth cookies for `claude_admin` (uid=1904), navigate to `/membership-guide/`. Expected: `lgms-mg-member` body class, shared header with avatar + "Admin" pill (manage_options caps), Loothalong CTA changes to "Join the room →" pointing at the configured URL.
+
+**Header §0a compliance:**
+- `active_nav` empty string (membership not in canonical top nav per §0d) — no nav item highlighted
+- `logout_url` only set for authenticated viewers; null for anon (header skips logout UI)
+
+### JS-heavy slugs — inventory + standalone plan
+
+These need standalone page shells AND careful nonce/cookie handling for their REST callouts:
+
+| Slug | JS pattern | REST endpoints called | Standalone plan |
+|---|---|---|---|
+| `/lgjoin/` | `loadProducts()` (3 inlined defs — Stripe Checkout redirect) | `/wp-json/lg-member-sync/v1/auth` + Slim `/billing/v1/checkout` | Page shell standalone; products lookup goes direct PDO from poller DB; auth still needs nonce-mint (see nonce note below) |
+| `/lggift-buy/` | Same `loadProducts` pattern + gift recipient form | Slim `/billing/v1/checkout?gift=true` + WP `/v1/send-gift-recipient` | Same as `/lgjoin/` |
+| `/lggift/` | Redemption form | `/wp-json/lg-member-sync/v1/gift-auth` | Page shell standalone; just emits the form, REST stays WP-side |
+| `/manage-subscription/` | Plan-switch confirm modal, payment-method list, cancel-timing radio | `/wp-json/lg-member-sync/v1/me/*` (~7 endpoints) | Page shell standalone; subscription data direct PDO from `lg_membership` DB; REST stays WP-side |
+| `/my-gifts/` | Send/resend/reassign/void modals | `/wp-json/lg-member-sync/v1/me/gift-*` | Same — list direct PDO, mutations via REST |
+| `/welcome/` | `showWelcome()` modal reads `_lg_pending_welcome` user meta | `/wp-json/lg-member-sync/v1/dismiss-welcome` | **Hard case** — welcome modal currently fires from `wp_footer` (WP-side). Standalone needs to read meta via REST or direct DB and render the modal inline |
+| `/affiliate-earnings/` | Admin form, withdraw flow | `/wp-json/lg-member-sync/v1/affiliate-withdraw` | Page shell standalone; affiliate data direct PDO from poller DB |
+| `/request-refund/` | Form submission | `/wp-json/lg-member-sync/v1/refund-request` | Easy — mostly static page + form POST |
+| `/regional-pricing-not-available/` | None | None | Pure static |
+| `/test-checklist/` | Admin-only checklist UI | None (just renders) | Admin-only, deprioritize |
+
+### REST endpoint de-WP-coupling — verdict: none needed
+
+REST endpoints under `/wp-json/lg-member-sync/v1/*` and `/wp-json/looth/v1/*` already run as WP REST routes — they're invoked by JS on user interaction, not by every page render. WP-boot on a REST request is acceptable (REST init path is much lighter than full page render: no theme load, no enqueue chain, no template hierarchy). §0b is about the page-load floor; REST stays as-is.
+
+**One coordination concern — WP nonces for JS-heavy pages:**
+The REST endpoints use `permission_callback => [self::class, 'authLoggedInUser']` which checks `is_user_logged_in()` (cookie-based, no nonce needed for WP REST auth itself). But many of them validate a `_wpnonce` field defensively. Standalone pages don't have access to `wp_create_nonce()`. Two options:
+- **(a)** Mint nonces server-side via a tiny WP loopback (`GET /wp-json/lg-member-sync/v1/nonce` returns a fresh nonce keyed to the current session) — one cold WP-boot per session, cached in `/dev/shm` thereafter
+- **(b)** Drop nonce checks from these specific endpoints and rely on cookie auth + Origin header validation — cleaner long-term
+
+Either is implementable; decision falls to coordinator since it touches the lg-stripe REST contract. Not blocking the page-shell standalone work; the easy slugs (membership-guide, regional-fail, refund-request) don't need it. Flagging early.
+
+### Coexistence with the `template_include` mu-plugin
+
+Left installed per coord directive. Mechanism:
+- Once nginx reload picks up `^~ /membership-guide/` → the URL routes to standalone PHP before WP catch-all sees it; mu-plugin's `template_include` filter never fires for that slug
+- Mu-plugin remains active for any slug still in `LG_MEMBERSHIP_CHROME_SLUGS` that hasn't been ported yet
+- Emergency rollback: pull the nginx location block, slug falls back to WP-templated render automatically — no code change
+
+### Lower-priority items (not started this turn)
+
+- **P8 dormant-mode dev smoke** — still owed. Not started.
+- **`lg_member_nav` cleanup (§3k)** — lg-shell's lane; this surface doesn't render a secondary nav strip. Pages.php createPage prefix-drop is still queued for the WP-side cleanup pass per the earlier handoff entry.
+
+### Open questions for coordinator (flagged, none blocking deploy of this PoC)
+
+**Q1 — Nonce strategy for JS-heavy slugs.** Per above — pick (a) loopback mint, (b) drop nonces, or (c) hybrid. Not relevant for membership-guide itself (no JS REST calls).
+
+**Q2 — FPM pool isolation vs. reuse.** Should `php8.3-fpm-membership.sock` be its own pool (per the snippet) or alias to `php8.3-fpm-events.sock` to skip the pool-provisioning step on first deploy? Pool isolation is the architecturally correct shape; aliasing is faster to ship. I wrote the snippet assuming dedicated pool.
+
+**Q3 — Welcome modal port (`/welcome/` slug).** Modal currently fires from `wp_footer` on the next WP-rendered page after a successful checkout. Once all membership pages are standalone, the modal needs its own port (small REST call to consume the meta + inline modal). Want coordinator's read on whether the modal stays on WP-rendered surfaces only, or ports to the standalone /welcome/ surface as part of this lane.
+
+---
+
+## 2026-05-29 — Membership chrome PoC (template_include — SUPERSEDED by standalone above)
+
+Per `docs/briefing-membership-pages.md` + the rotation message. PoC scoped
+to `/membership-guide/` per briefing's first-moves §1.
+
+### Files added
+
+| Path | Purpose |
+|---|---|
+| `/var/www/dev/wp-content/mu-plugins/lg-membership-chrome.php` | mu-plugin bootstrap. Hooks `template_include` (priority 99) for page slugs in `LG_MEMBERSHIP_CHROME_SLUGS` const (currently `['membership-guide']`). Exposes `lg_membership_chrome_viewer()` which builds the `lg_shared_render_site_header()` ctx from in-process WP state (briefing alt path: `wp_get_current_user()` + role→tier mapping per §1, not `/whoami`). |
+| `/var/www/dev/wp-content/mu-plugins/lg-membership-chrome/template.php` | The custom template. `<!doctype>` → `wp_head()` → `<link rel="stylesheet" href="/lg-shared/site-header.css">` → `lg_shared_render_site_header($viewer)` → `<main class="lg-membership-chrome__main">the_content()</main>` → `lg_shared_render_site_footer([])` → `wp_footer()`. Calls `body_class('lg-membership-chrome')` so the poller's `addCustomerBodyClass` filter still fires the `lgms-mg-anon`/`lgms-mg-member` classes that the guide shortcode depends on. |
+
+Permissions: `looth-dev:loothdevs 0664`. No changes to existing files,
+no DB writes, no nginx changes.
+
+### Header ctx — §0a compliant
+
+- `authenticated` — `WP_User->ID > 0`
+- `tier` — role walk `looth4|3→pro`, `looth2→lite`, `looth1→public`, none→`public`
+- `display_name`, `avatar_url` (`get_avatar_url(uid, size=96)` or null on anon)
+- `capabilities`: `manage_options`, `edit_archive_poc` via `user_can()`
+- `msg_unread`, `notif_unread`: `null` (lazy-load via REST per the partial's contract)
+- **`active_nav` — required per §0a. Set to `''`** (empty) — membership pages aren't in the canonical §0d top nav.
+- **`logout_url` — required per §0a. `wp_logout_url($auth ? get_permalink() : home_url('/'))`** (nonce'd, returns to current page on auth, home on anon)
+- `profile_url` — `/profile/edit` (matches the partial's new default; explicit for clarity)
+
+### What coordinator needs to deploy / test
+
+These files are already in place on dev (`/var/www/dev/...`). No deploy
+step needed for dev verification — just load `/membership-guide/`
+through the browser with `loothdev_auth` + admin/member cookies and:
+
+1. Confirm the shared header renders at the top (logo + nav + account chip).
+2. Confirm the guide content renders below it (Elders, Recurring Shows,
+   Loothalong, etc. — the existing `[lg_membership_guide]` shortcode).
+3. Confirm body has both `lg-membership-chrome` and (when logged-in)
+   `lgms-mg-member` (or `lgms-mg-anon` when logged-out) classes. If the
+   admin preview-toggle bar at the top-right of the guide page works,
+   the body_class chain is intact.
+4. **Visual audit:** any BB theme CSS fighting the shared shell? Notes
+   doc covers this — for the PoC we left enqueue alone. Selective
+   dequeue can land as a follow-up if needed.
+5. Confirm sign-out from the account menu round-trips back to
+   `/membership-guide/` (wp_logout_url is nonce'd; logout URL points
+   to the current permalink).
+
+If verified clean, the coordinator says go-ahead → I extend
+`LG_MEMBERSHIP_CHROME_SLUGS` with the remaining 10 slugs (commented in
+the bootstrap file). That extension is a one-array-edit, no logic change.
+
+### Open questions for coordinator (flagged, not blocking the deploy)
+
+**Q1 — §0b standalone invariant.** §0b explicitly excludes `template_include`
+on WP pages from the launch-form pattern: *"A WP-templated page boots
+WordPress on every load (slow, ~2.6s floor)."* The rotation message
+endorsed `template_include` for this lane. I read this as: membership
+pages get an exception (lower traffic / heavier per-page UX that's
+hard to lift out of WP), with the eventual standalone conversion being
+a separate effort. The PoC ships in `template_include` form. **Want
+coordinator confirmation that this is the right read — or pointer to
+the standalone approach if not.**
+
+**Q2 — lg_member_nav fate.** Briefing decision #1 still open. The PoC
+currently renders `[lg_member_nav]` inside `the_content()` because
+every auto-seeded page has the shortcode baked into post_content. Three
+choices:
+- (a) Leave as-is — secondary nav strip under the shared header
+- (b) Fold into the shared header itself — requires lg-shell changes,
+  routes through coordinator (lg-shell owns site-header.php)
+- (c) Remove from membership pages entirely — strip
+  `[lg_member_nav]` from existing posts' content (one-shot SQL),
+  drop the prepend in `Pages::createPage()`, leave the shortcode
+  registered as a no-op for safety
+- I have no strong preference; (a) is the lowest-risk for PoC.
+
+**Q3 — Welcome-modal / `[lg_subscription_success]` chrome.** The
+welcome modal hook (`showWelcome()`) reads `_lg_pending_welcome` user
+meta and fires on `wp_footer()`. My template emits `wp_footer()`, so
+the modal will still fire. But it was historically scoped to the
+BB-themed `/welcome/` slug. When I add `welcome` to the slug list
+post-PoC, the modal will render inside the new chrome too — likely
+fine since it's a JS overlay, but flagging in case there's a known
+issue.
+
+### Not done (deferred)
+
+- The other 10 membership slugs — pending Q1 + Q2 resolution.
+- Dequeue passes on BB theme assets — pending visual audit.
+- Cleanup of vestigial `template` field in `PAGES` registry — post BB-decommission.
+- BB allowlist (`bp-enable-private-network-public-content`) coupling —
+  irrelevant if BB plugin goes; live as-is until coordinator says strip.
+
+---
+
 ## 2026-05-28 — round-trip verified ✓
 
 Per `docs/reply-to-poller-purge-ready.md`. profile-app's exempt block
@@ -745,6 +949,20 @@ forgotten at cutover.
 ---
 
 ## 2026-05-29 — membership-pages PoC (shared chrome) SHIPPED on dev
+
+> **⚠️ COURSE-CORRECTED same day — see `docs/reply-to-membership-standalone.md`.**
+> Launch invariant §0b (STRANGLER-COORDINATION.md) landed: launch pages are served
+> **standalone** (nginx → standalone PHP → `require site-header.php`), NOT via
+> `template_include` on a WP page — a WP-templated page boots WordPress every load
+> (~2.6s floor) and the shim doesn't fix that. **So the `template_include`
+> mu-plugin below is the RETIRED delivery mechanism — do NOT ship it to live.**
+> What transfers to the standalone build (don't re-discover it): the viewer-ctx
+> shape + `lg_viewer_tier()` reuse, the full shared-header consumer contract
+> (`active_nav` + `logout_url`), and the confirmed BB-bypass / `body_class` /
+> `wp_head`/`wp_footer` requirements — all proven here. The *render* is correct;
+> only the *delivery* (WP template vs. standalone PHP reading `lg_membership`
+> directly) changes. mu-plugin remains installed on dev as a render reference
+> pending the standalone surface; pull it when that lands.
 
 The membership-pages task's proof-of-concept is live on dev: `/membership-guide/`
 renders on the unified `/srv/lg-shared/` header+footer, BuddyBoss theme chrome
