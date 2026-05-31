@@ -547,6 +547,20 @@ final class Block
         $accepted = $lists['accepted'] ?? [];
         $isOwner  = ($viewerUserId !== null && $viewerUserId === $userId);
 
+        // Reciprocal privacy (Ian, 2026-05-31): showing connection B in A's list
+        // exposes B too — so a non-owner only sees connections whose OWN connect
+        // block is visible to that audience. A connection with no connect block (→
+        // member default) or a private one stays hidden on the public front even if
+        // A's connect block is public. Owner always sees all of their own connections.
+        if (!$isOwner && $accepted) {
+            $audience = ($viewerUserId !== null) ? 'member' : 'public';
+            $visMap   = self::connectVisFor(array_column($accepted, 'uuid'));
+            $accepted = array_values(array_filter($accepted, static function ($b) use ($audience, $visMap) {
+                $v = $visMap[$b['uuid']] ?? ['connect' => 'members', 'header' => 'members'];
+                return self::canSee($audience, $v['header'], $v['connect']);
+            }));
+        }
+
         $shape = static fn(array $r): array => [
             'uuid'   => $r['uuid'],
             'name'   => $r['display_name'],
@@ -587,6 +601,33 @@ final class Block
             'vis'     => self::normalizeVis(self::blockVisibility($userId, self::CONNECT_KEY, 'members')),
             'fields'  => $fields,
         ];
+    }
+
+    /**
+     * Batch: each uuid's OWN connect-block vis + header ceiling (DB literals), for the
+     * reciprocal-privacy filter in loadConnect. Missing rows default to 'members'.
+     * @return array<string,array{connect:string,header:string}>
+     */
+    private static function connectVisFor(array $uuids): array
+    {
+        $uuids = array_values(array_unique(array_filter($uuids)));
+        if (!$uuids) return [];
+        $ph = implode(',', array_fill(0, count($uuids), '?'));
+        $st = Db::pg()->prepare(
+            "SELECT u.uuid,
+                    COALESCE(pc.visibility, 'members') AS connect_vis,
+                    COALESCE(ph.visibility, 'members') AS header_vis
+               FROM users u
+               LEFT JOIN profile_sections pc ON pc.user_id = u.id AND pc.key = 'connect'
+               LEFT JOIN profile_sections ph ON ph.user_id = u.id AND ph.key = 'header'
+              WHERE u.uuid IN ($ph)"
+        );
+        $st->execute($uuids);
+        $out = [];
+        while ($r = $st->fetch()) {
+            $out[(string)$r['uuid']] = ['connect' => (string)$r['connect_vis'], 'header' => (string)$r['header_vis']];
+        }
+        return $out;
     }
 
     // ---------- block: practice-header (the required /p/ header) ----------
