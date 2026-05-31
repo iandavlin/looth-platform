@@ -28,7 +28,7 @@ if (count($uuids) > 100)     profile_app_json(400, ['error' => 'too_many', 'cap'
 
 $ph = implode(',', array_fill(0, count($uuids), '?'));
 $st = Db::pg()->prepare("
-    SELECT uuid, slug, display_name, avatar_url
+    SELECT uuid, slug, display_name, avatar_url, at_a_glance
     FROM users
     WHERE uuid IN ($ph) AND archived_at IS NULL
 ");
@@ -41,6 +41,7 @@ while ($r = $st->fetch()) {
         'slug'         => $r['slug'] ?: null,
         'display_name' => $r['display_name'] ?? null,
         'avatar_url'   => $r['avatar_url'] ?? null,
+        'bio'          => $r['at_a_glance'] ?? null,   // single-source author bio → bylines/author box
     ];
 }
 
