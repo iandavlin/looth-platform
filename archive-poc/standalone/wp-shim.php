@@ -183,6 +183,17 @@ if (!function_exists('get_term_link')) {
     }
 }
 
+/* ── Sponsor brand kit (ACF) — served from materialized post_context.sponsor ──
+ * The post-header "sponsor" variant calls get_field('brand_*', 'user_<id>'); the
+ * materializer pre-resolved that kit (incl. the logo as {url:…}) into LG_PC.sponsor,
+ * so this returns the baked value by field name and ignores the user-id selector. */
+if (!function_exists('get_field')) {
+    function get_field($selector, $id = false, $format_value = true) {
+        $sp = $GLOBALS['LG_PC']['sponsor'] ?? null;
+        return (is_array($sp) && array_key_exists((string) $selector, $sp)) ? $sp[(string) $selector] : null;
+    }
+}
+
 /* ── Viewer auth (comments gate only; harness sets the flag per render) ── */
 if (!function_exists('is_user_logged_in')) {
     function is_user_logged_in(): bool { return !empty($GLOBALS['LG_VIEWER_AUTH']); }
@@ -200,7 +211,6 @@ if (!function_exists('wp_strip_all_tags')) {
  * Deliberately NOT defined (so function_exists() is false and the engine takes
  * its no-WP branch):
  *   bp_core_get_user_domain  → BP member-profile link slot is skipped
- *   get_field (ACF)          → only the post-header "sponsor" variant uses it
  *   wp_oembed_get / wp_remote_get / get_transient → YouTube/Instagram render
  *                              via pure-regex facades; generic oEmbed is the
  *                              only path that would need these (not in this PoC)

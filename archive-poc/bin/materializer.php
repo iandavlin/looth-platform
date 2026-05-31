@@ -49,6 +49,16 @@ const LG_MAT_AUTHOR_META_KEYS = [
     'author_facebook', 'author_youtube', 'author_linktree',
 ];
 
+/** Sponsor brand-kit ACF fields (stored on the author user, prefix `user_<id>`)
+ *  that the post-header "sponsor" variant reads via get_field(). Resolved here so
+ *  the byte-identical block reads them from post_context.sponsor with no ACF at
+ *  render. `brand-logo1` is resolved separately (attachment → {url}). */
+const LG_MAT_SPONSOR_FIELDS = [
+    'brand_name', 'brand_primary_color_1', 'brand_secondary_color_',
+    'brand_third_color_header_color', 'brand_website', 'brand_instagram',
+    'brand_facebook', 'brand_youtube', 'tlg_sponsor_page_url', 'brand_email', 'brand_tag',
+];
+
 /**
  * Build the blob for one post, or null if it should not have one (not a managed
  * post / no layout / not published). Callers treat null as "delete any blob".
@@ -153,8 +163,30 @@ function lg_materialize_build_blob(int $post_id): ?array {
         $options[LG_LAYOUT_V2_STYLE_OPTION] = get_option(LG_LAYOUT_V2_STYLE_OPTION, []);
     }
 
+    // ── Sponsor brand kit (ACF on the author user) ─────────────────────────
+    //    Only the post-header "sponsor" variant reads these; resolve once here so
+    //    the byte-identical block renders standalone with no ACF. Logo pre-resolved
+    //    to the {url:…} shape the block already handles. Null when the author has
+    //    no brand kit (the common case) → shim get_field() returns null, block skips.
+    $sponsor = null;
+    if ($author_id > 0 && function_exists('get_field')) {
+        $uid = 'user_' . $author_id;
+        $sp  = [];
+        foreach (LG_MAT_SPONSOR_FIELDS as $f) {
+            $v = get_field($f, $uid);
+            if (is_string($v) && $v !== '') $sp[$f] = $v;
+        }
+        $logo = get_field('brand-logo1', $uid);
+        $logo_url = '';
+        if (is_array($logo) && !empty($logo['url']))  $logo_url = (string) $logo['url'];
+        elseif (is_numeric($logo) && (int) $logo > 0) $logo_url = (string) (wp_get_attachment_image_url((int) $logo, 'thumbnail') ?: '');
+        if ($logo_url !== '') $sp['brand-logo1'] = ['url' => $logo_url];
+        if ($sp) $sponsor = $sp;
+    }
+
     $post_context = [
         'post_id'       => $post_id,
+        'sponsor'       => $sponsor,
         'title'         => (string) get_the_title($post_id),
         'permalink'     => (string) get_permalink($post_id),
         'date'          => (string) get_the_date('', $post_id),
