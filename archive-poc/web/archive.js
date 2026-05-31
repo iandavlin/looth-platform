@@ -271,14 +271,14 @@ async function renderAuthorBanner() {
     .join('');
 
   const profileUrl = data.looth_profile || data.profile_url || '#';
-  const bioBtn = data.bio
-    ? `<button class="author-banner__info" type="button" data-author-bio aria-label="About ${escapeHtml(data.name || 'this author')}" title="About this author"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>`
-    : '';
   $authorBan.hidden = false;
+  // Bio (single-source author bio) renders inline under the name; empty/null → nothing.
   $authorBan.innerHTML = `
     <img class="author-banner__avatar" src="${escapeHtml(data.avatar_url || '')}" alt="" loading="lazy">
-    <h2 class="author-banner__name"><a href="${escapeHtml(profileUrl)}">${escapeHtml(data.name || 'Member')}</a></h2>
-    ${bioBtn}
+    <div class="author-banner__body">
+      <h2 class="author-banner__name"><a href="${escapeHtml(profileUrl)}">${escapeHtml(data.name || 'Member')}</a></h2>
+      ${data.bio ? `<p class="author-banner__bio">${escapeHtml(data.bio)}</p>` : ''}
+    </div>
     ${socialHtml ? `<div class="author-banner__socials">${socialHtml}</div>` : ''}
   `;
 }
@@ -1118,17 +1118,25 @@ if (ssrPresent && !hasFilters) {
     const dt = it.when ? new Date(it.when * 1000) : null;
     const dateText = dt ? dt.toLocaleString(undefined, {month:'short', day:'numeric'}) : '';
     const isoDate = dt ? dt.toISOString() : '';
+    // Tier gating (mirror of the SSR card): gated when the item's tier outranks
+    // the viewer's. Suppresses the inline play button so a lower tier can't play
+    // gated video, and adds the overlay class.
+    const TIER_RANK = { public: 0, lite: 1, pro: 2 };
+    const viewerTier = (window.__LG_VIEWER_TIER__ || 'public').toLowerCase();
+    const isGated = (TIER_RANK[tier] || 0) > (TIER_RANK[viewerTier] || 0);
     const a = document.createElement('a');
     let cls = `acard acard--${meta.variant} acard--kind-${targetKind}`;
     if (meta.yt_id) cls += ' acard--youtube';
     if (compact) cls += ' acard--compact';
+    if (isGated) cls += ` acard--gated acard--gated-${tier}`;
     a.className = cls;
     a.href = target.url || '#';
     a.innerHTML = `
       ${meta.is_sticky ? '<span class="acard__pin">📌 Pinned</span>' : ''}
       ${meta.has_image ? `<div class="acard__img-wrap">
-        <img class="acard__img" src="${escapeHtml(it.image_url)}" alt="" loading="lazy" width="560" height="320">
-        ${meta.yt_id ? `<button type="button" class="acard__play" data-yt-play="${escapeHtml(meta.yt_id)}" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+        <img class="acard__img" src="${escapeHtml(isGated && /ytimg\.com/.test(it.image_url || '') ? 'https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp' : it.image_url)}" alt="" loading="lazy" width="560" height="320">
+        ${meta.yt_id && !isGated ? `<button type="button" class="acard__play" data-yt-play="${escapeHtml(meta.yt_id)}" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
+        ${isGated ? `<span class="acard__gate" aria-label="${tier} member content"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>` : ''}
       </div>` : ''}
       <div class="acard__body">
         ${user.name ? `<div class="acard__head">
@@ -1149,45 +1157,42 @@ if (ssrPresent && !hasFilters) {
     return a;
   }
 
-  // Click-to-play: swap the YouTube thumbnail for an autoplaying iframe inline
-  // (facade → iframe only on demand). The play button sits inside the card's
-  // <a>, so cancel the card navigation when it's the click target.
-  rail.addEventListener('click', (e) => {
-    const btn = e.target.closest('.acard__play[data-yt-play]');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const id   = btn.getAttribute('data-yt-play');
-    const wrap = btn.closest('.acard__img-wrap');
-    if (!id || !wrap || wrap.querySelector('iframe')) return;
-    const h = wrap.offsetHeight || 220;   // keep the thumbnail's footprint
-    wrap.innerHTML =
-      `<iframe class="acard__video" style="height:${h}px" ` +
-      `src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1" ` +
-      `title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ` +
-      `allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
-  });
 })();
 
-// --- Click-to-play for video RAIL cards (discovery rows + rows-more) ---
-// Same facade as the activity strip: the rail card's play button swaps the
-// thumbnail for an autoplaying iframe inline and cancels the card's <a> nav.
-// Document-level since rails appear in several rows.
+// --- Click-to-play, unified for activity (acard) + rail (rcard) video cards ---
+// Facade → iframe only on demand. The iframe OVERLAYS the thumbnail (kept in the
+// DOM), so "stop" is just removing the iframe. Only ONE plays at a time: opening
+// a new player tears down the previous one. The play button sits inside the
+// card's <a>, so cancel navigation when it's the click target. Document-level
+// since both the activity strip and several rails are on the page.
 (function () {
+  let active = null;   // the currently-playing iframe, if any
   document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.rcard__play[data-yt-play]');
+    const btn = e.target.closest('.acard__play[data-yt-play], .rcard__play[data-yt-play]');
     if (!btn) return;
     e.preventDefault();
     e.stopPropagation();
     const id   = btn.getAttribute('data-yt-play');
-    const wrap = btn.closest('.rcard__img-wrap');
-    if (!id || !wrap || wrap.querySelector('iframe')) return;
-    const h = wrap.offsetHeight || 270;   // keep the thumbnail's footprint
-    wrap.innerHTML =
-      `<iframe class="rcard__video" style="height:${h}px" ` +
-      `src="https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1" ` +
-      `title="Video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ` +
-      `allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    const wrap = btn.closest('.acard__img-wrap, .rcard__img-wrap');
+    if (!id || !wrap) return;
+
+    // One at a time: stop whatever was playing (removing the iframe reveals its
+    // thumbnail again, since we only overlaid it).
+    if (active) { active.remove(); active = null; }
+    if (wrap.querySelector('iframe')) return;
+
+    const isRail = wrap.classList.contains('rcard__img-wrap');
+    const iframe = document.createElement('iframe');
+    iframe.className = isRail ? 'rcard__video' : 'acard__video';
+    iframe.src = `https://www.youtube.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0&modestbranding=1`;
+    iframe.title = 'Video';
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    iframe.allowFullscreen = true;
+    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+    // Overlay the thumbnail (img-wrap is position:relative).
+    iframe.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; z-index:5;';
+    wrap.appendChild(iframe);
+    active = iframe;
   });
 })();
 

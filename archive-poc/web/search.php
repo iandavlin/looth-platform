@@ -48,9 +48,11 @@ $LOGO = LG_ARCHIVE_POC_LOGO_URL;
 <meta name="robots" content="noindex, follow">
 <link rel="canonical" href="<?= h($canonical) ?>">
 <link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
 <body class="view-grid arc-search-page">
-<?php require __DIR__ . '/_chrome.php'; ?>
+<?php $lg_active_nav = 'archive'; // on the Archive page — suppress its own nav link
+require __DIR__ . '/_chrome.php'; ?>
 
 <main class="arc-page" id="main">
 

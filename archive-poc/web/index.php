@@ -403,9 +403,11 @@ $client_state = [
 <meta name="twitter:image" content="<?= h($og_image) ?>">
 
 <link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
 <body class="view-discover<?= $happening_now ? ' has-live' : '' ?>">
-<?php require __DIR__ . '/_chrome.php'; ?>
+<?php $lg_active_nav = ''; // front page is none of the nav sections — show all, incl. Archive
+require __DIR__ . '/_chrome.php'; ?>
 <?php if ($happening_now): $hn = $happening_now; ?>
 <aside class="live-banner" role="status">
   <span class="live-banner__dot">🔴</span>
@@ -695,7 +697,8 @@ $client_state = [
   </div>
 </div>
 <?php require __DIR__ . '/_chrome-footer.php'; ?>
-<script>window.__ROWS__ = <?= json_encode($client_state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;</script>
+<script>window.__ROWS__ = <?= json_encode($client_state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+window.__LG_VIEWER_TIER__ = <?= json_encode($viewer_tier) ?>;</script>
 <script src="/archive-poc/archive.js?v=<?= @filemtime(__DIR__.'/archive.js') ?>"></script>
 </body>
 </html>
