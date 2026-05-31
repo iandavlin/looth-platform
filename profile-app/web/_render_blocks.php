@@ -37,6 +37,38 @@ if (!function_exists('looth_initials')) {
 }
 
 /**
+ * Tiny inline-SVG preview of what a block looks like on the profile — shown on each caddy
+ * chip so the owner can see what they're adding. Shapes only (the chip CSS frames them).
+ */
+function looth_caddy_preview(string $key): string
+{
+    $svg = static fn(string $inner): string =>
+        '<svg viewBox="0 0 120 48" width="100%" height="100%" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' . $inner . '</svg>';
+    switch ($key) {
+        case 'about':
+            return $svg('<rect x="12" y="11" width="96" height="5" rx="2.5" fill="#9fb295"/><rect x="12" y="23" width="96" height="5" rx="2.5" fill="#c8d3c0"/><rect x="12" y="35" width="60" height="5" rx="2.5" fill="#c8d3c0"/>');
+        case 'location':
+            return $svg('<line x1="0" y1="16" x2="120" y2="32" stroke="#cdd8c5" stroke-width="3"/><line x1="44" y1="0" x2="70" y2="48" stroke="#cdd8c5" stroke-width="3"/><path d="M60 36c-5-7-9-11-9-15a9 9 0 0 1 18 0c0 4-4 8-9 15z" fill="#6f8a63"/><circle cx="60" cy="21" r="3.2" fill="#fff"/>');
+        case 'craft':
+        case 'skills':
+            return $svg('<rect x="10" y="10" width="44" height="12" rx="6" fill="#9fb295"/><rect x="60" y="10" width="34" height="12" rx="6" fill="#c8d3c0"/><rect x="10" y="27" width="30" height="12" rx="6" fill="#c8d3c0"/><rect x="46" y="27" width="48" height="12" rx="6" fill="#9fb295"/>');
+        case 'services':
+            return $svg('<rect x="12" y="10" width="96" height="9" rx="3" fill="#9fb295"/><rect x="12" y="24" width="70" height="7" rx="3" fill="#c8d3c0"/><circle cx="100" cy="27" r="6" fill="none" stroke="#9fb295" stroke-width="2"/><path d="M97 27l2 2 4-4" stroke="#9fb295" stroke-width="2" fill="none"/><rect x="12" y="36" width="54" height="6" rx="3" fill="#dbe2d4"/>');
+        case 'instruments':
+            return $svg('<circle cx="34" cy="30" r="12" fill="none" stroke="#6f8a63" stroke-width="3"/><circle cx="34" cy="30" r="4" fill="#9fb295"/><rect x="44" y="8" width="5" height="26" rx="2.5" fill="#9fb295" transform="rotate(-18 46 20)"/><rect x="70" y="12" width="34" height="6" rx="3" fill="#c8d3c0"/><rect x="70" y="24" width="26" height="6" rx="3" fill="#dbe2d4"/>');
+        case 'music':
+            return $svg('<path d="M44 12v20" stroke="#6f8a63" stroke-width="3"/><path d="M76 8v20" stroke="#6f8a63" stroke-width="3"/><path d="M44 12l32-4" stroke="#6f8a63" stroke-width="3"/><circle cx="40" cy="34" r="6" fill="#9fb295"/><circle cx="72" cy="30" r="6" fill="#9fb295"/>');
+        case 'gallery':
+            return $svg('<rect x="12" y="8" width="44" height="15" rx="2" fill="#9fb295"/><rect x="62" y="8" width="46" height="15" rx="2" fill="#c8d3c0"/><rect x="12" y="27" width="46" height="13" rx="2" fill="#c8d3c0"/><rect x="64" y="27" width="44" height="13" rx="2" fill="#9fb295"/><circle cx="24" cy="14" r="2.6" fill="#fff"/>');
+        case 'connect':
+            return $svg('<circle cx="46" cy="24" r="11" fill="#9fb295" stroke="#fff" stroke-width="2"/><circle cx="60" cy="24" r="11" fill="#bcae8f" stroke="#fff" stroke-width="2"/><circle cx="74" cy="24" r="11" fill="#c8d3c0" stroke="#fff" stroke-width="2"/>');
+        case 'socials':
+            return $svg('<rect x="12" y="11" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="14" width="15" height="5" rx="2.5" fill="#9fb295"/><rect x="35" y="15" width="44" height="3" rx="1.5" fill="#cdd8c5"/><rect x="12" y="27" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="30" width="15" height="5" rx="2.5" fill="#bcae8f"/><rect x="35" y="31" width="36" height="3" rx="1.5" fill="#cdd8c5"/>');
+    }
+    return '';
+}
+
+/**
  * Render a /u/ profile's blocks for a viewer.
  * @param int    $userId  spine user id (subject)
  * @param string $role    'me'|'member'|'friend'|'public'

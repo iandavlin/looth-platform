@@ -75,12 +75,16 @@ $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$
 <style>
 /* Block-model /u/ render. Tokens (--lg-*) come from site-header.css. */
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
-.lg-shell{max-width:760px;margin:0 auto}
-.lg-profile{max-width:760px;margin:0 auto;padding:24px 20px 48px}
-/* desktop: profile + a PERMANENT block sidebar, centered as a group (mobile keeps the off-canvas drawer) */
+.lg-shell{max-width:760px;margin:0 auto;padding:24px 20px 48px}
+.lg-profile{min-width:0}
+/* desktop: View-as bar spans the top; the block sidebar sits LEFT and the profile right, with
+   both columns top-aligned — so the sidebar lines up with the header card, not the View-as bar. */
 @media(min-width:1100px){
-  .lg-shell--owner{display:flex;gap:28px;max-width:1108px;align-items:flex-start}
-  .lg-shell--owner .lg-profile{flex:1 1 760px;min-width:0;max-width:760px;margin:0}
+  .lg-shell--owner{display:grid;grid-template-columns:280px minmax(0,760px);
+    grid-template-areas:"viewas viewas" "caddy profile";column-gap:28px;align-items:start;max-width:1088px}
+  .lg-shell--owner .lg-viewas{grid-area:viewas}
+  .lg-shell--owner .lg-caddy{grid-area:caddy}
+  .lg-shell--owner .lg-profile{grid-area:profile}
 }
 
 /* View-as toggle (owner only) */
@@ -174,16 +178,20 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__close:hover{color:var(--lg-ink)}
 .lg-caddy__hint{font:500 11.5px/1.5 var(--lg-font-sans);color:var(--lg-mute);margin:0 0 14px}
 .lg-caddy__list{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
-.lg-caddy__item{display:flex;align-items:center;gap:8px;text-align:left;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;
-  padding:11px 12px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-ink);cursor:grab}
-.lg-caddy__item:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-caddy__item{display:flex;flex-direction:column;align-items:stretch;gap:7px;text-align:left;background:#fff;
+  border:1px solid var(--lg-line);border-radius:11px;padding:8px;cursor:grab}
+.lg-caddy__item:hover{border-color:var(--lg-sage);box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.lg-caddy__item:hover .lg-caddy__preview{background:var(--lg-sage-tint)}
 .lg-caddy__item.lg-sort-dragging{opacity:.45}
+.lg-caddy__preview{display:block;height:46px;border-radius:7px;overflow:hidden;background:var(--lg-cream);border:1px solid var(--lg-line)}
+.lg-caddy__preview svg{display:block;width:100%;height:100%}
+.lg-caddy__label{display:flex;align-items:center;gap:8px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-ink);padding:0 2px}
 .lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
 .lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
 /* desktop: caddy becomes a permanent sticky sidebar column (overrides the off-canvas drawer) */
 @media(min-width:1100px){
-  .lg-shell--owner .lg-caddy{position:sticky;top:24px;right:auto;flex:0 0 280px;width:280px;height:auto;
+  .lg-shell--owner .lg-caddy{position:sticky;top:24px;right:auto;align-self:start;width:auto;height:auto;
     max-height:calc(100vh - 48px);transform:none;border:1px solid var(--lg-line);border-radius:14px;
     box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
@@ -285,7 +293,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 
 <main class="main" id="lg-main">
   <div class="lg-shell<?= $isOwner ? ' lg-shell--owner' : '' ?>">
-  <div class="lg-profile">
 
     <?php if ($isOwner): ?>
       <div class="lg-viewas" role="group" aria-label="Preview your profile as">
@@ -297,19 +304,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
         </span>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">✚ Blocks</button>
         <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
-        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. Drag the ⠿ on a block to reorder; <b>✚ Blocks</b> adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
+        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. Drag the ⠿ on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
       </div>
-    <?php endif; ?>
-
-    <?php looth_render_profile_blocks($subjectId, $role, $tierBadge, $socialActions, $viewer ? (int)$viewer['id'] : null); ?>
-
-    <?php if (!$isOwner): ?>
-      <a class="lg-report" href="#" id="report-link">Report this profile</a>
-    <?php endif; ?>
-  </div>
-
-  <?php if ($isOwner): $available = Block::availableBlocks($subjectId); ?>
-    <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
+      <?php $available = Block::availableBlocks($subjectId); ?>
+      <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
       <div class="lg-caddy__head">
         <strong>Add a block</strong>
         <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
@@ -318,13 +316,21 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       <div class="lg-caddy__list" id="lg-caddy-list">
         <?php foreach ($available as $key): $b = Block::LAYOUT_BLOCKS[$key]; ?>
           <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
-            <span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($b['label']) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span>
+            <span class="lg-caddy__preview" aria-hidden="true"><?= looth_caddy_preview($key) ?></span>
+            <span class="lg-caddy__label"><span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($b['label']) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span></span>
           </button>
         <?php endforeach; ?>
         <span class="lg-caddy__empty"<?= $available ? ' hidden' : '' ?>>All blocks added ✓</span>
       </div>
     </aside>
-  <?php endif; ?>
+    <?php endif; ?>
+
+    <div class="lg-profile">
+      <?php looth_render_profile_blocks($subjectId, $role, $tierBadge, $socialActions, $viewer ? (int)$viewer['id'] : null); ?>
+      <?php if (!$isOwner): ?>
+        <a class="lg-report" href="#" id="report-link">Report this profile</a>
+      <?php endif; ?>
+    </div>
   </div><!-- /lg-shell -->
 </main>
 
