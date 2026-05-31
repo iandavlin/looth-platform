@@ -141,7 +141,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $isOwner ? 'Edit your profile' : looth_h($displayName) ?> · Looth</title>
 <link rel="stylesheet" href="/profile/edit/edit.css">
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <script>window.LOOTH_BOOT = <?= $bootstrap ?>;</script>
 </head>
 <body class="<?= $isOwner ? 'mode-editor' : 'mode-view' ?>">

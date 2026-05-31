@@ -52,7 +52,7 @@ $viewLink = fn(string $v): string => '/p/' . rawurlencode($slugSafe) . '?view=' 
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($name) ?> · Looth</title>
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <style>
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
 .lg-profile{max-width:760px;margin:0 auto;padding:24px 20px 48px}

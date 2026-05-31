@@ -100,7 +100,7 @@ function looth_render_public(array $rendered, string $viewerRole, int $userId): 
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($displayName) ?> · Looth</title>
 <link rel="stylesheet" href="/profile/edit/edit.css">
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
 <body class="mode-view">
 <?php require __DIR__ . '/_chrome.php'; ?>

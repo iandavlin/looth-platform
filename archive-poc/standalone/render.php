@@ -184,7 +184,7 @@ function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $a
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>
 <meta name="robots" content="<?= $tier === 'public' ? 'index, follow' : 'noindex, follow' ?>">
-<link rel="stylesheet" href="/lg-shared/site-header.css">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <style>
 <?= $css ?>
 </style>
