@@ -255,6 +255,19 @@ function lg_shared_render_site_header(array $ctx): void
           <?php endif; ?>
         </a>
 
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
+                aria-label="Connections"
+                data-lg-conn-link>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="lg-chrome__badge" data-lg-conn-count hidden>0</span>
+        </button>
+
         <!-- Account dropdown trigger -->
         <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
           <button class="lg-chrome__account" type="button"
@@ -424,6 +437,96 @@ function lg_shared_render_site_header(array $ctx): void
   }
 })();
 </script>
+
+<?php if ($authenticated): ?>
+<!-- ── P9 social modals ────────────────────────────────────── -->
+
+<!-- Notifications modal -->
+<div class="lg-social-modal" id="lg-notif-modal"
+     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Notifications">
+  <div class="lg-social-modal__backdrop"></div>
+  <div class="lg-social-modal__panel">
+    <div class="lg-social-modal__head">
+      <h2 class="lg-social-modal__title">Notifications</h2>
+      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="lg-social-modal__body" id="lg-notif-list"></div>
+  </div>
+</div>
+
+<!-- Messages modal -->
+<div class="lg-social-modal" id="lg-messages-modal"
+     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages">
+  <div class="lg-social-modal__backdrop"></div>
+  <div class="lg-social-modal__panel">
+    <div class="lg-social-modal__head">
+      <button class="lg-social-modal__back-btn" data-lg-thread-back aria-label="Back to threads" hidden>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <h2 class="lg-social-modal__title">Messages</h2>
+      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <!-- Thread list view -->
+    <div class="lg-social-modal__body" id="lg-msg-list"></div>
+    <!-- Thread detail view -->
+    <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="lg-msg__messages" id="lg-msg-messages"></div>
+      <div class="lg-msg__compose">
+        <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
+                  placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                  rows="2"></textarea>
+        <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Connections / Friends modal -->
+<div class="lg-social-modal" id="lg-connections-modal"
+     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Connections">
+  <div class="lg-social-modal__backdrop"></div>
+  <div class="lg-social-modal__panel">
+    <div class="lg-social-modal__head">
+      <h2 class="lg-social-modal__title">Connections</h2>
+      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="lg-social-modal__body">
+      <div id="lg-conn-pending-section" hidden>
+        <h3 class="lg-conn__section-h">Pending requests</h3>
+        <div id="lg-conn-pending"></div>
+      </div>
+      <h3 class="lg-conn__section-h">Your connections</h3>
+      <div id="lg-conn-accepted"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/lg-shared/social-modals.js" defer></script>
+<?php endif; ?>
 <?php
 } // end function
 } // end if !function_exists
