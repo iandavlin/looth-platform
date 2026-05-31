@@ -4,6 +4,15 @@ Quick-scan of active chats. Updated by coordinator. Open this when you need to k
 
 **To switch chats:** use the Claude Code panel on the left of code-server (native session picker). The session IDs below are recorded for coordinator bookkeeping + chat-lineage logging.
 
+> **2026-05-31 status deltas (see STRANGLER-SESSION-HANDOFF "LATEST"):**
+> - **layout-standalone** — `/article/ /video/ /sponsor/` standalone routes LIVE (commit 10b00fd). 5 more CPT types have blobs+render but no route yet.
+> - **profile-2.0** — practice `/p/` pages + avatar store/upload/serve + Leaflet fix + social slot SHIPPED (5a5f0fc +avatar).
+> - **social** — schema applied, 5 endpoints live, modals wired. History migration = CUT-DAY (fixture on dev).
+> - **shim-replacement** — inline JWT verify (`/srv/lg-shared/jwt-verify.php`) live on bb-mirror; loopback dies on the fast path. Next: roll to archive-poc + shared header.
+> - **lg-shell** — P9 social modals (bell/messages/connections) wired + bug-fixed to real shapes.
+> - **poller** — `/membership-guide/` standalone (§0b) live; 10 slugs + parity remain.
+> - **cpt-conversions** — bootstrap written (`bootstrap-cpt-conversions.md`); not yet spawned.
+
 | # | Chat | Outliner title (left panel) | Session ID | Owns | Now |
 |---|---|---|---|---|---|
 | 1 | **coordinator** | *Review briefing coordinator successor …* | `34c73878-3c14-41f6-b56f-8d5195ea47e4` | cross-cutting contract, doc, routing | active — successor chain from `7deff0ff` → `c047417b` → this; confirmed via transcript 2026-05-28 |

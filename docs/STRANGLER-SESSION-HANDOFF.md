@@ -9,7 +9,80 @@ also box sysadmin `ubuntu`).
 
 ---
 
-## LATEST — 2026-05-30 build phase (refresh; ~3/4 context, 1 compaction)
+## LATEST — 2026-05-31 build session (multi-lane marshal)
+
+Big push night — 7 lanes advanced, all committed + tested on dev. Pushed to main.
+
+### layout-standalone — CPT rendering off WP (commit 10b00fd)
+- `render.php` rewired to read blobs from **`discovery.article_blobs` (Postgres)** by
+  post_type + slug (nginx fastcgi_param), real `/whoami` viewer (was static-file PoC).
+- **nginx routes LIVE: `/article/<slug>/`, `/video/<slug>/`, `/sponsor/<slug>/`** →
+  standalone renderer, archive-poc FPM pool. **VERIFIED 200, standalone shell, no WP boot.**
+- **Blob store has all types** (loothprint 153, post-imgcap 71, useful_links 39,
+  post-type-videos 9, loothcuts 7, event 6, member-benefit 6, document 6, sponsor-post 1).
+- ⚠️ **5 types (loothprint/loothcuts/useful_links/document/member-benefit) have blobs +
+  RENDER fine via the engine (CLI-verified) but NO nginx route → live URLs fall through
+  to WP.** Lighting them up = add routes (cheap) + QA whether the auto-materialized
+  layouts are good. CPT-conversions bootstrap doc: `docs/bootstrap-cpt-conversions.md`
+  (needs Ian on per-type block shape / layout quality).
+
+### profile-2.0 — practice pages + avatar + social slot (5a5f0fc, +avatar commit)
+- **practice-header block + `/p/<slug>` page** + View-as toggle. Fixture practice
+  `monte-guitar-works` (owner user 3). CDP-verified.
+- **Leaflet fix** (u.php): real OSM tiles now render (was grey grid).
+- **Avatar single-source SHIPPED**: `me-avatar.php` upload→store→bump version→serve.
+  Store `/srv/profile-app-media/avatars/<uuid>/<v>.<ext>` (profile-app:profile-app 0775);
+  nginx `/profile-media/avatars/` serve block + `me/avatar` route + allowlist; schema
+  `users.avatar_version`. VERIFIED upload→200→serve image/jpeg; propagates to header chip.
+- **Social Connect/Message slot** wired into `/u/` header card (Social::renderProfileActions).
+
+### social layer — schema applied + endpoints live + modals wired (a3120cf, ff23ba4)
+- **Schema APPLIED** (connections/message_threads/messages/message_recipients/notifications
+  + dedup indexes). All 5 endpoints VERIFIED 200: social-counts/notifications/connections/
+  connections-pending/messages.
+- **History migration = CUT-DAY task** (Ian ruled 2026-05-31). Dev uses a small seeded
+  FIXTURE only (user 1918: 1 thread/3 msgs, 1 accepted + 1 pending connection).
+  `migrate-social-from-bb.php` dry-run = 10,975 edges / 370 threads / 1,881 msgs ready;
+  run `--commit` once at cutover. See memory `project_social_backfill_cutday`.
+
+### shim-replacement — inline JWT verify kills loopback (1f9dd7c)
+- `/srv/lg-shared/jwt-verify.php` (zero-dep RS256). bb-mirror `_chrome.php` prefers
+  inline JWT, falls back to whoami loopback. VERIFIED: `[shim-inline]` + `[shim-fallback]`
+  log lines both fire. `profile-auth.php` +clear_auth_cookie hook.
+- **NEXT (autonomous, PRE-CUT): roll the inline-verify pattern to archive-poc + the
+  shared-header path**; then decide shim retirement (Step B) — Ian's call on timing.
+- Note: `lg_tier` already set by lg-viewer-tier.php on every WP page load (the
+  "tier defaults public" gap is a narrow edge, not a blocker).
+
+### lg-shell — P9 social modals on live backend (lg-shared commits)
+- bell + messages + connections modals wired; 9+ badge cap; `lg:open-dm` hook; follow dropped.
+- **Fixed 5 modal field-mapping bugs** vs real endpoint shapes (accepted/pending_in,
+  peers[0], uuid-routing, mine-from-peers, reply {body}) + cache-bust script src.
+  CDP-verified against the fixture: counts, connections (accepted + pending Accept/Decline),
+  thread detail all render real data.
+- ⚠️ lg-shell wrote deploy-first to `/srv/lg-shared/` — coordinator synced back to repo
+  (`lg-shared/`) + committed. Repo = source of truth; remember to sync if they do it again.
+
+### poller — membership standalone (membership-pages commit)
+- **`/membership-guide/` standalone (§0b)**: own FPM pool `php8.3-fpm-membership.sock`,
+  `membership` system user, `/etc/lg-membership-db` secret, `strangler-membership.conf`.
+  VERIFIED 200, shared shell, no BB chrome. **Content is a SUBSET this pass** (body-class
+  shows `lgms-mg-lb` not `-anon`; VIEW BIO not matched) — full parity + remaining 10 slugs
+  next pass. `template_include` mu-plugin LEFT as fallback (don't pull until parity).
+
+### Infra provisioned this session (sysadmin record)
+- avatar media store + nginx serve route; `membership` user + FPM pool + DB secret +
+  nginx snippet + include; all social + avatar + practice-header nginx routes/allowlist.
+
+### Open / next
+- **Needs Ian:** CPT conversions (5 types — route + layout-quality QA);  shim retirement timing.
+- **Autonomous next:** shim inline-verify → archive-poc + shared-header path; poller's 10
+  remaining membership slugs + guide parity; profile-2.0 remaining blocks → spine dev-final.
+- Social `--commit` migration deferred to cut day (decided).
+
+---
+
+## 2026-05-30 build phase (refresh; ~3/4 context, 1 compaction)
 
 **Moved from design into BUILDING the profile spine.** Everything in the "morning"
 section below is still canon; this is what's new + the live process state.
@@ -72,11 +145,12 @@ section below is still canon; this is what's new + the live process state.
   `/etc/nginx/snippets/strangler-profile-app.conf` (repo copy DRIFTED — don't deploy-clobber).
 
 ### Open / next
-- Ian: **header default** (member vs public) — last visibility knob.
-- Spine: inc1 (header) ✅ + inc2 (location) ✅ → **NEXT: craft + socials blocks** →
+- Ian: **header default** — **RULED: member** (2026-05-30). Profile header defaults to
+  members-only; public is opt-in. Last deferred knob closed.
+- Spine: inc1 (header) ✅ + inc2 (location) ✅ → **inc3 (craft + socials blocks) IN FLIGHT** →
   crib (profiles-only, gated dev-final) → View-as toggle render.
-- Coordinator chore: add `Block.php` to `config.php`'s require list (config.php shim-shared).
-- shim: unblock dev `/mint-token` → then close the profile `/me` HTTP tests (inc1 + inc2).
+- Coordinator chore: `Block.php` + `Mint.php` added to `config.php` ✅ (shim, 702dd43).
+- shim: mint CLI live ✅ → profile `/me` HTTP tests (inc1 + inc2) now unblocked → next: real HTTP endpoint + WP login hooks.
 - Backlog: tutorial/tour modal (lg-shell).
 
 ---
