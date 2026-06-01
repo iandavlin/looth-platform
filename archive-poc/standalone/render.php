@@ -76,6 +76,10 @@ if (!$row) {
        uncovered ones get the normal WP page. CLI keeps the hard 404 (proof/debug). */
     if (!$IS_CLI) {
         $origPath = strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?');
+        // Visibility into uncovered posts: every blob-miss that falls back to WP
+        // is logged so we can see which managed-CPT permalinks still lack a blob.
+        error_log('lg-render: blob-miss -> WP fallback: ' . $postType . '/'
+            . ($postId > 0 ? "#$postId" : $slug) . ' (' . $origPath . ')');
         if ($origPath !== false && $origPath !== '') {
             header('X-Accel-Redirect: /__wp_render' . $origPath);
             exit;
