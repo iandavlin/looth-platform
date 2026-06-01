@@ -19,7 +19,7 @@
  *       // 'logo_url'   => 'https://…/logo.png',     // optional override
  *       // 'search_id'  => 'chrome-q',               // optional; id of the <input>
  *       // 'search_placeholder' => 'Search…',        // optional
- *       // 'profile_url'        => '/profile/edit',   // optional; default /profile/edit
+ *       // 'profile_url'        => '/u/<slug>',       // optional; viewer's public profile page (/u/<slug>, which for the owner is the inline editor). Default /profile/edit only when slug-less.
  *       // 'logout_url'         => wp_logout_url(),  // optional; WP callers pass nonce'd URL
  *   ]);
  *
@@ -64,7 +64,7 @@ if (!function_exists('lg_shared_render_site_header')) {
  *   logo_url?: string,
  *   search_id?: string,
  *   search_placeholder?: string,
- *   profile_url?: string,
+ *   profile_url?: string,  // viewer's public profile page (/u/<slug>; owner edits inline there). Default /profile/edit when slug-less.
  *   logout_url?: string,   // optional; WP callers pass wp_logout_url() for nonce'd URL
  *   before_nav?: string,   // raw HTML injected between logo and <nav> (e.g. archive-poc back-link)
  * } $ctx
@@ -79,7 +79,7 @@ function lg_shared_render_site_header(array $ctx): void
     $caps          = (array)($ctx['capabilities'] ?? []);
     $msg_unread    = $ctx['msg_unread']   ?? null;   // null = lazy-load
     $notif_unread  = $ctx['notif_unread'] ?? null;   // null = lazy-load
-    $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');
+    $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');  // viewer's public profile (/u/<slug>); /profile/edit is only the slug-less fallback
     $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
     // P9 hooks: msg/notif icon hrefs. Default to BB paths for now; P9 modals will override.
     $msg_url       = (string)($ctx['msg_url']   ?? '/members/me/messages/');
@@ -300,10 +300,7 @@ function lg_shared_render_site_header(array $ctx): void
           <ul class="lg-chrome__account-menu" id="lg-account-menu"
               role="menu" aria-label="Account menu" hidden>
             <li role="none">
-              <?php /* Always the editor: profile-app consumers set $ctx['profile_url']
-                       to the PUBLIC profile (/u/<slug>), so we don't reuse it here —
-                       this item must land on the edit page (relay-to-shell-myprofile-edit). */ ?>
-              <a role="menuitem" href="/profile/edit">My Profile</a>
+              <a role="menuitem" href="<?= $h($profile_url) ?>">My Profile</a>
             </li>
             <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
