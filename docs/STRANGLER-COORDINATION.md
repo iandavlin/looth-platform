@@ -1047,8 +1047,17 @@ in the strangled stack while the account-creation engine stays in WP.
    passes back (success / not-a-patron / already-onboarded).
 
 *standalone (owns the page):*
-1. Build the public `/join/` page (shared header, like manage-subscription): "Connect your
-   Patreon" CTA → poller's authorize-entry URL, plus the post-auth states.
+1. Build the public `/join/` page (standalone, shared header). **Launch scope = lean + connect-first:**
+   - Primary: "Connect your Patreon" → the poller's `/patreon-connect?return=/join/`; render the
+     post-auth states (success / already_onboarded / not_a_patron / email_collision / fail).
+   - Secondary: a light "Not a patron yet? → Become a patron" link to
+     `patreon.com/loothgroup/membership`.
+   - **Build it funnel-shaped (a pitch/CTA scaffold)** because **`/join/` is slated to become the
+     Stripe join/checkout page** once Stripe goes live (Patreon→Stripe membership migration, ref
+     §3h). Design so the PRIMARY CTA can swap "Become a patron (Patreon)" → "Subscribe (Stripe
+     checkout)", with Patreon-connect demoting to a "already a patron? connect" secondary path.
+     **Do NOT build the Stripe checkout now** (Stripe is dormant) — just leave the seam. Keep a
+     full marketing funnel for later; launch stays lean.
 2. Add a "not linked yet → /join/" hint to `/manage-subscription/`.
 
 *shell:* public nav/account entry to `/join/` for logged-out visitors.
