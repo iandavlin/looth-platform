@@ -89,6 +89,14 @@ function lgpo_register_settings() {
     register_setting( 'lgpo_settings', 'lgpo_patreon_link', 'esc_url_raw' );
     register_setting( 'lgpo_settings', 'lgpo_contact_email', 'sanitize_email' );
     register_setting( 'lgpo_settings', 'lgpo_creator_access_token', 'sanitize_text_field' );
+    // Refresh-token lifecycle for the creator access token (§3n). Captured by
+    // the creator-OAuth dance (Settings → "Connect Creator Account" →
+    // /patreon-connect?creator=1) and rotated by lgpo_refresh_creator_token()
+    // inline on a 401 from the members API. Not editable via UI — Settings
+    // shows only their status badge.
+    register_setting( 'lgpo_settings', 'lgpo_creator_refresh_token',    'sanitize_text_field' );
+    register_setting( 'lgpo_settings', 'lgpo_creator_token_expires_at', 'absint' );
+    register_setting( 'lgpo_settings', 'lgpo_creator_token_obtained_at','absint' );
     register_setting( 'lgpo_settings', 'lgpo_auto_sync_enabled', [ 'type' => 'string', 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ] );
     register_setting( 'lgpo_settings', 'lgpo_sync_frequency', [
         'type'              => 'string',
@@ -245,7 +253,49 @@ function lgpo_settings_page() {
                 <tr><th>Campaign ID</th><td><input type="text" name="lgpo_campaign_id" value="<?php echo esc_attr( get_option( 'lgpo_campaign_id' ) ); ?>" class="regular-text" /></td></tr>
                 <tr><th>Patreon Membership Link</th><td><input type="url" name="lgpo_patreon_link" value="<?php echo esc_attr( $patreon_link ); ?>" class="regular-text" /></td></tr>
                 <tr><th>Contact Email</th><td><input type="email" name="lgpo_contact_email" value="<?php echo esc_attr( $contact_email ); ?>" class="regular-text" /></td></tr>
-                <tr><th>Creator Access Token</th><td><input type="password" name="lgpo_creator_access_token" value="<?php echo esc_attr( get_option( 'lgpo_creator_access_token', '' ) ); ?>" class="regular-text" autocomplete="off" /><p class="description">From Patreon Developer Portal. Used for campaign member API sync.</p></td></tr>
+                <tr><th>Creator Access Token</th><td><input type="password" name="lgpo_creator_access_token" value="<?php echo esc_attr( get_option( 'lgpo_creator_access_token', '' ) ); ?>" class="regular-text" autocomplete="off" /><p class="description">From Patreon Developer Portal. Manual paste — kept as fallback. Prefer the "Connect Creator Account" OAuth dance below (captures refresh_token + auto-renews).</p></td></tr>
+                <?php
+                $creator_expires_at  = (int) get_option( 'lgpo_creator_token_expires_at', 0 );
+                $creator_obtained_at = (int) get_option( 'lgpo_creator_token_obtained_at', 0 );
+                $has_refresh_token   = (string) get_option( 'lgpo_creator_refresh_token', '' ) !== '';
+                $token_status        = '<span style="color:#dc3232;">not configured (auto-refresh OFF)</span>';
+                if ( $has_refresh_token ) {
+                    if ( $creator_expires_at > 0 ) {
+                        $delta = $creator_expires_at - time();
+                        if ( $delta > 86400 ) {
+                            $token_status = sprintf( '<span style="color:#46b450;">healthy — expires %s (in %d days)</span>',
+                                esc_html( gmdate( 'Y-m-d H:i', $creator_expires_at ) ),
+                                (int) ( $delta / 86400 )
+                            );
+                        } elseif ( $delta > 0 ) {
+                            $token_status = sprintf( '<span style="color:#ffb900;">expires soon: %s (in %d hours) — refresh-on-401 will rotate</span>',
+                                esc_html( gmdate( 'Y-m-d H:i', $creator_expires_at ) ),
+                                (int) ( $delta / 3600 )
+                            );
+                        } else {
+                            $token_status = sprintf( '<span style="color:#dc3232;">EXPIRED %s — refresh-on-401 will rotate on next sync</span>',
+                                esc_html( gmdate( 'Y-m-d H:i', $creator_expires_at ) )
+                            );
+                        }
+                    } else {
+                        $token_status = '<span style="color:#ffb900;">refresh_token present but no expires_at recorded</span>';
+                    }
+                }
+                $connect_url = esc_url( home_url( '/patreon-connect/?creator=1' ) );
+                $creator_flag = isset( $_GET['lgpo_creator'] ) ? sanitize_text_field( wp_unslash( $_GET['lgpo_creator'] ) ) : '';
+                ?>
+                <tr><th>Creator-OAuth refresh</th><td>
+                    <p>Token status: <?php echo $token_status; ?><?php if ( $creator_obtained_at > 0 ): ?> <em>(last refreshed <?php echo esc_html( gmdate( 'Y-m-d H:i', $creator_obtained_at ) ); ?>)</em><?php endif; ?></p>
+                    <?php if ( $creator_flag === 'connected' ): ?>
+                        <p style="color:#46b450;font-weight:bold;">✓ Creator account connected. Refresh + access tokens captured. Polling will self-heal on token expiry.</p>
+                    <?php elseif ( $creator_flag === 'fail' ): ?>
+                        <p style="color:#dc3232;font-weight:bold;">Creator OAuth failed — check the LGPO alert email + Patreon developer portal config.</p>
+                    <?php endif; ?>
+                    <p>
+                        <a href="<?php echo $connect_url; ?>" class="button button-primary">Connect Creator Account</a>
+                        <span style="color:#666;margin-left:1em;">One-shot OAuth dance with the creator account. Replaces manual token paste + enables auto-refresh.</span>
+                    </p>
+                </td></tr>
                 <tr><th>Auto Sync</th><td><label><input type="checkbox" name="lgpo_auto_sync_enabled" value="1" <?php checked( get_option( 'lgpo_auto_sync_enabled', '' ), '1' ); ?> /> Enable automatic sync (applies changes without review)</label></td></tr>
                 <tr><th>Sync Frequency</th><td><select name="lgpo_sync_frequency"><option value="daily" <?php selected( get_option( 'lgpo_sync_frequency', 'daily' ), 'daily' ); ?>>Daily</option><option value="twicedaily" <?php selected( get_option( 'lgpo_sync_frequency', 'daily' ), 'twicedaily' ); ?>>Twice Daily</option><option value="hourly" <?php selected( get_option( 'lgpo_sync_frequency', 'daily' ), 'hourly' ); ?>>Hourly</option></select><p class="description">Only applies when Auto Sync is enabled.</p></td></tr>
             </table>
@@ -463,12 +513,264 @@ function lgpo_shortcode( $atts ) {
 add_action( 'init', 'lgpo_register_rewrite' );
 function lgpo_register_rewrite() {
     add_rewrite_rule( '^patreon-callback/?$', 'index.php?lgpo_callback=1', 'top' );
+
+    // §3n authorize-entry URL — stable entry point for the standalone /join/
+    // page (and anywhere else that needs to kick off Patreon OAuth). Builds
+    // the OAuth state + redirects to Patreon's authorize endpoint. Optional
+    // ?return=<path> binds the post-callback redirect target (defaults to
+    // /manage-subscription/). See lgpo_handle_connect() below for the
+    // contract.
+    add_rewrite_rule( '^patreon-connect/?$', 'index.php?lgpo_connect=1', 'top' );
 }
 
 add_filter( 'query_vars', 'lgpo_query_vars' );
 function lgpo_query_vars( $vars ) {
     $vars[] = 'lgpo_callback';
+    $vars[] = 'lgpo_connect';
     return $vars;
+}
+
+/**
+ * §3n — Authorize-entry handler.
+ *
+ * Contract:
+ *   GET /patreon-connect[?return=/some/path/]
+ *   → 302 to https://www.patreon.com/oauth2/authorize?...&state=<state>
+ *
+ * The callback at /patreon-callback/ will redirect back to <return>?onboarded=<state>
+ * on a terminal outcome, with state ∈ {
+ *   success           — new account created, password-setup email sent
+ *   already_onboarded — patreon_user_id already maps to a WP user
+ *   not_a_patron      — OAuth succeeded but no active Looth Group membership
+ *   email_collision   — email matches an existing WP user; manual review queued
+ *   fail              — anything else (token/identity fetch failure, WP insert error, etc.)
+ * }
+ *
+ * If the state was minted by the legacy [lg_patreon_onboard] shortcode (no
+ * return target), the callback keeps its existing wp_die behavior — no
+ * regression for that path.
+ *
+ * The `return` query param must be path-only (leading /, not //) to prevent
+ * open-redirect.
+ */
+add_action( 'template_redirect', 'lgpo_handle_connect' );
+function lgpo_handle_connect() {
+    if ( ! get_query_var( 'lgpo_connect' ) ) {
+        return;
+    }
+
+    $client_id    = get_option( 'lgpo_client_id' );
+    $redirect_uri = get_option( 'lgpo_redirect_uri' );
+
+    if ( empty( $client_id ) || empty( $redirect_uri ) ) {
+        wp_die(
+            'Patreon onboarding is not configured yet. Please check back soon.',
+            'Onboarding Unavailable',
+            array( 'response' => 503 )
+        );
+    }
+
+    // ?creator=1 — admin-only branch that does the one-shot OAuth dance to
+    // capture refresh_token + expires_at for the campaign-members sweep.
+    // Gated behind manage_options because the callback persists the resulting
+    // tokens to wp_options (a leaked / unauthenticated trigger would let an
+    // attacker race their own creator account into the active token slot).
+    $creator_mode = ( isset( $_GET['creator'] ) && $_GET['creator'] === '1' );
+    if ( $creator_mode && ! current_user_can( 'manage_options' ) ) {
+        wp_die( 'Creator-mode OAuth requires admin access.', 'Forbidden', array( 'response' => 403 ) );
+    }
+
+    // Validate the optional return target — path only, no scheme/host, no
+    // protocol-relative URLs (//evil.com). Not used in creator mode.
+    $return_target = '/manage-subscription/'; // default per §3n
+    if ( isset( $_GET['return'] ) ) {
+        $candidate = (string) wp_unslash( $_GET['return'] );
+        if ( preg_match( '#^/[^/]#', $candidate ) && strpos( $candidate, "\n" ) === false ) {
+            $return_target = $candidate;
+        }
+    }
+
+    $state = wp_generate_password( 32, false );
+
+    if ( $creator_mode ) {
+        // Creator scope unlocks the campaign-members API used by the sweep.
+        // We don't bind a return_target — the callback routes back to the
+        // admin Settings page directly with a status flag.
+        $scope = 'campaigns campaigns.members campaigns.members[email] identity';
+        set_transient( 'lgpo_state_' . $state, wp_json_encode( [
+            'v'            => 1,
+            'creator_mode' => true,
+            'minted_at'    => time(),
+            'source'       => 'creator-onboard',
+        ] ), 600 );
+    } else {
+        $scope = 'identity identity[email] identity.memberships';
+        set_transient( 'lgpo_state_' . $state, wp_json_encode( [
+            'v'             => 1,
+            'return_target' => $return_target,
+            'minted_at'     => time(),
+            'source'        => 'patreon-connect',
+        ] ), 600 );
+    }
+
+    $auth_url = add_query_arg( array(
+        'response_type' => 'code',
+        'client_id'     => $client_id,
+        'redirect_uri'  => $redirect_uri,
+        'scope'         => $scope,
+        'state'         => $state,
+    ), 'https://www.patreon.com/oauth2/authorize' );
+
+    wp_redirect( $auth_url, 302 );
+    exit;
+}
+
+/**
+ * Parse a state-transient value. /patreon-connect plants JSON; the legacy
+ * shortcode plants the string '1'. Returns the decoded payload array on
+ * the JSON path, null on the legacy path. Used by the callback to decide
+ * whether to redirect or wp_die on terminal states.
+ */
+function lgpo_parse_state_payload( $raw ): ?array {
+    if ( ! is_string( $raw ) || $raw === '1' ) return null;
+    $decoded = json_decode( $raw, true );
+    if ( ! is_array( $decoded ) || empty( $decoded['v'] ) ) return null;
+    return $decoded;
+}
+
+/**
+ * Terminal-state handler: redirect to <return_target>?onboarded=<status>
+ * when the OAuth state was minted by /patreon-connect, OR fall through to
+ * the legacy lgpo_success/lgpo_fail wp_die page when it was minted by the
+ * shortcode.
+ */
+function lgpo_terminal( string $status, ?array $payload, string $legacy_html ): void {
+    // Creator-OAuth payloads don't carry return_target (they're admin-only and
+    // route to Settings on success) — they're handled in lgpo_handle_callback
+    // before reaching here, so we fall back to the wp_die page for those if
+    // any terminal call reaches lgpo_terminal with a creator-mode payload.
+    if ( $payload && ! empty( $payload['return_target'] ) ) {
+        $url = add_query_arg( [ 'onboarded' => $status ], (string) $payload['return_target'] );
+        wp_redirect( $url, 302 );
+        exit;
+    }
+    if ( $status === 'success' || $status === 'already_onboarded' ) {
+        lgpo_success( $legacy_html );
+    } else {
+        lgpo_fail( $legacy_html );
+    }
+}
+
+/**
+ * Failure alert — used by the polling engine and onboarding callback for
+ * conditions the coordinator/admin must know about (expired creator token,
+ * API outage, repeated 401, config drift). Emails the contact address
+ * (lgpo_contact_email, falling back to admin_email), logs to error_log,
+ * and is best-effort — any mail failure is swallowed.
+ *
+ * §3n item 5 — "Poll failures alert the coordinator (devmsg/email), not just error_log."
+ */
+function lgpo_alert_failure( string $context, string $detail ): void {
+    error_log( "LGPO ALERT [{$context}]: {$detail}" );
+    try {
+        $to = (string) get_option( 'lgpo_contact_email', '' );
+        if ( $to === '' ) { $to = (string) get_option( 'admin_email', '' ); }
+        if ( $to === '' ) return;
+        $site = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+        wp_mail(
+            $to,
+            "[{$site}] LGPO alert: {$context}",
+            "Context: {$context}\n\nDetail:\n{$detail}\n\nReview: "
+            . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"
+        );
+    } catch ( \Throwable $_ ) {
+        // best-effort
+    }
+}
+
+/**
+ * Persist a Patreon OAuth-token response (creator scope) to the lgpo_creator_*
+ * options. Takes the full body returned by Patreon's /api/oauth2/token
+ * endpoint (auth_code or refresh_token grants) and stores:
+ *   - lgpo_creator_access_token       — used for member-sweep API calls
+ *   - lgpo_creator_refresh_token      — used by lgpo_refresh_creator_token()
+ *   - lgpo_creator_token_expires_at   — unix ts; ~31 days from issue for Patreon
+ *   - lgpo_creator_token_obtained_at  — audit / staleness display
+ *
+ * Returns true if at least access_token + refresh_token are present in the
+ * payload (refresh isn't always re-issued by Patreon on rotation; we keep the
+ * old refresh_token if the new response omits it).
+ */
+function lgpo_persist_creator_tokens( array $token_body ): bool {
+    $access = isset( $token_body['access_token'] ) ? (string) $token_body['access_token'] : '';
+    if ( $access === '' ) return false;
+
+    update_option( 'lgpo_creator_access_token', $access );
+
+    if ( ! empty( $token_body['refresh_token'] ) ) {
+        update_option( 'lgpo_creator_refresh_token', (string) $token_body['refresh_token'] );
+    }
+
+    if ( ! empty( $token_body['expires_in'] ) ) {
+        update_option( 'lgpo_creator_token_expires_at', time() + (int) $token_body['expires_in'] );
+    }
+
+    update_option( 'lgpo_creator_token_obtained_at', time() );
+    return true;
+}
+
+/**
+ * Refresh the creator access token using the stored refresh_token. Posts
+ * `grant_type=refresh_token` to Patreon's OAuth endpoint, persists the new
+ * pair, and returns the fresh access token on success.
+ *
+ * @return array{ok:true, access_token:string} | array{ok:false, error:string}
+ */
+function lgpo_refresh_creator_token(): array {
+    $refresh = (string) get_option( 'lgpo_creator_refresh_token', '' );
+    $client_id     = (string) get_option( 'lgpo_client_id', '' );
+    $client_secret = (string) get_option( 'lgpo_client_secret', '' );
+
+    if ( $refresh === '' ) {
+        return [ 'ok' => false, 'error' => 'no refresh_token on file (run creator-OAuth dance via Settings)' ];
+    }
+    if ( $client_id === '' || $client_secret === '' ) {
+        return [ 'ok' => false, 'error' => 'client_id/client_secret missing' ];
+    }
+
+    $resp = wp_remote_post( 'https://www.patreon.com/api/oauth2/token', [
+        'timeout' => 15,
+        'headers' => [
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'User-Agent'   => 'LoothGroup-TokenRefresh/1.0',
+        ],
+        'body' => [
+            'grant_type'    => 'refresh_token',
+            'refresh_token' => $refresh,
+            'client_id'     => $client_id,
+            'client_secret' => $client_secret,
+        ],
+    ] );
+
+    if ( is_wp_error( $resp ) ) {
+        return [ 'ok' => false, 'error' => 'wp_remote_post: ' . $resp->get_error_message() ];
+    }
+    $code = (int) wp_remote_retrieve_response_code( $resp );
+    $body = (string) wp_remote_retrieve_body( $resp );
+    $json = json_decode( $body, true );
+
+    if ( $code !== 200 || ! is_array( $json ) || empty( $json['access_token'] ) ) {
+        return [
+            'ok'    => false,
+            'error' => "Patreon token endpoint returned HTTP {$code} — " . substr( $body, 0, 300 ),
+        ];
+    }
+
+    if ( ! lgpo_persist_creator_tokens( $json ) ) {
+        return [ 'ok' => false, 'error' => 'persist failed (token_body shape unexpected)' ];
+    }
+
+    return [ 'ok' => true, 'access_token' => (string) $json['access_token'] ];
 }
 
 add_action( 'template_redirect', 'lgpo_handle_callback' );
@@ -478,10 +780,15 @@ function lgpo_handle_callback() {
     }
 
     $state = isset( $_GET['state'] ) ? sanitize_text_field( $_GET['state'] ) : '';
-    if ( empty( $state ) || ! get_transient( 'lgpo_state_' . $state ) ) {
+    $state_raw = $state !== '' ? get_transient( 'lgpo_state_' . $state ) : false;
+    if ( empty( $state ) || $state_raw === false ) {
         wp_die( 'Invalid or expired request. Please go back and try again.', 'Onboarding Error', array( 'response' => 403 ) );
     }
     delete_transient( 'lgpo_state_' . $state );
+
+    // Decode whether this OAuth flow originated from /patreon-connect (JSON
+    // payload with return target) vs. the legacy shortcode (raw '1' string).
+    $state_payload = lgpo_parse_state_payload( $state_raw );
 
     $code = isset( $_GET['code'] ) ? sanitize_text_field( $_GET['code'] ) : '';
     if ( empty( $code ) ) {
@@ -507,15 +814,38 @@ function lgpo_handle_callback() {
     ) );
 
     if ( is_wp_error( $token_response ) ) {
-        lgpo_fail( 'Could not connect to Patreon. Please try again later.' );
+        lgpo_terminal( 'fail', $state_payload, 'Could not connect to Patreon. Please try again later.' );
     }
 
     $token_body = json_decode( wp_remote_retrieve_body( $token_response ), true );
     if ( empty( $token_body['access_token'] ) ) {
-        lgpo_fail( 'Failed to get access token from Patreon. Please try again.' );
+        lgpo_terminal( 'fail', $state_payload, 'Failed to get access token from Patreon. Please try again.' );
     }
 
     $access_token = $token_body['access_token'];
+
+    // Creator-mode branch: persist the token pair to wp_options and bounce
+    // back to the admin Settings page. Skips the identity / membership fetch
+    // because creator OAuth is solely about capturing the API credentials.
+    if ( is_array( $state_payload ) && ! empty( $state_payload['creator_mode'] ) ) {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            // The /patreon-connect entry was admin-gated, but the callback
+            // can be hit directly (a third party with the state could replay
+            // it) — re-check on this end too.
+            wp_die( 'Creator-mode callback requires admin access.', 'Forbidden', array( 'response' => 403 ) );
+        }
+        if ( ! lgpo_persist_creator_tokens( (array) $token_body ) ) {
+            lgpo_alert_failure(
+                'creator-oauth.persist',
+                "Creator OAuth callback succeeded but the token payload was unexpected:\n"
+                . substr( wp_json_encode( $token_body ), 0, 500 )
+            );
+            wp_redirect( add_query_arg( [ 'lgpo_creator' => 'fail' ], admin_url( 'options-general.php?page=lg-patreon-onboard' ) ), 302 );
+            exit;
+        }
+        wp_redirect( add_query_arg( [ 'lgpo_creator' => 'connected' ], admin_url( 'options-general.php?page=lg-patreon-onboard' ) ), 302 );
+        exit;
+    }
 
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
         . '?include=memberships,memberships.currently_entitled_tiers'
@@ -531,13 +861,13 @@ function lgpo_handle_callback() {
     ) );
 
     if ( is_wp_error( $identity_response ) ) {
-        lgpo_fail( 'Could not fetch your Patreon profile. Please try again later.' );
+        lgpo_terminal( 'fail', $state_payload, 'Could not fetch your Patreon profile. Please try again later.' );
     }
 
     $identity_body = json_decode( wp_remote_retrieve_body( $identity_response ), true );
 
     if ( empty( $identity_body['data']['id'] ) ) {
-        lgpo_fail( 'Could not read your Patreon profile data. Please try again.' );
+        lgpo_terminal( 'fail', $state_payload, 'Could not read your Patreon profile data. Please try again.' );
     }
 
     $patreon_user_id = $identity_body['data']['id'];
@@ -578,7 +908,7 @@ function lgpo_handle_callback() {
 
     if ( ! $membership ) {
         $patreon_link = get_option( 'lgpo_patreon_link', 'https://www.patreon.com/cw/theloothgroup/membership' );
-        lgpo_fail(
+        lgpo_terminal( 'not_a_patron', $state_payload,
             "We couldn't find an active Looth Group membership on your Patreon account. "
             . '<a href="' . esc_url( $patreon_link ) . '">Join here</a> and then come back to activate your account.'
         );
@@ -598,7 +928,7 @@ function lgpo_handle_callback() {
     if ( $existing_by_patreon ) {
         lgpo_apply_role_via_arbiter( (int) $existing_by_patreon->ID, $wp_role );
         update_user_meta( $existing_by_patreon->ID, 'payment_source', 'patreon' );
-        lgpo_success(
+        lgpo_terminal( 'already_onboarded', $state_payload,
             'Your account is already connected! Your membership has been verified and your access level updated. '
             . '<a href="' . esc_url( wp_login_url() ) . '">Log in here</a>.'
         );
@@ -617,7 +947,7 @@ function lgpo_handle_callback() {
                 'wp_user_id' => $existing_by_email->ID, 'reason' => 'different_patreon_id',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
-            lgpo_fail(
+            lgpo_terminal( 'email_collision', $state_payload,
                 'There\'s already an account associated with your email address that is linked to a different Patreon account. '
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
             );
@@ -630,7 +960,7 @@ function lgpo_handle_callback() {
                 'wp_user_id' => $existing_by_email->ID, 'reason' => 'email_collision',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
-            lgpo_fail(
+            lgpo_terminal( 'email_collision', $state_payload,
                 'There\'s already an account associated with this email address. '
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
             );
@@ -650,7 +980,7 @@ function lgpo_handle_callback() {
     ) );
 
     if ( is_wp_error( $user_id ) ) {
-        lgpo_fail( 'Could not create your account: ' . $user_id->get_error_message() );
+        lgpo_terminal( 'fail', $state_payload, 'Could not create your account: ' . $user_id->get_error_message() );
     }
 
     update_user_meta( $user_id, 'lgpo_patreon_user_id', $patreon_user_id );
@@ -676,7 +1006,7 @@ function lgpo_handle_callback() {
 
     wp_mail( $patreon_email, $subject, $message );
 
-    lgpo_success(
+    lgpo_terminal( 'success', $state_payload,
         'Your account has been created! Check your email at <strong>' . esc_html( $patreon_email ) . '</strong> for a link to set your password. '
         . 'If you don\'t see it, check your spam folder.'
     );

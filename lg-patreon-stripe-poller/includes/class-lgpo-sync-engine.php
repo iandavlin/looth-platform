@@ -157,6 +157,14 @@ class LGPO_Sync_Engine {
         $config = self::validate_config();
         if ( isset( $config['error'] ) ) {
             error_log( 'LGPO Sync: Aborted — ' . $config['error'] );
+            if ( function_exists( 'lgpo_alert_failure' ) ) {
+                lgpo_alert_failure(
+                    'sync.validate_config',
+                    "Hourly Patreon sync aborted — " . $config['error']
+                    . "\n\nThis means polling is NOT happening; member churn / upgrades will NOT reflect."
+                    . "\nLikely cause: missing or expired creator token (lgpo_creator_access_token), or wiped campaign_id / tier_map."
+                );
+            }
             delete_transient( self::LOCK_KEY );
             return;
         }
@@ -164,6 +172,17 @@ class LGPO_Sync_Engine {
         $members = self::fetch_all_members( $config['token'], $config['campaign_id'] );
         if ( $members === null ) {
             error_log( 'LGPO Sync: Aborted — API fetch failed.' );
+            if ( function_exists( 'lgpo_alert_failure' ) ) {
+                lgpo_alert_failure(
+                    'sync.fetch_all_members',
+                    "Hourly Patreon sync aborted — campaign-members API fetch failed."
+                    . "\n\nThis means polling is NOT happening; member churn / upgrades will NOT reflect."
+                    . "\nCheck the debug log for the specific HTTP error. Common causes:"
+                    . "\n  - Creator access token expired (HTTP 401)"
+                    . "\n  - Patreon API outage (HTTP 5xx / connect timeout)"
+                    . "\n  - Campaign ID wrong (HTTP 404)"
+                );
+            }
             delete_transient( self::LOCK_KEY );
             return;
         }
@@ -232,9 +251,10 @@ class LGPO_Sync_Engine {
      * @return array|null Array of normalized member records, or null on failure.
      */
     private static function fetch_all_members( string $token, string $campaign_id ): ?array {
-        $members = [];
-        $cursor  = null;
-        $page    = 0;
+        $members         = [];
+        $cursor          = null;
+        $page            = 0;
+        $refreshed_once  = false; // gate the 401-refresh retry to a single attempt
 
         do {
             $page++;
@@ -256,9 +276,59 @@ class LGPO_Sync_Engine {
             }
 
             $code = wp_remote_retrieve_response_code( $response );
+
+            // Retry-on-401 with refresh — only once per fetch_all_members call,
+            // and only if a refresh_token is available. On a 2nd 401 (or no
+            // refresh_token, or refresh failure), fall through to the alert
+            // path and return null.
+            if ( $code === 401 && ! $refreshed_once && function_exists( 'lgpo_refresh_creator_token' ) ) {
+                $refreshed_once = true;
+                $refresh_result = lgpo_refresh_creator_token();
+                if ( ! empty( $refresh_result['ok'] ) ) {
+                    error_log( 'LGPO Sync: 401 → refresh OK, retrying same page with new token.' );
+                    $token = (string) $refresh_result['access_token'];
+                    // re-request this same page with the rotated token
+                    $response = wp_remote_get( $url, [
+                        'timeout' => 30,
+                        'headers' => [
+                            'Authorization' => 'Bearer ' . $token,
+                            'User-Agent'    => 'LoothGroup-Sync/1.0',
+                        ],
+                    ] );
+                    if ( is_wp_error( $response ) ) {
+                        error_log( 'LGPO Sync: API retry after refresh failed — ' . $response->get_error_message() );
+                        return null;
+                    }
+                    $code = wp_remote_retrieve_response_code( $response );
+                } else {
+                    if ( function_exists( 'lgpo_alert_failure' ) ) {
+                        lgpo_alert_failure(
+                            'sync.refresh_failed',
+                            "401 on campaign-members API, refresh attempt also FAILED.\n"
+                            . "Refresh error: " . (string) ( $refresh_result['error'] ?? 'unknown' )
+                            . "\n\nPolling will stay broken until an admin reconnects the creator account "
+                            . "via Settings → LG Patreon Onboard → Connect Creator Account."
+                        );
+                    }
+                    return null;
+                }
+            }
+
             if ( $code !== 200 ) {
                 $body = wp_remote_retrieve_body( $response );
                 error_log( "LGPO Sync: API returned HTTP {$code} — " . substr( $body, 0, 500 ) );
+                if ( $code === 401 && function_exists( 'lgpo_alert_failure' ) ) {
+                    // 401 *after* a refresh attempt (or with no refresh_token
+                    // on file) — the most likely silent-death cause. The
+                    // generic null-return alert in run() catches the rest;
+                    // this gives the email a clear subject line.
+                    lgpo_alert_failure(
+                        'sync.creator_token_401',
+                        "Patreon campaign-members API returned HTTP 401 after a refresh attempt."
+                        . "\n\nThe creator account needs to be re-connected from Settings → LG Patreon Onboard → Connect Creator Account."
+                        . "\n\nResponse body (first 500 chars):\n" . substr( $body, 0, 500 )
+                    );
+                }
                 return null;
             }
 
