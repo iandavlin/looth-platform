@@ -56,7 +56,6 @@ function lg_shared_render_site_footer(array $ctx = []): void
         <h3 class="lg-chrome-foot__h">About</h3>
         <ul>
           <li><a href="/about/">About</a></li>
-          <li><a href="/lgjoin/">Membership</a></li>
           <li><a href="/contact/">Contact</a></li>
         </ul>
       </div>
@@ -68,7 +67,6 @@ function lg_shared_render_site_footer(array $ctx = []): void
     <nav aria-label="Legal">
       <a href="https://loothtool.com/privacy/">Privacy</a>
       <a href="https://loothtool.com/terms/">Terms</a>
-      <a href="/request-refund/">Billing &amp; Refund</a>
     </nav>
   </div>
 </footer>
