@@ -86,7 +86,7 @@ function lg_shared_render_site_header(array $ctx): void
     $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
-    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'forum'|'events'|'members'
+    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'hub'|'events'|'members'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
 
@@ -192,7 +192,7 @@ function lg_shared_render_site_header(array $ctx): void
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
         <?php if ($active_nav !== 'archive'):  ?><li><a href="/archive/">Archive</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'forum'):   ?><li><a href="/forum/">Forum</a></li><?php endif; ?>
+        <?php if ($active_nav !== 'hub'):     ?><li><a href="/hub/">The Hub</a></li><?php endif; ?>
         <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
         <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
         <li><a href="https://loothtool.com/">Loothtool</a></li>

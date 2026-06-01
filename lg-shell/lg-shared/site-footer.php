@@ -48,7 +48,7 @@ function lg_shared_render_site_footer(array $ctx = []): void
       <div class="lg-chrome-foot__col">
         <h3 class="lg-chrome-foot__h">Community</h3>
         <ul>
-          <li><a href="/forums-poc/">Forums</a></li>
+          <li><a href="/hub/">The Hub</a></li>
           <li><a href="/archive-poc/">Activity</a></li>
           <li><a href="/directory/members/">Members</a></li>
         </ul>
