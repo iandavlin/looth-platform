@@ -283,24 +283,64 @@ function plotPins(pins) {
 // Initialize map + first list load.
 document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, false); });
 
-// Google Places for the location filter (autocomplete only — separate from the map tiles).
-window.lootInitDirPlaces = function () {
+// Location autocomplete via OSM Nominatim (server-proxied /me/location/search) — replaces the
+// broken Google Places widget. Fills #dir-lat/#dir-lng on pick, then applyFilters(). No API key.
+(function () {
   const input = document.getElementById('dir-loc');
-  if (!input || !window.google?.maps?.places) return;
-  const ac = new google.maps.places.Autocomplete(input, {fields:['geometry','formatted_address'], types:['geocode']});
-  ac.addListener('place_changed', () => {
-    const p = ac.getPlace();
-    if (p?.geometry?.location) {
-      document.getElementById('dir-lat').value = p.geometry.location.lat();
-      document.getElementById('dir-lng').value = p.geometry.location.lng();
-      applyFilters();
-    }
+  if (!input) return;
+  input.parentNode.style.position = 'relative';
+  const box = document.createElement('div');
+  box.style.cssText = 'position:absolute;z-index:1200;top:100%;left:0;right:0;background:#fff;border:1px solid #e2e0d6;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);max-height:260px;overflow:auto;margin-top:4px;display:none';
+  input.parentNode.appendChild(box);
+  let timer = null, lastQ = null;
+  const close = () => { box.style.display = 'none'; };
+  function pick(lat, lng, label) {
+    document.getElementById('dir-lat').value = lat;
+    document.getElementById('dir-lng').value = lng;
+    if (label) input.value = label;
+    close(); applyFilters();
+  }
+  function summarize(row) {
+    const a = row.address || {};
+    const city = a.city || a.town || a.village || a.hamlet || a.suburb;
+    const parts = [city, a.state, a.country].filter(Boolean);
+    return parts.length ? parts.join(', ') : (row.display_name || '').slice(0, 80);
+  }
+  function run() {
+    const q = input.value.trim();
+    if (q === lastQ) return; lastQ = q;
+    if (q.length < 3) { close(); return; }
+    // Directory is viewable by anon, so geocode client-side via Nominatim (CORS, no auth/key).
+    fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6&q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+      .then(r => r.ok ? r.json() : [])
+      .then(rows => {
+        if (input.value.trim() !== q) return;                 // stale
+        const items = (Array.isArray(rows) ? rows : []).map(row => ({ short: summarize(row), lat: row.lat, lng: row.lon, display_name: row.display_name }));
+        box.innerHTML = '';
+        if (!items.length) { close(); return; }
+        items.slice(0, 6).forEach(it => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;padding:9px 12px;font:600 13px/1.3 system-ui,sans-serif;color:#1f1d1a';
+          b.textContent = it.short || it.display_name || '';
+          b.addEventListener('mouseenter', () => { b.style.background = '#eef2ea'; });
+          b.addEventListener('mouseleave', () => { b.style.background = 'none'; });
+          b.addEventListener('click', () => pick(it.lat, it.lng, it.short || it.display_name));
+          box.appendChild(b);
+        });
+        box.style.display = 'block';
+      })
+      .catch(close);
+  }
+  input.addEventListener('input', () => {
+    document.getElementById('dir-lat').value = '';
+    document.getElementById('dir-lng').value = '';            // typing invalidates the previous pin
+    clearTimeout(timer); timer = setTimeout(run, 500);        // debounce (Nominatim ≤1 req/sec policy)
   });
-};
+  input.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  document.addEventListener('click', e => { if (!box.contains(e.target) && e.target !== input) close(); });
+})();
 </script>
-<?php if ($placesKey): ?>
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=<?= htmlspecialchars($placesKey, ENT_QUOTES) ?>&libraries=places&callback=lootInitDirPlaces"></script>
-<?php endif; ?>
 <?php lg_shared_render_site_footer(); ?>
 </body>
 </html>
