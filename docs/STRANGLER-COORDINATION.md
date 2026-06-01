@@ -1058,8 +1058,17 @@ in the strangled stack while the account-creation engine stays in WP.
 client_id/secret/campaign_id/tier_map into live config; confirm the live tier_map (Patreon tier
 IDs → looth1–4) is current. Own this section + dev-proof sign-off.
 
-*profile-app/identity (verify only):* the Arbiter-written tier flows into `looth_id`→`whoami` so
-the tier pill + gating reflect the Patreon tier post-onboard (mostly automatic via role→tier).
+*profile (light lane — onboarding touchpoints, confirmed involved):*
+- **Provisioning:** a profile is born when the WP user is. Patreon onboard creates the WP user →
+  the existing `/profile-api/v0/hooks/user-created` path provisions the profile row + looth_id.
+  VERIFY it fires for Patreon-created users (not only the old BB path).
+- **New-member defaults** live here: `location_visibility`/`pin_precision` → members/city is the
+  location-default task — i.e. onboarding defaults (buck's first task).
+- **Post-onboard landing:** after account + password setup, route the new member to
+  `/profile/edit` to complete their profile (final redirect target decided with the poller's
+  return contract).
+- **Tier reflection:** Arbiter tier → role → looth_id → whoami → tier pill + gating on
+  profile/directory (mostly automatic via role→tier).
 
 **Sequence:** poller dev-proves new-member-create + churn-demote loops (GATE) → `/join/` page →
 shell nav → live OAuth client registered → launch.

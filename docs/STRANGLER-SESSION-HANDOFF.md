@@ -138,9 +138,7 @@ See `docs/standalone-launch-inventory.md` for the full list. Key remaining:
 ### Lane roster (current)
 | Lane | Chat/Status |
 |---|---|
-| profile-app: profile + member map | **buck** (own clone) — assigned 2026-06-01; supersedes the map+editor chats below |
-| profile-app map | winding down → buck |
-| profile-app editor | winding down → buck |
+| profile-app: profile + member map | **buck** (own clone) — assigned 2026-06-01. Prior **map + editor chats RETIRED 2026-06-01** (work committed, tree clean); buck owns these files now. First task: location-default. Editor's View-as/header-card CSS gap is his once he's clear of it. |
 | lg-shell | `1d248347` — unified modal + My Profile + nav-loothtool queued |
 | archive-poc/standalone | active — launch batch in flight |
 | poller/membership | cutover-ready, idle |
