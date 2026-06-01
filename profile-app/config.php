@@ -11,6 +11,31 @@ declare(strict_types=1);
 if (defined('LG_PROFILE_APP_ENV_LOADED')) return;
 define('LG_PROFILE_APP_ENV_LOADED', true);
 
+/**
+ * Mint-bounce for WEB surfaces. A viewer with a valid WP session cookie but no
+ * looth_id is bounced ONCE through the WP /issue endpoint to mint a looth_id,
+ * then 302'd back. Genuine anonymous viewers (no WP cookie) and stale/expired
+ * sessions fall through via a one-shot guard cookie and render anonymously.
+ *
+ * Generalizes web/edit.php's inline hop so every strangled surface mints
+ * identity for logged-in WP users even when no WP-rendered page (which fires the
+ * init-mint hook) was visited. Call at the TOP of a web entrypoint, before any
+ * output. NEVER call from an API endpoint — those must return JSON 401.
+ */
+function looth_issue_bounce_if_needed(): void {
+    if (PHP_SAPI === 'cli' || headers_sent()) return;
+    if (!empty($_COOKIE['looth_id'])) return;                  // already have identity
+    $hasWp = false;
+    foreach ($_COOKIE as $n => $_v) { if (strncmp($n, 'wordpress_logged_in_', 20) === 0) { $hasWp = true; break; } }
+    if (!$hasWp) return;                                       // genuine anonymous viewer — no bounce
+    if (!empty($_COOKIE['looth_issue_tried'])) return;         // one-shot guard: stale session / mint failure can't loop
+    setcookie('looth_issue_tried', '1', ['expires' => time() + 120, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
+    $ret = $_SERVER['REQUEST_URI'] ?? '/';
+    if ($ret === '' || $ret[0] !== '/') $ret = '/';
+    header('Location: /wp-json/looth/auth/issue?return=' . rawurlencode($ret));
+    exit;
+}
+
 $env = getenv('LG_PROFILE_APP_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();

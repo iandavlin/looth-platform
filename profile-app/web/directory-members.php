@@ -7,6 +7,8 @@ require_once __DIR__ . '/_render.php';
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Whoami;
 
+looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who land here without one
+
 $qs = $_GET;
 $insts  = (array)($qs['inst']  ?? []);
 $skills = (array)($qs['skill'] ?? []);

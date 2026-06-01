@@ -37,6 +37,7 @@ if (!$row && ctype_digit($slug)) {
 if (!$row) { http_response_code(404); echo 'not found'; exit; }
 
 $subjectId = (int)$row['id'];
+looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who land here without one
 $viewer    = Auth::currentUser();
 $isOwner   = $viewer && strtolower((string)$viewer['uuid']) === strtolower((string)$row['uuid']);
 
