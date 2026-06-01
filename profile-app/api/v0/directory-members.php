@@ -1,10 +1,22 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
+require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Profile;
+use Looth\ProfileApp\Block;
+
+/** Great-circle miles — distance is computed from the DISPLAYED (precision-coarsened) point so it never leaks precision. */
+function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
+{
+    $r = 3958.8;
+    $dLa = deg2rad($la2 - $la1);
+    $dLo = deg2rad($lo2 - $lo1);
+    $a = sin($dLa / 2) ** 2 + cos(deg2rad($la1)) * cos(deg2rad($la2)) * sin($dLo / 2) ** 2;
+    return $r * 2 * asin(min(1.0, sqrt($a)));
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 
@@ -66,16 +78,19 @@ if ($lat !== null && $lng !== null) {
     // lat/lng never enter the query); that's correct — they're invisible
     // on the map but still surface in the un-filtered list.
     $selectDistance = ', (point(u.lng, u.lat) <@> point(:lng, :lat)) AS distance_mi';
+    // Privacy: a user only appears on the map when their precision for THIS audience isn't 'private'
+    // (members → members_precision default city; public → public_precision default private).
     $wheres[] = '(u.lat IS NOT NULL AND u.lng IS NOT NULL AND (point(u.lng, u.lat) <@> point(:lng, :lat)) <= :radius
-                  AND (u.location_visibility = \'public\' OR (u.location_visibility = \'members\' AND :authed = 1)))';
+                  AND (CASE WHEN :authed = 1 THEN COALESCE(u.location_members_precision, \'city\')
+                                             ELSE COALESCE(u.location_public_precision, \'private\') END) <> \'private\')';
     $orderBy  = 'distance_mi ASC';
     $params[':lat'] = $lat; $params[':lng'] = $lng; $params[':radius'] = $radius;
     $params[':authed'] = $viewerUserId !== 0 ? 1 : 0;
 }
 
 $sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url,
-               u.location_text, u.location_city, u.location_region, u.location_country, u.location_postcode,
-               u.lat, u.lng, u.location_visibility, u.slug
+               u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
+               u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug
                $selectDistance
         FROM users u
         WHERE " . implode(' AND ', $wheres) . "
@@ -111,21 +126,37 @@ if ($rows) {
         $highlightsByUser[(int)$h['user_id']][] = ['kind' => $h['kind'], 'slug' => $h['slug'], 'name' => $h['name']];
     }
 
+    $audience = $viewerUserId !== 0 ? 'members' : 'public';
     foreach ($rows as $r) {
         $subjectId = (int)$r['id'];
-        $vis       = $r['location_visibility'] ?: 'members';
-        $canSeeLoc = Profile::canSeeLocation($viewerUserId, $subjectId, $vis);
-        $loc = Profile::renderLocation([
-            'text'        => $r['location_text'],
-            'place_id'    => null,
-            'lat'         => $r['lat'] !== null ? (float)$r['lat'] : null,
-            'lng'         => $r['lng'] !== null ? (float)$r['lng'] : null,
-            'country'     => $r['location_country'],
-            'region'      => $r['location_region'],
-            'city'        => $r['location_city'],
-            'postcode'    => $r['location_postcode'],
-            'visibility'  => $vis,
-        ], $canSeeLoc);
+        // Per-audience precision (owner viewing self → full street); coarsens the pin or hides it.
+        if ($subjectId === $viewerUserId) {
+            $precision = 'street';
+        } else {
+            $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
+            $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
+        }
+        $place = [
+            'address'  => $r['location_address'],
+            'postcode' => $r['location_postcode'],
+            'city'     => $r['location_city'],
+            'region'   => $r['location_region'],
+            'country'  => $r['location_country'],
+            'lat'      => $r['lat'] !== null ? (float)$r['lat'] : null,
+            'lng'      => $r['lng'] !== null ? (float)$r['lng'] : null,
+            'text'     => $r['location_text'],
+        ];
+        $disp = Block::locationDisplay($place, $precision);          // null when private for this audience
+        $loc  = $disp
+            ? ['text' => $disp['text'], 'lat' => $disp['lat'], 'lng' => $disp['lng'], 'zoom' => $disp['zoom'], 'kind' => $disp['kind']]
+            : ['hidden' => true];
+
+        // Distance from the DISPLAYED (coarsened) point, so it matches the pin's precision.
+        $dist = null;
+        if ($disp && $lat !== null && $lng !== null && $disp['lat'] !== null && $disp['lng'] !== null) {
+            $dist = round(dir_haversine_mi((float)$lat, (float)$lng, (float)$disp['lat'], (float)$disp['lng']), 1);
+        }
+
         $results[] = [
             'uuid'         => $r['uuid'],
             'slug'         => $r['slug'] ?: (string)$subjectId,
@@ -133,7 +164,7 @@ if ($rows) {
             'avatar_url'   => $r['avatar_url'],
             'location'     => $loc,
             'highlights'   => $highlightsByUser[$subjectId] ?? [],
-            'distance_mi'  => isset($r['distance_mi']) && $canSeeLoc ? round((float)$r['distance_mi'], 1) : null,
+            'distance_mi'  => $dist,
         ];
     }
 }
