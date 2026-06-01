@@ -66,6 +66,11 @@
             $extra = $meta['yt_id'] ? ' acard--youtube' : '';
             if ($compact) $extra .= ' acard--compact';
             $img_url = $meta['has_image'] ? $it['image_url'] : '';
+            // Leak guard: the YouTube thumbnail URL embeds the video id. For a
+            // gated card (viewer below the content's tier) don't emit it — fall
+            // back to the generic image so a non-entitled viewer never receives
+            // the id anywhere in the HTML.
+            if ($is_gated && str_contains((string)$img_url, 'ytimg.com')) $img_url = LG_FALLBACK_IMG;
             ob_start();
 ?>
         <a class="acard acard--<?= h($meta['variant']) ?> acard--kind-<?= h($target['kind'] ?? 'misc') ?><?= $extra ?><?= $gated_class ?>" href="<?= h($href) ?>">
@@ -73,7 +78,7 @@
           <?php if ($meta['has_image']): ?>
             <div class="acard__img-wrap">
               <img class="acard__img" src="<?= h($img_url) ?>" alt="" loading="lazy" width="560" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
-              <?php if ($meta['yt_id']): ?><button type="button" class="acard__play" data-yt-play="<?= h($meta['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button><?php endif; ?>
+              <?php if ($meta['yt_id'] && !$is_gated): ?><button type="button" class="acard__play" data-yt-play="<?= h($meta['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button><?php endif; ?>
               <?php if ($is_gated): ?>
                 <span class="acard__gate" aria-label="<?= h(ucfirst($tier)) ?> member content" title="<?= h(ucfirst($tier)) ?> members only">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

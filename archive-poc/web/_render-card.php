@@ -20,8 +20,17 @@ function archive_poc_render_rcard(array $it, string $viewer_tier): string {
     $gated_class = $is_gated ? ' rcard--gated rcard--gated-' . $tier : '';
     ob_start(); ?>
 <a class="rcard rcard--<?= h($kind) ?><?= $gated_class ?>" href="<?= h($it['url'] ?: '#') ?>">
+  <?php
+    // Prefer the real YouTube thumbnail for video cards. Gated cards keep the
+    // generic/featured image so the video id (embedded in the ytimg URL) never
+    // reaches a non-entitled viewer.
+    $thumb_src = thumb_url($it);
+    if (!empty($it['yt_id']) && !$is_gated) {
+        $thumb_src = 'https://i.ytimg.com/vi/' . h($it['yt_id']) . '/hqdefault.jpg';
+    }
+  ?>
   <div class="rcard__img-wrap">
-    <img class="rcard__img" src="<?= h(thumb_url($it)) ?>" alt="" loading="lazy" width="480" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+    <img class="rcard__img" src="<?= h($thumb_src) ?>" alt="" loading="lazy" width="480" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
     <?php if (!empty($it['yt_id']) && !$is_gated): ?>
       <button type="button" class="rcard__play" data-yt-play="<?= h($it['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
     <?php endif; ?>

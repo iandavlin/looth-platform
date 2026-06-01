@@ -497,3 +497,173 @@ magnifier opens it on every strangler surface, not just our page.
   both audiences) — the regression was purely these client fetches under WP-FPM
   contention. Featured-video YouTube iframe (~1.3s) already has loading="lazy";
   left as-is (third-party, in-viewport).
+
+## Activity feed showing only 1 item — over-fetch starvation fix (2026-05-29)
+Symptom: front-page activity strip loaded with just 1 card (sometimes a handful).
+Root cause: NOT the SWR cache (it faithfully stored whatever WP returned) and NOT
+gating — the WP `lg_activity_route` over-fetched only `limit*3+5 = 50` recent
+activity rows, then dropped any whose target post was deleted. Dev has heavy
+test-post churn (HARNESS/DELTEST create+delete), so ~49 of the 50 most-recent
+activities pointed at dead posts → 1 survivor. Proven: limit=15→1 item,
+limit=40 (deeper over-fetch)→40 items.
+Fix (`mu-plugins/archive-poc-sync.php`, `lg_activity_route`): over-fetch floor
+raised to `max(limit*3+5, 120)`, capped at 250. Now returns a full 15.
+Hydration is heavier per WP fetch but it's cached (30s) and off the critical
+path (SWR background refresh), so document TTFB stays ~0.16s warm.
+NB on live: far less dead-post churn, so the strip wouldn't have starved there —
+but the deeper floor is harmless and robust. The activity endpoint is archive-poc's
+own surface (feeds our strip), so this is in-lane despite living in the WP mu-plugin.
+
+## Archive page: "People" type tab + no-scroll filter toggles (2026-05-29)
+- **Filter toggles no longer scroll the page.** `applyAndFetch()` default flipped
+  to `scroll:false` — typing in the search bar and toggling tabs/tags/tiers no
+  longer yanks the page to the top. Only pagination scrolls (its own `goToPage`
+  scrollIntoView). Opt-in `scroll:true` still available if ever needed.
+- **"People" added to the TYPE list** (`/archive/` rail). It's a pseudo-kind
+  (`state.kind==='people'`) — never sent to the API as a kind; instead the view
+  renders matching authors as cards (avatar + name + post count) from the search
+  endpoint's author facet. Clicking a person → leaves People view and shows ALL
+  their content (drops the name query, matching the search modal's People links).
+  - Backend: `search.php` author facet now LEFT JOINs `person` for `avatar_url`
+    + `slug` so the People cards render rich (parity with the modal).
+  - Frontend: `renderTabs` appends the People tab (count = author-facet length);
+    `renderPeople()` renders `.person-card`s; `fetchSearch` branches on
+    `kind==='people'` (hides pagination, meta shows "N people"); URL carries
+    `?kind=people` for shareable/restorable state.
+
+## People tab: pagination + posts/discussions-only (2026-05-29)
+- **Paginated server-side.** `search.php` now takes `?people=1` → returns a
+  `people` array (LIMIT/OFFSET via the standard limit/offset params) plus
+  `people_total` (always computed, drives the People tab count accurately —
+  no longer capped at the 20-row author facet). Frontend: on the People tab,
+  `state.total = people_total`, renderPagination() runs (was hidden before),
+  goToPage paginates people. Verified: 399 contributors, 24/page, page-nav works.
+- **Only people with posts or discussions.** The people query filters
+  `ci.kind NOT IN ('benefit','event')` — sponsors (benefit) and event-only
+  authors are excluded; counts reflect post/discussion items only. (DB kinds:
+  discussion, video, loothprint, misc, article, benefit, event — so "posts or
+  discussions" = everything except benefit + event.)
+- Frontend bits: `state.peopleTotal`, fetchSearch sends `people=1` on the tab,
+  renderTabs People count uses `peopleTotal`.
+
+## Forum links → bb-mirror, comprehensively (2026-05-30)
+Last session only fixed the activity ENDPOINT's topic links. The discovery rows
++ search were still legacy because `content_item.url` in SQLite stored the old
+BB permalink. Fixed at the indexing layer so EVERY archive-poc surface emits
+bb-mirror `/forum/<forum-slug>/<topic-slug>/`:
+- `bin/indexer.php` (incremental _sync), `bin/backfill.php` (SQLite full),
+  `bin/backfill-pg.php` (pg cutover): discussion items now build the bb-mirror
+  URL from immediate-forum post_name + topic post_name (verified slug parity).
+- Re-ran `sudo -u www-data php bin/backfill.php` → 1167 discussions reindexed,
+  0 legacy URLs left in SQLite. Search + discovery rows now all /forum/.
+- `mu-plugins/archive-poc-sync.php` activity hydrate: also handles post_type
+  'forum' (pinned forum → /forum/<slug>/) in addition to 'topic'.
+- `web/_chrome-footer.php`: footer "Forums" link → /forum/.
+- Verified: front page has 0 legacy forum links; sample /forum/ URLs return 200.
+
+Not changed (not forum content): a `sponsor-page` CPT ("Strings Micro Factory")
+whose WP permalink is forum-shaped links to its own page — correct. And
+`config.json`'s "Suggestion box" CTA hardcodes a loothgroup.com (LIVE) forum
+URL — dash-managed copy, left alone.
+
+**Contract for bb-mirror:** archive-poc deep-links now hard-depend on
+bb-mirror's forum.slug/topic.slug == bbPress post_name. If they ever re-slug,
+these links break → would need a shared URL builder/shim. Worth putting on record.
+
+## Activity strip: media facade for YouTube (2026-05-30)
+Activity cards whose topic BODY links a video showed the raw URL as text. Now
+the activity endpoint (`lg_activity_hydrate_post`) extracts a YouTube id from
+`post_content` and, if there's no featured image, uses the free YouTube
+thumbnail (i.ytimg.com/vi/<id>/hqdefault.jpg) + sets `yt_id`. The card renders
+as an image card with a play overlay (`acard--youtube`) — a FACADE: just an
+image, no iframe, no oEmbed, so warm TTFB stays ~0.09s. Both SSR
+(_render-main-row.php) and client load-more (classifyActivity) already honor
+`yt_id`. Bare media URLs (youtube/instagram/reddit) are now stripped from the
+excerpt so cards don't show raw links.
+- Instagram: detected + URL stripped, but NO thumbnail (IG oEmbed needs an app
+  token — deferred; would be the slow path).
+- Scope = activity strip only. Discovery rows / search (SQLite thumb_url) could
+  get the same YT-thumbnail treatment in the indexer if wanted — not done yet.
+- Optional follow-up: click-to-play inline (swap thumbnail→iframe on play-button
+  click) instead of navigating to the topic. Not built (keeps it a pure facade).
+
+## Activity strip: inline click-to-play YouTube (2026-05-30)
+Play button on YT activity cards is now a real <button data-yt-play="<id>">.
+Clicking it swaps the thumbnail for an autoplaying <iframe.acard__video> inline
+(height captured from the wrap so footprint is unchanged) and cancels the card's
+<a> navigation. Still a facade — iframe only created on click, so load stays
+fast. Both SSR (_render-main-row.php) and client load-more (renderActivityCard)
+emit the button; handler is a delegated rail listener in archive.js. CSS:
+.acard__play is now clickable (pointer-events restored); .acard__video added.
+
+## Video rails: YouTube facade + inline play (2026-05-30)
+Extended the activity-strip video facade to the discovery RAIL cards (rcards).
+- `_rowlib.php` (archive_poc_run_row): for kind='video', extract a YouTube id
+  from the already-selected `body_text` (cheap regex, videos only) → `$it['yt_id']`.
+  No schema change, no re-backfill needed (body_text was already in the query).
+- `_render-card.php`: renders a `.rcard__play[data-yt-play]` button on video
+  cards when a yt_id is present AND the card isn't gated (gated videos still
+  just link to the page — no inline bypass).
+- `archive.js`: document-level delegated handler swaps the thumbnail for an
+  autoplaying iframe inline (`.rcard__video`), cancels the card <a> nav.
+- `archive.css`: `.rcard__play` / `.rcard__video` reuse the acard play styling.
+- rows-more AJAX reuses render_rcard + run_row, so lazy-loaded rail cards get it too.
+Runtime cost ~zero: facade only (thumbnail already loads; iframe on click). ~13%
+of videos have no extractable YT id (Vimeo/self-hosted) → those just link out, no button.
+
+## Activity strip: inline body images (2026-05-30)
+Activity hydrate now falls back to the first inline <img> in the post body when
+there's no featured image and no YouTube id — forum posts embed uploaded photos
+(fluentform/BB media), so those cards now render as image cards. Skips
+emoji/avatar/spacer/icon sprites; applies the R2-graveyard guard (drop dev-local
+images whose file is missing/empty). Fallback order: featured image → YouTube
+thumb → first body image → text card. Pure facade (browser lazy-loads the image),
+warm TTFB unchanged (~0.13s). Applies to all hydrated items, not just topics.
+
+## Activity strip: BuddyBoss media images (2026-05-30, fix)
+The prior "inline body image" change didn't help forum posts because forum
+topics store photos as BuddyBoss MEDIA attachments (bp_media_ids meta), not
+inline <img> — the post_content is typically empty. Added
+`lg_activity_first_bp_media_thumb()` to the mu-plugin (mirrors the indexer's
+first_bp_media_thumb: bp_media_ids → wp_bp_media.attachment_id →
+wp_get_attachment_image_url). New image fallback order in lg_activity_hydrate_post:
+featured image → YouTube thumb → BB media → inline body <img> → text.
+Verified: fresh topic "fsdfs" (id 69625, empty body, bp_media_ids=3163) now
+renders its photo (bb_medias/.../images-2.jpeg, 200); activity strip went from
+~0 to 6 image cards. Still a facade (lazy <img>), speed unchanged.
+
+## Player gating + one-at-a-time (2026-05-30)
+- **Tier overlays confirmed intact** across changes (front page: 102 gated as
+  public, 0 as pro). rcard play buttons already gated on !is_gated.
+- **Closed an inline-play leak:** activity SSR card (_render-main-row.php) now
+  only renders the play button when `!$is_gated` (a lite member viewing pro
+  content can no longer click-play a gated video). Client load-more renderer
+  (renderActivityCard) was ungated entirely — now computes is_gated from
+  `window.__LG_VIEWER_TIER__` (newly emitted in index.php), adds the gated
+  overlay class, and suppresses the play button on gated items.
+- **One player at a time:** unified the acard + rcard play handlers into one
+  document-level listener. The iframe now OVERLAYS the thumbnail (position:
+  absolute, kept in DOM) and opening a new player tears down the previous
+  (module-scoped `active`). Verified: 1 iframe max.
+
+Note (honest gating model): hrefs and ungated YouTube ids are in the page HTML
+— readable via inspector. The overlays are a discovery-layer visual gate; real
+access control is server-side at the content (WP membership / bb-mirror). The
+fix prevents click-to-play of gated video, but truly private video must be
+unlisted/private on YouTube + server-gated, not relied on by hiding the id.
+
+## Leak-free gated video — thumbnail id guard (2026-05-30)
+Closed the last residual id exposure: a gated activity card whose image was the
+YouTube thumbnail (i.ytimg.com/vi/<id>/…) leaked the id via the img URL. Now both
+SSR (_render-main-row.php) and client (renderActivityCard) swap a gated card's
+ytimg thumbnail for the generic fallback. Net: a non-entitled viewer receives NO
+video id anywhere (no play button, no ytimg thumb) — rails were already clean.
+Caveat recorded earlier stands: if the underlying YouTube video is public/unlisted,
+true secrecy still requires private/unlisted-on-YouTube + server auth; this makes
+the on-site gate leak-free, not the video itself.
+
+## Rail video cards: real YouTube thumbnails (2026-05-30)
+_render-card.php now uses i.ytimg.com/vi/<yt_id>/hqdefault.jpg for ungated video
+rcards (yt_id from _rowlib body extraction); gated cards keep thumb_url/fallback
+so no id leaks. onerror still falls back to LG_FALLBACK_IMG. Activity strip
+already used YT thumbs; rails now match.

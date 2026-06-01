@@ -220,6 +220,13 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
     }
     foreach ($rows as &$r) {
         $r['tags'] = $tags_by_id[(int)$r['id']] ?? [];
+        // Video facade: pull a YouTube id from the body so rail cards can play
+        // inline (same pattern as the activity strip). Cheap regex, videos only.
+        $r['yt_id'] = null;
+        if (($r['kind'] ?? '') === 'video' && !empty($r['body_text'])
+            && preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i', (string)$r['body_text'], $ytm)) {
+            $r['yt_id'] = $ytm[1];
+        }
     }
     unset($r);
 

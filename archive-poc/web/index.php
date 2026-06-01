@@ -32,7 +32,7 @@ $db->exec('PRAGMA query_only = ON');
  * Activity strip: loopback fetch to the WP REST endpoint. Forwards
  * wordpress_logged_in_* cookie so the endpoint sees the visitor's audience.
  */
-const LG_ACTIVITY_CACHE_TTL = 30;   // seconds a cached strip is "fresh"
+const LG_ACTIVITY_CACHE_TTL = 300;  // 5 min — low-traffic dev: keep the strip cache warm between visits
 
 /** Build the cookie header forwarded to the WP activity endpoint. */
 function archive_poc_activity_cookie(bool $is_member): string {

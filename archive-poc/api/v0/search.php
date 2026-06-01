@@ -198,8 +198,12 @@ if ($id_set) {
         $tag_counts[] = ['v' => $tr['slug'], 'label' => $tr['label'], 'n' => (int)$tr['n']];
     }
 
-    $asql = "SELECT ci.author_id, ci.author_name, COUNT(*) AS n
+    // Join person for avatar + slug so the "People" tab can render rich author
+    // cards (matches the search modal's People section).
+    $asql = "SELECT ci.author_id, ci.author_name, COUNT(*) AS n,
+                    p.avatar_url, p.slug
              FROM content_item ci
+             LEFT JOIN person p ON p.id = ci.author_id
              WHERE ci.id IN ($ph) AND ci.author_id IS NOT NULL AND ci.author_id > 0
              GROUP BY ci.author_id ORDER BY n DESC LIMIT 20";
     $as = $db->prepare($asql);
@@ -209,7 +213,55 @@ if ($id_set) {
             'v' => (int)$ar['author_id'],
             'label' => $ar['author_name'] ?: '(unknown)',
             'n' => (int)$ar['n'],
+            'avatar_url' => $ar['avatar_url'] ?: null,
+            'slug' => $ar['slug'] ?: null,
         ];
+    }
+}
+
+// ---- People (authors with posts or discussions) ------------------------
+// A "person" in the People tab is an author who has at least one matching item
+// that's a post or a discussion — i.e. NOT a sponsor benefit or an event.
+// people_total is always computed (drives the People tab count); the paginated
+// list is only built when ?people=1 (i.e. the People tab is active).
+$want_people  = (param_int('people') === 1);
+$people       = [];
+$people_total = 0;
+if ($id_set) {
+    $ph_p = implode(',', array_fill(0, count($id_set), '?'));
+    $ct = $db->prepare("
+        SELECT COUNT(*) FROM (
+            SELECT ci.author_id
+            FROM content_item ci
+            WHERE ci.id IN ($ph_p) AND ci.author_id > 0
+              AND ci.kind NOT IN ('benefit','event')
+            GROUP BY ci.author_id
+        )
+    ");
+    $ct->execute($id_set);
+    $people_total = (int) $ct->fetchColumn();
+
+    if ($want_people) {
+        $psql = "SELECT ci.author_id, ci.author_name, COUNT(*) AS n,
+                        p.avatar_url, p.slug
+                 FROM content_item ci
+                 LEFT JOIN person p ON p.id = ci.author_id
+                 WHERE ci.id IN ($ph_p) AND ci.author_id > 0
+                   AND ci.kind NOT IN ('benefit','event')
+                 GROUP BY ci.author_id
+                 ORDER BY n DESC
+                 LIMIT $limit OFFSET $offset";
+        $ps = $db->prepare($psql);
+        $ps->execute($id_set);
+        foreach ($ps->fetchAll() as $pr) {
+            $people[] = [
+                'v'          => (int)$pr['author_id'],
+                'label'      => $pr['author_name'] ?: '(unknown)',
+                'n'          => (int)$pr['n'],
+                'avatar_url' => $pr['avatar_url'] ?: null,
+                'slug'       => $pr['slug'] ?: null,
+            ];
+        }
     }
 }
 
@@ -224,11 +276,13 @@ usort($facet_tier, fn($a, $b) => $b['n'] <=> $a['n']);
 $elapsed_ms = (int) round((microtime(true) - $t0) * 1000);
 
 send_json([
-    'total'   => $total,
-    'limit'   => $limit,
-    'offset'  => $offset,
-    'sort'    => $sort,
-    'items'   => $items,
+    'total'        => $total,
+    'limit'        => $limit,
+    'offset'       => $offset,
+    'sort'         => $sort,
+    'items'        => $items,
+    'people'       => $people,        // populated when ?people=1
+    'people_total' => $people_total,  // always — drives the People tab count
     'facets'  => [
         'kind'   => $facet_kind,
         'tier'   => $facet_tier,

@@ -68,6 +68,19 @@ try {
 }
 
 if (!$row) {
+    /* Blob-miss fallback: not every managed-CPT post has a standalone blob (e.g.
+       only a fraction of videos/sponsors are materialized). Rather than 404 the
+       uncovered majority, hand the ORIGINAL permalink back to WordPress via an
+       internal nginx location (X-Accel-Redirect). nginx re-runs the WP front
+       controller for this REQUEST_URI; covered posts render standalone-fast,
+       uncovered ones get the normal WP page. CLI keeps the hard 404 (proof/debug). */
+    if (!$IS_CLI) {
+        $origPath = strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?');
+        if ($origPath !== false && $origPath !== '') {
+            header('X-Accel-Redirect: /__wp_render' . $origPath);
+            exit;
+        }
+    }
     lg_standalone_fail($IS_CLI, 404, "not found: $postType/" . ($postId > 0 ? "#$postId" : $slug));
 }
 
@@ -113,12 +126,22 @@ if (!$IS_CLI && $previewAs === '') {
     }
 }
 
+/* ── Comments affordance ─────────────────────────────────────────────────
+   Count baked at materialize. The modal iframes the WP comments-only view
+   (?lg_comments=1). Shown when there are comments OR the thread is open; logged-out
+   users still see the count (teaser) and the read-only thread + a login prompt. */
+$commentsCount = (int) ($postContext['comments_count'] ?? 0);
+$commentsOpen  = !empty($postContext['comments_open']);
+$commentsUrl   = (!$IS_CLI && ($commentsCount > 0 || $commentsOpen))
+    ? rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_comments=1'
+    : '';
+
 /* ── Render ──────────────────────────────────────────────────────────── */
 $articleHtml = lg_standalone_render_article($layout, $postContext, $viewer, $authed);
 $css         = $GLOBALS['LG_STANDALONE_LAST_CSS'] ?? '';
 
 if (!$IS_CLI) header('Content-Type: text/html; charset=utf-8');
-echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl);
+echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl, $commentsUrl, $commentsCount);
 
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -250,7 +273,7 @@ function lg_standalone_css_href(string $css): string {
     return $url;
 }
 
-function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = ''): string {
+function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0): string {
     $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
 
     require_once '/srv/lg-shared/site-header.php';
@@ -282,6 +305,20 @@ body { margin: 0; background: #f0eee8; color: #323532;
   background: #323532; color: #f0eee8; border-radius: 999px; font-size: 14px;
   font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
 .lg-standalone-edit:hover { background: #1a1a1a; }
+.lg-standalone-comments { position: fixed; left: 18px; bottom: 18px; z-index: 50;
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; background: #fff;
+  color: #323532; border: 1px solid #d8d2c4; border-radius: 999px; font-size: 14px;
+  font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+.lg-standalone-comments:hover { background: #f4f1e8; }
+.lg-cmodal[hidden] { display: none; }
+.lg-cmodal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
+.lg-cmodal__backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+.lg-cmodal__panel { position: relative; width: min(720px,94vw); height: min(80vh,900px); background: #fff;
+  border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.35); display: flex; flex-direction: column; }
+.lg-cmodal__head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+  border-bottom: 1px solid #e3ddd0; font-weight: 700; }
+.lg-cmodal__close { background: none; border: 0; font-size: 22px; line-height: 1; cursor: pointer; color: #323532; }
+.lg-cmodal__frame { flex: 1; width: 100%; border: 0; }
 </style>
 </head>
 <body>
@@ -301,6 +338,31 @@ body { margin: 0; background: #f0eee8; color: #323532;
 ?>
 <?php if ($editUrl !== ''): ?>
 <a class="lg-standalone-edit" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">&#9998; Edit</a>
+<?php endif; ?>
+<?php if ($commentsUrl !== ''): ?>
+<button type="button" class="lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
+  &#128172; <span><?= $commentsCount > 0 ? number_format($commentsCount) . ' comment' . ($commentsCount === 1 ? '' : 's') : 'Comments' ?></span>
+</button>
+<div class="lg-cmodal" id="lg-cmodal" role="dialog" aria-modal="true" aria-label="Comments" hidden>
+  <div class="lg-cmodal__backdrop" data-lg-cmodal-close></div>
+  <div class="lg-cmodal__panel">
+    <div class="lg-cmodal__head"><span>Comments</span><button type="button" class="lg-cmodal__close" data-lg-cmodal-close aria-label="Close">&times;</button></div>
+    <iframe class="lg-cmodal__frame" id="lg-cmodal-frame" title="Comments" data-src="<?= htmlspecialchars($commentsUrl, ENT_QUOTES, 'UTF-8') ?>"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var btn=document.getElementById('lg-comments-btn'),
+      modal=document.getElementById('lg-cmodal'),
+      frame=document.getElementById('lg-cmodal-frame');
+  if(!btn||!modal||!frame)return;
+  function openModal(){ if(!frame.src) frame.src=frame.getAttribute('data-src'); modal.hidden=false; }
+  function closeModal(){ modal.hidden=true; }
+  btn.addEventListener('click',openModal);
+  modal.addEventListener('click',function(e){ if(e.target.hasAttribute('data-lg-cmodal-close'))closeModal(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!modal.hidden)closeModal(); });
+})();
+</script>
 <?php endif; ?>
 <main class="lg-standalone-main" id="lg-main">
 <?= $articleHtml ?>

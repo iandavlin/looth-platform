@@ -215,9 +215,11 @@ function lg_materialize_build_blob(int $post_id): ?array {
     }
 
     $post_context = [
-        'post_id'       => $post_id,
-        'sponsor'       => $sponsor,
-        'related'       => $related,
+        'post_id'         => $post_id,
+        'sponsor'         => $sponsor,
+        'related'         => $related,
+        'comments_count'  => (int) get_comments_number($post_id),
+        'comments_open'   => (get_post_field('comment_status', $post_id) === 'open'),
         'title'         => (string) get_the_title($post_id),
         'permalink'     => (string) get_permalink($post_id),
         'date'          => (string) get_the_date('', $post_id),
