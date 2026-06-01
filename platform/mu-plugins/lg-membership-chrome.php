@@ -55,6 +55,42 @@ add_filter( 'template_include', static function ( $template ) {
 }, 99 );
 
 /**
+ * Admin-only Stripe panel — minimal renderer for the standalone
+ * /manage-subscription/ surface's iframe (see membership-pages/web/manage-
+ * subscription.php). The standalone surface embeds an iframe pointing at
+ * /__lg-stripe-panel/ when the viewer has manage_options; this hook serves
+ * that URL with a stripped-down template that runs wp_head/wp_footer and
+ * outputs [lg_manage_subscription] — no BB chrome, no theme, no membership
+ * shell — so the shortcode's JS / REST / nonces all load and work in the
+ * iframe without porting any of that to standalone.
+ *
+ * Server-side gate enforces manage_options independently — the iframe URL
+ * is safe to leak (non-admins get 403). No corresponding WP page exists;
+ * WP's query layer 404s but template_include swaps the template anyway,
+ * and we set 200 in the template itself.
+ *
+ * Priority 98 (above the page-slug filter at 99) so this fires first; if
+ * it doesn't match, the page-slug filter still gets to run.
+ */
+add_filter( 'template_include', static function ( $template ) {
+    $req = strtok( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), '?' );
+    $req = rtrim( (string) $req, '/' );
+    if ( $req !== '/__lg-stripe-panel' ) {
+        return $template;
+    }
+
+    if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+        status_header( 403 );
+        nocache_headers();
+        echo '<!doctype html><meta charset="utf-8"><title>403</title><p>Admin only.</p>';
+        exit;
+    }
+
+    $custom = __DIR__ . '/lg-membership-chrome/stripe-panel-template.php';
+    return file_exists( $custom ) ? $custom : $template;
+}, 98 );
+
+/**
  * Build the viewer-context array for lg_shared_render_site_header().
  *
  * Derives identity + tier from in-process WP state (the briefing's
