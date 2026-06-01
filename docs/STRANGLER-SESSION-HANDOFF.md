@@ -70,20 +70,21 @@ Tree is **clean + pushed to origin/main**. All lane work committed. One dirty fi
 
 ### Next session — priority order
 
-**1. nginx catch-all for CPT renderer (NEXT — planned, not yet done)**
-Replace 9 near-identical CPT location blocks with one catch-all:
-```nginx
-location ~ ^/([a-z0-9][a-z0-9_-]+)/([a-z0-9][a-z0-9_-]*)/?$ {
-    fastcgi_pass unix:/run/php/php8.3-fpm-archive-poc.sock;
-    fastcgi_param LG_POST_TYPE $1;
-    fastcgi_param LG_SLUG      $2;
-    ...
-}
-```
-- render.php already has WP fallback on blob-miss (`X-Accel-Redirect`).
-- `^~` prefix blocks (hub, archive, events, profile, membership) are immune — they always beat `~`.
-- **Also add:** `error_log()` in render.php on blob-miss (visibility into uncovered posts).
-- This unblocks: sponsor-page, sponsor-product, and any future CPT automatically.
+**1. nginx catch-all for CPT renderer — ✅ DONE (`f6c9457`, 2026-06-01)**
+Collapsed the 7 type-equals-segment permalink blocks (post-imgcap, post-type-videos,
+sponsor-post, loothprint, loothcuts, useful_links, member-benefit) into ONE regex
+that captures `post_type` as `$1`, `slug` as `$2`. Net −58 lines.
+- **Deviation from the planned wide-open regex:** used an EXPLICIT type alternation,
+  NOT `^/([\w-]+)/([\w-]+)/?$`. An open two-segment regex would shadow extensionless
+  WP core paths — e.g. `/wp-json/lg-member-sync` — because a regex location beats the
+  `location /` prefix WP falls through to. Verified post-cut: wp-json still hits WP
+  REST (`rest_no_route`), `/u/<slug>` still hits profile-app.
+- Onboarding a new CPT (sponsor-page, sponsor-product, …) is now a **one-word add** to
+  the alternation — not automatic, by design (each needs blob coverage + a real permalink).
+- `error_log()` on blob-miss added to render.php; verified emitting + WP fallback intact.
+- Friendly aliases (`/article`,`/video`,`/sponsor`) + `/document/<id>` stay explicit.
+- Deployed to `/etc/nginx/snippets/strangler-archive-poc.conf` + repo source-of-truth
+  `archive-poc/nginx-snippet.conf` (kept identical); backup `.bak.20260601-170056`.
 
 **2. Lanes with open tickets (hand to their chats)**
 - **lg-shell:** unified Messages+Connections tabbed modal (`relay-to-shell-unified-social-modal.md`)
@@ -104,9 +105,9 @@ See `docs/standalone-launch-inventory.md` for the full list. Key remaining:
 - Archive-poc sidebar: remove "Add Forum Post" + "Member Map"; add "Report a Bug" (modal with form); update "Weekly Email" link.
 
 ### Architecture notes (from audit this session)
-- **Biggest dumb thing:** 9 identical nginx CPT blocks → fix is the catch-all (item #1 above).
-- **2nd:** 3 separate whoami implementations → post-cutover cleanup (not worth mid-migration).
-- **3rd:** blob-miss fallback is silent → fix alongside the catch-all (one `error_log()` line).
+- ~~**Biggest dumb thing:** 9 identical nginx CPT blocks~~ → ✅ fixed (catch-all, `f6c9457`).
+- **Now #1:** 3 separate whoami implementations → post-cutover cleanup (not worth mid-migration).
+- ~~blob-miss fallback is silent~~ → ✅ fixed (one `error_log()` line in render.php, `f6c9457`).
 - `/tmp` activity cache, host constants, dead bb-mirror files → LOW, ignore for now.
 
 ### Ops reminders
