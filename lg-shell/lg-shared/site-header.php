@@ -300,10 +300,10 @@ function lg_shared_render_site_header(array $ctx): void
           <ul class="lg-chrome__account-menu" id="lg-account-menu"
               role="menu" aria-label="Account menu" hidden>
             <li role="none">
-              <a role="menuitem" href="/u/me">My Profile</a>
-            </li>
-            <li role="none">
-              <a role="menuitem" href="<?= $h($profile_url) ?>">Edit Profile</a>
+              <?php /* Always the editor: profile-app consumers set $ctx['profile_url']
+                       to the PUBLIC profile (/u/<slug>), so we don't reuse it here —
+                       this item must land on the edit page (relay-to-shell-myprofile-edit). */ ?>
+              <a role="menuitem" href="/profile/edit">My Profile</a>
             </li>
             <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
