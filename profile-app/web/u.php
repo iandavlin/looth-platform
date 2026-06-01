@@ -105,9 +105,9 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 
 /* header / identity card */
 .lg-idrow{display:flex;gap:20px;align-items:center}
-.lg-idrow__pic{width:96px;height:96px;border-radius:50%;flex:none;background:var(--lg-sage);color:#fff;
+.lg-idrow__pic{width:96px;height:96px;border-radius:16px;flex:none;background:var(--lg-sage);color:#fff;
   display:grid;place-items:center;font:700 34px/1 var(--lg-font-serif);position:relative;overflow:hidden}
-.lg-idrow__pic img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.lg-idrow__pic img{width:100%;height:100%;object-fit:cover;border-radius:16px}
 .lg-idrow__cam{position:absolute;right:0;bottom:0;width:30px;height:30px;border-radius:50%;background:#fff;
   border:1px solid var(--lg-line);cursor:pointer;font-size:14px;line-height:1}
 .lg-idrow__name{margin:0;font:800 28px/1.1 var(--lg-font-serif);color:var(--lg-charcoal);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -183,7 +183,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
 /* header status lights (availability widgets) */
-.lg-lights{position:relative;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.lg-lights{position:relative;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:22px}
 .lg-light{display:inline-flex;align-items:center;gap:7px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:999px;padding:5px 12px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink)}
 .lg-lights[data-lights-edit] .lg-light{cursor:pointer;padding-right:6px}
 .lg-lights[data-lights-edit] .lg-light:hover{border-color:var(--lg-sage-3)}
@@ -198,11 +198,18 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-light-menu{position:absolute;top:calc(100% + 4px);display:inline-flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--lg-line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;z-index:1000}
 .lg-light-menu button{display:flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;padding:7px 10px;border-radius:7px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink);text-align:left;white-space:nowrap}
 .lg-light-menu button:hover{background:var(--lg-sage-tint)}
-/* wide screens: the caddy floats off to the LEFT of the centered profile (permanent, fixed in
-   the left gutter). Needs room, so it kicks in at ≥1380px; below that it's the off-canvas drawer. */
+/* wide screens (≥1380px): a 3-column grid — caddy | profile | empty spacer — so the profile
+   stays PAGE-centered while the block sidebar sits in the left gutter. The View-as bar spans the
+   top, centered over the profile. The caddy is sticky + IN-FLOW (not fixed), so it never overlaps
+   the footer. Below 1380 → single centered column + off-canvas drawer. */
 @media(min-width:1380px){
-  .lg-shell--owner .lg-caddy{position:fixed;box-sizing:border-box;top:110px;right:calc(50% + 404px);left:auto;width:280px;
-    height:auto;max-height:calc(100vh - 134px);overflow-y:auto;transform:none;
+  .lg-shell--owner{display:grid;max-width:1376px;column-gap:28px;align-items:start;
+    grid-template-columns:280px minmax(0,760px) 280px;
+    grid-template-areas:"viewas viewas viewas" "caddy profile spacer"}
+  .lg-shell--owner .lg-viewas{grid-area:viewas;max-width:760px;width:100%;margin:0 auto}
+  .lg-shell--owner .lg-profile{grid-area:profile}
+  .lg-shell--owner .lg-caddy{grid-area:caddy;position:sticky;top:24px;left:auto;right:auto;box-sizing:border-box;
+    width:auto;height:auto;max-height:calc(100vh - 48px);overflow-y:auto;transform:none;
     border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
   .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
@@ -642,6 +649,10 @@ window.lgSortable = function (container, opts) {
   var EP = {
     'header':          { url: BASE + '/me/header',   m: 'PATCH', k: 'visibility' },
     'craft':           { url: BASE + '/me/craft',    m: 'PATCH', k: 'visibility' },
+    'skills':          { url: BASE + '/me/catalog/skills',      m: 'PUT', k: 'visibility' },
+    'services':        { url: BASE + '/me/catalog/services',    m: 'PUT', k: 'visibility' },
+    'instruments':     { url: BASE + '/me/catalog/instruments', m: 'PUT', k: 'visibility' },
+    'music':           { url: BASE + '/me/catalog/music',       m: 'PUT', k: 'visibility' },
     'connect':         { url: BASE + '/me/connect',  m: 'PATCH', k: 'visibility' },
     'about':           { url: BASE + '/me/about',    m: 'PATCH', k: 'visibility' },
     'gallery':         { url: BASE + '/me/gallery',  m: 'PUT',   k: 'visibility' },
@@ -1124,11 +1135,13 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     if (!avail.length) return;
     var menu = document.createElement('div'); menu.className = 'lg-light-menu'; menu.id = 'lg-light-menu';
     avail.forEach(function (k) {
-      var fs = states(k)[0], st = REG[k].states[fs];
-      var b = document.createElement('button'); b.type = 'button';
-      b.innerHTML = '<span class="lg-light__dot lg-light__dot--' + st.tone + '"></span>' + st.label;
-      b.addEventListener('click', function () { row.insertBefore(makePill(k, fs), addBtn); put(k, fs); closeMenu(); refreshAdd(); });
-      menu.appendChild(b);
+      states(k).forEach(function (s) {                       // every state pickable → negatives are first-class
+        var st = REG[k].states[s];
+        var b = document.createElement('button'); b.type = 'button';
+        b.innerHTML = '<span class="lg-light__dot lg-light__dot--' + st.tone + '"></span>' + st.label;
+        b.addEventListener('click', function () { row.insertBefore(makePill(k, s), addBtn); put(k, s); closeMenu(); refreshAdd(); });
+        menu.appendChild(b);
+      });
     });
     row.appendChild(menu); menu.style.left = addBtn.offsetLeft + 'px';
     document.addEventListener('click', onDoc);

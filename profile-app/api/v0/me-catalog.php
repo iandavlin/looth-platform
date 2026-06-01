@@ -27,13 +27,24 @@ if ($method !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
 
-if (isset($in['ids']) && is_array($in['ids'])) {
-    $ids = $in['ids'];
-} elseif (isset($in['items']) && is_array($in['items'])) {
-    $ids = array_map(static fn($x) => is_array($x) ? ($x['id'] ?? 0) : $x, $in['items']);
-} else {
-    profile_app_json(400, ['error' => 'ids_required']);
+$hasVis = array_key_exists('visibility', $in);
+$hasIds = (isset($in['ids']) && is_array($in['ids'])) || (isset($in['items']) && is_array($in['items']));
+if (!$hasVis && !$hasIds) profile_app_json(400, ['error' => 'ids_or_visibility_required']);
+
+// Block-level privacy chip (pmp) → profile_sections key=<block> visibility.
+if ($hasVis) {
+    if (Block::visFromInput($in['visibility']) === null) {
+        profile_app_json(400, ['error' => 'invalid_visibility', 'allowed' => ['public', 'member', 'private']]);
+    }
+    Block::saveBlockVisibility($uid, $block, $in['visibility'], 20);
 }
 
-$result = Block::saveCatalogSelection($uid, $block, $ids);
-profile_app_json(200, ['ok' => true, 'block' => $result]);
+// Selection replace (the picker).
+if ($hasIds) {
+    $ids = isset($in['ids']) && is_array($in['ids'])
+        ? $in['ids']
+        : array_map(static fn($x) => is_array($x) ? ($x['id'] ?? 0) : $x, $in['items']);
+    Block::saveCatalogSelection($uid, $block, $ids);
+}
+
+profile_app_json(200, ['ok' => true, 'block' => Block::loadCatalogBlock($uid, $block)]);

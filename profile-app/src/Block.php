@@ -178,7 +178,15 @@ final class Block
             'label'  => 'Collaboration',
             'states' => [
                 'open'   => ['label' => 'Open to collaborations', 'tone' => 'go'],
-                'closed' => ['label' => 'Not collaborating',      'tone' => 'stop'],
+                'closed' => ['label' => 'Not open to collaborations', 'tone' => 'stop'],
+            ],
+        ],
+        'tour' => [
+            'label'  => 'Touring',
+            'states' => [
+                'available' => ['label' => 'Available for tour work', 'tone' => 'go'],
+                'on_tour'   => ['label' => 'Currently on tour',        'tone' => 'maybe'],
+                'closed'    => ['label' => 'Not available for tours',  'tone' => 'stop'],
             ],
         ],
     ];
