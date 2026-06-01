@@ -1075,6 +1075,59 @@ shell nav → live OAuth client registered → launch.
 
 ---
 
+## 3o. View-As (admin impersonation) — browse the front end as any user (2026-06-01, Ian)
+
+**Goal (for live):** an admin selects a user and browses the *whole* strangled front end as
+that member — to see exactly what they see. Reversible, with a persistent banner and an audit
+trail. Replaces BuddyBoss's "View As" (BB is being strangled out, so its view-as won't cover the
+new standalone surfaces). Plus an admin **"open this user in wp-admin"** button alongside it.
+
+**Why it's an identity-layer feature (coordinator-owned):** every strangled surface decides "who
+are you" from the `looth_id` JWT → `Whoami::resolve()`. So "view as user X" = make the effective
+`looth_id` resolve to X. Do that once at the identity layer and *every* surface (profile,
+directory, archive, shared header) reflects X with little per-lane work.
+
+**Mechanism (recommended — reuse the existing mint):**
+1. Admin-only **"Switch to <user>"** action → switch the WP session to the target (the WP
+   *User Switching* `switch_to_user` pattern; retain the real admin id for return).
+2. Re-mint `looth_id` as the target — the existing mint path already mints from
+   `wp_get_current_user()`. Add an **`act` (actor) claim = the real admin id** so the token is
+   self-identifying as an impersonation (never looks like a real login).
+3. `Whoami::resolve()` reads it; all strangled surfaces render as X.
+4. **Return:** restore the admin's WP session + re-mint their own `looth_id`.
+
+**Safety (non-negotiable — impersonation is sensitive):**
+- `manage_options` only; the switch endpoint nonce-protected; impersonation **logged** (who, as
+  whom, when).
+- **Read-only while impersonating:** block self-service *writes* — billing (cancel/switch-plan/
+  payment-method), profile edits, social actions — gated off when the `act` claim is present.
+  (Admin views; doesn't mutate the member's data by accident.)
+- Persistent **"Viewing as X — Return to admin"** banner on every surface while active.
+
+**Lanes:**
+- **coordinator (me):** the switch + return endpoints, `looth_id` re-mint w/ `act` claim,
+  `Whoami` honoring it, the manage_options gate + nonce + audit log. Lives in the WP mu-plugin
+  (`profile-auth.php`) + a small admin trigger UI. Owns the banner *contract* (what surfaces read).
+- **shell:** render the "Viewing as X — Return" banner in the shared header when the `act` claim
+  is present; the admin-only **"open in wp-admin"** button (`/wp-admin/user-edit.php?user_id=X`).
+- **profile (buck):** suppress owner-only UI (the View-as profile bar, edit links) when the viewer
+  is an impersonating admin rather than the real owner — so admin sees the member's *actual* view.
+- **poller/billing:** enforce the read-only-write block on the money self-service endpoints when
+  `act` is set.
+
+**Entry points (open decision):** where does the admin trigger it — the directory, a profile page,
+the wp-admin users list, a "view as" search box, or all? Default proposal: a control on the
+directory + each profile (admin-only), plus the wp-admin users list.
+
+**Sequence:** coordinator builds switch + re-mint(+act) + Whoami + banner contract on dev → shell
+banner + wp-admin button → profile owner-UI suppression → billing write-block → dev-prove the full
+loop (switch → browse as X across surfaces → blocked writes → return) → ship to live.
+
+**Open:** (1) entry points (above); (2) read-only impersonation everywhere, or allow specific
+admin actions while switched? Default: fully read-only.
+
+---
+
 ## 4. Cutover sequence
 
 > **⚠️ MODEL CHANGED 2026-05-28 — blue-green, not in-place.**
