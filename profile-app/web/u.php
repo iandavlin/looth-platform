@@ -112,7 +112,9 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   border:1px solid var(--lg-line);cursor:pointer;font-size:14px;line-height:1}
 .lg-idrow__name{margin:0;font:800 28px/1.1 var(--lg-font-serif);color:var(--lg-charcoal);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .lg-tierpill{font:800 10px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-amber);color:#4a3c10;border-radius:6px;padding:4px 9px}
-.lg-idrow__glance{font-size:16px;margin:6px 0 0;color:var(--lg-ink)}
+.lg-idrow__glance{font-size:16px;margin:12px 0 0;color:var(--lg-ink)}
+/* the owner's tagline is also .lg-edit (margin:0 -4px), which would zero the gap above — keep it */
+.lg-idrow__body .lg-idrow__glance{margin-top:12px}
 
 /* location */
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
