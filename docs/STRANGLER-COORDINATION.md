@@ -1073,6 +1073,28 @@ IDs → looth1–4) is current. Own this section + dev-proof sign-off.
 **Sequence:** poller dev-proves new-member-create + churn-demote loops (GATE) → `/join/` page →
 shell nav → live OAuth client registered → launch.
 
+**STATUS 2026-06-01 (poller report-back):**
+- ✅ Pre-existing + verified: shortcode→OAuth→`/patreon-callback/`→user-creation, tier→role,
+  Patreon-ID anchor, already-onboarded + email-collision paths, hourly sync, Stripe/looth4/admin
+  guards, `lg_patreon_members` cache, admin settings UI.
+- ✅ **Authorize-entry + return contract LIVE** (the contract `/join/` consumes):
+  `GET /patreon-connect[?return=/path/]` → 302 Patreon authorize (path-only validation,
+  open-redirect clamped); callback → `<return>?onboarded=<status>`,
+  `status ∈ {success | already_onboarded | not_a_patron | email_collision | fail}`; default
+  return `/manage-subscription/`; legacy `[lg_patreon_onboard]` shortcode entry unchanged.
+- ✅ Churn-demote proven (synthetic: former_patron → downgrade looth3→looth1; apply_change wiring
+  proven by earlier uid=1906 promote/revert tests).
+- ✅ Poll-failure alerting: `lgpo_alert_failure()` (email + error_log) on validate_config + null
+  member-fetch + the explicit 401 "creator token expired" path.
+- ⚠️ **ONE OPEN GAP — creator-token refresh lifecycle.** Token is a manually-pasted string, no
+  `refresh_token`, ~31-day expiry → silent death (now LOUD via the 401 alert). **Coordinator
+  call: BUILD it** (~2h: refresh routine + retry-on-401 + a one-shot creator-OAuth button in
+  Settings to capture `refresh_token` + `expires_at`). Not day-0-blocking (fresh token at launch)
+  but required for "polling fully functional." Poller builds next.
+
+(Dev note: Fluent SMTP is active for WP `wp_mail` on dev → the poller's alerts reach real inboxes,
+not mailpit. msmtp/sendmail paths — e.g. the sudo-queue notifier — still go to mailpit.)
+
 ---
 
 ## 3o. View-As (admin impersonation) — browse the front end as any user (2026-06-01, Ian)
@@ -1099,9 +1121,11 @@ directory, archive, shared header) reflects X with little per-lane work.
 **Safety (non-negotiable — impersonation is sensitive):**
 - `manage_options` only; the switch endpoint nonce-protected; impersonation **logged** (who, as
   whom, when).
-- **Read-only while impersonating:** block self-service *writes* — billing (cancel/switch-plan/
-  payment-method), profile edits, social actions — gated off when the `act` claim is present.
-  (Admin views; doesn't mutate the member's data by accident.)
+- **Full functionality (Ian, 2026-06-01):** the admin *acts as* the user — writes are NOT
+  blocked. The `act` (actor=admin) claim rides every request so all actions are **attributed to
+  the real admin** in logs. CAUTION: billing self-service (cancel/switch-plan/payment) is live
+  while impersonating — recommend a confirm-guard on irreversible money actions; audit covers
+  attribution either way.
 - Persistent **"Viewing as X — Return to admin"** banner on every surface while active.
 
 **Lanes:**
@@ -1110,21 +1134,24 @@ directory, archive, shared header) reflects X with little per-lane work.
   (`profile-auth.php`) + a small admin trigger UI. Owns the banner *contract* (what surfaces read).
 - **shell:** render the "Viewing as X — Return" banner in the shared header when the `act` claim
   is present; the admin-only **"open in wp-admin"** button (`/wp-admin/user-edit.php?user_id=X`).
-- **profile (buck):** suppress owner-only UI (the View-as profile bar, edit links) when the viewer
-  is an impersonating admin rather than the real owner — so admin sees the member's *actual* view.
-- **poller/billing:** enforce the read-only-write block on the money self-service endpoints when
-  `act` is set.
+- **profile (buck) — also owns the trigger:** the admin-only **"View as this user"** control on
+  the **user profile page** (`/u/<slug>`) — Ian's chosen entry point. Also suppress owner-only UI
+  (the View-as profile bar, edit links) when the viewer is an impersonating admin, not the real
+  owner — so admin sees the member's *actual* view.
+- **poller/billing:** no write-block (full functionality, per Ian) — ensure any money action taken
+  while `act` is set is logged with the actor (admin) for audit/refunds.
 
-**Entry points (open decision):** where does the admin trigger it — the directory, a profile page,
-the wp-admin users list, a "view as" search box, or all? Default proposal: a control on the
-directory + each profile (admin-only), plus the wp-admin users list.
+**Entry point (Ian, 2026-06-01):** the **user profile page** (`/u/<slug>`) — an admin viewing a
+profile gets an admin-only "View as this user" control (built in the profile lane). Other entry
+points (directory, wp-admin users list) can be added later.
 
-**Sequence:** coordinator builds switch + re-mint(+act) + Whoami + banner contract on dev → shell
-banner + wp-admin button → profile owner-UI suppression → billing write-block → dev-prove the full
-loop (switch → browse as X across surfaces → blocked writes → return) → ship to live.
+**Sequence:** coordinator builds switch + re-mint(+act) + Whoami + banner contract on dev → profile
+lane adds the "View as" trigger on `/u/<slug>` + owner-UI suppression → shell banner + "open in
+wp-admin" button → dev-prove the full loop (trigger on a profile → browse as X across surfaces →
+act as X → return) → ship to live.
 
-**Open:** (1) entry points (above); (2) read-only impersonation everywhere, or allow specific
-admin actions while switched? Default: fully read-only.
+**Decisions (Ian, 2026-06-01):** entry point = the user profile page; **full functionality** while
+impersonating (NOT read-only) — audit via the `act` claim + the banner are the guardrails.
 
 ---
 
