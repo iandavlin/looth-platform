@@ -195,6 +195,7 @@ function lg_shared_render_site_header(array $ctx): void
         <?php if ($active_nav !== 'forum'):   ?><li><a href="/forum/">Forum</a></li><?php endif; ?>
         <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
         <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
+        <li><a href="https://loothtool.com/">Loothtool</a></li>
       </ul>
     </nav>
 

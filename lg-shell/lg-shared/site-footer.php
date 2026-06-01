@@ -42,7 +42,7 @@ function lg_shared_render_site_footer(array $ctx = []): void
           <li><a href="/">Home</a></li>
           <li><a href="/events/">Events</a></li>
           <li><a href="/sponsors/">Sponsors</a></li>
-          <li><a href="/shops/">Shops</a></li>
+          <li><a href="https://loothtool.com/shop/">Shops</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">
@@ -50,7 +50,7 @@ function lg_shared_render_site_footer(array $ctx = []): void
         <ul>
           <li><a href="/forums-poc/">Forums</a></li>
           <li><a href="/archive-poc/">Activity</a></li>
-          <li><a href="/members/">Members</a></li>
+          <li><a href="/directory/members/">Members</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">
@@ -67,9 +67,9 @@ function lg_shared_render_site_footer(array $ctx = []): void
   <div class="lg-chrome-foot__legal">
     <span>© <?= date('Y') ?> The Looth Group. All rights reserved.</span>
     <nav aria-label="Legal">
-      <a href="/privacy/">Privacy</a>
-      <a href="/terms/">Terms</a>
-      <a href="/billing-refund/">Billing &amp; Refund</a>
+      <a href="https://loothtool.com/privacy/">Privacy</a>
+      <a href="https://loothtool.com/terms/">Terms</a>
+      <a href="/request-refund/">Billing &amp; Refund</a>
     </nav>
   </div>
 </footer>
