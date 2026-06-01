@@ -39,7 +39,7 @@ function looth_issue_bounce_if_needed(): void {
 $env = getenv('LG_PROFILE_APP_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
-    if (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
+    if (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, '.dev.loothgroup.com') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
         $env = 'dev';
     } else {
         $env = 'live';
