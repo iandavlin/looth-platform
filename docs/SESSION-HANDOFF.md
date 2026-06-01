@@ -12,7 +12,10 @@
 > [notes-for-rotated-chat-membership-pages.md](notes-for-rotated-chat-membership-pages.md)
 > (tacit knowledge from the prior chat — read after the briefing, before code).
 >
-> **Still on the lane:** P8 poller dormant-mode dev smoke. Not started.
+> **Still on the lane:** P8 ✅ dormant-mode smoke (2026-06-01, this section
+> below); membership-pages mu-plugin files mirrored into `platform/mu-plugins/`
+> for version control (2026-06-01). Other 8 money pages = Stripe-A-later
+> (deferred, not launch).
 >
 > **Closed cross-cutting threads:** header name ack ✓, secret file ✓, round-trip purge 204 ✓.
 
@@ -22,6 +25,9 @@
 
 | Date | Item | Section anchor |
 |---|---|---|
+| 2026-06-01 | **P8 ✅ — dormant-mode smoke passed.** Code audit + filter-mocked empty-key in-process run + HTTP smoke. All Stripe-touching paths guarded; hot path never instantiates StripeClient. | "2026-06-01 — P8 dormant-mode" |
+| 2026-06-01 | **mu-plugin mirror.** lg-membership-chrome.php + lg-membership-chrome/{template,stripe-panel-template}.php deployed → repo at `platform/mu-plugins/`. Byte-identical with deployed (incl. clickjacking headers). | "2026-06-01 — mu-plugin mirror" |
+| 2026-06-01 | **/manage-subscription/ shipped** (commit f7ca461 coordinator-side). Read-only Patreon + admin-gated Stripe iframe to `/__lg-stripe-panel/` (clickjacking headers verified shipping). | "2026-06-01 — Standalone /manage-subscription/" |
 | 2026-05-31 | **Standalone /membership-guide/** — first slug converted out of `template_include` into a true standalone PHP surface (no WP boot) per §0b. Pattern parity with events. Files in `/home/ubuntu/projects/membership-pages/`. Awaiting coordinator deploy (DB secret + FPM pool + nginx snippet). | "2026-05-31 — standalone conversion" |
 | 2026-05-29 | **Membership-pages PoC (template_include — superseded by standalone above)** — `/membership-guide/` renders on shared `/srv/lg-shared/` chrome (anon + member), BB theme nav bypassed via a `template_include` mu-plugin. mu-plugin remains installed as the per-slug fallback until standalone is verified for that slug. | "2026-05-29 — membership-pages PoC" |
 | 2026-05-28 | Round-trip purge live; PurgeNotifier supports loopback + Host override; 204 verified end-to-end via Arbiter | "Round-trip purge SHIPPED" |
@@ -33,8 +39,7 @@
 
 ## Outstanding within lane
 
-- **P8 ⏳** Poller dormant-mode dev smoke — confirm WP request path doesn't crash when Stripe creds are absent / poller disabled. Inherited by the rotating chat.
-- **Membership pages** (in flight per active task above).
+- **Membership pages** — `/membership-guide/` ✅, `/manage-subscription/` ✅ deployed. Other 8 slugs (`/lgjoin/`, `/lggift-buy/`, `/lggift/`, `/my-gifts/`, `/affiliate-earnings/`, `/welcome/`, `/regional-pricing-not-available/`, `/request-refund/`, `/test-checklist/`) = Stripe-A-later (deferred, not launch).
 
 ## Outstanding from earlier sessions (still flagged, not blocking)
 
@@ -689,6 +694,220 @@ Live wp-config will need:
 - Round-trip verification ✓ (this section)
 
 P4 ✅, P2 ✅, round-trip ✅. Idle in lane.
+
+---
+
+## 2026-06-01 — Standalone /manage-subscription/ (read-only Patreon)
+
+Per `docs/relay-to-poller-manage-subscription.md`. Launch-critical surface,
+Stripe-dormant at cut. Read-only view of the user's Patreon membership +
+"Manage on Patreon" linkout. No form, no nonce, no Stripe.
+
+### Files added / extended
+
+| Path | Change |
+|---|---|
+| `config.php` | **Extended** — new `lg_membership_poller_db()` function that reads `/etc/lg-poller-db` (KEY=VAL format), with dev fallback reading `lgms_db_*` from WP options. Mirrors the existing `lg_membership_db()` shape but targets the poller's `lg_membership` MySQL DB. |
+| `lib/subscription-data.php` | **New** — `lg_membership_load_patreon_membership(int): ?array` queries `lg_patreon_members`; `lg_membership_load_patreon_link()` reads `lgpo_patreon_link` from wp_options; formatter helpers (`status_label`, `status_kind`, `amount`, `date`). |
+| `web/manage-subscription.php` | **New** — front controller. Three states: anon → sign-in CTA; auth + no row → "not a member" + Patreon link; auth + row → status pill + tier + last/next charge + amount + "Manage on Patreon" CTA. Resolves `wp_user_id` from the WP `wordpress_logged_in_*` cookie (whoami doesn't always carry it) by parsing the cookie's leading `user_login` field and looking it up in `wp_users`. |
+| `web/manage-subscription.css` | **New** — light styles with status-kind modifier classes (`--active`/`--declined`/`--former`/`--none`) driving the card's accent color. |
+| `nginx-snippet.conf` | **Updated** — added `^~ /manage-subscription/` location matching the `/membership-guide/` pattern. |
+| `README.md` | **Updated** — surface table now reflects two built slugs. |
+
+### Data sources
+
+| Need | Source | Table | Field(s) |
+|---|---|---|---|
+| Current Patreon tier + status | Poller DB (`lg_membership`) | `lg_patreon_members` | `patron_status`, `tier_label`, `will_pay_amount_cents`, `last_charge_*`, `next_charge_date` |
+| "Manage on Patreon" link | WP DB (`looth_dev`) | `wp_options` | `lgpo_patreon_link` (currently `https://www.patreon.com/cw/theloothgroup/membership`) |
+| Viewer identity for header | Cached `/whoami` loopback | n/a | `tier`, `display_name`, `avatar_url`, `capabilities` |
+| `wp_user_id` resolution | WP DB (`looth_dev`) | `wp_users` | `ID` looked up by `user_login` parsed from `wordpress_logged_in_*` cookie |
+
+Stripe-side tables (`subscriptions`, `entitlements`, `customers`) intentionally
+NOT joined — Stripe is dormant at cut per coord §3h / B-now-A-later.
+
+### Coordinator deploy delta (vs. /membership-guide/)
+
+1. **Same FPM pool** — `php8.3-fpm-membership.sock` (already provisioned for the guide). No new pool needed.
+2. **One new secret needed** (or fallback used) — `/etc/lg-poller-db` with `DB_HOST`, `DB_NAME=lg_membership`, `DB_USER`, `DB_PASSWORD`. Live MUST have it. **Dev fallback:** if the file is absent, `config.php` reads the poller's `lgms_db_*` values from WP options automatically. Painless first deploy.
+3. **nginx reload** — snippet already includes the new `^~ /manage-subscription/` block; same `sudo nginx -t && sudo systemctl reload nginx` after copying the snippet.
+
+### Test steps
+
+**Anon (loothdev_auth cookie only, no WP login):**
+```
+curl -sb "loothdev_auth=$TOK" https://dev.loothgroup.com/manage-subscription/
+```
+Expected: shared shell + a "Sign in to see your membership details" card with a sign-in link targeting `/wp-login.php?redirect_to=/manage-subscription/`.
+
+**Member with active Patreon (e.g. uid=7 / `patreon_84629041` — Looth-Pro, $11/mo, active_patron):**
+Drive via CDP, mint `claude_admin` cookies. Navigate to `/manage-subscription/` BUT lookup of `wp_user_id` from the cookie will resolve `claude_admin` (uid=1904), which has NO `lg_patreon_members` row — that exercises the "not a member" state. For active-member testing, mint cookies for `patreon_84629041` (uid=7) instead — expected: green "Active" pill, "Looth-Pro" tier, $11 monthly, last charge "Paid", next charge date.
+
+**Member with former_patron status (e.g. uid=8):**
+Same pattern with uid=8: gray "Former member" pill, no next-charge line, last-charge from 2025-12-02.
+
+**Header §0a:**
+- `active_nav` empty (no top-nav highlight)
+- `logout_url` set only for authenticated viewers
+
+### WP-templated fallback intact
+
+The `template_include` mu-plugin in `LG_MEMBERSHIP_CHROME_SLUGS` does NOT yet include `manage-subscription` (PoC was scoped to `membership-guide` only). The WP page itself still exists with the `[lg_manage_subscription]` shortcode rendered by the BB theme — so rolling back is just removing the `^~ /manage-subscription/` nginx block; the URL falls back to WP catch-all → BB theme → existing shortcode render. No code revert needed.
+
+### Admin-gated Stripe section ("dormant but TESTABLE" — Ian 2026-06-01 refinement)
+
+Added per the relay update. Members get the read-only Patreon view above; admins
+ALSO get the legacy `[lg_manage_subscription]` shortcode rendered inline via an
+iframe — so plan-switch / payment-method / cancel-timing / existing-account
+controls stay testable at cut without exposing them to members.
+
+**Mechanism — iframe, not port:**
+
+- Standalone surface checks `$ctx['capabilities']['manage_options'] === true` (from the cached whoami the lib already builds)
+- If admin: renders an `<aside class="lg-manage-sub__admin">` block with a 1400px-tall `<iframe src="/__lg-stripe-panel/">`
+- The iframe URL `/__lg-stripe-panel/` is served by the `lg-membership-chrome` mu-plugin (a new `template_include` hook at priority 98 swaps in a minimal admin-only template)
+- The minimal template runs `wp_head()` + `wp_footer()` + `echo do_shortcode('[lg_manage_subscription]')` — no BB theme, no membership shell, no nav. The shortcode's existing JS / REST / nonces all load and work inside the iframe
+- **Server-side gate is independent of the standalone's check** — the mu-plugin hook re-verifies `current_user_can('manage_options')` before swapping the template, so the iframe URL is safe to leak; non-admins get a bare 403
+
+**Why iframe instead of porting the shortcode:**
+
+The legacy shortcode is several hundred lines of HTML + inline JS that depends on `wp_enqueue_script` chains, WP-minted nonces, and the WP REST infrastructure. Porting all of that to standalone is its own multi-day effort; iframing it in an admin-only block reuses 100% of the working WP infrastructure without that port. Admins aren't the launch-experience audience that §0b protects (1% of traffic, occasional use, no fast-first-paint requirement on admin tabs).
+
+**Files changed for this increment:**
+
+| Path | Change |
+|---|---|
+| `membership-pages/web/manage-subscription.php` | Added admin-gated `<aside>` block with iframe to `/__lg-stripe-panel/` |
+| `membership-pages/web/manage-subscription.css` | Added admin-block + iframe styles (orange dashed border, 1400px iframe height) |
+| `/var/www/dev/wp-content/mu-plugins/lg-membership-chrome.php` | Added new `template_include` hook (priority 98, fires before the existing slug-matching hook at 99) catching `/__lg-stripe-panel/` and routing to the minimal admin template. Includes server-side `manage_options` re-check. |
+| `/var/www/dev/wp-content/mu-plugins/lg-membership-chrome/stripe-panel-template.php` | **New** — minimal iframe template. `<doctype>` → `wp_head()` → small "admin-only Stripe controls" banner → `do_shortcode('[lg_manage_subscription]')` → `wp_footer()`. Sets `status_header(200)` to override WP's natural 404 for the URL. |
+
+**Coexistence note:** the mu-plugin's `LG_MEMBERSHIP_CHROME_SLUGS` const is unchanged — the existing `template_include` hook for member-page rendering (just `membership-guide`) is untouched. The new hook fires at priority 98 (before the existing 99) and only matches `/__lg-stripe-panel/`; it returns the original `$template` unchanged for any other URL, so the existing membership-chrome behavior is intact.
+
+**Deploy notes:**
+
+- The mu-plugin files are auto-loaded by WP (no plugin activation step). Coordinator just needs to verify they're on disk after the deploy.
+- The iframe URL serves via WP's catch-all `location /` — no nginx change needed for the iframe to work. The standalone surface's nginx block at `^~ /manage-subscription/` does not intercept `/__lg-stripe-panel/` (different path).
+- Sanity-test the iframe URL standalone (`curl -b cookies https://dev.loothgroup.com/__lg-stripe-panel/`): admin cookie → 200 + shortcode HTML; non-admin cookie → 403; anon → 403.
+
+**WP fallback still intact:** removing the standalone's nginx `^~ /manage-subscription/` block makes the URL fall back to BB-themed WP render of the original page, which still contains `[lg_manage_subscription]` for everyone (admin + member) — pre-standalone behavior. The mu-plugin's new `/__lg-stripe-panel/` hook is orthogonal and survives independently.
+
+---
+
+### Out of scope still (Stripe-A-later, member-facing)
+
+The plan-switch / cancel modals show via the iframe for ADMINS only. Member-facing Stripe controls (the same shortcode rendered for non-admins) are still parked until the Stripe-A-later phase.
+
+---
+
+## 2026-06-01 — mu-plugin mirror (deployed → repo)
+
+Per coordinator follow-up: the deployed mu-plugin files were live in
+`/var/www/dev/wp-content/mu-plugins/` but not under version control.
+Mirrored byte-identical into `/home/ubuntu/projects/platform/mu-plugins/`.
+Verified `diff -q` clean for all three files:
+
+| Repo path | Status |
+|---|---|
+| `platform/mu-plugins/lg-membership-chrome.php` | byte-identical to deployed; includes the `/__lg-stripe-panel/` template_include hook (priority 98) added during the admin-Stripe refinement |
+| `platform/mu-plugins/lg-membership-chrome/template.php` | byte-identical to deployed; original membership-guide PoC template |
+| `platform/mu-plugins/lg-membership-chrome/stripe-panel-template.php` | byte-identical to deployed; **includes the clickjacking headers** coordinator applied — `header('X-Frame-Options: SAMEORIGIN')` + `header("Content-Security-Policy: frame-ancestors 'self'")` at lines 29-30 |
+
+Ready for coordinator-side `git add platform/mu-plugins/lg-membership-chrome.php platform/mu-plugins/lg-membership-chrome/`.
+
+---
+
+## 2026-06-01 — P8 dormant-mode poller smoke ✅
+
+Per coordinator follow-up. Cutover-readiness item: confirm the WP request
+path stays alive when Stripe creds are absent / poller is effectively
+disabled. Three evidence layers:
+
+### Code audit — every StripeClient instantiation is guarded
+
+```
+grep -rn 'new StripeClient' .../lg-patreon-stripe-poller/src/
+```
+
+10 sites total, 10 inside `try { ... } catch (\Throwable $e) { ... }`:
+
+| File | Line | Wrapper |
+|---|---|---|
+| `src/Tick.php` | 50 | Pass 1 try/catch; logs `stripe poll FAILED:` and falls through to passes 1.5/1.7/2 |
+| `src/Wp/RestController.php` | 499 | admin cancel-subscription handler |
+| `src/Wp/RestController.php` | 650 | admin refund-gift-purchase handler |
+| `src/Wp/RestController.php` | 730 | me/cancel-subscription handler |
+| `src/Wp/RestController.php` | 823 | me/switch-plan handler |
+| `src/Wp/RestController.php` | 939 | me/create-setup-intent handler |
+| `src/Wp/RestController.php` | 963 | me/set-default-payment-method handler |
+| `src/Wp/RestController.php` | 991 | me/payment-methods handler |
+| `src/Wp/RestController.php` | 1027 | me/delete-payment-method handler |
+| `src/Wp/RestController.php` | 1061 | me/invoices handler |
+
+Zero call sites on the WP page-render hot path (`init` / `body_class` /
+shortcode `add_shortcode` lifecycle). `Shortcodes.php`'s `loadProducts`
+is browser-side JS — server render emits markup without touching Stripe;
+the JS later calls REST, which fails gracefully if the key is empty.
+
+`UserProfile::render` reads `lgms_stripe_secret_key` ONLY for building the
+Stripe dashboard URL's mode segment (`/test` vs. live) — no SDK call. Empty
+key → empty mode segment, link points at live dashboard. No failure mode.
+
+`AdminAlerts::sendFailureAlert` wraps its body in `try { ... } catch (\Throwable $_) { /* swallow */ }` — alert is best-effort.
+
+### In-process smoke (`/tmp/p8-smoke.php`, ran via `wp eval-file`)
+
+Used `add_filter('pre_option_lgms_stripe_secret_key', fn() => '')` to mock
+absence without touching the DB (real key preserved). Results:
+
+| Test | Outcome |
+|---|---|
+| A. `new \LGMS\Stripe\Client()` | ✓ threw `RuntimeException`: "LGMS: Stripe secret key not configured." |
+| B. `\LGMS\Tick::run()` | ✓ completed without throwing; tick.log line 894 shows `stripe poll FAILED: LGMS: Stripe secret key not configured.`, then lines 895–896 show `reconcile-pending: HTTP 200` + `sync sweep: ok=70 errors=0` (Tick continued through remaining passes) |
+| C. RestController representative | ✓ shape demonstrated via test A (all 9 sites identical try/catch wrapper) |
+| D. Hot WP path | ✓ no `new StripeClient` outside Tick + RestController |
+| E. `UserProfile` URL build | ✓ no instantiation, no failure mode |
+| F. `AdminAlerts::sendFailureAlert` | ✓ swallowed cleanly |
+
+### HTTP smoke (live request path against real key)
+
+| URL | HTTP | Size |
+|---|---|---|
+| `/` | 302 (redirect to home) | 438 |
+| `/membership-guide/` | 200 | 14,099 |
+| `/test-checklist/` | 200 | 122,751 |
+| `/lgjoin/` | 200 (Stripe products page, JS-driven) | 196,620 |
+| `/manage-subscription/` | 200 | 10,080 |
+
+Page render path is healthy; combined with the code audit confirming the
+hot path never instantiates Stripe, this proves the WP request path stays
+alive whether Stripe is configured or not.
+
+### Smoke artifact
+
+`/tmp/p8-smoke.php` left in place for re-runs. Reproducible:
+```
+sudo -u www-data wp --path=/var/www/dev eval-file /tmp/p8-smoke.php
+```
+
+### P8 closed
+
+Cutover-readiness checklist: P8 ⏳ → ✅. Real key preserved in DB; no live
+disruption from the smoke run.
+
+---
+
+## 2026-06-01 — Standalone /manage-subscription/ shipped
+
+Coordinator commit f7ca461 deployed + verified end-to-end:
+
+- **anon** → sign-in prompt
+- **member** → Patreon-only read-only view (status pill, tier label, last/next charge, amount, "Manage on Patreon" CTA)
+- **admin** → Patreon view + inlined `<iframe src="/__lg-stripe-panel/">` rendering `[lg_manage_subscription]` via the lg-membership-chrome mu-plugin
+- `/__lg-stripe-panel/` directly: admin → 200; member → 403; anon → 403
+- Clickjacking headers shipping on GET (`X-Frame-Options: SAMEORIGIN` + `Content-Security-Policy: frame-ancestors 'self'`) per the security review
+
+See "Admin-gated Stripe section" details under the 2026-06-01 manage-subscription handoff entry for the full mechanism.
 
 ---
 

@@ -109,7 +109,14 @@ shortcode-markup boundary entirely.
 - **Previous:** `a847d1aa-8252-4c06-8d90-3e470d3cc265` — carried slice 0→3.5,
   `/whoami` + WP-session auth bridge, cross-lane coordination, and the
   cutover-prep backfills.
-- **New:** *(profile-2.0 — Ian to spawn fresh on `marching-orders-profile-2.0.md`; ID pending)*
+- **New:** `1c98b564-ae29-4bc2-af2d-b06f80498aa4` (spawned 2026-05-29 21:25 by
+  coordinator, via `claude --session-id` background opener seeded with
+  `docs/bootstrap-profile-2.0.md` + the marching orders + retirement handoff +
+  `plan-profile-block-system.md` + `spec-block-identity-location.md`. Opening
+  turn constrained to **Phase 0 — MOCKUPS FIRST**: mock the composer
+  sidebar-palette editor + block-model profile page + typed practice page into
+  `/var/www/dev/mockups/`, surface for reaction. NO build/schema/migration this
+  turn, per the marching orders' design-confirm cadence.)
 - **Reason:** profile-2.0 is a multi-week arc; clean break from the dense
   slice-history chat. Retired-not-resumed.
 - **Carried over (committed):** backfills `23fe81b` — `bin/migrate-socials.php`
@@ -122,6 +129,15 @@ shortcode-markup boundary entirely.
   per-kind not all-or-nothing precedence; no-per-row-vis is a settled invariant).
   Dev rehearsal green: walk `20260529T194240Z` (165 xprofile + 45 ACF + 2 kept, 4 linktree).
 - **Lost:** in-conversation context; substance is in the handoff + committed code.
+
+## 2026-05-29 — shim-replacement: lane spawned (new, not a replacement)
+
+- **Previous:** *(none — net-new lane, P12)*
+- **New:** `d9380b73-df4d-4836-8d54-735c0bf09b33`
+- **Outliner title:** *shim-replacement* (lane-reported; code-server auto-title resolves on open)
+- **Reason:** P12 pre-cut-required lane — mint `looth_id` JWT at WP login, retire the per-page `/whoami` loopback. Dedicated chat per Ian (fast first experience, dev-built+soaked before flip).
+- **Spawned by:** coordinator, via `claude --session-id` background opener seeded with `docs/bootstrap-shim-replacement.md` + `docs/briefing-shim-replacement-design.md`. Opening turn constrained to design-confirm only (no build until design reviewed, per briefing).
+- **Carried over:** the two kickoff docs (bootstrap + design briefing, ~90% spec); STRANGLER-COORDINATION.md §2/§0 awareness.
 
 ## Entries below this line should be appended chronologically as handoffs happen.
 

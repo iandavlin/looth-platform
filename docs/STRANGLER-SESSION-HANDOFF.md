@@ -53,6 +53,12 @@ Big push night — 7 lanes advanced, all committed + tested on dev. Pushed to ma
 - **→ lg-shell:** (a) nav surfacing for the standalone CPT pages; (b) the **social skin**
   (header connections/messages/notifications modals over the live endpoints). Coordinator
   to spec; profile-app `/u/` social bits coordinated separately (Ian driving that tree).
+  - **NOW SPECCED + QUEUED (2026-05-31):** lg-shell lane has a fresh-chat boot —
+    `docs/handoff-lg-shell-new-chat.md` — and the modal-layer job is fully specced against
+    the now-LIVE social backend (committed `a3120cf`, routed) in
+    `docs/relay-to-shell-social-modals.md` (all 5 endpoint groups + response shapes, "9+" cap
+    contract, `lg:open-dm`/`lg:require-auth` DM contract, scope guardrails). Hand both to the
+    shell chat to start with no re-discovery.
 - **Onboarding matrix** (built × blob × routed × feed-linked × in-nav) — to be probed from
   dev, not trusted from notes, then drive the route+nav close-out.
 
