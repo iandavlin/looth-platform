@@ -1,3 +1,27 @@
+<!-- ===================== COORDINATOR BANNER (2026-06-01) ===================== -->
+> **Ownership consolidated 2026-06-01.** archive-poc/standalone had two chats colliding
+> (the shared-tree problem). Resolved to **one owner**: the active standalone chat (Part A
+> `5073a34` + the launch-batch data-source analysis). **The `61c058c` chat is RETIRED** — its
+> work (render perf, video WP fallback, same-tab cards, comments frame, materializer, nginx
+> routes) is committed + live and preserved in the state below; do not resume it.
+>
+> **Boundary:** the standalone lane owns archive-poc app code (`render.php`, `search.php`,
+> `web/`, `api/`, materializer/indexer, `content_item`, `/weekly/`) **and its
+> `nginx-snippet.conf` repo copy**. The **coordinator** owns deploy→`/etc`, the main-site conf,
+> the cookie gate, FPM pools — and **relays** cross-cutting routing rather than editing lane
+> files (re the `f6c9457` CPT catch-all + `render.php` overlap).
+>
+> **Open (2026-06-01):**
+> - **Part B (WP-fallback): SETTLED** — outcome live + verified (covered→standalone,
+>   uncovered→WP, bogus→404) via `61c058c` + `f6c9457`. Do not redo.
+> - **Part C (/weekly/): APPROVED — build Option C.** Index `weekly_email` as kind `'digest'`
+>   in `content_item`; add `'digest'` to the existing `kind NOT IN (…)` exclude in `search.php`
+>   (+ feed) so it never pollutes feed/search; `/weekly/` selects `WHERE kind='digest'`. Read
+>   side stays post-WP-pure; only the indexer repoints at cut.
+> - `standalone/dash-theme.json` has been dirty (uncommitted) all session — confirm it's a dash
+>   runtime write, then commit-or-discard.
+<!-- ========================================================================== -->
+
 # archive-poc — Session Handoff (2026-05-28)
 
 ## Where things stand
