@@ -80,6 +80,69 @@ function lg_membership_db(): PDO {
 }
 }
 
+/* ---------- read-only POLLER-MySQL connection (lg_membership DB) ---------- *
+ * Separate from lg_membership_db() which reads the WP DB. The poller owns its
+ * own MySQL database (lg_membership) with subscription / patron / entitlement
+ * tables. Read-only here — mutations stay in the poller plugin.
+ *
+ * Secret: /etc/lg-poller-db (KEY=VAL lines: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST).
+ * Dev fallback: when the secret file is missing, read the credentials from WP's
+ *               wp_options table (the poller stashes them there as lgms_db_*).
+ *               That keeps first-deploy on dev painless — same as the events-DB
+ *               fallback above.
+ */
+if (!function_exists('lg_membership_poller_db')) {
+function lg_membership_poller_db(): PDO {
+    static $pdo = null;
+    if ($pdo instanceof PDO) return $pdo;
+
+    $c = ['DB_HOST' => '127.0.0.1', 'DB_NAME' => 'lg_membership', 'DB_USER' => '', 'DB_PASSWORD' => ''];
+    $secret_path = '/etc/lg-poller-db';
+
+    if (is_readable($secret_path)) {
+        $raw = (string) @file_get_contents($secret_path);
+        foreach (preg_split('/\r?\n/', $raw) as $line) {
+            if (!str_contains($line, '=')) continue;
+            [$k, $v] = explode('=', $line, 2);
+            $k = strtoupper(trim($k));
+            if (array_key_exists($k, $c)) $c[$k] = trim($v);
+        }
+    } else {
+        // Dev fallback — pull poller DB creds from WP options. Single cold read
+        // per request; the WP DB itself is the events-fallback secret.
+        try {
+            $stmt = lg_membership_db()->prepare(
+                "SELECT option_name, option_value FROM " . LG_MEMBERSHIP_TABLE_PREFIX .
+                "options WHERE option_name IN ('lgms_db_host','lgms_db_port','lgms_db_name','lgms_db_user','lgms_db_pass')"
+            );
+            $stmt->execute();
+            foreach ($stmt->fetchAll() as $row) {
+                switch ($row['option_name']) {
+                    case 'lgms_db_host': $c['DB_HOST']     = (string) $row['option_value']; break;
+                    case 'lgms_db_name': $c['DB_NAME']     = (string) $row['option_value']; break;
+                    case 'lgms_db_user': $c['DB_USER']     = (string) $row['option_value']; break;
+                    case 'lgms_db_pass': $c['DB_PASSWORD'] = (string) $row['option_value']; break;
+                }
+            }
+        } catch (Throwable $e) {
+            throw new RuntimeException('membership-pages: cannot read poller DB secret at ' . $secret_path . ' and WP-options fallback failed: ' . $e->getMessage());
+        }
+    }
+
+    if ($c['DB_USER'] === '') {
+        throw new RuntimeException('membership-pages: poller DB creds unresolved (no ' . $secret_path . ' and no lgms_db_user in wp_options)');
+    }
+
+    $dsn = "mysql:host={$c['DB_HOST']};dbname={$c['DB_NAME']};charset=utf8mb4";
+    $pdo = new PDO($dsn, $c['DB_USER'], $c['DB_PASSWORD'], [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ]);
+    return $pdo;
+}
+}
+
 /* ---------- shared helpers ---------- */
 if (!function_exists('lg_membership_h')) {
 function lg_membership_h(string $s): string {

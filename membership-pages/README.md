@@ -29,11 +29,11 @@ membership-pages/
 
 | Slug | File | Status |
 |---|---|---|
-| `/membership-guide/` | `web/membership-guide.php` | **PoC (this turn)** — locks the standalone delivery shape |
+| `/membership-guide/` | `web/membership-guide.php` | **Built** — first standalone surface (delivery shape locked) |
+| `/manage-subscription/` | `web/manage-subscription.php` | **Built (read-only Patreon)** — launch-critical; "Manage on Patreon" linkout, no Stripe |
 | `/lgjoin/` | _to add_ | JS+REST-heavy — page shell standalone, REST stays on poller pool |
 | `/lggift-buy/` | _to add_ | JS+REST-heavy |
 | `/lggift/` | _to add_ | JS+REST-heavy |
-| `/manage-subscription/` | _to add_ | JS+REST-heavy |
 | `/my-gifts/` | _to add_ | JS+REST-heavy |
 | `/affiliate-earnings/` | _to add_ | Admin form heavy |
 | `/request-refund/` | _to add_ | Static-ish |
