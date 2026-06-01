@@ -112,6 +112,15 @@ lg_shared_render_site_header([
       <?php endforeach; ?>
     </select>
   </div>
+  <?php if (!($_whoami['authenticated'] ?? false)): ?>
+  <div class="filt viewbox">
+    <span class="flab">Show</span>
+    <select id="dir-view">
+      <option value="all">All members</option>
+      <option value="visible">Visible profiles</option>
+    </select>
+  </div>
+  <?php endif; ?>
   <?php if ($msCatalogs['inst']): ?><div class="filt"><span class="flab">Instruments</span><div class="ms" data-ms="inst" data-ph="Any instrument…"></div></div><?php endif; ?>
   <?php if ($msCatalogs['skill']): ?><div class="filt"><span class="flab">Skills</span><div class="ms" data-ms="skill" data-ph="Any skill…"></div></div><?php endif; ?>
   <?php if ($msCatalogs['music']): ?><div class="filt"><span class="flab">Music</span><div class="ms" data-ms="music" data-ph="Any genre…"></div></div><?php endif; ?>
@@ -255,6 +264,8 @@ function applyFilters() {
 document.querySelectorAll('.ms').forEach(initMultiselect);
 document.getElementById('dir-radius').addEventListener('change', applyFilters);
 document.getElementById('dir-more').addEventListener('click', () => loadPage(curPage + 1, true));
+const viewSel = document.getElementById('dir-view');
+if (viewSel) viewSel.addEventListener('change', () => { viewFilter = viewSel.value; plotPins(lastPins); });
 document.querySelectorAll('#dir-sort button').forEach(btn => btn.addEventListener('click', () => {
   if (curSort === btn.dataset.sort) return;
   curSort = btn.dataset.sort;
@@ -263,11 +274,17 @@ document.querySelectorAll('#dir-sort button').forEach(btn => btn.addEventListene
 }));
 
 // Map setup — Leaflet + OpenStreetMap (no API key needed) + marker clustering.
-let dirMap = null, dirCluster = null;
+let dirMap = null, dirCluster = null, lastPins = [], viewFilter = 'all';
 const pinIcon = L.divIcon({
   className: '',
   html: '<div style="width:14px;height:14px;border-radius:50%;background:#b9450b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
   iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
+});
+// Anonymized "hidden member" pin — muted/grey so it reads as locked at a glance.
+const pinIconGated = L.divIcon({
+  className: '',
+  html: '<div style="width:13px;height:13px;border-radius:50%;background:#9a948a;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);opacity:.9"></div>',
+  iconSize: [13, 13], iconAnchor: [6.5, 6.5], popupAnchor: [0, -10],
 });
 function initDirMap() {
   if (dirMap) return;
@@ -283,13 +300,22 @@ function initDirMap() {
 }
 function plotPins(pins) {
   if (!dirMap) return;
+  lastPins = pins;
   dirCluster.clearLayers();
   const pts = [];
   pins.forEach(p => {
     if (p.lat == null || p.lng == null) return;
-    const m = L.marker([p.lat, p.lng], {icon: pinIcon, title: p.display_name})
-      .bindPopup(`<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
-        + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : ''));
+    if (p.gated && viewFilter === 'visible') return;   // "Visible profiles" filter hides anonymized pins
+    let m;
+    if (p.gated) {
+      m = L.marker([p.lat, p.lng], {icon: pinIconGated})
+        .bindPopup(`<div style="font-size:13px;color:#6b665e;max-width:190px">${escH(p.message)}</div>`
+          + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:#b9450b;text-decoration:none">Sign in to view →</a>`);
+    } else {
+      m = L.marker([p.lat, p.lng], {icon: pinIcon, title: p.display_name})
+        .bindPopup(`<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
+          + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : ''));
+    }
     dirCluster.addLayer(m);
     pts.push([p.lat, p.lng]);
   });

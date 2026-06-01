@@ -162,14 +162,36 @@ if (!empty($_GET['pins'])) {
     $pStmt->execute($params);
     $pins = [];
     while ($pr = $pStmt->fetch()) {
+        if (empty($pr['loc_on_profile'])) continue;          // opted off the map entirely
         $disp = dir_member_display($pr, $viewerUserId, $isAdmin, $audience);
-        if (!$disp || $disp['lat'] === null || $disp['lng'] === null) continue;
+        if ($disp && $disp['lat'] !== null && $disp['lng'] !== null) {
+            // Visible to this viewer — full card.
+            $pins[] = [
+                'slug'         => $pr['slug'] ?: (string)(int)$pr['id'],
+                'display_name' => $pr['display_name'],
+                'lat'          => (float)$disp['lat'],
+                'lng'          => (float)$disp['lng'],
+                'text'         => $disp['text'],
+                'gated'        => false,
+            ];
+            continue;
+        }
+        // Hidden for this viewer. Logged-out viewers still get an anonymized pin at
+        // CITY precision (density without identity) + a "sign in" nudge; the message
+        // reflects whether the member is members-only or fully private. Logged-in
+        // members keep the member-precision behavior (no gated pins).
+        if ($audience !== 'public') continue;
+        $gLat = Block::coarsen($pr['lat'] !== null ? (float)$pr['lat'] : null, 1);
+        $gLng = Block::coarsen($pr['lng'] !== null ? (float)$pr['lng'] : null, 1);
+        if ($gLat === null || $gLng === null) continue;
+        $membersPrivate = (Block::precisionFromInput($pr['location_members_precision']) ?? 'city') === 'private';
         $pins[] = [
-            'slug'         => $pr['slug'] ?: (string)(int)$pr['id'],
-            'display_name' => $pr['display_name'],
-            'lat'          => (float)$disp['lat'],
-            'lng'          => (float)$disp['lng'],
-            'text'         => $disp['text'],
+            'lat'     => (float)$gLat,
+            'lng'     => (float)$gLng,
+            'gated'   => true,
+            'message' => $membersPrivate
+                ? 'This member has their profile set to private.'
+                : 'This member is only showing their profile to members.',
         ];
     }
     profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
