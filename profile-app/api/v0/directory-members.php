@@ -26,6 +26,9 @@ function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
  */
 function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $audience): ?array
 {
+    // If the owner removed the Location block from their profile (it's in the caddy, not on the
+    // layout), they've opted off the map entirely — private for everyone, admin included.
+    if (empty($r['loc_on_profile'])) return null;
     $subjectId = (int)$r['id'];
     if ($subjectId === $viewerUserId) {
         $precision = 'street';                                          // owner sees self exactly
@@ -131,6 +134,7 @@ if ($lat !== null && $lng !== null) {
     // Privacy: a user only appears on the map when their precision for THIS audience isn't 'private'
     // (both audiences now default to city; individuals can dial down to state/private).
     $wheres[] = '(u.lat IS NOT NULL AND u.lng IS NOT NULL AND (point(u.lng, u.lat) <@> point(:lng, :lat)) <= :radius
+                  AND (u.profile_layout IS NULL OR u.profile_layout @> \'["location"]\'::jsonb)
                   AND (CASE WHEN :authed = 1 THEN COALESCE(u.location_members_precision, \'city\')
                                              ELSE COALESCE(u.location_public_precision, \'city\') END) <> \'private\')';
     $orderBy  = 'distance_mi ASC';
@@ -172,7 +176,8 @@ if (!empty($_GET['pins'])) {
 
 $sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url,
                u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
-               u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug
+               u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug,
+               (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
                $selectDistance
         FROM users u
         WHERE " . implode(' AND ', $wheres) . "
