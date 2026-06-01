@@ -77,15 +77,8 @@ $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
 .lg-shell{max-width:760px;margin:0 auto;padding:24px 20px 48px}
 .lg-profile{min-width:0}
-/* desktop: View-as bar spans the top; the block sidebar sits LEFT and the profile right, with
-   both columns top-aligned — so the sidebar lines up with the header card, not the View-as bar. */
-@media(min-width:1100px){
-  .lg-shell--owner{display:grid;grid-template-columns:280px minmax(0,760px);
-    grid-template-areas:"viewas viewas" "caddy profile";column-gap:28px;align-items:start;max-width:1088px}
-  .lg-shell--owner .lg-viewas{grid-area:viewas}
-  .lg-shell--owner .lg-caddy{grid-area:caddy}
-  .lg-shell--owner .lg-profile{grid-area:profile}
-}
+/* The profile (with the View-as bar right above it) stays centered on the page; on wide screens
+   the block sidebar floats off to the LEFT of that centered column (see the .lg-caddy rule). */
 
 /* View-as toggle (owner only) */
 .lg-viewas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lg-charcoal);color:#cfd3cb;
@@ -205,11 +198,12 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-light-menu{position:absolute;top:calc(100% + 4px);display:inline-flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--lg-line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;z-index:1000}
 .lg-light-menu button{display:flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;padding:7px 10px;border-radius:7px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink);text-align:left;white-space:nowrap}
 .lg-light-menu button:hover{background:var(--lg-sage-tint)}
-/* desktop: caddy becomes a permanent sticky sidebar column (overrides the off-canvas drawer) */
-@media(min-width:1100px){
-  .lg-shell--owner .lg-caddy{position:sticky;top:24px;right:auto;align-self:start;width:auto;height:auto;
-    max-height:calc(100vh - 48px);transform:none;border:1px solid var(--lg-line);border-radius:14px;
-    box-shadow:0 1px 3px rgba(0,0,0,.06)}
+/* wide screens: the caddy floats off to the LEFT of the centered profile (permanent, fixed in
+   the left gutter). Needs room, so it kicks in at ≥1380px; below that it's the off-canvas drawer. */
+@media(min-width:1380px){
+  .lg-shell--owner .lg-caddy{position:fixed;box-sizing:border-box;top:110px;right:calc(50% + 404px);left:auto;width:280px;
+    height:auto;max-height:calc(100vh - 134px);overflow-y:auto;transform:none;
+    border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
   .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
   .lg-caddy__backdrop{display:none}
@@ -550,8 +544,8 @@ window.lgSortable = function (container, opts) {
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
     if (backdrop) { backdrop.classList.remove('is-open'); setTimeout(function () { backdrop.hidden = true; }, 220); }
   }
-  // ≥1100px the caddy is a permanent sticky sidebar (CSS); below, it's an off-canvas drawer.
-  var deskMq = window.matchMedia('(min-width:1100px)');
+  // ≥1380px the caddy is a permanent floating sidebar (CSS); below, it's an off-canvas drawer.
+  var deskMq = window.matchMedia('(min-width:1380px)');
   function syncCaddyMode() {
     if (!caddy) return;
     if (deskMq.matches) {                              // permanent: always visible, never a drawer
