@@ -126,6 +126,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-loc__map .leaflet-container,.lg-loc__pin .leaflet-container{height:100%;border-radius:12px;font:inherit}
 /* location audience precision controls (owner) */
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
+.lg-loc__empty{font-size:13.5px;color:var(--lg-mute);margin:10px 0 0}
+.lg-loc__edit{position:relative;margin-top:12px}
 .lg-loc__aud{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--lg-line)}
 .lg-loc__audrow{display:inline-flex;align-items:center;gap:8px}
 .lg-loc__audlabel{font:700 12px/1 var(--lg-font-sans);color:var(--lg-mute)}
@@ -732,6 +734,69 @@ window.lgSortable = function (container, opts) {
       menu.style.top  = (window.scrollY + r.bottom + 6) + 'px';
       menu.style.left = (window.scrollX + Math.min(r.left, document.documentElement.clientWidth - 230)) + 'px';
       openMenu = menu;
+    });
+  });
+})();
+</script>
+
+<script>
+/* Location editor (owner/Me) — set / change the actual location. Search OSM Nominatim via
+   /me/location/search (server-proxied, IP-biased, no API key), pick a result → PUT
+   /me/location {nominatim:<raw>} → reload. Zero results → "save as text" escape hatch. */
+(function () {
+  var wrap = document.getElementById('lg-loc-edit');
+  if (!wrap) return;
+  var btn = wrap.querySelector('.lg-loc__change');
+
+  function save(body) {
+    return fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.ok; });
+  }
+
+  btn.addEventListener('click', function () {
+    if (wrap.querySelector('.lg-craft-search')) return;
+    btn.style.display = 'none';
+    var box = document.createElement('span'); box.className = 'lg-craft-search';
+    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search a city or address…';
+    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
+    box.appendChild(inp); box.appendChild(res); wrap.appendChild(box); inp.focus();
+
+    var timer = null, lastQ = '';
+    function close() { box.remove(); btn.style.display = ''; }
+    function pick(body) { save(body).then(function (ok) { if (ok) location.reload(); else alert('Could not save location.'); }); }
+
+    function run() {
+      var q = inp.value.trim();
+      if (q === lastQ) return; lastQ = q;
+      if (q.length < 3) { res.style.display = 'none'; return; }
+      fetch('/profile-api/v0/me/location/search?q=' + encodeURIComponent(q), { credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (inp.value.trim() !== q) return;                 // stale
+          res.innerHTML = '';
+          var items = (d && d.items) || [];
+          items.slice(0, 6).forEach(function (it) {
+            var b = document.createElement('button'); b.type = 'button';
+            b.innerHTML = '<span>' + (it.short ? it.short.replace(/[&<>"]/g, '') : '') + '</span>';
+            b.title = it.display_name || '';
+            b.addEventListener('click', function () { pick({ nominatim: it.raw }); });
+            res.appendChild(b);
+          });
+          if (!items.length) {                                // escape hatch: save freeform text
+            var t = document.createElement('button'); t.type = 'button'; t.className = 'lg-cat-new';
+            t.innerHTML = '<span>No match — use “' + q.replace(/[&<>"]/g, '') + '” as text</span><span class="t">text</span>';
+            t.addEventListener('click', function () { pick({ text_only: q }); });
+            res.appendChild(t);
+          }
+          res.style.display = 'block';
+        })
+        .catch(function () { res.innerHTML = '<div class="none">Search unavailable.</div>'; res.style.display = 'block'; });
+    }
+    inp.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 320); });   // debounce (Nominatim politeness)
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.addEventListener('click', function onDoc(e) {
+      if (!box.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', onDoc); }
     });
   });
 })();

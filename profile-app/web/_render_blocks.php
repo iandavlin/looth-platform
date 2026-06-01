@@ -463,15 +463,17 @@ function looth_prec_control(string $audience, string $value): string
 function looth_render_location_block(int $userId, string $role, string $headerVis): void
 {
     $loc = Block::loadLocation($userId);
-    if ($loc === null || empty($loc['has'])) return;
+    if ($loc === null) return;
     $isOwner = ($role === 'me');
+    $has     = !empty($loc['has']);
+    if (!$has && !$isOwner) return;                                           // empty + visitor → no block
 
     // Precision for THIS viewer.
     if ($isOwner)               $prec = 'street';
     elseif ($role === 'public') $prec = (string)$loc['public_precision'];
     else                        $prec = (string)$loc['members_precision'];   // member / friend
 
-    $disp = Block::locationDisplay($loc['place'], $prec);
+    $disp = $has ? Block::locationDisplay($loc['place'], $prec) : null;
     if ($disp === null && !$isOwner) return;                                  // private for this audience
 
     echo '<section class="block lg-block lg-block--location" data-block="location">';
@@ -486,14 +488,22 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
            . ' data-lat="' . looth_h((string)$disp['lat']) . '" data-lng="' . looth_h((string)$disp['lng']) . '"></div>';
     }
 
-    // Owner controls: two audience knobs.
+    // Owner controls: change the actual location (search) + the two audience knobs.
     if ($isOwner) {
-        echo '<div class="lg-loc__aud">'
-           . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">👥 Members see</span> '
-           . looth_prec_control('members', (string)$loc['members_precision']) . '</span>'
-           . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">🌐 Public sees</span> '
-           . looth_prec_control('public', (string)$loc['public_precision']) . '</span>'
-           . '</div>';
+        if (!$has) {
+            echo '<p class="lg-loc__empty">No location set — add yours so members can find you on the map.</p>';
+        }
+        echo '<div class="lg-loc__edit" id="lg-loc-edit">'
+           . '<button type="button" class="lg-link__add lg-loc__change">'
+           . ($has ? '✎ Change location' : '＋ Set your location') . '</button></div>';
+        if ($has) {
+            echo '<div class="lg-loc__aud">'
+               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">👥 Members see</span> '
+               . looth_prec_control('members', (string)$loc['members_precision']) . '</span>'
+               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">🌐 Public sees</span> '
+               . looth_prec_control('public', (string)$loc['public_precision']) . '</span>'
+               . '</div>';
+        }
     }
 
     echo '</section>';
