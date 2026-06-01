@@ -205,7 +205,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
    top, centered over the profile. The caddy is sticky + IN-FLOW (not fixed), so it never overlaps
    the footer. Below 1380 → single centered column + off-canvas drawer. */
 @media(min-width:1380px){
-  .lg-shell--owner{display:grid;max-width:1376px;column-gap:28px;align-items:start;
+  .lg-shell--owner{display:grid;max-width:1376px;column-gap:28px;row-gap:20px;align-items:start;
     grid-template-columns:280px minmax(0,760px) 280px;
     grid-template-areas:"viewas viewas viewas" "caddy profile spacer"}
   .lg-shell--owner .lg-viewas{grid-area:viewas;max-width:760px;width:100%;margin:0 auto}
