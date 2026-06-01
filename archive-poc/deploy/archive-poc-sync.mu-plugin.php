@@ -17,6 +17,15 @@
 
 if (!defined('ABSPATH')) exit;
 
+// Register edit_archive_poc capability on the administrator role.
+// Stored in wp_options (wp_user_roles), so the add_cap() only writes once.
+add_action('init', function () {
+    $role = get_role('administrator');
+    if ($role && !isset($role->capabilities['edit_archive_poc'])) {
+        $role->add_cap('edit_archive_poc');
+    }
+}, 1);
+
 if (!function_exists('archive_poc_sync_dispatch')) {
 function archive_poc_sync_dispatch(int $post_id, string $action = 'upsert'): void {
     if ($post_id <= 0) return;
@@ -225,8 +234,12 @@ foreach (array_keys($_COOKIE) as $cn) {
         $where_extra .= ' AND a.date_recorded < FROM_UNIXTIME(%d)';
         $params[] = $before;
     }
-    // Over-fetch then trim — privacy + dedupe may discard some
-    $sql_limit = $limit * 3 + 5;
+    // Over-fetch then trim — many recent rows get discarded (gated content for
+    // anon, dedupe, and especially activities whose target post was deleted —
+    // dev sees heavy test-post churn). A shallow over-fetch can leave the strip
+    // nearly empty, so scan deep with a generous floor + bounded cap.
+    $sql_limit = max($limit * 3 + 5, 120);
+    if ($sql_limit > 250) $sql_limit = 250;
     $params[] = $sql_limit;
 
     $rows = $wpdb->get_results($wpdb->prepare("
@@ -279,6 +292,23 @@ foreach (array_keys($_COOKIE) as $cn) {
     return rest_ensure_response($payload);
 }
 
+/** First BuddyBoss media attachment image for a post — forum posts attach
+ *  photos as bp_media (post_content is often empty). Mirrors the archive-poc
+ *  indexer's first_bp_media_thumb(). */
+function lg_activity_first_bp_media_thumb(int $post_id): ?string {
+    global $wpdb;
+    $ids_csv = (string) get_post_meta($post_id, 'bp_media_ids', true);
+    if ($ids_csv === '') return null;
+    $ids = array_values(array_filter(array_map('intval', array_map('trim', explode(',', $ids_csv)))));
+    if (!$ids) return null;
+    $ph  = implode(',', array_fill(0, count($ids), '%d'));
+    $sql = "SELECT attachment_id FROM {$wpdb->prefix}bp_media
+            WHERE id IN ($ph) ORDER BY FIELD(id, $ph) LIMIT 1";
+    $att_id = (int) $wpdb->get_var($wpdb->prepare($sql, ...array_merge($ids, $ids)));
+    if (!$att_id) return null;
+    return wp_get_attachment_image_url($att_id, 'medium_large') ?: null;
+}
+
 /** Build an activity row from a post target. Returns null if filtered out. */
 function lg_activity_hydrate_post(int $post_id, bool $is_member, bool $is_sticky, ?array $activity_row = null): ?array {
     $post = get_post($post_id);
@@ -316,6 +346,25 @@ function lg_activity_hydrate_post(int $post_id, bool $is_member, bool $is_sticky
     ];
     $target_kind = $kind_map[$post->post_type] ?? 'post';
 
+    // Forum topics link to the bb-mirror reader / The Hub (/hub/<forum-slug>/<topic-slug>/),
+    // NOT the legacy BuddyBoss group-forum permalink. bb-mirror's forum.slug and
+    // topic.slug were backfilled from bbPress post_name, and a bbPress topic's
+    // post_parent IS its forum — so we build the URL directly here, no shim.
+    // Verified slug parity (e.g. topic blades-for-sale → forum sell-sell-sell).
+    $target_url = get_permalink($post_id) ?: '';
+    if ($post->post_type === 'topic') {
+        $forum_id   = (int) $post->post_parent;
+        $forum_slug = $forum_id ? (string) get_post_field('post_name', $forum_id) : '';
+        $topic_slug = (string) $post->post_name;
+        if ($forum_slug !== '' && $topic_slug !== '') {
+            $target_url = '/hub/' . $forum_slug . '/' . $topic_slug . '/';
+        }
+    } elseif ($post->post_type === 'forum') {
+        // A forum surfaced in the feed (e.g. a pinned forum) → bb-mirror forum page.
+        $forum_slug = (string) $post->post_name;
+        if ($forum_slug !== '') $target_url = '/hub/' . $forum_slug . '/';
+    }
+
     $img = null;
     $tid = (int) get_post_thumbnail_id($post_id);
     if ($tid > 0) $img = wp_get_attachment_image_url($tid, 'medium_large') ?: null;
@@ -325,10 +374,46 @@ function lg_activity_hydrate_post(int $post_id, bool $is_member, bool $is_sticky
         if ($local !== $img && (!is_file(explode('?', $local, 2)[0]) || filesize(explode('?', $local, 2)[0]) === 0)) $img = null;
     }
 
+    // Media facade: if the body links a YouTube video and there's no featured
+    // image, use the (free, instant) YouTube thumbnail. The card renders as an
+    // image card with a play overlay — no iframe, no oEmbed call → stays fast.
+    $yt_id = null;
+    if (preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i', (string) $post->post_content, $ytm)) {
+        $yt_id = $ytm[1];
+        if (!$img) $img = 'https://i.ytimg.com/vi/' . $yt_id . '/hqdefault.jpg';
+    }
+
+    // Forum posts attach photos as BuddyBoss media (post_content is often empty),
+    // so resolve bp_media_ids → attachment image before falling back to inline <img>.
+    if (!$img) {
+        $bb = lg_activity_first_bp_media_thumb($post_id);
+        if ($bb) $img = $bb;
+    }
+
+    // Still no image? Pull the first inline image from the body — some posts
+    // embed photos inline instead. Skip emoji/avatar/spacer sprites. Then apply
+    // the same R2-graveyard guard as the indexer so a missing dev-local file
+    // doesn't render broken.
+    if (!$img && preg_match_all('~<img[^>]+src=["\']([^"\']+)["\']~i', (string) $post->post_content, $imm)) {
+        foreach ($imm[1] as $cand) {
+            if (!preg_match('~^https?://~i', $cand)) continue;
+            if (preg_match('~(emoji|smilie|gravatar|/s\.w\.org/|spacer|blank\.gif|wpforms|icon)~i', $cand)) continue;
+            $img = $cand;
+            break;
+        }
+        if ($img) {
+            $local = str_replace(['https://'.$_SERVER['HTTP_HOST'].'/','http://'.$_SERVER['HTTP_HOST'].'/'], ABSPATH, $img);
+            if ($local !== $img && (!is_file(explode('?', $local, 2)[0]) || filesize(explode('?', $local, 2)[0]) === 0)) $img = null;
+        }
+    }
+
     $excerpt = trim((string) $post->post_excerpt);
     if ($excerpt === '') $excerpt = wp_strip_all_tags($post->post_content);
     // Collapse all whitespace runs to single spaces, decode entities.
     $excerpt = html_entity_decode($excerpt, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    // Drop bare media URLs — they're represented by the thumbnail / link now,
+    // and a raw URL as body text looks broken on the card.
+    $excerpt = preg_replace('~\b(?:https?://)?(?:www\.|m\.)?(?:youtu\.be|youtube\.com|instagram\.com|reddit\.com|redd\.it)/\S*~i', '', $excerpt);
     $excerpt = preg_replace('/\s+/u', ' ', $excerpt) ?? $excerpt;
     $excerpt = trim($excerpt);
     if (mb_strlen($excerpt) > 200) $excerpt = mb_substr($excerpt, 0, 197) . '…';
@@ -346,10 +431,11 @@ function lg_activity_hydrate_post(int $post_id, bool $is_member, bool $is_sticky
         'action' => $action,
         'target' => [
             'title' => $post->post_title ?: '(untitled)',
-            'url'   => get_permalink($post_id) ?: '',
+            'url'   => $target_url,
             'kind'  => $target_kind,
         ],
         'image_url' => $img,
+        'yt_id'     => $yt_id,   // → card shows YT thumbnail + play overlay (facade)
         'excerpt'   => $excerpt,
     ];
 }

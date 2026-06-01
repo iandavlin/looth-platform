@@ -394,6 +394,12 @@ while (true) {
             } else {
                 $forum_label    = (string) (get_the_title($immediate) ?: '');
             }
+            // bb-mirror reader URL, not legacy BB permalink (slugs == bbPress post_name).
+            $fslug = (string) get_post_field('post_name', $immediate);
+            $tslug = (string) ($p['post_name'] ?? '');
+            if ($fslug !== '' && $tslug !== '') {
+                $url = '/hub/' . $fslug . '/' . $tslug . '/';
+            }
         }
 
         $has_download = false;

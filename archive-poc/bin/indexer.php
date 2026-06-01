@@ -315,6 +315,16 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
                 $forum_label    = (string) (get_the_title($immediate) ?: '');
             }
         }
+
+        // Link discussions to the bb-mirror reader, not the legacy BB permalink.
+        // bb-mirror URL = /forum/<immediate-forum-slug>/<topic-slug>/ — its
+        // forum.slug/topic.slug were backfilled from bbPress post_name, so we
+        // build it directly (no shim). Falls back to get_permalink if missing.
+        $fslug = $immediate ? (string) get_post_field('post_name', $immediate) : '';
+        $tslug = (string) $post->post_name;
+        if ($fslug !== '' && $tslug !== '') {
+            $url = '/hub/' . $fslug . '/' . $tslug . '/';
+        }
     }
 
     $has_download = 0;

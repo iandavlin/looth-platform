@@ -410,6 +410,14 @@ while (true) {
             } else {
                 $forum_label    = (string) (get_the_title($immediate) ?: '');
             }
+            // Link to the bb-mirror reader, not the legacy BB permalink.
+            // /forum/<immediate-forum-slug>/<topic-slug>/ — slugs match bbPress
+            // post_name (verified), so build directly. Fall back if missing.
+            $fslug = (string) get_post_field('post_name', $immediate);
+            $tslug = (string) ($p['post_name'] ?? '');
+            if ($fslug !== '' && $tslug !== '') {
+                $url = '/hub/' . $fslug . '/' . $tslug . '/';
+            }
         }
 
         // has_download for loothprint-ish
