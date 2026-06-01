@@ -1001,6 +1001,71 @@ No more "edit the giant shared conf and pray" merges.
 
 ---
 
+## 3n. Patreon launch onboarding — new members create a WP account from Patreon (2026-06-01, Ian)
+
+**Launch-critical goal:** a net-new member authorizes Patreon → a WordPress account is
+created **anchored to their Patreon user ID** with the correct `looth1–4` tier role; the
+**hourly** Patreon poll keeps that role in sync (upgrades AND churn/cancel demotions).
+Scope is **new-member account creation** (not existing-user linking — the code handles that
+too, but it's not the launch target).
+
+**Owner: the poller lane** (`lg-patreon-stripe-poller`). Most of this already exists there —
+**verify/harden, don't rebuild:**
+- *Linking:* `[lg_patreon_onboard]` shortcode → Patreon `oauth2/authorize` → `/patreon-callback/`
+  (rewrite rule) → verify active patron → create WP user, map tier→role, password-setup email.
+  Identity anchor = Patreon user ID (not email). Dev is configured (client_id, campaign_id,
+  tier_map, redirect_uri=dev).
+- *Polling:* `LGPO_Sync_Engine::run` on the `lgpo_patreon_auto_sync` cron (hourly) — fetches all
+  campaign members (Patreon API v2), maps tier→role, writes usermeta.
+- *Authority:* `PatreonSourceReader` → `Arbiter::sync` (`source='patreon'`, highest tier wins,
+  looth4 protected). `/manage-subscription/` is the post-account read surface.
+
+**Onboarding page (coordinator decision):** signup is pre-account/anonymous → it must NOT live
+behind login or on `/manage-subscription/`. → **dedicated public `/join/` page**, per §0d clean
+URLs. Built **standalone** (wears the shared header, like `/manage-subscription/`): it renders the
+"Connect your Patreon" CTA linking to the poller's WP-side authorize entry; OAuth + WP-account
+creation happen WP-side (poller); on success it returns to `/manage-subscription/`. Keeps the page
+in the strangled stack while the account-creation engine stays in WP.
+
+**Lanes this touches: standalone (the page) · shell (nav) · poller (the engine).**
+
+**Lane work:**
+
+*poller (owns the engine — most already built, verify/harden):*
+1. Dev-prove the NEW-member happy path end-to-end: fresh authorize → WP account created +
+   anchored to Patreon ID + correct tier role + password-setup email delivered.
+2. Dev-prove the hourly poll: a pledge upgrade reflects within the hour; **cancel/churn demotes
+   the role** (downgrade path — most likely under-tested; the key gate).
+3. Refresh-token lifecycle (creator token for the member sweep + per-user tokens) survives so
+   polling doesn't silently die.
+4. Edge flows fire + notify admin: already-onboarded ("you're all set"), not-a-patron error,
+   email collision → manual-review flag.
+5. Poll-failure visibility → devmsg/email the coordinator (not just `error_log`).
+6. Expose a stable **authorize-entry URL** the standalone `/join/` page links to (e.g.
+   `/patreon-connect` → builds the OAuth `state` + redirects to Patreon); define the
+   post-callback return target (`/manage-subscription/` or a success page) + the copy/states it
+   passes back (success / not-a-patron / already-onboarded).
+
+*standalone (owns the page):*
+1. Build the public `/join/` page (shared header, like manage-subscription): "Connect your
+   Patreon" CTA → poller's authorize-entry URL, plus the post-auth states.
+2. Add a "not linked yet → /join/" hint to `/manage-subscription/`.
+
+*shell:* public nav/account entry to `/join/` for logged-out visitors.
+
+*coordinator (me) — launch-day prerequisite (not a lane):* register
+`https://loothgroup.com/patreon-callback/` as a Patreon dev-portal redirect URI + load live
+client_id/secret/campaign_id/tier_map into live config; confirm the live tier_map (Patreon tier
+IDs → looth1–4) is current. Own this section + dev-proof sign-off.
+
+*profile-app/identity (verify only):* the Arbiter-written tier flows into `looth_id`→`whoami` so
+the tier pill + gating reflect the Patreon tier post-onboard (mostly automatic via role→tier).
+
+**Sequence:** poller dev-proves new-member-create + churn-demote loops (GATE) → `/join/` page →
+shell nav → live OAuth client registered → launch.
+
+---
+
 ## 4. Cutover sequence
 
 > **⚠️ MODEL CHANGED 2026-05-28 — blue-green, not in-place.**
