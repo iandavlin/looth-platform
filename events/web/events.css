@@ -1,4 +1,5 @@
 /* events landing — standalone surface styles (loaded on the shared shell). */
+*, *::before, *::after { box-sizing: border-box; }
 
 .lg-evland { max-width: var(--lg-article-max, 1040px); margin: 0 auto; padding: 32px clamp(16px,4vw,48px); }
 .lg-evland__head { margin: 0 0 8px; font: 700 clamp(28px,4vw,44px)/1.1 var(--lg-font-serif, Georgia, serif); color: var(--lg-charcoal, #1a1d1a); }
