@@ -224,6 +224,20 @@ sudo -u looth-live wp --path=/var/www/html eval-file /srv/archive-poc/bin/backfi
 
 # (7g) Run profile-app's slice 4 migration on new box's data
 sudo -u profile-app php /srv/profile-app/bin/migrate-from-xprofile.php
+
+# (7h) Bulk-set location defaults for existing members (Ian ruled 2026-06-01)
+# New members already default to members-visible/city (schema default changed pre-cut).
+# Existing members: set location_visibility='members' + location_pin_precision='city'
+# for any row where both are still at the old 'private'/'exact' defaults (i.e. never
+# explicitly set by the user). Members who touched their own dial are left alone.
+sudo -u profile-app psql -d profile_app -c "
+  UPDATE users
+     SET location_visibility    = 'members',
+         location_pin_precision = 'city'
+   WHERE location_visibility    = 'private'
+     AND location_pin_precision = 'exact';
+"
+# Verify: should update the bulk of existing members; anyone who self-configured is untouched.
 ```
 
 **Rollback before DNS swing:** drop the new-box DB, re-run from a fresh export. Old box not touched.
@@ -336,3 +350,6 @@ After soak passes. Stop EC2 instance 54.157.13.77; preserve EBS volume for a wee
 - archive-poc skip-pgloader / re-run-backfill model (step 7f)
 - bb-mirror pgloader from dev SQLite (step 7e — bb-mirror lives on dev today)
 - Step 13 6-check gate, now gating DNS-swing not "cutover-complete declaration"
+
+## File ownership → generic www-data (Ian, 2026-05-31)
+At cut, collapse all strangler-app file ownership to generic `www-data` on loothgroup.com (kill chown reacharounds). DEPENDENCY: apps peer-auth to postgres via distinct OS users → switch to password-auth DSNs (LG_*_DSN already supports) or one role before flipping pool users. Also drops per-app pool isolation (acceptable single-host).
