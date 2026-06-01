@@ -77,18 +77,32 @@ $wheres = [
 $params = [];
 
 if ($insts) {
-    $ph = [];
-    foreach ($insts as $i => $s) { $k = ":i$i"; $ph[] = $k; $params[$k] = (string)$s; }
-    $wheres[] = "EXISTS (SELECT 1 FROM profile_instruments pi
-                         JOIN instrument_catalog ic ON ic.id = pi.instrument_id
-                         WHERE pi.user_id = u.id AND ic.slug IN (" . implode(',', $ph) . "))";
+    // Match the full list (profile_instruments) OR the featured highlights (profile_highlights),
+    // since migrated profiles carry instruments as highlights. Distinct param names per subquery.
+    $ph1 = []; $ph2 = [];
+    foreach ($insts as $i => $s) {
+        $ph1[] = ":i$i"; $ph2[] = ":ih$i";
+        $params[":i$i"] = (string)$s; $params[":ih$i"] = (string)$s;
+    }
+    $wheres[] = "(EXISTS (SELECT 1 FROM profile_instruments pi
+                          JOIN instrument_catalog ic ON ic.id = pi.instrument_id
+                          WHERE pi.user_id = u.id AND ic.slug IN (" . implode(',', $ph1) . "))
+              OR EXISTS (SELECT 1 FROM profile_highlights h
+                          JOIN instrument_catalog ic ON ic.id = h.ref_id
+                          WHERE h.user_id = u.id AND h.kind = 'instrument' AND ic.slug IN (" . implode(',', $ph2) . ")))";
 }
 if ($skills) {
-    $ph = [];
-    foreach ($skills as $i => $s) { $k = ":sk$i"; $ph[] = $k; $params[$k] = (string)$s; }
-    $wheres[] = "EXISTS (SELECT 1 FROM profile_skills ps
-                         JOIN skill_catalog sc ON sc.id = ps.skill_id
-                         WHERE ps.user_id = u.id AND sc.slug IN (" . implode(',', $ph) . "))";
+    $ph1 = []; $ph2 = [];
+    foreach ($skills as $i => $s) {
+        $ph1[] = ":sk$i"; $ph2[] = ":skh$i";
+        $params[":sk$i"] = (string)$s; $params[":skh$i"] = (string)$s;
+    }
+    $wheres[] = "(EXISTS (SELECT 1 FROM profile_skills ps
+                          JOIN skill_catalog sc ON sc.id = ps.skill_id
+                          WHERE ps.user_id = u.id AND sc.slug IN (" . implode(',', $ph1) . "))
+              OR EXISTS (SELECT 1 FROM profile_highlights h
+                          JOIN skill_catalog sc ON sc.id = h.ref_id
+                          WHERE h.user_id = u.id AND h.kind = 'skill' AND sc.slug IN (" . implode(',', $ph2) . ")))";
 }
 if ($music) {
     $ph = [];
