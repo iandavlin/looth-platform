@@ -60,6 +60,31 @@
 
   function reload() { window.location.reload(); }
 
+  /* ── Exit handoff ────────────────────────────────────────────────────
+     "Exit editor" links to the bare permalink (FeEditor drops ?lg_edit),
+     which nginx serves from the standalone renderer. But the save-hook
+     re-bake (materialize) is async — it trails the REST save by ~0.5s — so
+     a naive navigation can land on the *previous* blob. Hold a beat: drain
+     any in-flight save (the blur-save fired by this very click counts), then
+     wait out the materialize before navigating, so standalone shows fresh. */
+  var REBAKE_SETTLE_MS = 600;   // async save-hook materialize lag cushion
+  function exitToBarePermalink(href) {
+    spinnerInc();   // our own count (+1) keeps the "Saving…" pill up while we wait
+    if (_spinnerEl) {
+      var t = _spinnerEl.querySelector('.lg-fe-spinner__text');
+      if (t) t.textContent = 'Finishing…';
+    }
+    var started = Date.now();
+    (function waitDrain() {
+      // Drained once our exit count is the only one left (cap so we never hang).
+      if (_spinnerCount > 1 && Date.now() - started < 8000) {
+        setTimeout(waitDrain, 80);
+        return;
+      }
+      setTimeout(function () { window.location.assign(href); }, REBAKE_SETTLE_MS);
+    })();
+  }
+
   function flashError(msg) { console.error('[lg-fe-editor]', msg); window.alert(msg); }
 
   /* ── Marker wiring ───────────────────────────────────────────────── */
@@ -1457,6 +1482,18 @@
   } else {
     wireMarkers();
   }
+
+  /* Intercept the "Exit editor" link so the async re-bake settles before we
+     land on the standalone view (see exitToBarePermalink). Capture phase so
+     we beat the default navigation. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a.lg-fe-edit-btn.is-active');
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (!href) return;
+    e.preventDefault();
+    exitToBarePermalink(href);
+  }, true);
 
   /* Expose for future use (e.g. drop-zone inserts that need to re-wire). */
   window.LG_FE_EDITOR_API = { wireMarkers: wireMarkers, rest: rest };

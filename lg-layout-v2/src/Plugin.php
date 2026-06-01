@@ -21,7 +21,10 @@ final class Plugin
      *  actually carry a `_lg_layout_v2` meta render via v2 (manages() also
      *  requires the meta), so unconverted events keep the legacy template —
      *  an incremental, per-post cutover. */
-    public const MANAGED_CPTS = ['post-imgcap', 'post-type-videos', 'sponsor-post', 'event'];
+    public const MANAGED_CPTS = [
+        'post-imgcap', 'post-type-videos', 'sponsor-post', 'event',
+        'loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit',
+    ];
 
     public static function boot(): void
     {
@@ -50,6 +53,12 @@ final class Plugin
            so a re-publish (wp_update_post, no layout-meta change) must also
            bust the anon cache. Scoped to the `event` CPT. */
         add_action('save_post_event',   [self::class, 'on_event_saved'], 10, 3);
+
+        /* Structured CPTs whose layouts are synthesized from postmeta — any
+           save (ACF form, submission form, wp_update_post) must bust the cache. */
+        foreach (['loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit'] as $cpt) {
+            add_action("save_post_{$cpt}", [self::class, 'on_synth_cpt_saved'], 10, 3);
+        }
 
         /* Phase 3: authoring surface. Registers its own admin menu + save route. */
         Dash::boot();
@@ -240,13 +249,12 @@ final class Plugin
         if (!$post instanceof \WP_Post) return false;
         if (!in_array($post->post_type, self::MANAGED_CPTS, true)) return false;
 
-        /* Events get a *default* v2 layout synthesized from their postmeta
-           (see default_event_layout), so any published event is managed even
-           with no explicit `_lg_layout_v2` meta — that's what lets a
-           Sheet-published event render on v2 with zero per-event work. An
-           explicit layout meta still wins as an override (handled in
-           load_layout). Drafts/test stubs stay on the legacy template. */
-        if ($post->post_type === 'event') {
+        /* Synthesized CPTs get a default layout built from postmeta at render
+           time, so any published post of these types is managed — no explicit
+           `_lg_layout_v2` meta needed. An explicit meta still wins as an
+           override (see load_layout). Drafts stay on the legacy template. */
+        $synth = ['event', 'loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit'];
+        if (in_array($post->post_type, $synth, true)) {
             if (!empty(get_post_meta($post->ID, LG_LAYOUT_V2_META_KEY, true))) return true;
             return $post->post_status === 'publish';
         }
@@ -266,8 +274,14 @@ final class Plugin
             return is_array($data) ? $data : null;
         }
         $post = get_post($post_id);
-        if ($post instanceof \WP_Post && $post->post_type === 'event') {
-            return self::default_event_layout($post);
+        if (!$post instanceof \WP_Post) return null;
+        switch ($post->post_type) {
+            case 'event':          return self::default_event_layout($post);
+            case 'loothprint':     return self::default_loothprint_layout($post);
+            case 'loothcuts':      return self::default_loothcuts_layout($post);
+            case 'useful_links':   return self::default_useful_links_layout($post);
+            case 'document':       return self::default_document_layout($post);
+            case 'member-benefit': return self::default_member_benefit_layout($post);
         }
         return null;
     }
@@ -317,6 +331,282 @@ final class Plugin
         $html = preg_replace('~<h([1-6])\b[^>]*>.*?' . $q . '.*?</h\1>~is', '', $html) ?? $html;
         $html = preg_replace('~<a\b[^>]*href="[^"]*' . $q . '[^"]*"[^>]*>.*?</a>~is', '', $html) ?? $html;
         return $html;
+    }
+
+    /**
+     * Synthesize a loothprint layout from postmeta.
+     * post-header → wysiwyg(desc) → gallery → embed(video) →
+     * callout:files(download) → callout:links(onshape) →
+     * callout:note(license) → callout:links(bmc) → post-footer
+     */
+    private static function default_loothprint_layout(\WP_Post $post): array
+    {
+        $pid = $post->ID;
+
+        $body = wpautop(trim((string) $post->post_content));
+
+        $raw_images = get_post_meta($pid, 'loothprint_more_images', true);
+        $image_ids  = is_array($raw_images)
+            ? array_values(array_filter(array_map('intval', $raw_images)))
+            : [];
+
+        $file_id   = (int) get_post_meta($pid, 'loothprint_3d_file', true);
+        $file_url  = $file_id > 0 ? (string) (wp_get_attachment_url($file_id) ?: '') : '';
+        $file_name = $file_id > 0 ? (string) (get_the_title($file_id) ?: basename($file_url)) : basename($file_url);
+
+        $cc      = trim((string) get_post_meta($pid, 'loothprint_creative_commons', true));
+        $onshape = trim((string) get_post_meta($pid, 'loothprint_onshape_link', true));
+        $video   = trim((string) get_post_meta($pid, 'loothprint_video_instructions', true));
+        $bmc     = trim((string) get_post_meta($pid, 'loothprint_buy_me_a_coffee', true));
+        $gate    = self::synth_gate_tier($pid);
+
+        $blocks = [['type' => 'post-header', 'id' => 'lp_header']];
+
+        if (trim(wp_strip_all_tags($body)) !== '') {
+            $blocks[] = ['type' => 'wysiwyg', 'id' => 'lp_desc', 'html' => $body];
+        }
+        if (!empty($image_ids)) {
+            $blocks[] = ['type' => 'gallery', 'id' => 'lp_gallery', 'image_ids' => $image_ids];
+        }
+        if ($video !== '') {
+            // embed is in Renderer::AUTO_GATE_TYPES — auto-gates from post tier, no gated_tier needed
+            $blocks[] = ['type' => 'embed', 'id' => 'lp_video', 'url' => $video];
+        }
+        if ($file_url !== '') {
+            $dl = [
+                'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
+                'title' => 'Download',
+                'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
+            ];
+            if ($gate) $dl['gated_tier'] = $gate;
+            $blocks[] = $dl;
+        }
+        if ($onshape !== '') {
+            $os = [
+                'type' => 'callout', 'id' => 'lp_onshape', 'variant' => 'links',
+                'title' => 'CAD',
+                'items' => [['icon' => 'globe', 'label' => 'Open in OnShape', 'url' => $onshape]],
+            ];
+            if ($gate) $os['gated_tier'] = $gate;
+            $blocks[] = $os;
+        }
+        if ($cc !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'lp_license', 'variant' => 'note',
+                'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
+            ];
+        }
+        if ($bmc !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'lp_bmc', 'variant' => 'links',
+                'items' => [['icon' => 'link', 'label' => 'Support the creator on Buy Me a Coffee', 'url' => $bmc]],
+            ];
+        }
+        $blocks[] = ['type' => 'post-footer', 'id' => 'lp_footer'];
+
+        return ['schema' => 1, '_meta' => ['title' => $post->post_title, 'generated' => 'default-loothprint-layout'], 'blocks' => $blocks];
+    }
+
+    /**
+     * Synthesize a loothcuts layout. Mirrors loothprint but description lives in
+     * loothcut_about_your_loothcut (post_content is empty on these posts).
+     */
+    private static function default_loothcuts_layout(\WP_Post $post): array
+    {
+        $pid = $post->ID;
+
+        $about = str_replace('&nbsp;', ' ', trim((string) get_post_meta($pid, 'loothcut_about_your_loothcut', true)));
+        $body  = wpautop($about);
+
+        $raw_images = get_post_meta($pid, 'loothcut_more_images', true);
+        $image_ids  = is_array($raw_images)
+            ? array_values(array_filter(array_map('intval', $raw_images)))
+            : [];
+
+        $file_id   = (int) get_post_meta($pid, 'loothcut_cnc_file', true);
+        $file_url  = $file_id > 0 ? (string) (wp_get_attachment_url($file_id) ?: '') : '';
+        $file_name = $file_id > 0 ? (string) (get_the_title($file_id) ?: basename($file_url)) : basename($file_url);
+
+        $cc      = trim((string) get_post_meta($pid, 'loothcut_creative_commons', true));
+        $onshape = trim((string) get_post_meta($pid, 'loothcut_onshape_link', true));
+        $video   = trim((string) get_post_meta($pid, 'loothcut_video_instructions', true));
+        $gate    = self::synth_gate_tier($pid);
+
+        $blocks = [['type' => 'post-header', 'id' => 'lc_header']];
+
+        if (trim(wp_strip_all_tags($body)) !== '') {
+            $blocks[] = ['type' => 'wysiwyg', 'id' => 'lc_desc', 'html' => $body];
+        }
+        if (!empty($image_ids)) {
+            $blocks[] = ['type' => 'gallery', 'id' => 'lc_gallery', 'image_ids' => $image_ids];
+        }
+        if ($video !== '') {
+            $blocks[] = ['type' => 'embed', 'id' => 'lc_video', 'url' => $video];
+        }
+        if ($file_url !== '') {
+            $dl = [
+                'type' => 'callout', 'id' => 'lc_download', 'variant' => 'files',
+                'title' => 'Download',
+                'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download CNC File', 'url' => $file_url]],
+            ];
+            if ($gate) $dl['gated_tier'] = $gate;
+            $blocks[] = $dl;
+        }
+        if ($onshape !== '') {
+            $os = [
+                'type' => 'callout', 'id' => 'lc_onshape', 'variant' => 'links',
+                'title' => 'CAD',
+                'items' => [['icon' => 'globe', 'label' => 'Open in OnShape', 'url' => $onshape]],
+            ];
+            if ($gate) $os['gated_tier'] = $gate;
+            $blocks[] = $os;
+        }
+        if ($cc !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'lc_license', 'variant' => 'note',
+                'title' => 'License', 'body' => '<p>' . esc_html($cc) . '</p>',
+            ];
+        }
+        $blocks[] = ['type' => 'post-footer', 'id' => 'lc_footer'];
+
+        return ['schema' => 1, '_meta' => ['title' => $post->post_title, 'generated' => 'default-loothcuts-layout'], 'blocks' => $blocks];
+    }
+
+    /**
+     * Synthesize a useful_links layout. These are link cards — no gating (all public).
+     * post-header → wysiwyg(body/excerpt) → callout:links(external URL)
+     */
+    private static function default_useful_links_layout(\WP_Post $post): array
+    {
+        $pid = $post->ID;
+
+        $url      = trim((string) get_post_meta($pid, 'useful_url', true));
+        $body_raw = trim((string) $post->post_content) ?: trim((string) $post->post_excerpt);
+        $body     = $body_raw !== '' ? wpautop($body_raw) : '';
+
+        $blocks = [['type' => 'post-header', 'id' => 'ul_header']];
+
+        if ($body !== '' && trim(wp_strip_all_tags($body)) !== '') {
+            $blocks[] = ['type' => 'wysiwyg', 'id' => 'ul_desc', 'html' => $body];
+        }
+        if ($url !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'ul_link', 'variant' => 'links',
+                'items' => [['icon' => 'globe', 'label' => $post->post_title ?: $url, 'url' => $url]],
+            ];
+        }
+
+        return ['schema' => 1, '_meta' => ['title' => $post->post_title, 'generated' => 'default-useful-links-layout'], 'blocks' => $blocks];
+    }
+
+    /**
+     * Synthesize a document layout. post-header → callout:files(download).
+     * Gated at looth-lite when the post carries a non-public tier term.
+     */
+    private static function default_document_layout(\WP_Post $post): array
+    {
+        $pid = $post->ID;
+
+        $file_url = trim((string) get_post_meta($pid, 'pdf_url', true));
+        if ($file_url === '') $file_url = trim((string) get_post_meta($pid, 'download_url', true));
+        if ($file_url === '') {
+            $upload_id = (int) get_post_meta($pid, 'file_upload', true);
+            if ($upload_id > 0) $file_url = (string) (wp_get_attachment_url($upload_id) ?: '');
+        }
+
+        $gate = self::synth_gate_tier($pid);
+
+        $blocks = [['type' => 'post-header', 'id' => 'doc_header']];
+
+        if ($file_url !== '') {
+            $ext  = strtolower((string) pathinfo($file_url, PATHINFO_EXTENSION));
+            $icon = $ext === 'pdf' ? 'file-pdf' : ($ext === 'zip' ? 'file-zip' : 'file');
+            $item = ['icon' => $icon, 'label' => $post->post_title ?: 'Download Document', 'url' => $file_url];
+            if ($ext !== '') $item['ext'] = $ext;
+            $dl = ['type' => 'callout', 'id' => 'doc_download', 'variant' => 'files', 'title' => 'Download', 'items' => [$item]];
+            if ($gate) $dl['gated_tier'] = $gate;
+            $blocks[] = $dl;
+        }
+
+        return ['schema' => 1, '_meta' => ['title' => $post->post_title, 'generated' => 'default-document-layout'], 'blocks' => $blocks];
+    }
+
+    /**
+     * Synthesize a member-benefit layout.
+     * post-header(hero) → wysiwyg(intro) → gallery →
+     * [gated] callout:links(vendor) → [gated] callout:note(code) → [gated] wysiwyg(details)
+     * Always gated at looth-lite (member-benefits are member-only by definition).
+     */
+    private static function default_member_benefit_layout(\WP_Post $post): array
+    {
+        $pid = $post->ID;
+
+        $hero_id    = (int) get_post_meta($pid, 'member_benefits_hero_image', true);
+        $intro_raw  = trim((string) get_post_meta($pid, 'member_benefits_introduction', true))
+                   ?: trim((string) $post->post_excerpt);
+        $details    = trim((string) get_post_meta($pid, 'member_benefits_full_details', true));
+        $link       = trim((string) get_post_meta($pid, 'member_benefits_link', true));
+        $link_title = trim((string) get_post_meta($pid, 'member_benefits_link_title', true));
+        $code_raw   = trim((string) get_post_meta($pid, 'member_benefits_instructions_or_code', true));
+
+        $raw_gallery = get_post_meta($pid, 'post_addon_gallery', true);
+        $gallery_ids = is_array($raw_gallery)
+            ? array_values(array_filter(array_map('intval', $raw_gallery)))
+            : [];
+
+        $gate = self::synth_gate_tier($pid) ?: 'looth-lite';
+
+        $header = ['type' => 'post-header', 'id' => 'mb_header'];
+        if ($hero_id > 0) $header['featured_image_id'] = $hero_id;
+        $blocks = [$header];
+
+        if ($intro_raw !== '') {
+            $blocks[] = ['type' => 'wysiwyg', 'id' => 'mb_intro', 'html' => wpautop($intro_raw)];
+        }
+        if (!empty($gallery_ids)) {
+            $blocks[] = ['type' => 'gallery', 'id' => 'mb_gallery', 'image_ids' => $gallery_ids];
+        }
+        if ($link !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'mb_link', 'variant' => 'links',
+                'title' => 'Member Discount', 'gated_tier' => $gate,
+                'items' => [['icon' => 'globe', 'label' => $link_title ?: $post->post_title, 'url' => $link]],
+            ];
+        }
+        if ($code_raw !== '') {
+            $blocks[] = [
+                'type' => 'callout', 'id' => 'mb_code', 'variant' => 'note',
+                'title' => 'How To Claim', 'gated_tier' => $gate,
+                'body' => wp_kses_post($code_raw),
+            ];
+        }
+        if ($details !== '') {
+            $blocks[] = ['type' => 'wysiwyg', 'id' => 'mb_details', 'gated_tier' => $gate, 'html' => wp_kses_post($details)];
+        }
+
+        return ['schema' => 1, '_meta' => ['title' => $post->post_title, 'generated' => 'default-member-benefit-layout'], 'blocks' => $blocks];
+    }
+
+    /**
+     * Return the first non-public tier taxonomy slug for a post, or null if public/unset.
+     * Used by synthesized CPT layouts to decide whether to add gated_tier to download blocks.
+     */
+    private static function synth_gate_tier(int $post_id): ?string
+    {
+        $terms = wp_get_object_terms($post_id, 'tier', ['fields' => 'slugs']);
+        if (is_wp_error($terms)) return null;
+        foreach ((array) $terms as $slug) {
+            if (is_string($slug) && $slug !== '' && $slug !== 'public') return $slug;
+        }
+        return null;
+    }
+
+    /** Cache invalidation — a synthesized CPT's postmeta changed (ACF save, form submit).
+     *  Fires for loothprint, loothcuts, useful_links, document, member-benefit. */
+    public static function on_synth_cpt_saved($post_id, $post = null, $update = null): void
+    {
+        if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) return;
+        self::invalidate_render_cache((int) $post_id);
     }
 
     /**
