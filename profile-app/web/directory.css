@@ -1,0 +1,78 @@
+/* directory.css — profile-app MAP lane.
+ * Owns the directory/map layout + the multiselect filter bar. Loaded AFTER
+ * edit.css so these rules override the .dir-* defaults that live there
+ * (edit.css is the editor lane's file — never edited from here).
+ * Reuses edit.css custom props: --panel --line --ink --ink-mute --accent
+ * --accent-soft --shadow.
+ */
+
+/* z-index: contain Leaflet's panes (z 400) + controls (z 1000) inside their own
+ * stacking context so the map never paints over the site header (z 40) or its
+ * account dropdown (z 100). Without position+z-index the leaflet layers live in
+ * the root stacking context and cover the header menu. */
+.dir-map { height: 360px; position: relative; z-index: 0; }
+
+/* Single column — the filters move out of the left rail into a bar under the map. */
+.dir-app { display: block; max-width: 1180px; margin: 0 auto; padding: 0 32px 24px; }
+
+/* Horizontal filter bar: sits under the map, above the member list. */
+.dir-filterbar {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+  max-width: 1180px; margin: 0 auto; padding: 14px 32px;
+  border-bottom: 1px solid var(--line); background: var(--panel);
+}
+.dir-filterbar .filt { flex: 1 1 170px; min-width: 150px; position: relative; }
+.dir-filterbar .filt.loc { flex: 1 1 220px; }
+.dir-filterbar .filt.radiusbox, .dir-filterbar .filt.sortbox { flex: 0 0 auto; min-width: 0; }
+.dir-filterbar .flab {
+  display: block; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-mute); font-weight: 700; margin-bottom: 5px;
+}
+.dir-filterbar input[type=text], .dir-filterbar select {
+  width: 100%; padding: 7px 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+
+/* --- multiselect "search bar" --- chips + typeahead, no external deps. */
+.ms { position: relative; }
+.ms-control {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  min-height: 34px; padding: 4px 6px; border: 1px solid var(--line);
+  border-radius: 6px; background: #fff; cursor: text;
+}
+.ms-control.open { border-color: var(--accent); }
+.ms-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+  padding: 2px 4px 2px 8px; background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; font-weight: 600; max-width: 100%;
+}
+.ms-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-chip button {
+  border: 0; background: none; color: inherit; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px;
+}
+.ms-search { flex: 1 1 50px; min-width: 50px; border: 0; outline: 0; background: none; font: inherit; font-size: 13px; }
+.ms-menu {
+  position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 3px);
+  max-height: 240px; overflow: auto; background: #fff; border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: var(--shadow);
+}
+.ms-opt { padding: 7px 10px; font-size: 13px; cursor: pointer; }
+.ms-opt:hover, .ms-opt.active { background: var(--accent-soft); }
+.ms-opt.sel { font-weight: 600; color: var(--accent); }
+.ms-opt.sel::after { content: " ✓"; }
+.ms-none { padding: 8px 10px; font-size: 12px; color: var(--ink-mute); font-style: italic; }
+
+/* --- sort toggle (oldest ⇄ newest join date) --- */
+.dir-sort { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.dir-sort button {
+  border: 0; background: #fff; padding: 7px 12px; font: inherit; font-size: 12px;
+  cursor: pointer; color: var(--ink-mute); white-space: nowrap;
+}
+.dir-sort button + button { border-left: 1px solid var(--line); }
+.dir-sort button.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+@media (max-width: 760px) {
+  .dir-filterbar .filt, .dir-filterbar .filt.radiusbox, .dir-filterbar .filt.sortbox { flex: 1 1 100%; }
+  .dir-sort, .dir-sort button { width: 100%; }
+}

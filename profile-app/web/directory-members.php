@@ -16,6 +16,7 @@ $lat    = isset($qs['lat']) ? (float)$qs['lat']    : null;
 $lng    = isset($qs['lng']) ? (float)$qs['lng']    : null;
 $radius = isset($qs['radius']) ? (int)$qs['radius'] : 50;
 $locTxt = (string)($qs['loc'] ?? '');
+$sort   = ($qs['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
 
 $pg = Db::pg();
 $cats = [
@@ -25,10 +26,21 @@ $cats = [
     'credentials' => $pg->query("SELECT id, slug, issuer, program, category FROM credential_catalog WHERE active=true ORDER BY category, issuer, program")->fetchAll(),
 ];
 
-$initialQS = http_build_query([
-    'inst' => $insts, 'skill' => $skills, 'scene' => $scenes, 'cred' => $creds,
-    'lat' => $lat, 'lng' => $lng, 'radius' => $radius, 'page' => 1,
-]);
+// Catalog options for the multiselect search bars. The four facets mirror the
+// member-profile taxonomy (instruments, skills, credentials, scenes — see
+// Profile::sections()); keep them in lockstep when the profile taxo changes.
+$msCatalogs = [
+    'inst'  => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['instruments']),
+    'skill' => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['skills']),
+    'scene' => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['scenes']),
+    'cred'  => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['issuer'] . ' — ' . $c['program']], $cats['credentials']),
+];
+$msSelected = [
+    'inst'  => array_values(array_map('strval', $insts)),
+    'skill' => array_values(array_map('strval', $skills)),
+    'scene' => array_values(array_map('strval', $scenes)),
+    'cred'  => array_values(array_map('strval', $creds)),
+];
 
 $placesKey = looth_places_key();
 require_once '/srv/lg-shared/site-header.php';
@@ -42,8 +54,12 @@ $_whoami = Whoami::resolve();
 <title>Directory · Looth</title>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="/profile/edit/edit.css">
+<link rel="stylesheet" href="/profile/edit/directory.css?v=<?= @filemtime(__DIR__ . '/directory.css') ?: '1' ?>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
 </head>
 <body>
 <?php
@@ -64,62 +80,36 @@ lg_shared_render_site_header([
 ?>
 <div class="dir-header">Members <span class="dir-meta" id="dir-meta">loading…</span></div>
 <div id="dir-map" class="dir-map" aria-hidden="true"></div>
+
+<div class="dir-filterbar" id="dir-filterbar">
+  <div class="filt loc">
+    <span class="flab">Location</span>
+    <input type="text" id="dir-loc" placeholder="Start typing a city…" value="<?= htmlspecialchars($locTxt, ENT_QUOTES) ?>">
+    <input type="hidden" id="dir-lat" value="<?= $lat !== null ? htmlspecialchars((string)$lat, ENT_QUOTES) : '' ?>">
+    <input type="hidden" id="dir-lng" value="<?= $lng !== null ? htmlspecialchars((string)$lng, ENT_QUOTES) : '' ?>">
+  </div>
+  <div class="filt radiusbox">
+    <span class="flab">Radius</span>
+    <select id="dir-radius">
+      <?php foreach ([10,25,50,100,250] as $r): ?>
+      <option value="<?= $r ?>" <?= $radius===$r?'selected':'' ?>>within <?= $r ?> mi</option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div class="filt"><span class="flab">Instruments</span><div class="ms" data-ms="inst" data-ph="Any instrument…"></div></div>
+  <div class="filt"><span class="flab">Skills</span><div class="ms" data-ms="skill" data-ph="Any skill…"></div></div>
+  <div class="filt"><span class="flab">Scenes</span><div class="ms" data-ms="scene" data-ph="Any scene…"></div></div>
+  <div class="filt"><span class="flab">Credentials</span><div class="ms" data-ms="cred" data-ph="Any credential…"></div></div>
+  <div class="filt sortbox">
+    <span class="flab">Joined</span>
+    <div class="dir-sort" id="dir-sort" role="group" aria-label="Sort by join date">
+      <button type="button" data-sort="joined_asc"  class="<?= $sort==='joined_asc'?'on':'' ?>">Oldest</button>
+      <button type="button" data-sort="joined_desc" class="<?= $sort==='joined_desc'?'on':'' ?>">Newest</button>
+    </div>
+  </div>
+</div>
+
 <div class="dir-app">
-
-  <aside class="dir-filters">
-    <form id="dir-form" method="get">
-      <div class="filter-block">
-        <h4>Location</h4>
-        <input type="text" id="dir-loc" name="loc" placeholder="Start typing a city…" value="<?= htmlspecialchars($locTxt, ENT_QUOTES) ?>">
-        <input type="hidden" id="dir-lat" name="lat" value="<?= $lat !== null ? htmlspecialchars((string)$lat, ENT_QUOTES) : '' ?>">
-        <input type="hidden" id="dir-lng" name="lng" value="<?= $lng !== null ? htmlspecialchars((string)$lng, ENT_QUOTES) : '' ?>">
-        <select name="radius" style="margin-top:6px">
-          <?php foreach ([10,25,50,100,250] as $r): ?>
-          <option value="<?= $r ?>" <?= $radius===$r?'selected':'' ?>>within <?= $r ?> mi</option>
-          <?php endforeach; ?>
-        </select>
-      </div>
-
-      <div class="filter-block">
-        <h4>Instruments</h4>
-        <div class="multi-pick">
-          <?php foreach ($cats['instruments'] as $c): ?>
-            <label><input type="checkbox" name="inst[]" value="<?= htmlspecialchars($c['slug']) ?>" <?= in_array($c['slug'], $insts, true)?'checked':'' ?>><?= htmlspecialchars($c['name']) ?></label>
-          <?php endforeach; ?>
-        </div>
-      </div>
-
-      <div class="filter-block">
-        <h4>Skills</h4>
-        <div class="multi-pick">
-          <?php foreach ($cats['skills'] as $c): ?>
-            <label><input type="checkbox" name="skill[]" value="<?= htmlspecialchars($c['slug']) ?>" <?= in_array($c['slug'], $skills, true)?'checked':'' ?>><?= htmlspecialchars($c['name']) ?></label>
-          <?php endforeach; ?>
-        </div>
-      </div>
-
-      <div class="filter-block">
-        <h4>Scenes</h4>
-        <div class="multi-pick">
-          <?php foreach ($cats['scenes'] as $c): ?>
-            <label><input type="checkbox" name="scene[]" value="<?= htmlspecialchars($c['slug']) ?>" <?= in_array($c['slug'], $scenes, true)?'checked':'' ?>><?= htmlspecialchars($c['name']) ?></label>
-          <?php endforeach; ?>
-        </div>
-      </div>
-
-      <div class="filter-block">
-        <h4>Credentials</h4>
-        <div class="multi-pick">
-          <?php foreach ($cats['credentials'] as $c): ?>
-            <label><input type="checkbox" name="cred[]" value="<?= htmlspecialchars($c['slug']) ?>" <?= in_array($c['slug'], $creds, true)?'checked':'' ?>><?= htmlspecialchars($c['issuer']) ?> — <?= htmlspecialchars($c['program']) ?></label>
-          <?php endforeach; ?>
-        </div>
-      </div>
-
-      <button type="button" class="btn btn-pri" id="dir-apply">Apply filters</button>
-    </form>
-  </aside>
-
   <main>
     <div class="dir-results" id="dir-results"></div>
     <button class="btn dir-load-more" id="dir-more" hidden>Load more</button>
@@ -127,20 +117,84 @@ lg_shared_render_site_header([
 </div>
 
 <script>
-const INITIAL_QS = '<?= $initialQS ?>';
+const CATALOGS = <?= json_encode($msCatalogs, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+const state = {
+  inst:  <?= json_encode($msSelected['inst'],  JSON_UNESCAPED_SLASHES) ?>,
+  skill: <?= json_encode($msSelected['skill'], JSON_UNESCAPED_SLASHES) ?>,
+  scene: <?= json_encode($msSelected['scene'], JSON_UNESCAPED_SLASHES) ?>,
+  cred:  <?= json_encode($msSelected['cred'],  JSON_UNESCAPED_SLASHES) ?>,
+};
 let curPage = 1;
-
-function buildQs(page) {
-  const f = document.getElementById('dir-form');
-  const fd = new FormData(f);
-  const sp = new URLSearchParams();
-  for (const [k,v] of fd.entries()) if (v) sp.append(k, v);
-  sp.set('page', page);
-  return sp.toString();
-}
+let curSort = <?= json_encode($sort) ?>;
 
 function escH(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// Filter-only query (no page) — shared by the list and the map-pin feed.
+function filterQs() {
+  const sp = new URLSearchParams();
+  ['inst','skill','scene','cred'].forEach(k => state[k].forEach(v => sp.append(k + '[]', v)));
+  const loc = document.getElementById('dir-loc').value.trim();
+  const lat = document.getElementById('dir-lat').value;
+  const lng = document.getElementById('dir-lng').value;
+  if (loc) sp.set('loc', loc);
+  if (lat && lng) { sp.set('lat', lat); sp.set('lng', lng); sp.set('radius', document.getElementById('dir-radius').value); }
+  sp.set('sort', curSort);
+  return sp;
+}
+function buildQs(page) { const sp = filterQs(); sp.set('page', page); return sp.toString(); }
+
+// ---------- multiselect search bars ----------
+function labelFor(name, val) { const o = CATALOGS[name].find(o => o.v === val); return o ? o.l : val; }
+function renderChips(root, name) {
+  const ctrl = root.querySelector('.ms-control');
+  ctrl.querySelectorAll('.ms-chip').forEach(c => c.remove());
+  const search = root.querySelector('.ms-search');
+  state[name].forEach(v => {
+    const chip = document.createElement('span');
+    chip.className = 'ms-chip';
+    chip.innerHTML = `<span>${escH(labelFor(name, v))}</span><button type="button" aria-label="remove">×</button>`;
+    chip.querySelector('button').addEventListener('click', e => {
+      e.stopPropagation();
+      state[name] = state[name].filter(x => x !== v);
+      renderChips(root, name); applyFilters();
+    });
+    ctrl.insertBefore(chip, search);
+  });
+}
+function renderMenu(root, name) {
+  const menu = root.querySelector('.ms-menu');
+  const q = root.querySelector('.ms-search').value.trim().toLowerCase();
+  const opts = CATALOGS[name].filter(o => !q || o.l.toLowerCase().includes(q));
+  if (!opts.length) { menu.innerHTML = '<div class="ms-none">no matches</div>'; return; }
+  menu.innerHTML = opts.map(o =>
+    `<div class="ms-opt${state[name].includes(o.v) ? ' sel' : ''}" data-v="${escH(o.v)}">${escH(o.l)}</div>`).join('');
+  menu.querySelectorAll('.ms-opt').forEach(el => el.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const v = el.getAttribute('data-v');
+    if (state[name].includes(v)) state[name] = state[name].filter(x => x !== v);
+    else state[name].push(v);
+    root.querySelector('.ms-search').value = '';
+    renderChips(root, name); renderMenu(root, name); applyFilters();
+  }));
+}
+function initMultiselect(root) {
+  const name = root.getAttribute('data-ms');
+  root.innerHTML =
+    `<div class="ms-control"><input class="ms-search" type="text" placeholder="${escH(root.getAttribute('data-ph') || '')}"></div>` +
+    `<div class="ms-menu" hidden></div>`;
+  const ctrl = root.querySelector('.ms-control');
+  const search = root.querySelector('.ms-search');
+  const menu = root.querySelector('.ms-menu');
+  const open = () => { ctrl.classList.add('open'); menu.hidden = false; renderMenu(root, name); };
+  const close = () => { ctrl.classList.remove('open'); menu.hidden = true; };
+  ctrl.addEventListener('click', () => { search.focus(); open(); });
+  search.addEventListener('focus', open);
+  search.addEventListener('input', () => renderMenu(root, name));
+  document.addEventListener('click', e => { if (!root.contains(e.target)) close(); });
+  renderChips(root, name);
+}
+
+// ---------- results + map ----------
 function renderResults(items, append) {
   const wrap = document.getElementById('dir-results');
   const html = items.map(it => `
@@ -155,12 +209,10 @@ function renderResults(items, append) {
     </a>`).join('');
   if (append) wrap.insertAdjacentHTML('beforeend', html);
   else wrap.innerHTML = html || '<div class="dir-empty">no members match. try widening filters.</div>';
-  updateMapPins(items, append);
 }
 
 async function loadPage(page, append) {
-  const qs = buildQs(page);
-  const res = await fetch('/profile-api/v0/directory/members?' + qs, {credentials:'include'});
+  const res = await fetch('/profile-api/v0/directory/members?' + buildQs(page), {credentials:'include'});
   const d = await res.json();
   document.getElementById('dir-meta').textContent = `${d.total} member${d.total===1?'':'s'} matching`;
   renderResults(d.items || [], append);
@@ -168,52 +220,70 @@ async function loadPage(page, append) {
   curPage = page;
 }
 
-document.getElementById('dir-apply').addEventListener('click', () => { loadPage(1, false); window.history.replaceState({}, '', '/directory/members?' + buildQs(1)); });
-document.getElementById('dir-more').addEventListener('click', () => loadPage(curPage + 1, true));
-
-// Auto-submit on checkbox change for instant feel.
-document.querySelectorAll('#dir-form input[type=checkbox]').forEach(cb =>
-  cb.addEventListener('change', () => { loadPage(1, false); window.history.replaceState({}, '', '/directory/members?' + buildQs(1)); }));
-
-// Initial load using the SSR-rendered query string.
-loadPage(1, false);
-
-// Map setup — Leaflet + OpenStreetMap (no API key needed).
-let dirMap = null, dirMarkers = [];
-function initDirMap() {
-  if (dirMap) return;
-  dirMap = L.map('dir-map', {zoomControl: true, scrollWheelZoom: false})
-    .setView([39, -98], 3);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 18,
-  }).addTo(dirMap);
+// All matching members' pins (not just the current page) — plotted on the map.
+async function loadPins() {
+  if (!dirMap) return;
+  const sp = filterQs(); sp.set('pins', '1');
+  const res = await fetch('/profile-api/v0/directory/members?' + sp.toString(), {credentials:'include'});
+  const d = await res.json();
+  plotPins(d.pins || []);
 }
+
+function applyFilters() {
+  loadPage(1, false);
+  loadPins();
+  window.history.replaceState({}, '', '/directory/members?' + buildQs(1));
+}
+
+// Wire up controls.
+document.querySelectorAll('.ms').forEach(initMultiselect);
+document.getElementById('dir-radius').addEventListener('change', applyFilters);
+document.getElementById('dir-more').addEventListener('click', () => loadPage(curPage + 1, true));
+document.querySelectorAll('#dir-sort button').forEach(btn => btn.addEventListener('click', () => {
+  if (curSort === btn.dataset.sort) return;
+  curSort = btn.dataset.sort;
+  document.querySelectorAll('#dir-sort button').forEach(b => b.classList.toggle('on', b === btn));
+  applyFilters();
+}));
+
+// Map setup — Leaflet + OpenStreetMap (no API key needed) + marker clustering.
+let dirMap = null, dirCluster = null;
 const pinIcon = L.divIcon({
   className: '',
   html: '<div style="width:14px;height:14px;border-radius:50%;background:#b9450b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
   iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
 });
-function updateMapPins(items, append) {
+function initDirMap() {
+  if (dirMap) return;
+  dirMap = L.map('dir-map', {zoomControl: true, scrollWheelZoom: true}).setView([39, -98], 3);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(dirMap);
+  // Cluster many overlapping pins into counts; spiderfy on click at max zoom.
+  dirCluster = L.markerClusterGroup({chunkedLoading: true, maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false});
+  dirMap.addLayer(dirCluster);
+  loadPins();
+}
+function plotPins(pins) {
   if (!dirMap) return;
-  if (!append) { dirMarkers.forEach(m => dirMap.removeLayer(m)); dirMarkers = []; }
+  dirCluster.clearLayers();
   const pts = [];
-  items.forEach(it => {
-    if (!it.location?.lat || !it.location?.lng) return;
-    const m = L.marker([it.location.lat, it.location.lng], {icon: pinIcon, title: it.display_name})
-      .bindPopup(`<a href="/u/${escH(it.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(it.display_name)}</a>`
-        + (it.location.text ? `<div style="font-size:12px;color:#8a8478">${escH(it.location.text)}</div>` : ''))
-      .addTo(dirMap);
-    dirMarkers.push(m);
-    pts.push([it.location.lat, it.location.lng]);
+  pins.forEach(p => {
+    if (p.lat == null || p.lng == null) return;
+    const m = L.marker([p.lat, p.lng], {icon: pinIcon, title: p.display_name})
+      .bindPopup(`<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
+        + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : ''));
+    dirCluster.addLayer(m);
+    pts.push([p.lat, p.lng]);
   });
-  if (!append && pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
+  if (pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
 }
 
-// Initialize map immediately (Leaflet needs no API key callback).
-document.addEventListener('DOMContentLoaded', initDirMap);
+// Initialize map + first list load.
+document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, false); });
 
-// Google Places for location filter (autocomplete only — separate from map).
+// Google Places for the location filter (autocomplete only — separate from the map tiles).
 window.lootInitDirPlaces = function () {
   const input = document.getElementById('dir-loc');
   if (!input || !window.google?.maps?.places) return;
@@ -223,7 +293,7 @@ window.lootInitDirPlaces = function () {
     if (p?.geometry?.location) {
       document.getElementById('dir-lat').value = p.geometry.location.lat();
       document.getElementById('dir-lng').value = p.geometry.location.lng();
-      loadPage(1, false);
+      applyFilters();
     }
   });
 };

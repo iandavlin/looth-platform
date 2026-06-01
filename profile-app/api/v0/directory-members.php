@@ -18,6 +18,38 @@ function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
     return $r * 2 * asin(min(1.0, sqrt($a)));
 }
 
+/**
+ * Coarsen a member row to the point/text the viewer is allowed to see.
+ * Single source of truth shared by the paginated list and the map-pin feed,
+ * so a pin can never expose more precision than the card does. Returns the
+ * display array (lat/lng/text/zoom/kind) or null when private for this audience.
+ */
+function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $audience): ?array
+{
+    $subjectId = (int)$r['id'];
+    if ($subjectId === $viewerUserId) {
+        $precision = 'street';                                          // owner sees self exactly
+    } elseif ($isAdmin) {
+        // Admin oversight: exact pin for every member, UNLESS they made it private to members.
+        $mp = Block::precisionFromInput($r['location_members_precision']) ?? 'city';
+        $precision = $mp === 'private' ? 'private' : 'street';
+    } else {
+        $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
+        $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
+    }
+    $place = [
+        'address'  => $r['location_address'],
+        'postcode' => $r['location_postcode'],
+        'city'     => $r['location_city'],
+        'region'   => $r['location_region'],
+        'country'  => $r['location_country'],
+        'lat'      => $r['lat'] !== null ? (float)$r['lat'] : null,
+        'lng'      => $r['lng'] !== null ? (float)$r['lng'] : null,
+        'text'     => $r['location_text'],
+    ];
+    return Block::locationDisplay($place, $precision);          // null when private for this audience
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 
 $viewer       = Auth::currentUser();
@@ -34,6 +66,7 @@ $creds  = isset($_GET['cred'])  ? (array)$_GET['cred']  : [];
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $pageSize = isset($_GET['page_size']) ? max(1, min(200, (int)$_GET['page_size'])) : 20;
 $offset   = ($page - 1) * $pageSize;
+$sort   = ($_GET['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
 
 $pg = Db::pg();
 
@@ -71,7 +104,8 @@ if ($creds) {
 }
 
 $selectDistance = '';
-$orderBy = 'u.id DESC';
+// Default: oldest join date first. A location filter overrides with distance ASC (below).
+$orderBy = $sort === 'joined_desc' ? 'u.created_at DESC, u.id DESC' : 'u.created_at ASC, u.id ASC';
 if ($lat !== null && $lng !== null) {
     // earthdistance: point(lng, lat) <@> point(lng, lat) returns miles.
     // Geo-filter implicitly hides users we can't see location for (their
@@ -86,6 +120,38 @@ if ($lat !== null && $lng !== null) {
     $orderBy  = 'distance_mi ASC';
     $params[':lat'] = $lat; $params[':lng'] = $lng; $params[':radius'] = $radius;
     $params[':authed'] = $viewerUserId !== 0 ? 1 : 0;
+}
+
+// Viewer audience/oversight — computed once; shared by the pin feed and the list.
+$audience = $viewerUserId !== 0 ? 'members' : 'public';
+$isAdmin  = Auth::isAdmin();   // admins see every member at full precision unless they set it private
+
+// Map-pin feed: coarsened coords for the ENTIRE filtered set (not just the current
+// page), so all matching members plot. Slim payload — no highlights, no pagination.
+// Same precision/visibility path as the list (dir_member_display), so a pin never
+// leaks more than the card.
+if (!empty($_GET['pins'])) {
+    $pinSql = "SELECT u.id, u.display_name, u.slug,
+                      u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
+                      u.lat, u.lng, u.location_members_precision, u.location_public_precision
+               FROM users u
+               WHERE " . implode(' AND ', $wheres) . "
+               LIMIT 5000";
+    $pStmt = $pg->prepare($pinSql);
+    $pStmt->execute($params);
+    $pins = [];
+    while ($pr = $pStmt->fetch()) {
+        $disp = dir_member_display($pr, $viewerUserId, $isAdmin, $audience);
+        if (!$disp || $disp['lat'] === null || $disp['lng'] === null) continue;
+        $pins[] = [
+            'slug'         => $pr['slug'] ?: (string)(int)$pr['id'],
+            'display_name' => $pr['display_name'],
+            'lat'          => (float)$disp['lat'],
+            'lng'          => (float)$disp['lng'],
+            'text'         => $disp['text'],
+        ];
+    }
+    profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
 }
 
 $sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url,
@@ -126,32 +192,10 @@ if ($rows) {
         $highlightsByUser[(int)$h['user_id']][] = ['kind' => $h['kind'], 'slug' => $h['slug'], 'name' => $h['name']];
     }
 
-    $audience = $viewerUserId !== 0 ? 'members' : 'public';
-    $isAdmin  = Auth::isAdmin();   // admins see every member at full precision unless they set it private
     foreach ($rows as $r) {
         $subjectId = (int)$r['id'];
-        // Per-audience precision (owner viewing self → full street); coarsens the pin or hides it.
-        if ($subjectId === $viewerUserId) {
-            $precision = 'street';                                          // owner sees self exactly
-        } elseif ($isAdmin) {
-            // Admin oversight: exact pin for every member, UNLESS they made it private to members.
-            $mp = Block::precisionFromInput($r['location_members_precision']) ?? 'city';
-            $precision = $mp === 'private' ? 'private' : 'street';
-        } else {
-            $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
-            $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
-        }
-        $place = [
-            'address'  => $r['location_address'],
-            'postcode' => $r['location_postcode'],
-            'city'     => $r['location_city'],
-            'region'   => $r['location_region'],
-            'country'  => $r['location_country'],
-            'lat'      => $r['lat'] !== null ? (float)$r['lat'] : null,
-            'lng'      => $r['lng'] !== null ? (float)$r['lng'] : null,
-            'text'     => $r['location_text'],
-        ];
-        $disp = Block::locationDisplay($place, $precision);          // null when private for this audience
+        // Per-audience precision (owner→street, admin→street unless private, else coarsened/hidden).
+        $disp = dir_member_display($r, $viewerUserId, $isAdmin, $audience);
         $loc  = $disp
             ? ['text' => $disp['text'], 'lat' => $disp['lat'], 'lng' => $disp['lng'], 'zoom' => $disp['zoom'], 'kind' => $disp['kind']]
             : ['hidden' => true];
