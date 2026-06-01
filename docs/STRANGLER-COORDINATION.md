@@ -124,6 +124,47 @@ self-links to the clean base → verify → 301 the POC path. **Each app must
 parameterize/update its self-link base path** (don't hardcode POC). nginx routing
 + 301s = sysadmin; self-links = each lane; nav = lg-shell.
 
+## 0e. Multi-dev git-native workflow (2026-06-01, Ian: bringing on a 2nd dev)
+
+Two+ human devs, each running their **own** Claude in their **own** Linux account
+(`ian`, `buck`, …). They do NOT share one working tree and do NOT talk to each
+other directly. They stay on the same path through exactly two things:
+
+1. **This doc = shared *intent*.** It's versioned in the repo; every lane-Claude
+   reads it on startup (+ the project `CLAUDE.md` + `TEAM-CHANGELOG`). **Only the
+   coordinator edits it**; when the contract changes, coordinator commits it and
+   everyone `git pull`s. The doc keeps direction aligned.
+2. **One coordinator + one `main` = shared *code*.** Every change funnels through a
+   single merge point. The doc aligns what we build; the coordinator's merges align
+   the code. (The doc alone is not enough — that's how two accounts would drift.)
+
+**Topology**
+- **GitHub** `github:iandavlin/looth-platform` (remote alias `github-looth`) is upstream truth.
+- **Canonical local tree** `/home/ubuntu/projects` — the **coordinator/sysadmin** (`ubuntu`)
+  clone. The only clone with GitHub push creds + sudo for deploys.
+- **Each dev** has their own clone in `$HOME` (e.g. `/home/buck/looth-platform`), `origin`
+  = the canonical tree (so `git pull` works **cred-free**; no GitHub creds for devs).
+
+**Merge-on-behalf flow** (the coordinator is the gateway; devs never push to GitHub):
+1. Dev branches in their clone (`<user>/<lane>-<topic>`), commits **by pathspec**
+   (never `git add -A` — §0).
+2. Dev tells the coordinator the branch is ready (via Ian / a `~/temp` note).
+3. Coordinator: `git -C /home/ubuntu/projects fetch /home/<user>/looth-platform <branch>`,
+   reviews the diff, runs the **dev test pass** (governing invariant: dev-complete AND
+   dev-proven before merge).
+4. Coordinator merges to `main`, **pushes `main` to GitHub**, then `deploy/deploy.sh`
+   places it (most targets — `/srv`, `/etc/nginx`, FPM pools — need **sudo**, so deploy
+   is a coordinator job; team accounts are no-sudo, see `/etc/skel/.claude/CLAUDE.md`).
+5. Devs stay current with `git pull` (reads `main` from the canonical tree).
+
+**Review-together rule (Ian, 2026-06-01):** the coordinator presents the full set of
+commits + their diffstat **before** every push to GitHub. No silent pushes.
+
+**Shared WordPress:** all devs work the one shared dev site at `/var/www/dev`
+(`ian:loothdevs`, group-writable + setgid) — no per-dev WP install. The repo holds the
+plugins/apps that *deploy into* `/var/www/dev` or `/srv`; the running WP is shared, so a
+WP-plugin change is visible to everyone on dev (coordination point, not isolation need).
+
 ## 1. Tier vocabulary
 
 The user identity has two axes. Don't collapse them into one enum.
