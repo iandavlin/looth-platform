@@ -10,7 +10,7 @@ use Looth\ProfileApp\Whoami;
 $qs = $_GET;
 $insts  = (array)($qs['inst']  ?? []);
 $skills = (array)($qs['skill'] ?? []);
-$scenes = (array)($qs['scene'] ?? []);
+$music  = (array)($qs['music'] ?? []);
 $creds  = (array)($qs['cred']  ?? []);
 $lat    = isset($qs['lat']) ? (float)$qs['lat']    : null;
 $lng    = isset($qs['lng']) ? (float)$qs['lng']    : null;
@@ -22,23 +22,23 @@ $pg = Db::pg();
 $cats = [
     'instruments' => $pg->query("SELECT id, slug, name FROM instrument_catalog WHERE active=true ORDER BY sort_order, name")->fetchAll(),
     'skills'      => $pg->query("SELECT id, slug, name, category FROM skill_catalog WHERE active=true ORDER BY category, sort_order, name")->fetchAll(),
-    'scenes'      => $pg->query("SELECT slug, name FROM scene_tags WHERE active=true ORDER BY sort_order, name")->fetchAll(),
+    'music'       => $pg->query("SELECT slug, name FROM genre_catalog WHERE active=true ORDER BY sort_order, name")->fetchAll(),
     'credentials' => $pg->query("SELECT id, slug, issuer, program, category FROM credential_catalog WHERE active=true ORDER BY category, issuer, program")->fetchAll(),
 ];
 
 // Catalog options for the multiselect search bars. The four facets mirror the
-// member-profile taxonomy (instruments, skills, credentials, scenes — see
-// Profile::sections()); keep them in lockstep when the profile taxo changes.
+// member-profile taxonomy (instruments, skills, credentials, music/genres);
+// keep them in lockstep when the profile taxo changes.
 $msCatalogs = [
     'inst'  => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['instruments']),
     'skill' => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['skills']),
-    'scene' => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['scenes']),
+    'music' => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['name']], $cats['music']),
     'cred'  => array_map(fn($c) => ['v' => $c['slug'], 'l' => $c['issuer'] . ' — ' . $c['program']], $cats['credentials']),
 ];
 $msSelected = [
     'inst'  => array_values(array_map('strval', $insts)),
     'skill' => array_values(array_map('strval', $skills)),
-    'scene' => array_values(array_map('strval', $scenes)),
+    'music' => array_values(array_map('strval', $music)),
     'cred'  => array_values(array_map('strval', $creds)),
 ];
 
@@ -98,7 +98,7 @@ lg_shared_render_site_header([
   </div>
   <div class="filt"><span class="flab">Instruments</span><div class="ms" data-ms="inst" data-ph="Any instrument…"></div></div>
   <div class="filt"><span class="flab">Skills</span><div class="ms" data-ms="skill" data-ph="Any skill…"></div></div>
-  <div class="filt"><span class="flab">Scenes</span><div class="ms" data-ms="scene" data-ph="Any scene…"></div></div>
+  <div class="filt"><span class="flab">Music</span><div class="ms" data-ms="music" data-ph="Any genre…"></div></div>
   <div class="filt"><span class="flab">Credentials</span><div class="ms" data-ms="cred" data-ph="Any credential…"></div></div>
   <div class="filt sortbox">
     <span class="flab">Joined</span>
@@ -121,7 +121,7 @@ const CATALOGS = <?= json_encode($msCatalogs, JSON_UNESCAPED_SLASHES | JSON_UNES
 const state = {
   inst:  <?= json_encode($msSelected['inst'],  JSON_UNESCAPED_SLASHES) ?>,
   skill: <?= json_encode($msSelected['skill'], JSON_UNESCAPED_SLASHES) ?>,
-  scene: <?= json_encode($msSelected['scene'], JSON_UNESCAPED_SLASHES) ?>,
+  music: <?= json_encode($msSelected['music'], JSON_UNESCAPED_SLASHES) ?>,
   cred:  <?= json_encode($msSelected['cred'],  JSON_UNESCAPED_SLASHES) ?>,
 };
 let curPage = 1;
@@ -132,7 +132,7 @@ function escH(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp
 // Filter-only query (no page) — shared by the list and the map-pin feed.
 function filterQs() {
   const sp = new URLSearchParams();
-  ['inst','skill','scene','cred'].forEach(k => state[k].forEach(v => sp.append(k + '[]', v)));
+  ['inst','skill','music','cred'].forEach(k => state[k].forEach(v => sp.append(k + '[]', v)));
   const loc = document.getElementById('dir-loc').value.trim();
   const lat = document.getElementById('dir-lat').value;
   const lng = document.getElementById('dir-lng').value;

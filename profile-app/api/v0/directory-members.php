@@ -61,7 +61,7 @@ $lng    = isset($_GET['lng']) ? (float)$_GET['lng'] : null;
 $radius = isset($_GET['radius']) ? max(1, min(500, (int)$_GET['radius'])) : 50;
 $insts  = isset($_GET['inst'])  ? (array)$_GET['inst']  : [];
 $skills = isset($_GET['skill']) ? (array)$_GET['skill'] : [];
-$scenes = isset($_GET['scene']) ? (array)$_GET['scene'] : [];
+$music  = isset($_GET['music']) ? (array)$_GET['music'] : [];
 $creds  = isset($_GET['cred'])  ? (array)$_GET['cred']  : [];
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $pageSize = isset($_GET['page_size']) ? max(1, min(200, (int)$_GET['page_size'])) : 20;
@@ -90,10 +90,12 @@ if ($skills) {
                          JOIN skill_catalog sc ON sc.id = ps.skill_id
                          WHERE ps.user_id = u.id AND sc.slug IN (" . implode(',', $ph) . "))";
 }
-if ($scenes) {
+if ($music) {
     $ph = [];
-    foreach ($scenes as $i => $s) { $k = ":sc$i"; $ph[] = $k; $params[$k] = (string)$s; }
-    $wheres[] = "EXISTS (SELECT 1 FROM profile_scenes ps WHERE ps.user_id = u.id AND ps.scene_slug IN (" . implode(',', $ph) . "))";
+    foreach ($music as $i => $s) { $k = ":g$i"; $ph[] = $k; $params[$k] = (string)$s; }
+    $wheres[] = "EXISTS (SELECT 1 FROM profile_genres pgn
+                         JOIN genre_catalog gc ON gc.id = pgn.genre_id
+                         WHERE pgn.user_id = u.id AND gc.slug IN (" . implode(',', $ph) . "))";
 }
 if ($creds) {
     $ph = [];
