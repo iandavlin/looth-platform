@@ -153,7 +153,8 @@ $isAdmin  = Auth::isAdmin();   // admins see every member at full precision unle
 if (!empty($_GET['pins'])) {
     $pinSql = "SELECT u.id, u.display_name, u.slug,
                       u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
-                      u.lat, u.lng, u.location_members_precision, u.location_public_precision
+                      u.lat, u.lng, u.location_members_precision, u.location_public_precision,
+                      (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
                FROM users u
                WHERE " . implode(' AND ', $wheres) . "
                LIMIT 5000";
