@@ -42,7 +42,6 @@ function lg_shared_render_site_footer(array $ctx = []): void
           <li><a href="/">Home</a></li>
           <li><a href="/events/">Events</a></li>
           <li><a href="/sponsors/">Sponsors</a></li>
-          <li><a href="https://loothtool.com/shop/">Shops</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">
