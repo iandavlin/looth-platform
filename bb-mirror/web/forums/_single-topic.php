@@ -281,14 +281,14 @@ $fh_image      = $forum['header_image_url'] ?: null;
       <div class="forum-header__bg" style="background-image: url('<?= htmlspecialchars($fh_image, ENT_QUOTES, 'UTF-8') ?>')"></div>
     <?php endif; ?>
     <div class="forum-header__body">
-      <a class="forum-header__home" href="<?= htmlspecialchars($public_path . '/') ?>">Forums</a>
+      <a class="forum-header__home" href="<?= htmlspecialchars($public_path . '/') ?>">The Hub</a>
       <?php if ($fh_parent): ?>
         <a class="forum-header__parent" href="<?= htmlspecialchars($fh_parent_url) ?>">&lsaquo; <?= htmlspecialchars($fh_parent['title']) ?></a>
       <?php endif; ?>
       <div class="forum-header__title-row">
         <a class="forum-header__title forum-header__title--link" href="<?= htmlspecialchars($forum_url) ?>"><?= htmlspecialchars($forum['title']) ?></a>
       </div>
-      <span class="forum-header__label">Forum</span>
+      <span class="forum-header__label">The Hub</span>
     </div>
   </header>
 

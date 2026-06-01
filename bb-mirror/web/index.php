@@ -36,10 +36,11 @@ if ($qs !== '' && empty($_GET)) {
 }
 
 // Strip the public mount prefix. Boundary-safe (so '/forum' never mis-strips
-// '/forums-poc') and tolerant of the legacy POC bases during the
-// /forums-poc → /forum dual-route window — canonical base is
-// LG_BB_MIRROR_PUBLIC_PATH; older mounts are accepted until their 301 lands.
-foreach ([LG_BB_MIRROR_PUBLIC_PATH, '/forums-poc', '/forums'] as $base) {
+// '/forums-poc') and tolerant of the legacy bases during the
+// /forum → /hub dual-route window — canonical base is now
+// LG_BB_MIRROR_PUBLIC_PATH (/hub); older mounts (/forum, /forums, /forums-poc)
+// are accepted until their 301 lands.
+foreach ([LG_BB_MIRROR_PUBLIC_PATH, '/forum', '/forums-poc', '/forums'] as $base) {
     if ($uri === $base || str_starts_with($uri, $base . '/')) {
         $uri = substr($uri, strlen($base));
         break;

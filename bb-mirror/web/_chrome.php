@@ -425,7 +425,7 @@ function lg_bb_mirror_viewer_from_whoami(): array {
 }
 }
 
-function bb_mirror_chrome_header(string $page_title = 'Forums'): void
+function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 {
     require_once '/srv/lg-shared/site-header.php';
 
@@ -495,7 +495,7 @@ function bb_mirror_chrome_header(string $page_title = 'Forums'): void
 <?php
     lg_shared_render_site_header([
         'authenticated'      => $authed,
-        'active_nav'         => 'forum',   // light the Forum nav item (§0a)
+        'active_nav'         => 'hub',     // light the The Hub nav item (§0a; key coordinated w/ lg-shell)
         'tier'               => $tier,
         'display_name'       => $dname,
         'avatar_url'         => lg_bb_mirror_safe_avatar($avatar),   // non-gated default

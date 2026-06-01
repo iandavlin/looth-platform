@@ -33,13 +33,13 @@ if ($env === 'live') {
     define('LG_BB_MIRROR_WP_PATH', '/var/www/html');
     define('LG_BB_MIRROR_WP_USER', 'looth-live');
     define('LG_BB_MIRROR_APP_ROOT','/srv/bb-mirror');
-    define('LG_BB_MIRROR_PUBLIC_PATH', '/forum');
+    define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
 } else { // dev
     define('LG_BB_MIRROR_HOST',    'dev.loothgroup.com');
     define('LG_BB_MIRROR_WP_PATH', '/var/www/dev');
     define('LG_BB_MIRROR_WP_USER', 'looth-dev');
     define('LG_BB_MIRROR_APP_ROOT','/home/ubuntu/projects/bb-mirror');
-    define('LG_BB_MIRROR_PUBLIC_PATH', '/forum');
+    define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
 }
 
 // ---------- derived ----------

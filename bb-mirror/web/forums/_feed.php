@@ -411,10 +411,10 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
 }
 
 // -- Render --
-$page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'Forums';
+$page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 bb_mirror_chrome_header($page_title);
 
-$header_title     = $scoped_forum ? (string)$scoped_forum['title'] : 'All Forums';
+$header_title     = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 $has_header_image = ($header_image_url !== null && $header_image_url !== '');
 
 // Category colour key for the header accent (site-wide = neutral 'general').
