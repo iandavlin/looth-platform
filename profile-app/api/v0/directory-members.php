@@ -127,11 +127,16 @@ if ($rows) {
     }
 
     $audience = $viewerUserId !== 0 ? 'members' : 'public';
+    $isAdmin  = Auth::isAdmin();   // admins see every member at full precision unless they set it private
     foreach ($rows as $r) {
         $subjectId = (int)$r['id'];
         // Per-audience precision (owner viewing self → full street); coarsens the pin or hides it.
         if ($subjectId === $viewerUserId) {
-            $precision = 'street';
+            $precision = 'street';                                          // owner sees self exactly
+        } elseif ($isAdmin) {
+            // Admin oversight: exact pin for every member, UNLESS they made it private to members.
+            $mp = Block::precisionFromInput($r['location_members_precision']) ?? 'city';
+            $precision = $mp === 'private' ? 'private' : 'street';
         } else {
             $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
             $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
