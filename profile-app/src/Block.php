@@ -543,7 +543,7 @@ final class Block
             'subject' => 'person',
             'has'     => (bool)($place['address'] || $place['city'] || $place['region'] || $place['text'] || $lat !== null),
             'members_precision' => $clean($r['location_members_precision'] ?? null, 'city'),
-            'public_precision'  => $clean($r['location_public_precision']  ?? null, 'private'),
+            'public_precision'  => $clean($r['location_public_precision']  ?? null, 'city'),
             'place'   => $place,
         ];
     }
