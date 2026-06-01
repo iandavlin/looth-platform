@@ -334,7 +334,7 @@ function lg_shared_render_site_header(array $ctx): void
       <?php else: ?>
 
         <a class="lg-chrome__signin" href="/wp-login.php">Sign in</a>
-        <a class="lg-chrome__join" href="/lgjoin/">Join</a>
+        <a class="lg-chrome__join" href="/join/">Join</a>
 
       <?php endif; ?>
 
