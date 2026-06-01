@@ -93,6 +93,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
         <section class="lg-manage-sub__card lg-manage-sub__card--anon">
             <p>Sign in to see your membership details.</p>
             <p><a class="lg-manage-sub__cta" href="/wp-login.php?redirect_to=<?= rawurlencode('/manage-subscription/') ?>">Sign in</a></p>
+            <p class="lg-manage-sub__hint"><small>Not linked yet? <a href="/join/">Join with Patreon &rarr;</a></small></p>
         </section>
 
     <?php elseif ($membership === null): ?>
@@ -105,6 +106,7 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                     Become a member on Patreon &rarr;
                 </a>
             </p>
+            <p class="lg-manage-sub__hint"><small>Already a patron but not linked yet? <a href="/join/">Connect your Patreon &rarr;</a></small></p>
         </section>
 
     <?php else: ?>

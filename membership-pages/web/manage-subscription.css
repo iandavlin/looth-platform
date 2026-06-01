@@ -76,6 +76,10 @@
 }
 .lg-manage-sub__cta:hover { background: #333; }
 
+.lg-manage-sub__hint { margin-top: 1rem; color: #666; }
+.lg-manage-sub__hint a { color: #2563eb; text-decoration: none; }
+.lg-manage-sub__hint a:hover { text-decoration: underline; }
+
 .lg-manage-sub__poc-note {
     text-align: center;
     color: #999;
