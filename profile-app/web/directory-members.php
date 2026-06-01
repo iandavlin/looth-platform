@@ -19,11 +19,25 @@ $locTxt = (string)($qs['loc'] ?? '');
 $sort   = ($qs['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
 
 $pg = Db::pg();
+// Only surface tags that at least one member actually uses — an option that
+// matches zero members is noise. The EXISTS clauses mirror each filter's own
+// match semantics below (instruments/skills count both the full list AND
+// migrated highlights). A facet that comes back empty is dropped from the bar.
 $cats = [
-    'instruments' => $pg->query("SELECT id, slug, name FROM instrument_catalog WHERE active=true ORDER BY sort_order, name")->fetchAll(),
-    'skills'      => $pg->query("SELECT id, slug, name, category FROM skill_catalog WHERE active=true ORDER BY category, sort_order, name")->fetchAll(),
-    'music'       => $pg->query("SELECT slug, name FROM genre_catalog WHERE active=true ORDER BY sort_order, name")->fetchAll(),
-    'credentials' => $pg->query("SELECT id, slug, issuer, program, category FROM credential_catalog WHERE active=true ORDER BY category, issuer, program")->fetchAll(),
+    'instruments' => $pg->query("SELECT id, slug, name FROM instrument_catalog ic WHERE active=true
+        AND (EXISTS (SELECT 1 FROM profile_instruments pi WHERE pi.instrument_id = ic.id)
+          OR EXISTS (SELECT 1 FROM profile_highlights h WHERE h.kind='instrument' AND h.ref_id = ic.id))
+        ORDER BY sort_order, name")->fetchAll(),
+    'skills'      => $pg->query("SELECT id, slug, name, category FROM skill_catalog sc WHERE active=true
+        AND (EXISTS (SELECT 1 FROM profile_skills ps WHERE ps.skill_id = sc.id)
+          OR EXISTS (SELECT 1 FROM profile_highlights h WHERE h.kind='skill' AND h.ref_id = sc.id))
+        ORDER BY category, sort_order, name")->fetchAll(),
+    'music'       => $pg->query("SELECT slug, name FROM genre_catalog gc WHERE active=true
+        AND EXISTS (SELECT 1 FROM profile_genres pg WHERE pg.genre_id = gc.id)
+        ORDER BY sort_order, name")->fetchAll(),
+    'credentials' => $pg->query("SELECT id, slug, issuer, program, category FROM credential_catalog cc WHERE active=true
+        AND EXISTS (SELECT 1 FROM profile_credentials pc WHERE pc.owner_type='profile' AND pc.catalog_id = cc.id)
+        ORDER BY category, issuer, program")->fetchAll(),
 ];
 
 // Catalog options for the multiselect search bars. The four facets mirror the
@@ -96,10 +110,10 @@ lg_shared_render_site_header([
       <?php endforeach; ?>
     </select>
   </div>
-  <div class="filt"><span class="flab">Instruments</span><div class="ms" data-ms="inst" data-ph="Any instrument…"></div></div>
-  <div class="filt"><span class="flab">Skills</span><div class="ms" data-ms="skill" data-ph="Any skill…"></div></div>
-  <div class="filt"><span class="flab">Music</span><div class="ms" data-ms="music" data-ph="Any genre…"></div></div>
-  <div class="filt"><span class="flab">Credentials</span><div class="ms" data-ms="cred" data-ph="Any credential…"></div></div>
+  <?php if ($msCatalogs['inst']): ?><div class="filt"><span class="flab">Instruments</span><div class="ms" data-ms="inst" data-ph="Any instrument…"></div></div><?php endif; ?>
+  <?php if ($msCatalogs['skill']): ?><div class="filt"><span class="flab">Skills</span><div class="ms" data-ms="skill" data-ph="Any skill…"></div></div><?php endif; ?>
+  <?php if ($msCatalogs['music']): ?><div class="filt"><span class="flab">Music</span><div class="ms" data-ms="music" data-ph="Any genre…"></div></div><?php endif; ?>
+  <?php if ($msCatalogs['cred']): ?><div class="filt"><span class="flab">Credentials</span><div class="ms" data-ms="cred" data-ph="Any credential…"></div></div><?php endif; ?>
   <div class="filt sortbox">
     <span class="flab">Joined</span>
     <div class="dir-sort" id="dir-sort" role="group" aria-label="Sort by join date">
