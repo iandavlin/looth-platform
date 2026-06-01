@@ -118,11 +118,29 @@ See `docs/standalone-launch-inventory.md` for the full list. Key remaining:
 - **nginx snippets:** repo copy + deployed copy can drift. Always diff before deploying.
 - **`/srv/lg-shared/*`** is www-data-owned, NOT in git. Mirror to `lg-shell/lg-shared/` after every edit.
 
+### 2nd dev onboarded — buck (2026-06-01)
+- **Lanes:** **profile** (`web/u.php`,`p.php`,`_render_blocks.php`, `me-*` endpoints) +
+  **member map** (`web/directory-members.php`,`api/v0/directory-members.php`). Reassigns
+  the prior coordinator-run map+editor profile-app work to buck — wind those down / hand
+  to him; never two profile-app turns at once.
+- **Model:** git-native per §0e. buck works in `~buck/looth-platform` (origin = canonical
+  tree), branches + commits; coordinator fetches, reviews, merges, pushes, deploys. No
+  GitHub creds for buck.
+- **Preview:** `https://buck.dev.loothgroup.com/{directory/members/,u/<slug>,p/<slug>}`
+  serves his clone's `web/` via the profile-app pool (`preview-buck-profile-app.conf`
+  included in his vhost). `src/`+`vendor/` from the shared tree → src changes need a merge.
+- **Escalation:** no sudo. sudo queue `/srv/lg-sudo-queue/REQUESTS.md` (watcher devmsgs
+  the coordinator). chrome-dev: passwordless `systemctl restart chrome-dev.service` for
+  `%loothdevs`. Bootstrap in `~buck/.claude/CLAUDE.md` + `~buck/sudo-queue-README.md`.
+- **Landed this session (main):** `looth_id` mint bounce on directory+profile
+  (`f78b869`) + `*.dev.loothgroup.com`→dev env detection (`c7b2e0e`).
+
 ### Lane roster (current)
 | Lane | Chat/Status |
 |---|---|
-| profile-app map | active — `directory-members.php` dirty |
-| profile-app editor | active — gap fix in progress |
+| profile-app: profile + member map | **buck** (own clone) — assigned 2026-06-01; supersedes the map+editor chats below |
+| profile-app map | winding down → buck |
+| profile-app editor | winding down → buck |
 | lg-shell | `1d248347` — unified modal + My Profile + nav-loothtool queued |
 | archive-poc/standalone | active — launch batch in flight |
 | poller/membership | cutover-ready, idle |
