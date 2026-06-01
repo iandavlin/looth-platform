@@ -189,6 +189,22 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
 .lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
+/* header status lights (availability widgets) */
+.lg-lights{position:relative;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.lg-light{display:inline-flex;align-items:center;gap:7px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:999px;padding:5px 12px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-lights[data-lights-edit] .lg-light{cursor:pointer;padding-right:6px}
+.lg-lights[data-lights-edit] .lg-light:hover{border-color:var(--lg-sage-3)}
+.lg-light__dot{width:9px;height:9px;border-radius:50%;background:var(--lg-mute);flex:0 0 auto}
+.lg-light--go .lg-light__dot,.lg-light__dot--go{background:#3fa34d;box-shadow:0 0 0 3px rgba(63,163,77,.18)}
+.lg-light--stop .lg-light__dot,.lg-light__dot--stop{background:#c0492f;box-shadow:0 0 0 3px rgba(192,73,47,.16)}
+.lg-light--maybe .lg-light__dot,.lg-light__dot--maybe{background:var(--lg-amber);box-shadow:0 0 0 3px rgba(224,168,60,.2)}
+.lg-light__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:15px;line-height:1;padding:0 2px}
+.lg-light__rm:hover{color:var(--lg-rust)}
+.lg-light-add{border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:5px 12px;font:700 12px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-light-add:hover{background:var(--lg-sage-tint)}
+.lg-light-menu{position:absolute;top:calc(100% + 4px);display:inline-flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--lg-line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;z-index:1000}
+.lg-light-menu button{display:flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;padding:7px 10px;border-radius:7px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink);text-align:left;white-space:nowrap}
+.lg-light-menu button:hover{background:var(--lg-sage-tint)}
 /* desktop: caddy becomes a permanent sticky sidebar column (overrides the off-canvas drawer) */
 @media(min-width:1100px){
   .lg-shell--owner .lg-caddy{position:sticky;top:24px;right:auto;align-self:start;width:auto;height:auto;
@@ -1048,6 +1064,82 @@ window.lgSortable = function (container, opts) {
       });
     });
   });
+})();
+</script>
+
+<script>
+/* Header status lights (owner/Me) — click a light to toggle its state, × to remove, + Status
+   to add an available one. All persisted to /me/lights; built client-side from the registry. */
+window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES) ?>;
+(function () {
+  var REG = window.LG_LIGHTS || {};
+  var row = document.querySelector('.lg-lights[data-lights-edit]');
+  if (!row) return;
+  var addBtn = document.getElementById('lg-light-add');
+
+  function put(key, state) {
+    return fetch('/profile-api/v0/me/lights', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, state: state || '' }) })
+      .then(function (r) { return r.ok; });
+  }
+  function states(key) { return Object.keys(((REG[key] || {}).states) || {}); }
+  function present() { return Array.prototype.map.call(row.querySelectorAll('.lg-light'), function (p) { return p.getAttribute('data-key'); }); }
+  function applyPill(pill, key, state) {
+    var st = REG[key].states[state];
+    pill.className = 'lg-light lg-light--' + st.tone;
+    pill.setAttribute('data-state', state);
+    pill.querySelector('.lg-light__label').textContent = st.label;
+  }
+  function makePill(key, state) {
+    var st = REG[key].states[state];
+    var pill = document.createElement('span');
+    pill.className = 'lg-light lg-light--' + st.tone;
+    pill.setAttribute('data-key', key); pill.setAttribute('data-state', state);
+    pill.setAttribute('role', 'button'); pill.setAttribute('tabindex', '0'); pill.title = 'Click to toggle';
+    pill.innerHTML = '<span class="lg-light__dot"></span><span class="lg-light__label">' + st.label + '</span>';
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-light__rm';
+    rm.setAttribute('aria-label', 'Remove status'); rm.textContent = '×';
+    pill.appendChild(rm);
+    return pill;
+  }
+  function refreshAdd() {
+    if (!addBtn) return;
+    var avail = Object.keys(REG).filter(function (k) { return present().indexOf(k) === -1; });
+    addBtn.style.display = avail.length ? '' : 'none';
+  }
+
+  row.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-light__rm');
+    if (rm) { var p = rm.closest('.lg-light'); var k = p.getAttribute('data-key'); p.remove(); put(k, ''); refreshAdd(); return; }
+    var pill = e.target.closest('.lg-light');
+    if (pill) {
+      var key = pill.getAttribute('data-key'), ss = states(key), cur = pill.getAttribute('data-state');
+      var next = ss[(ss.indexOf(cur) + 1) % ss.length];
+      applyPill(pill, key, next); put(key, next);
+    }
+  });
+  row.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('lg-light')) { e.preventDefault(); e.target.click(); }
+  });
+
+  function closeMenu() { var m = document.getElementById('lg-light-menu'); if (m) m.remove(); document.removeEventListener('click', onDoc); }
+  function onDoc(e) { if (!e.target.closest('#lg-light-menu') && e.target !== addBtn) closeMenu(); }
+  function openMenu() {
+    closeMenu();
+    var avail = Object.keys(REG).filter(function (k) { return present().indexOf(k) === -1; });
+    if (!avail.length) return;
+    var menu = document.createElement('div'); menu.className = 'lg-light-menu'; menu.id = 'lg-light-menu';
+    avail.forEach(function (k) {
+      var fs = states(k)[0], st = REG[k].states[fs];
+      var b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = '<span class="lg-light__dot lg-light__dot--' + st.tone + '"></span>' + st.label;
+      b.addEventListener('click', function () { row.insertBefore(makePill(k, fs), addBtn); put(k, fs); closeMenu(); refreshAdd(); });
+      menu.appendChild(b);
+    });
+    row.appendChild(menu); menu.style.left = addBtn.offsetLeft + 'px';
+    document.addEventListener('click', onDoc);
+  }
+  if (addBtn) addBtn.addEventListener('click', function (e) { e.stopPropagation(); document.getElementById('lg-light-menu') ? closeMenu() : openMenu(); });
 })();
 </script>
 

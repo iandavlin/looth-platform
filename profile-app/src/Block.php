@@ -158,6 +158,79 @@ final class Block
         ];
     }
 
+    // ---------- header status lights (availability "widgets") ----------
+
+    /**
+     * Addable header widgets: little status lights. Each light has a key + ordered states,
+     * each state a label + tone (go=green / stop=red / maybe=amber). Owner adds a light and
+     * toggles its state; it renders as a glowing dot + label in the header. Extensible — add
+     * more keys here and they appear in the "+ Status" picker automatically.
+     */
+    public const HEADER_LIGHTS = [
+        'work' => [
+            'label'  => 'Work',
+            'states' => [
+                'open'   => ['label' => 'Accepting new work', 'tone' => 'go'],
+                'closed' => ['label' => 'Not accepting work', 'tone' => 'stop'],
+            ],
+        ],
+        'collab' => [
+            'label'  => 'Collaboration',
+            'states' => [
+                'open'   => ['label' => 'Open to collaborations', 'tone' => 'go'],
+                'closed' => ['label' => 'Not collaborating',      'tone' => 'stop'],
+            ],
+        ],
+    ];
+
+    /** The user's set lights, in canonical order: [{key,state,label,tone}]. */
+    public static function loadHeaderLights(int $userId): array
+    {
+        $s = Db::pg()->prepare('SELECT header_lights FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return [];
+        $map = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+        if (!is_array($map)) $map = [];
+        $out = [];
+        foreach (self::HEADER_LIGHTS as $key => $cfg) {            // canonical order
+            if (!isset($map[$key])) continue;
+            $state = (string) $map[$key];
+            if (!isset($cfg['states'][$state])) continue;
+            $out[] = ['key' => $key, 'state' => $state] + $cfg['states'][$state];
+        }
+        return $out;
+    }
+
+    /** Lights not yet added — drives the "+ Status" picker. Returns [key => cfg]. */
+    public static function availableLights(int $userId): array
+    {
+        $present = [];
+        foreach (self::loadHeaderLights($userId) as $l) $present[$l['key']] = true;
+        return array_filter(self::HEADER_LIGHTS, static fn($k) => !isset($present[$k]), ARRAY_FILTER_USE_KEY);
+    }
+
+    /** Set ($state) or remove ($state===null) a header light. Returns the updated list, or null on bad input. */
+    public static function saveHeaderLight(int $userId, string $key, ?string $state): ?array
+    {
+        if (!isset(self::HEADER_LIGHTS[$key])) return null;
+        if ($state !== null && !isset(self::HEADER_LIGHTS[$key]['states'][$state])) return null;
+
+        $s = Db::pg()->prepare('SELECT header_lights FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return null;
+        $map = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+        if (!is_array($map)) $map = [];
+
+        if ($state === null) unset($map[$key]);
+        else                 $map[$key] = $state;
+
+        Db::pg()->prepare('UPDATE users SET header_lights = :v::jsonb, updated_at = now() WHERE id = :i')
+            ->execute([':v' => json_encode($map), ':i' => $userId]);
+        return self::loadHeaderLights($userId);
+    }
+
     /** Replace a user's selection for a catalog block (validated ⊂ active catalog, order preserved). */
     public static function saveCatalogSelection(int $userId, string $key, array $ids): ?array
     {

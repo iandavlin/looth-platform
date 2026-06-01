@@ -84,7 +84,7 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
 
     $header = Block::loadHeader($userId);
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
-    looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions);
+    looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions, $userId);
 
     // Body blocks render in the owner's chosen order (Block::profileLayout); the header is
     // pinned above. Each key maps to its existing renderer — order is the only thing the
@@ -500,7 +500,7 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
 }
 
 /** The profile-header (identity) block — the author-identity card. */
-function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = ''): void
+function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = '', int $userId = 0): void
 {
     $f       = $header['fields'];
     $name    = (string)($f['display_name'] ?? 'Member');
@@ -548,6 +548,23 @@ function looth_render_header_block(array $header, string $role, string $headerVi
         echo '<p class="lg-idrow__glance">' . looth_h($glance) . '</p>';
     }
     echo '</div></div>';                                   // close __body + idrow
+
+    // Header status lights (availability widgets). Owner can toggle/remove each + add more.
+    $lights = $userId ? Block::loadHeaderLights($userId) : [];
+    $avail  = ($isOwner && $userId) ? Block::availableLights($userId) : [];
+    if ($lights || $avail) {
+        echo '<div class="lg-lights"' . ($isOwner ? ' data-lights-edit' : '') . '>';
+        foreach ($lights as $l) {
+            echo '<span class="lg-light lg-light--' . looth_h($l['tone']) . '" data-key="' . looth_h($l['key']) . '" data-state="' . looth_h($l['state']) . '"'
+               . ($isOwner ? ' role="button" tabindex="0" title="Click to toggle"' : '') . '>'
+               . '<span class="lg-light__dot"></span><span class="lg-light__label">' . looth_h($l['label']) . '</span>';
+            if ($isOwner) echo '<button type="button" class="lg-light__rm" aria-label="Remove status">×</button>';
+            echo '</span>';
+        }
+        if ($avail) echo '<button type="button" class="lg-light-add" id="lg-light-add">+ Status</button>';
+        echo '</div>';
+    }
+
     // Social actions slot (Connect / Message) — server-rendered widget; empty for
     // owner/self. Sits below the identity row, inside the header card.
     if ($headerActions !== '') echo $headerActions;
