@@ -1968,34 +1968,54 @@ body.ntm-active { overflow: hidden; }
 
 /* Section head: label link + toggle button side by side */
 /* ── Pill nav ──────────────────────────────────────────────
-   Category pill = full-width toggle button; leaves expand on click.
-   Per-category accents come from --nc / --leaf-cap (set on .nav-section--*). */
+   Category pill: real categories = navigable name link + chevron toggle;
+   virtual groups (General/Sponsors/Local Looths) = whole pill is the toggle.
+   Per-category accents come from --nc / --leaf-cap (set on .nav-section--*).
+   Padding lives on the children so the link / chevron fill the whole pill. */
 .nav-tree__cat-pill {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
   width: 100%;
   margin: 3px 0 2px;
-  padding: 7px 12px;
+  padding: 0;
   border: 1px solid var(--leaf-cap, var(--lg-line));
   border-radius: 999px;
   background: var(--bg-card, #fff);
   color: var(--nc, var(--lg-ink));
   font: 700 12.5px/1.15 var(--lg-font-sans);
   text-align: left;
-  cursor: pointer;
+  overflow: hidden;
   transition: background .12s, border-color .12s, color .12s;
 }
+button.nav-tree__cat-pill { cursor: pointer; }
 .nav-tree__cat-pill:hover { background: var(--lg-sage-tint); }
+
+/* Category name — an <a> (navigates) for real cats, a <span> for groups */
 .nav-tree__cat-name {
   flex: 1; min-width: 0;
+  padding: 7px 4px 7px 13px;
+  color: inherit;
+  text-decoration: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+a.nav-tree__cat-name { cursor: pointer; }
+a.nav-tree__cat-name:hover { text-decoration: underline; }
+
+/* Chevron toggle — a button (real cats) or a bare span (groups) */
+.nav-tree__cat-pill .nav-tree__section-toggle {
+  flex-shrink: 0;
+  padding: 7px 13px 7px 6px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  line-height: 1;
+}
+.nav-tree__cat-pill > .nav-tree__chevron { padding: 7px 13px 7px 6px; }  /* group: span chevron */
 .nav-tree__chevron {
   flex-shrink: 0;
   font-size: 10px;
-  color: var(--nc, var(--lg-mute));
+  color: inherit;
   transition: transform .2s;
 }
 .nav-tree__section--open > .nav-tree__cat-pill {
@@ -2005,7 +2025,6 @@ body.ntm-active { overflow: hidden; }
 }
 .nav-tree__section--open > .nav-tree__cat-pill .nav-tree__chevron {
   transform: rotate(90deg);
-  color: #fff;
 }
 
 /* Body hidden until the category is opened */
@@ -2079,11 +2098,41 @@ body.ntm-active { overflow: hidden; }
    SUBFORUM PILLS
    ══════════════════════════════════════════════════════════ */
 
+/* Top-level category row (tier 1) — sits above the leaf/subforum row */
+.category-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: var(--s3) 0 0;
+}
+.category-pill {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--bg-card, #fff);
+  border: 1px solid var(--lg-line, #e3ddd0);
+  border-radius: 999px;
+  font: 700 12.5px var(--font-body);
+  color: var(--lg-ink);
+  text-decoration: none;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.category-pill:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+  text-decoration: none;
+}
+.category-pill--active {
+  background: var(--lg-sage-d);
+  border-color: var(--lg-sage-d);
+  color: #fff;
+}
+
 .subforum-pills {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
-  margin: var(--s3) 0 var(--s4);
+  margin: var(--s2) 0 var(--s4);
 }
 
 .subforum-pill {

@@ -186,17 +186,16 @@ function bb_mirror_left_nav(): void
               }
           }
       ?>
-        <?php $parent_active = ($active === (string)$c['parent']['slug']
-              || ($active_forum_id !== null && (int)$c['parent']['id'] === $active_forum_id)); ?>
         <div class="nav-tree__section nav-section--<?= $cat_key ?><?= $sec_active ? ' nav-tree__section--open' : '' ?>">
-          <button class="nav-tree__section-toggle nav-tree__cat-pill nav-section--<?= $cat_key ?>" type="button"
-                  aria-expanded="<?= $sec_active ? 'true' : 'false' ?>">
-            <span class="nav-tree__cat-name"><?= htmlspecialchars($c['parent']['title']) ?></span>
-            <span class="nav-tree__chevron" aria-hidden="true">&#9656;</span>
-          </button>
+          <div class="nav-tree__cat-pill nav-section--<?= $cat_key ?>">
+            <a class="nav-tree__cat-name" href="<?= $cat_href ?>"><?= htmlspecialchars($c['parent']['title']) ?></a>
+            <button class="nav-tree__section-toggle" type="button"
+                    aria-expanded="<?= $sec_active ? 'true' : 'false' ?>"
+                    aria-label="Toggle <?= htmlspecialchars($c['parent']['title'], ENT_QUOTES) ?> sub-forums">
+              <span class="nav-tree__chevron" aria-hidden="true">&#9656;</span>
+            </button>
+          </div>
           <div class="nav-tree__section-body">
-            <a class="nav-tree__item nav-tree__pill nav-tree__pill--all nav-section--<?= $cat_key ?><?= $parent_active ? ' nav-tree__item--active' : '' ?>"
-               href="<?= $cat_href ?>">View all <?= htmlspecialchars($c['parent']['title']) ?></a>
             <?php foreach ($c['kids'] as $kid) $render_link($kid, 'nav-tree__item--child nav-section--' . $cat_key); ?>
           </div>
         </div>
