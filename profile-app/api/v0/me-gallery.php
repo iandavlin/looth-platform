@@ -68,5 +68,6 @@ $images = array_key_exists('images', $in) && is_array($in['images'])
     : Block::loadGallery($uid)['images'];
 $vis    = array_key_exists('visibility', $in) ? $in['visibility'] : null;
 $title  = array_key_exists('title', $in) ? (string) $in['title'] : null;  // null = keep existing
-$gallery = Block::saveGalleryImages($uid, $images, $vis, $title);
+$mode   = array_key_exists('display_mode', $in) ? (string) $in['display_mode'] : null;  // null = keep existing
+$gallery = Block::saveGalleryImages($uid, $images, $vis, $title, $mode);
 profile_app_json(200, ['ok' => true, 'gallery' => $gallery]);

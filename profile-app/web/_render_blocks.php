@@ -120,7 +120,10 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
     if (!$images && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$g['vis'])) && !$isOwner) return;
 
-    $title = trim((string)($g['title'] ?? ''));
+    $title  = trim((string)($g['title'] ?? ''));
+    $mode   = (string)($g['display_mode'] ?? Block::GALLERY_DISPLAY_DEFAULT);
+    $isCar  = ($mode === 'carousel') && count($images) > 0;
+
     echo '<section class="block lg-block lg-block--gallery" data-block="gallery">';
     echo '<h3 class="lg-bh">';
     if ($isOwner) {
@@ -134,16 +137,54 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         echo looth_h($title !== '' ? $title : 'Gallery');
     }
     echo '</h3>';
-    echo '<div class="lg-gallery' . ($isOwner ? ' lg-gallery--edit' : '') . '" id="lg-gallery">';
+
+    // Owner: grid/carousel mode toggle. PUT /me/gallery {display_mode}.
+    if ($isOwner) {
+        echo '<div class="lg-gmode" role="group" aria-label="Gallery display mode">';
+        foreach (['grid' => 'Grid', 'carousel' => 'Carousel'] as $m => $label) {
+            $pressed = ($mode === $m) ? 'true' : 'false';
+            echo '<button type="button" class="lg-gmode__btn" data-mode="' . $m . '" aria-pressed="' . $pressed . '">' . $label . '</button>';
+        }
+        echo '</div>';
+    }
+
+    $wrapClass = 'lg-gallery'
+        . ($isOwner ? ' lg-gallery--edit' : '')
+        . ($isCar ? ' lg-gallery--carousel' : ' lg-gallery--grid');
+    echo '<div class="' . $wrapClass . '" id="lg-gallery">';
+
+    if ($isCar) {
+        echo '<div class="lg-carousel" data-carousel>';
+        if (count($images) > 1) {
+            echo '<button type="button" class="lg-carousel__nav lg-carousel__nav--prev" aria-label="Previous photo">‹</button>';
+            echo '<button type="button" class="lg-carousel__nav lg-carousel__nav--next" aria-label="Next photo">›</button>';
+        }
+        echo '<div class="lg-carousel__viewport"><div class="lg-carousel__track">';
+    }
+
     foreach ($images as $im) {
         $url = (string)($im['url'] ?? '');
         $cap = (string)($im['caption'] ?? '');
         echo '<figure class="lg-gphoto" data-url="' . looth_h($url) . '">'
-           . '<img src="' . looth_h($url) . '" alt="' . looth_h($cap) . '" loading="lazy">';
+           . '<img src="' . looth_h($url) . '" alt="' . looth_h($cap) . '" loading="lazy" decoding="async">';
         if ($isOwner) echo '<button type="button" class="lg-gphoto__rm" aria-label="Remove">×</button>';
         if ($cap !== '') echo '<figcaption>' . looth_h($cap) . '</figcaption>';
         echo '</figure>';
     }
+
+    if ($isCar) {
+        echo '</div></div>'; // track + viewport
+        if (count($images) > 1) {
+            echo '<div class="lg-carousel__dots" role="tablist" aria-label="Photo navigation">';
+            for ($i = 0, $n = count($images); $i < $n; $i++) {
+                $cur = ($i === 0) ? 'true' : 'false';
+                echo '<button type="button" class="lg-carousel__dot" role="tab" aria-current="' . $cur . '" aria-label="Photo ' . ($i + 1) . '"></button>';
+            }
+            echo '</div>';
+        }
+        echo '</div>'; // .lg-carousel
+    }
+
     if ($isOwner) echo '<button type="button" class="lg-gphoto__add" id="lg-gallery-add">＋ Add photos</button>';
     echo '</div></section>';
 }
