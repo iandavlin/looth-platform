@@ -165,7 +165,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* drop indicator while dragging a caddy block onto the profile */
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
-/* ✚ Blocks toggle in the View-as bar */
+/* Sections toggle in the View-as bar */
 .lg-viewas__caddy{background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:6px 14px;font:800 12px/1 var(--lg-font-sans);cursor:pointer}
 .lg-viewas__caddy:hover{filter:brightness(1.06)}
 /* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
@@ -422,7 +422,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
           <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
         </span>
-        <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">✚ Blocks</button>
+        <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
         <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
         <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
       </div>
@@ -638,7 +638,7 @@ window.lgSortable = function (container, opts) {
 
 <script>
 /* Owner layout controls — whole-block reorder (⠿ grip), per-block remove (✕), and the
-   ✚ Blocks caddy (tap-to-add, or drag a block from the caddy onto the profile). Order
+   Sections caddy (tap-to-add, or drag a block from the caddy onto the profile). Order
    persists to /me/layout with NO reload; add & remove reload so the server re-renders the
    affected block(s) + the caddy (and so a newly added block's inline editors wire up). */
 (function () {
