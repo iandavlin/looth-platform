@@ -175,6 +175,17 @@ function count_descendants(int $id, array $children_map): int {
     return $n;
 }
 
+// Collect all descendants of a node in DFS pre-order (child then its subtree)
+// — used to flatten a thread to two visual tiers (top-level + one indent).
+function collect_descendants(int $id, array $children_map): array {
+    $out = [];
+    foreach ($children_map[$id] ?? [] as $cid) {
+        $out[] = $cid;
+        foreach (collect_descendants($cid, $children_map) as $d) $out[] = $d;
+    }
+    return $out;
+}
+
 const MAX_DEPTH = 4;
 
 function render_reply(
@@ -231,20 +242,18 @@ function render_reply(
       </div>
     </div>
     <?php
-    if (!$children) return;
-
-    if ($depth >= MAX_DEPTH) {
-        $n = count_descendants($id, $children_map);
-        ?>
-        <div class="collapse-toggle">↩ Show <?= $n ?> deeper <?= $n === 1 ? 'reply' : 'replies' ?></div>
-        <?php
-        return;
-    }
+    // Flatten to two visual tiers: a top-level reply renders ALL its descendants
+    // (DFS) at a single child indent. Each nested reply keeps its "↩ in reply to
+    // <author>" reference (above) so the thread stays legible. Replies at depth >= 1
+    // don't recurse here — the depth-0 caller already emitted the whole subtree.
+    if ($depth >= 1) return;
+    $desc = collect_descendants($id, $children_map);
+    if (!$desc) return;
     ?>
     <ul class="replies-tree">
-      <?php foreach ($children as $cid): ?>
+      <?php foreach ($desc as $cid): ?>
         <li>
-          <?php render_reply($cid, $reply_map, $children_map, $op_id, $depth + 1); ?>
+          <?php render_reply($cid, $reply_map, $children_map, $op_id, 1); ?>
         </li>
       <?php endforeach; ?>
     </ul>

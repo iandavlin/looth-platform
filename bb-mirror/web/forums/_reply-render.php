@@ -44,11 +44,13 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
     /**
      * Render one .reply-stub row.
      *
-     * @param array $r        keys: author_name, author_slug, excerpt, created_at, reply_image_url
-     * @param bool  $is_child indented child styling
-     * @param bool  $overflow hidden-until-expanded (only used inside the lazy thread)
+     * @param array       $r               keys: reply_id, author_name, author_slug, excerpt, created_at, reply_image_url
+     * @param bool        $is_child        indented child styling (one tier — the tree is flattened to 2 visual levels)
+     * @param bool        $collapse_image  hide+defer the image behind a "Show image" button (loads on click)
+     * @param bool        $show_reply_btn  emit a per-reply "Reply" button (opens the reply modal nested)
+     * @param string|null $reply_to_author for depth ≥ 2: the parent author, shown as a "↪ @name" prefix
      */
-    function bb_mirror_render_reply_stub(array $r, bool $is_child = false, bool $overflow = false, bool $collapse_image = false): void
+    function bb_mirror_render_reply_stub(array $r, bool $is_child = false, bool $collapse_image = false, bool $show_reply_btn = false, ?string $reply_to_author = null): void
     {
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
@@ -57,9 +59,7 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $reply_rest  = mb_strlen($raw_text) > 160 ? mb_substr($raw_text, 160) : '';
         $rtime_r     = $r['created_at'] ? feed_rel_time((string)$r['created_at']) : '—';
         $av_slug     = $rslug ?: ($r['author_name'] ?: 'anonymous');
-        $classes     = 'reply-stub'
-                     . ($overflow ? ' reply-stub--overflow' : '')
-                     . ($is_child ? ' reply-stub--child' : '');
+        $classes     = 'reply-stub' . ($is_child ? ' reply-stub--child' : '');
         echo '<div class="' . $classes . '">';
         echo '<div class="reply-stub__head">';
         echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28);
@@ -69,8 +69,17 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             echo '<span class="reply-stub__author">' . $ra . '</span>';
         }
         echo '<time class="reply-stub__time">' . $rtime_r . '</time>';
+        if ($show_reply_btn && isset($r['reply_id'])) {
+            echo '<button class="reply-stub__reply" type="button"'
+               . ' data-reply-to="' . (int)$r['reply_id'] . '"'
+               . ' data-reply-to-author="' . htmlspecialchars($r['author_name'] ?: 'Anonymous', ENT_QUOTES) . '">'
+               . '&#8617; Reply</button>';
+        }
         echo '</div>';
         echo '<div class="reply-stub__body">';
+        if ($reply_to_author !== null && $reply_to_author !== '') {
+            echo '<span class="reply-stub__reply-to">&#8618; @' . htmlspecialchars($reply_to_author) . '</span> ';
+        }
         if ($reply_short !== '') {
             echo '<span class="reply-stub__excerpt">' . htmlspecialchars($reply_short);
             if ($reply_rest) {

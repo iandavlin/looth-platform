@@ -725,6 +725,7 @@
     var frmQuill    = null;     // lazy Quill instance (same editor as new-topic)
     var frmMediaIds = [];       // bbp_media upload_ids for this reply
     var frmMediaPreviews = [];  // preview URLs, for the optimistic stub (no refresh)
+    var frmParentId = 0;        // reply_to: set when replying to a specific reply (nested)
 
     function frmFocus() { if (frmQuill) frmQuill.focus(); else if (frmContent) frmContent.focus(); }
 
@@ -818,14 +819,28 @@
         .catch(function () { frmSetState('anon'); });
     }
     function frmOpen(trigger) {
-      // The trigger button carries topic-id / forum-id / title; the card is its
-      // ancestor (used for the optimistic stub).
+      // The card is the trigger's ancestor (used for the optimistic stub + to
+      // source topic/forum when the trigger is a per-reply button).
       frmCard = trigger.closest('.feed-card');
-      frmTopicId.value = trigger.dataset.topicId || '';
-      frmForumId.value = trigger.dataset.forumId || '';
-      var title = trigger.dataset.topicTitle || '';
-      if (frmCtxTitle && title) { frmCtxTitle.textContent = title; frmContext.hidden = false; }
-      else if (frmContext) { frmContext.hidden = true; }
+      var replyTo = parseInt(trigger.dataset.replyTo, 10) || 0;
+      frmParentId = replyTo;
+      // A per-reply "Reply" button only carries reply-to/-author; topic + forum
+      // live on the card's top-level reply CTA. The card CTA carries them directly.
+      var src = trigger;
+      if (replyTo && frmCard) {
+        var cta = frmCard.querySelector('.feed-card__reply-cta[data-frm-open]');
+        if (cta) src = cta;
+      }
+      frmTopicId.value = src.dataset.topicId || (frmCard && frmCard.dataset.topicId) || '';
+      frmForumId.value = src.dataset.forumId || '';
+      var title = src.dataset.topicTitle || '';
+      if (frmCtxTitle) {
+        if (replyTo) {
+          frmCtxTitle.textContent = '↩ Replying to ' + (trigger.dataset.replyToAuthor || 'a reply') + (title ? ' · ' + title : '');
+          frmContext.hidden = false;
+        } else if (title) { frmCtxTitle.textContent = title; frmContext.hidden = false; }
+        else if (frmContext) { frmContext.hidden = true; }
+      }
       frmStatus.textContent = '';
       frmResetEditor();
       frmOverlay.hidden = false;
@@ -841,8 +856,9 @@
 
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
-      var t = e.target.closest('.feed-card__reply-cta[data-frm-open]');
+      var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply');
       if (!t) return;
+      e.stopPropagation();
       frmOpen(t);
     });
     frmCancel.addEventListener('click', frmClose);
@@ -863,6 +879,7 @@
       var frmPayload = { topic_id: topicId, forum_id: forumId };
       if (content) frmPayload.content = content;
       if (frmMediaIds.length) frmPayload.bbp_media = frmMediaIds;
+      if (frmParentId) frmPayload.reply_to = frmParentId;   // nested reply
       fetch(frmRestBase + '/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },
@@ -874,7 +891,11 @@
             frmStatus.textContent = 'Error: ' + ((res.j && (res.j.message || res.j.code)) || 'failed');
             frmSubmit.disabled = false; return;
           }
-          frmAppendOptimistic(frmCard, frmName, content);   // images come from frmMediaPreviews
+          if (frmParentId) {
+            frmRefreshThread(frmCard);                      // nested: reload thread so it nests in place
+          } else {
+            frmAppendOptimistic(frmCard, frmName, content); // images come from frmMediaPreviews
+          }
           frmResetEditor();
           frmSubmit.disabled = false;
           frmClose();
@@ -934,7 +955,42 @@
         wrapEl.appendChild(exp);
       }
     }
+
+    // Nested reply: the optimistic teaser path would misrepresent depth, so just
+    // refresh the thread. Reload now if it's open (keeps it open, reply nested in
+    // place); otherwise mark stale so the next expand re-fetches.
+    function frmRefreshThread(card) {
+      if (!card) return;
+      var full = card.querySelector('.feed-card__replies-full');
+      if (!full) return;
+      full.dataset.loaded = '';
+      if (card.classList.contains('replies-expanded')) {
+        fetch(FORUM_BASE + '/?replies=' + card.dataset.topicId)
+          .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('fetch')); })
+          .then(function (html) { full.innerHTML = html; full.dataset.loaded = '1'; })
+          .catch(function () { /* leave stale; next expand re-fetches */ });
+      } else {
+        full.innerHTML = '';
+      }
+    }
   }
+
+  // ── 2e. "Load more replies" — append the next page of top-level threads ─────
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('.replies-loadmore');
+    if (!b) return;
+    var host = b.closest('.feed-card__replies-full');
+    if (!host) return;
+    var orig = b.textContent;
+    b.disabled = true; b.textContent = 'Loading…';
+    fetch(FORUM_BASE + '/?replies=' + b.dataset.topicId + '&sort=' + (b.dataset.sort || 'newest') + '&offset=' + b.dataset.offset)
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error('fetch')); })
+      .then(function (html) {
+        b.insertAdjacentHTML('beforebegin', html);  // next page (carries its own load-more if more remain)
+        b.remove();
+      })
+      .catch(function () { b.disabled = false; b.textContent = orig; });
+  });
 
   // ── 3b. Single-topic page: reply form + mark-seen on load ───────────────
   var wrap = document.querySelector('.reply-form-wrap');
