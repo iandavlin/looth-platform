@@ -53,25 +53,6 @@ function bb_mirror_cat_key(?string $parent_slug, ?string $own_slug = null): stri
 /**
  * Build a map of forum_id → category key for all public forums.
  */
-function bb_mirror_forum_icon(string $slug, string $cat_key): string {
-    static $leaf = [
-        'share-your-repair-content'=>"\u{1F4F7}",'finish'=>"\u{2728}",'touring-tech'=>"\u{1F690}",
-        'amps-pickups-and-pedals'=>"\u{1F39B}",'electric-2'=>"\u{26A1}",'neck-reset-database'=>"\u{1F4D0}",
-        'acoustic'=>"\u{1F3B8}",'folk-bluegrass-irish-old-time-instruments'=>"\u{1FA95}",
-        'design-and-testing'=>"\u{1F9EA}",'electric'=>"\u{26A1}",'acoustic-2'=>"\u{1F3B8}",'finish-2'=>"\u{2728}",
-        'amps-pickups-and-pedals-2'=>"\u{1F39B}",'share-your-new-builds-content'=>"\u{1F4F7}",
-        'folk-bluegrass-irish-old-time-instruments-2'=>"\u{1FA95}",
-        '3d-printing'=>"\u{1F5A8}",'cad-cam'=>"\u{1F4D0}",'cnc'=>"\u{2699}",'tools-and-jigs'=>"\u{1F9F0}",
-        'shop-organisation'=>"\u{1F5C4}",'plek-machine'=>"\u{1F916}",
-        'paper-work-and-drudgery'=>"\u{1F4C4}",'general-buisness'=>"\u{1F4BC}",'job-postings'=>"\u{1F4CB}",
-        'customer-relations'=>"\u{1F91D}",'resumes'=>"\u{1F4C4}",'buy-buy-buy'=>"\u{1F6D2}",'sell-sell-sell'=>"\u{1F4B5}",
-        'stewmac'=>"\u{1F6E0}",'go-acoustic-audio'=>"\u{1F50A}",'total-vise'=>"\u{1F5DC}",'strings-micro-factory'=>"\u{1F3BB}",
-    ];
-    if (isset($leaf[$slug])) return $leaf[$slug];
-    static $cat = ['repair'=>"\u{1F6E0}",'builds'=>"\u{1F528}",'acoustic'=>"\u{1F3B8}",'tools'=>"\u{1F9F0}",'business'=>"\u{1F4BC}",'market'=>"\u{1F3F7}",'general'=>"\u{1F4AC}",'sponsors'=>"\u{2B50}",'looths'=>"\u{1F4CD}"];
-    return $cat[$cat_key] ?? "\u{2022}";
-}
-
 function bb_mirror_build_cat_map(array $rows): array
 {
     $slugs   = [];
@@ -167,16 +148,23 @@ function bb_mirror_left_nav(): void
       </a>
 
       <?php
-      $render_link = function (array $f, string $extra_class = '', string $cat_key = '') use ($active, &$active_forum_id): void {
+      $render_link = function (array $f, string $extra_class = ''): void {
           $href    = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/' . $f['slug'] . '/');
           $is_act  = $active_forum_id !== null
               ? ((int)$f['id'] === $active_forum_id)
               : ($active === $f['slug']);
-          $classes = 'nav-tree__item ' . $extra_class . ($is_act ? ' nav-tree__item--active' : '');
+          $classes = 'nav-tree__item nav-tree__pill ' . $extra_class . ($is_act ? ' nav-tree__item--active' : '');
           echo '<a class="' . trim($classes) . '" href="' . $href . '">'
-             . '<span class="nav-tree__icon" aria-hidden="true">' . bb_mirror_forum_icon((string)$f['slug'], $cat_key) . '</span>'
              . htmlspecialchars($f['title'])
              . '</a>' . "\n";
+      };
+      // true if the active forum is one of these leaves (so its section opens on load)
+      $leaves_active = function (array $list) use ($active, &$active_forum_id): bool {
+          foreach ($list as $f) {
+              if ($active === (string)$f['slug']
+                  || ($active_forum_id !== null && (int)$f['id'] === $active_forum_id)) return true;
+          }
+          return false;
       };
       ?>
 
@@ -198,39 +186,43 @@ function bb_mirror_left_nav(): void
               }
           }
       ?>
-        <div class="nav-tree__section<?= $sec_active ? ' nav-tree__section--open' : '' ?>">
-          <div class="nav-tree__section-head">
-            <a class="nav-tree__section-label nav-section--<?= $cat_key ?>"
-               href="<?= $cat_href ?>"><span class="nav-tree__icon" aria-hidden="true"><?= bb_mirror_forum_icon((string)$c['parent']['slug'], $cat_key) ?></span><?= htmlspecialchars($c['parent']['title']) ?></a>
-            <button class="nav-tree__section-toggle" type="button"
-                    aria-expanded="<?= $sec_active ? 'true' : 'false' ?>">&#9658;</button>
-          </div>
+        <?php $parent_active = ($active === (string)$c['parent']['slug']
+              || ($active_forum_id !== null && (int)$c['parent']['id'] === $active_forum_id)); ?>
+        <div class="nav-tree__section nav-section--<?= $cat_key ?><?= $sec_active ? ' nav-tree__section--open' : '' ?>">
+          <button class="nav-tree__section-toggle nav-tree__cat-pill nav-section--<?= $cat_key ?>" type="button"
+                  aria-expanded="<?= $sec_active ? 'true' : 'false' ?>">
+            <span class="nav-tree__cat-name"><?= htmlspecialchars($c['parent']['title']) ?></span>
+            <span class="nav-tree__chevron" aria-hidden="true">&#9656;</span>
+          </button>
           <div class="nav-tree__section-body">
-            <?php foreach ($c['kids'] as $kid) $render_link($kid, 'nav-tree__item--child nav-section--' . $cat_key, $cat_key); ?>
+            <a class="nav-tree__item nav-tree__pill nav-tree__pill--all nav-section--<?= $cat_key ?><?= $parent_active ? ' nav-tree__item--active' : '' ?>"
+               href="<?= $cat_href ?>">View all <?= htmlspecialchars($c['parent']['title']) ?></a>
+            <?php foreach ($c['kids'] as $kid) $render_link($kid, 'nav-tree__item--child nav-section--' . $cat_key); ?>
           </div>
         </div>
       <?php endforeach; ?>
 
-      <?php if ($general): ?>
-        <div class="nav-tree__section">
-          <span class="nav-tree__section-label nav-section--general"><span class="nav-tree__icon" aria-hidden="true"><?= bb_mirror_forum_icon('','general') ?></span>General</span>
-          <?php foreach ($general as $f) $render_link($f, 'nav-tree__item--child nav-section--general', 'general'); ?>
+      <?php
+      // Virtual groups (no single parent forum) — same collapsible pill, no "View all".
+      $render_group = function (string $cat_key, string $title, array $list) use ($render_link, $leaves_active): void {
+          $open = $leaves_active($list);
+      ?>
+        <div class="nav-tree__section nav-section--<?= $cat_key ?><?= $open ? ' nav-tree__section--open' : '' ?>">
+          <button class="nav-tree__section-toggle nav-tree__cat-pill nav-section--<?= $cat_key ?>" type="button"
+                  aria-expanded="<?= $open ? 'true' : 'false' ?>">
+            <span class="nav-tree__cat-name"><?= htmlspecialchars($title) ?></span>
+            <span class="nav-tree__chevron" aria-hidden="true">&#9656;</span>
+          </button>
+          <div class="nav-tree__section-body">
+            <?php foreach ($list as $f) $render_link($f, 'nav-tree__item--child nav-section--' . $cat_key); ?>
+          </div>
         </div>
-      <?php endif; ?>
-
-      <?php if ($sponsors): ?>
-        <div class="nav-tree__section">
-          <span class="nav-tree__section-label nav-section--sponsors"><span class="nav-tree__icon" aria-hidden="true"><?= bb_mirror_forum_icon('','sponsors') ?></span>Sponsors</span>
-          <?php foreach ($sponsors as $f) $render_link($f, 'nav-tree__item--child nav-section--sponsors', 'sponsors'); ?>
-        </div>
-      <?php endif; ?>
-
-      <?php if ($local): ?>
-        <div class="nav-tree__section">
-          <span class="nav-tree__section-label nav-section--looths"><span class="nav-tree__icon" aria-hidden="true"><?= bb_mirror_forum_icon('','looths') ?></span>Local Looths</span>
-          <?php foreach ($local as $f) $render_link($f, 'nav-tree__item--child nav-section--looths', 'looths'); ?>
-        </div>
-      <?php endif; ?>
+      <?php
+      };
+      if ($general)  $render_group('general',  'General',      $general);
+      if ($sponsors) $render_group('sponsors', 'Sponsors',     $sponsors);
+      if ($local)    $render_group('looths',   'Local Looths', $local);
+      ?>
 
     </nav>
     <?php

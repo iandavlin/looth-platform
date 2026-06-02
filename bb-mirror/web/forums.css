@@ -1749,69 +1749,6 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   --cat-looths:    #6b8e9a;   /* muted teal — regional */
 }
 
-/* Nav section label accents */
-.nav-section--acoustic { border-left: 3px solid var(--cat-acoustic); padding-left: 6px; }
-.nav-section--builds   { border-left: 3px solid var(--cat-builds);   padding-left: 6px; }
-.nav-section--repair   { border-left: 3px solid var(--cat-repair);   padding-left: 6px; }
-.nav-section--tools    { border-left: 3px solid var(--cat-tools);    padding-left: 6px; }
-.nav-section--business { border-left: 3px solid var(--cat-business); padding-left: 6px; }
-.nav-section--market   { border-left: 3px solid var(--cat-market);   padding-left: 6px; }
-.nav-section--general  { border-left: 3px solid var(--cat-general);  padding-left: 6px; }
-.nav-section--sponsors { border-left: 3px solid var(--cat-sponsors); padding-left: 6px; }
-.nav-section--looths   { border-left: 3px solid var(--cat-looths);   padding-left: 6px; }
-
-/* Nav section label — override default padding for color-coded labels */
-.nav-tree__section-label.nav-section--acoustic,
-.nav-tree__section-label.nav-section--builds,
-.nav-tree__section-label.nav-section--repair,
-.nav-tree__section-label.nav-section--tools,
-.nav-tree__section-label.nav-section--business,
-.nav-tree__section-label.nav-section--market,
-.nav-tree__section-label.nav-section--general,
-.nav-tree__section-label.nav-section--sponsors,
-.nav-tree__section-label.nav-section--looths {
-  padding-left: 6px; /* border-left already adds visual offset */
-}
-
-/* Nav items: subtle left-border hint on hover/active */
-.nav-tree__item.nav-section--acoustic:hover,
-.nav-tree__item.nav-section--acoustic.nav-tree__item--active { border-left: 3px solid var(--cat-acoustic); padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--builds:hover,
-.nav-tree__item.nav-section--builds.nav-tree__item--active   { border-left: 3px solid var(--cat-builds);   padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--repair:hover,
-.nav-tree__item.nav-section--repair.nav-tree__item--active   { border-left: 3px solid var(--cat-repair);   padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--tools:hover,
-.nav-tree__item.nav-section--tools.nav-tree__item--active    { border-left: 3px solid var(--cat-tools);    padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--business:hover,
-.nav-tree__item.nav-section--business.nav-tree__item--active { border-left: 3px solid var(--cat-business); padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--market:hover,
-.nav-tree__item.nav-section--market.nav-tree__item--active   { border-left: 3px solid var(--cat-market);   padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--general:hover,
-.nav-tree__item.nav-section--general.nav-tree__item--active  { border-left: 3px solid var(--cat-general);  padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--sponsors:hover,
-.nav-tree__item.nav-section--sponsors.nav-tree__item--active { border-left: 3px solid var(--cat-sponsors); padding-left: calc(10px - 3px); }
-.nav-tree__item.nav-section--looths:hover,
-.nav-tree__item.nav-section--looths.nav-tree__item--active   { border-left: 3px solid var(--cat-looths);   padding-left: calc(10px - 3px); }
-
-/* Child items: slightly less indent to account for the border */
-.nav-tree__item--child.nav-section--acoustic:hover,
-.nav-tree__item--child.nav-section--acoustic.nav-tree__item--active { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--builds:hover,
-.nav-tree__item--child.nav-section--builds.nav-tree__item--active   { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--repair:hover,
-.nav-tree__item--child.nav-section--repair.nav-tree__item--active   { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--tools:hover,
-.nav-tree__item--child.nav-section--tools.nav-tree__item--active    { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--business:hover,
-.nav-tree__item--child.nav-section--business.nav-tree__item--active { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--market:hover,
-.nav-tree__item--child.nav-section--market.nav-tree__item--active   { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--general:hover,
-.nav-tree__item--child.nav-section--general.nav-tree__item--active  { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--sponsors:hover,
-.nav-tree__item--child.nav-section--sponsors.nav-tree__item--active { padding-left: calc(var(--s4) - 3px); }
-.nav-tree__item--child.nav-section--looths:hover,
-.nav-tree__item--child.nav-section--looths.nav-tree__item--active   { padding-left: calc(var(--s4) - 3px); }
 
 /* Feed cards: left-border tint by category */
 .feed-card[data-cat="acoustic"] { border-left-color: var(--cat-acoustic); }
@@ -2030,47 +1967,77 @@ body.ntm-active { overflow: hidden; }
    ══════════════════════════════════════════════════════════ */
 
 /* Section head: label link + toggle button side by side */
-.nav-tree__section-head {
+/* ── Pill nav ──────────────────────────────────────────────
+   Category pill = full-width toggle button; leaves expand on click.
+   Per-category accents come from --nc / --leaf-cap (set on .nav-section--*). */
+.nav-tree__cat-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  margin-bottom: 2px;
-}
-
-/* Category label is now a link */
-.nav-tree__section-label {
-  flex: 1;
-  min-width: 0;
-  text-decoration: none;
+  gap: 6px;
+  width: 100%;
+  margin: 3px 0 2px;
+  padding: 7px 12px;
+  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border-radius: 999px;
+  background: var(--bg-card, #fff);
+  color: var(--nc, var(--lg-ink));
+  font: 700 12.5px/1.15 var(--lg-font-sans);
+  text-align: left;
   cursor: pointer;
-  transition: color .12s;
+  transition: background .12s, border-color .12s, color .12s;
 }
-.nav-tree__section-label:hover { color: var(--accent, #8c4a2b); }
-
-/* Toggle chevron button */
-.nav-tree__section-toggle {
+.nav-tree__cat-pill:hover { background: var(--lg-sage-tint); }
+.nav-tree__cat-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nav-tree__chevron {
   flex-shrink: 0;
-  background: none;
-  border: none;
-  padding: 2px 4px;
-  cursor: pointer;
   font-size: 10px;
-  color: var(--lg-mute);
-  line-height: 1;
+  color: var(--nc, var(--lg-mute));
   transition: transform .2s;
 }
-.nav-tree__section-toggle:hover { color: var(--accent, #8c4a2b); }
-
-/* Body hidden by default */
-.nav-tree__section-body { display: none; }
-
-/* Open state */
-.nav-tree__section--open .nav-tree__section-body { display: block; }
-.nav-tree__section--open .nav-tree__section-toggle {
-  transform: rotate(90deg);
-  color: var(--accent, #8c4a2b);
+.nav-tree__section--open > .nav-tree__cat-pill {
+  background: var(--nc, var(--lg-sage-d));
+  border-color: var(--nc, var(--lg-sage-d));
+  color: #fff;
 }
+.nav-tree__section--open > .nav-tree__cat-pill .nav-tree__chevron {
+  transform: rotate(90deg);
+  color: #fff;
+}
+
+/* Body hidden until the category is opened */
+.nav-tree__section-body { display: none; padding: 1px 0 4px 10px; }
+.nav-tree__section--open > .nav-tree__section-body { display: block; }
+
+/* Leaf pills */
+.nav-tree__pill {
+  display: block;
+  margin: 3px 0;
+  padding: 5px 12px;
+  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border-radius: 999px;
+  background: var(--bg-card, #fff);
+  color: var(--lg-ink);
+  font: 600 12.5px/1.25 var(--lg-font-sans);
+  white-space: normal;
+}
+.nav-tree__pill:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--nc, var(--lg-sage-d));
+  color: var(--nc, var(--lg-sage-d));
+}
+.nav-tree__pill.nav-tree__item--active {
+  background: var(--nc, var(--lg-sage-d));
+  border-color: var(--nc, var(--lg-sage-d));
+  color: #fff;
+}
+/* "View all" pill leads the group — subtle, with a lead-in caret */
+.nav-tree__pill--all { font-weight: 600; opacity: .9; }
+.nav-tree__pill--all::before { content: "\25B8\00a0"; color: var(--nc, var(--lg-mute)); }
+.nav-tree__pill--all.nav-tree__item--active::before { color: #fff; }
 
 /* ══════════════════════════════════════════════════════════
    FORUM HEADER: POST BUTTON + TITLE ROW
@@ -2373,11 +2340,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .reply-form__editor .ql-container.ql-snow { border-color: var(--border); }
 
 /* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
-.nav-tree__icon { display: inline-block; width: 1.35em; margin-right: 5px; text-align: center; font-style: normal; }
-/* caption accent (--nc) + a lighter end-cap tint (--leaf-cap), per brand accent family */
+/* Per-category accent (--nc) + lighter pill border tint (--leaf-cap), per brand family */
 .nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: #586b3f; --leaf-cap: #99b27e; }
 .nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: #b8842b; --leaf-cap: #ecb351; }
 .nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: #323532; --leaf-cap: #a8aa9e; }
-.nav-tree__section-label { color: var(--nc) !important; font-weight: 700; }
-.nav-tree__item--child { border-left: 3px solid var(--leaf-cap); padding-left: 9px; }
-.nav-tree__item--child.nav-tree__item--active { border-left-color: var(--nc); }
