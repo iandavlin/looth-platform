@@ -302,14 +302,20 @@ function lg_shared_render_site_header(array $ctx): void
             <li role="none">
               <a role="menuitem" href="<?= $h($profile_url) ?>">My Profile</a>
             </li>
+            <?php /* Patreon-member-facing — always visible to logged-in members */ ?>
             <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/membership-guide/">Membership Guide</a>
+              <a role="menuitem" href="/connect-your-patreon/">Connect Your Patreon</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/my-gifts/">My Gifts</a>
+              <a role="menuitem" href="/membership-guide/">Membership Guide</a>
+            </li>
+            <?php if ($manage_opts): /* Stripe money pages — dormant pre-launch; admin-only QA until cut */ ?>
+            <li role="none" class="lg-chrome__account-menu-divider"></li>
+            <li role="none">
+              <a role="menuitem" href="/lgjoin/">Join</a>
             </li>
             <li role="none">
               <a role="menuitem" href="/lggift-buy/">Gift Memberships</a>
@@ -318,11 +324,18 @@ function lg_shared_render_site_header(array $ctx): void
               <a role="menuitem" href="/lggift/">Redeem a Gift</a>
             </li>
             <li role="none">
+              <a role="menuitem" href="/my-gifts/">My Gifts</a>
+            </li>
+            <li role="none">
+              <a role="menuitem" href="/affiliate-earnings/">Earnings</a>
+            </li>
+            <li role="none">
               <a role="menuitem" href="/request-refund/">Request a Refund</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/affiliate-earnings/">Affiliate Earnings</a>
+              <a role="menuitem" href="/test-checklist/">Test Checklist</a>
             </li>
+            <?php endif; ?>
             <li role="none" class="lg-chrome__account-menu-divider"></li>
             <li role="none">
               <a role="menuitem" class="lg-chrome__account-menu-signout"
