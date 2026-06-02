@@ -119,38 +119,6 @@ if ($scoped_forum && !empty($scoped_forum['parent_forum_id'])) {
 $pill_forums    = !empty($child_forums) ? $child_forums : $sibling_forums;
 $pill_active_id = (!empty($child_forums) || !$scoped_forum) ? 0 : (int)$scoped_forum['id'];
 
-// Top-level categories for the header category-pill row: real container
-// categories only (top-level forums that HAVE public children) — this matches
-// the navigable category set in the sidebar. Standalone top-level leaves
-// (regional looths, suggestion box) stay in the sidebar's grouped buckets.
-$categories = $db->query("
-    SELECT f.id, f.slug, f.title
-      FROM forum f
-     WHERE f.parent_forum_id IS NULL AND f.visibility = 'public'
-       AND f.status IN ('open','closed') AND f.id NOT IN (67251, 3876)
-       AND EXISTS (
-            SELECT 1 FROM forum c
-             WHERE c.parent_forum_id = f.id
-               AND c.visibility = 'public' AND c.status IN ('open','closed')
-       )
-     ORDER BY f.menu_order ASC
-")->fetchAll();
-
-// Active top-level category = the root ancestor of the current scope (if any).
-$active_cat_id = 0;
-if ($scoped_forum) {
-    $anc = $db->prepare("
-        WITH RECURSIVE up AS (
-            SELECT id, parent_forum_id FROM forum WHERE id = ?
-            UNION ALL
-            SELECT f.id, f.parent_forum_id FROM forum f JOIN up ON f.id = up.parent_forum_id
-        )
-        SELECT id FROM up WHERE parent_forum_id IS NULL LIMIT 1
-    ");
-    $anc->execute([(int)$scoped_forum['id']]);
-    $active_cat_id = (int)($anc->fetchColumn() ?: 0);
-}
-
 // Slug-frequency map for ?fid= disambiguation on pills + parent link (four forum
 // slugs collide, incl. folk-bluegrass-irish-old-time-instruments).
 $slug_freq = [];
@@ -457,21 +425,6 @@ $header_cat = $scoped_forum
 
 <div class="page feed-page">
 
-  <?php if ($categories): ?>
-  <nav class="category-pills" aria-label="Categories">
-    <a class="category-pill<?= !$scoped_forum ? ' category-pill--active' : '' ?>"
-       href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>"<?= !$scoped_forum ? ' aria-current="page"' : '' ?>>All</a>
-    <?php foreach ($categories as $cat):
-      $cat_is_active = ((int)$cat['id'] === $active_cat_id);
-    ?>
-      <a class="category-pill<?= $cat_is_active ? ' category-pill--active' : '' ?>"
-         href="<?= feed_forum_url($cat, $slug_freq) ?>"<?= $cat_is_active ? ' aria-current="page"' : '' ?>>
-        <?= htmlspecialchars($cat['title']) ?>
-      </a>
-    <?php endforeach; ?>
-  </nav>
-  <?php endif; ?>
-
   <!-- Forum header -->
   <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?>"
           data-cat="<?= htmlspecialchars($header_cat) ?>">
@@ -493,19 +446,6 @@ $header_cat = $scoped_forum
               title="Set header image" aria-label="Set header image">&#9998;</button>
     </div>
   </header>
-
-  <?php if ($pill_forums): ?>
-  <nav class="subforum-pills" aria-label="<?= $pill_active_id ? 'Related forums' : 'Sub-forums' ?>">
-    <?php foreach ($pill_forums as $cf):
-      $is_active = ((int)$cf['id'] === $pill_active_id);
-    ?>
-      <a class="subforum-pill<?= $is_active ? ' subforum-pill--active' : '' ?>"
-         href="<?= feed_forum_url($cf, $slug_freq) ?>"<?= $is_active ? ' aria-current="page"' : '' ?>>
-        <?= htmlspecialchars($cf['title']) ?>
-      </a>
-    <?php endforeach; ?>
-  </nav>
-  <?php endif; ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity">

@@ -2002,29 +2002,40 @@ a.nav-tree__cat-name { cursor: pointer; }
 a.nav-tree__cat-name:hover { text-decoration: underline; }
 
 /* Chevron toggle — a button (real cats) or a bare span (groups) */
+/* Chevron toggle — rendered as a round "open" button on the right of the pill.
+   For real categories it's wrapped in the <button> toggle; for virtual groups
+   it's a bare span inside the whole-pill button. Both show the same circle. */
 .nav-tree__cat-pill .nav-tree__section-toggle {
   flex-shrink: 0;
-  padding: 7px 13px 7px 6px;
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  line-height: 1;
+  display: inline-flex; align-items: center;
+  padding: 0 7px 0 4px;
+  background: none; border: none; color: inherit; cursor: pointer;
 }
-.nav-tree__cat-pill > .nav-tree__chevron { padding: 7px 13px 7px 6px; }  /* group: span chevron */
+.nav-tree__cat-pill > .nav-tree__chevron { margin: 0 7px 0 4px; }  /* group: bare span chevron */
 .nav-tree__chevron {
   flex-shrink: 0;
-  font-size: 10px;
-  color: inherit;
-  transition: transform .2s;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 21px; height: 21px;
+  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border-radius: 50%;
+  background: var(--bg-card, #fff);
+  color: var(--nc, var(--lg-mute));
+  font-size: 9px; line-height: 1;
+  transition: transform .2s, background .12s, color .12s, border-color .12s;
+}
+/* hover fills the button so it reads as the open control */
+.nav-tree__cat-pill:hover .nav-tree__chevron {
+  background: var(--nc, var(--lg-sage-d)); color: #fff; border-color: var(--nc, var(--lg-sage-d));
 }
 .nav-tree__section--open > .nav-tree__cat-pill {
   background: var(--nc, var(--lg-sage-d));
   border-color: var(--nc, var(--lg-sage-d));
   color: #fff;
 }
+/* open: pill is filled dark; the chevron button stays a light circle, rotated down */
 .nav-tree__section--open > .nav-tree__cat-pill .nav-tree__chevron {
   transform: rotate(90deg);
+  background: #fff; color: var(--nc, var(--lg-sage-d)); border-color: #fff;
 }
 
 /* Body hidden until the category is opened */
