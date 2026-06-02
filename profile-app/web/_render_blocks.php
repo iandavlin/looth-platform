@@ -64,6 +64,8 @@ function looth_caddy_preview(string $key): string
             return $svg('<circle cx="46" cy="24" r="11" fill="#9fb295" stroke="#fff" stroke-width="2"/><circle cx="60" cy="24" r="11" fill="#bcae8f" stroke="#fff" stroke-width="2"/><circle cx="74" cy="24" r="11" fill="#c8d3c0" stroke="#fff" stroke-width="2"/>');
         case 'socials':
             return $svg('<rect x="12" y="11" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="14" width="15" height="5" rx="2.5" fill="#9fb295"/><rect x="35" y="15" width="44" height="3" rx="1.5" fill="#cdd8c5"/><rect x="12" y="27" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="30" width="15" height="5" rx="2.5" fill="#bcae8f"/><rect x="35" y="31" width="36" height="3" rx="1.5" fill="#cdd8c5"/>');
+        case 'resume':
+            return $svg('<rect x="44" y="6" width="32" height="36" rx="3" fill="#fff" stroke="#9fb295" stroke-width="2"/><rect x="50" y="13" width="20" height="3" rx="1.5" fill="#c8d3c0"/><rect x="50" y="20" width="20" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="25" width="14" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="30" width="20" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="35" width="10" height="2" rx="1" fill="#cdd8c5"/>');
     }
     return '';
 }
@@ -98,6 +100,7 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         'instruments' => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'instruments'),
         'music'       => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'music'),
         'gallery'     => static fn() => looth_render_gallery_block($userId, $role, $headerVis),
+        'resume'      => static fn() => looth_render_resume_block($userId, $role, $headerVis),
         'connect'     => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
         'socials'     => static fn() => looth_render_socials_block($userId, $role, $headerVis),
     ];
@@ -172,6 +175,50 @@ function looth_render_about_block(int $userId, string $role, string $headerVis):
            . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
     } else {
         echo '<div class="lg-about">' . nl2br(looth_h($text)) . '</div>';
+    }
+    echo '</section>';
+}
+
+/**
+ * The resume block — single PDF (versioned). Per-resume visibility lives on
+ * users.resume_visibility (NOT a profile_sections row — resume is a singleton
+ * credential). Owner sees upload/replace + delete + pmp; visitor sees a
+ * "Download resume (PDF)" button when the resume is visible to them.
+ */
+function looth_render_resume_block(int $userId, string $role, string $headerVis): void
+{
+    $r       = Block::loadResume($userId);
+    if ($r === null) return;
+    $url     = $r['url'] ?? null;
+    $isOwner = ($role === 'me');
+
+    if (!$url && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$r['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--resume" data-block="resume">';
+    echo '<h3 class="lg-bh">Resume';
+    if ($isOwner) echo ' ' . looth_pmp_control('resume', (string)$r['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($url) {
+        // Both owner + visitor see the download. SVG = download glyph.
+        echo '<div class="lg-resume">';
+        echo '<a class="lg-resume__a" href="' . looth_h((string)$url) . '" target="_blank" rel="noopener" download>'
+           . '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none"'
+           . ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+           . '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+           . '<span>Download resume (PDF)</span></a>';
+        if ($isOwner) {
+            echo '<button type="button" class="lg-resume__set" id="lg-resume-set" title="Replace resume">Replace</button>';
+            echo '<button type="button" class="lg-resume__rm" id="lg-resume-rm" title="Remove resume" aria-label="Remove resume">×</button>';
+        }
+        echo '</div>';
+    } elseif ($isOwner) {
+        echo '<div class="lg-resume lg-resume--empty">';
+        echo '<button type="button" class="lg-resume__set lg-resume__set--add" id="lg-resume-set"'
+           . ' title="Upload a resume PDF (≤ 10 MB)">＋ Upload resume (PDF)</button>';
+        echo '<p class="lg-resume__hint">Adds a download link. PDF only, up to 10 MB.</p>';
+        echo '</div>';
     }
     echo '</section>';
 }
