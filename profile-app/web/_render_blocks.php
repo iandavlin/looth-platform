@@ -701,14 +701,42 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     $name    = (string)($f['display_name'] ?? 'Member');
     $avatar  = $f['avatar'] ?? null;
     $glance  = (string)($f['at_a_glance'] ?? '');
+    $banner  = $f['banner'] ?? null;
     $visUi   = Block::normalizeVis($headerVis);
     $isOwner = ($role === 'me');
 
-    echo '<section class="block lg-block lg-block--header" data-block="profile-header">';
+    $sectionClass = 'block lg-block lg-block--header'
+        . (($banner || $isOwner) ? ' lg-block--header--has-banner' : '');
+    echo '<section class="' . $sectionClass . '" data-block="profile-header">';
 
     if ($isOwner) {
         // The header IS the ceiling → no cap on itself ('' ceiling).
         echo looth_pmp_control('header', $visUi, '');
+    }
+
+    // Banner strip (optional). Owner sees an upload/remove control either way;
+    // visitor sees nothing when there's no banner. Sits ABOVE the identity row,
+    // INSIDE the header card so the header-as-ceiling rule covers it.
+    if ($banner || $isOwner) {
+        echo '<div class="lg-banner' . ($banner ? '' : ' lg-banner--empty') . '" data-banner>';
+        if ($banner) {
+            echo '<img class="lg-banner__img" src="' . looth_h((string)$banner) . '" alt="" loading="lazy" decoding="async">';
+        }
+        if ($isOwner) {
+            // POST /me/banner (multipart); DELETE /me/banner.
+            $label = $banner ? 'Change banner' : '+ Add banner';
+            echo '<button type="button" class="lg-banner__set" id="lg-banner-set" aria-label="' . looth_h($label) . '"'
+               . ' title="' . looth_h($label) . '">'
+               . '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16"'
+               . ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+               . '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>'
+               . '<path d="m21 15-5-5L5 21"/></svg>'
+               . '<span>' . looth_h($label) . '</span></button>';
+            if ($banner) {
+                echo '<button type="button" class="lg-banner__rm" id="lg-banner-rm" aria-label="Remove banner" title="Remove banner">×</button>';
+            }
+        }
+        echo '</div>';
     }
 
     echo '<div class="lg-idrow">';

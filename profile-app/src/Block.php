@@ -455,7 +455,7 @@ final class Block
     public static function loadHeader(int $userId): ?array
     {
         $pg = Db::pg();
-        $u = $pg->prepare('SELECT display_name, avatar_url, at_a_glance FROM users WHERE id = :i');
+        $u = $pg->prepare('SELECT display_name, avatar_url, at_a_glance, banner_url FROM users WHERE id = :i');
         $u->execute([':i' => $userId]);
         $row = $u->fetch();
         if (!$row) return null;
@@ -468,6 +468,7 @@ final class Block
                 'display_name' => $row['display_name'],
                 'avatar'       => $row['avatar_url'],    // null → initials fallback at render
                 'at_a_glance'  => $row['at_a_glance'],   // single-source author bio
+                'banner'       => $row['banner_url'],    // optional hero strip; null → no banner element
             ],
             'tier_badge' => 'auto',   // derived from /whoami at render; never stored
         ];
