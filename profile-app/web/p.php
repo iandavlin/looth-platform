@@ -55,9 +55,13 @@ $viewLink = fn(string $v): string => '/p/' . rawurlencode($slugSafe) . '?view=' 
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <style>
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
-.lg-profile{max-width:760px;margin:0 auto;padding:24px 20px 48px}
+/* The View-as bar and the first practice-header block are direct children of
+   .lg-profile here (no wrapping shell like u.php). Establishing flow-root
+   localises margin-collapse to the children and lets the viewas's margin-bottom
+   actually render — fixes the same gap bug noted in briefing-profile-editor.md. */
+.lg-profile{max-width:760px;margin:0 auto;padding:24px 20px 48px;display:flow-root}
 
-/* View-as toggle (owner only) */
+/* View-as toggle (owner only) — margin-bottom now reliable because .lg-profile is a flow-root. */
 .lg-viewas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lg-charcoal);color:#cfd3cb;
   border-radius:12px;padding:10px 14px;margin:0 0 20px;font:600 12.5px/1 var(--lg-font-sans)}
 .lg-viewas__label{font-weight:700}

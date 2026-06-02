@@ -76,14 +76,20 @@ $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$
 <style>
 /* Block-model /u/ render. Tokens (--lg-*) come from site-header.css. */
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
-.lg-shell{max-width:760px;margin:0 auto;padding:24px 20px 48px}
+/* Vertical spacing between top-level shell children (View-as bar ↔ profile body)
+   is owned by the SHELL via flex `gap`, not by child margins. This is robust
+   against margin-collapse + position:fixed/sticky weirdness — which is what
+   previously made the View-as ↔ header-card gap unreliable (see briefing-profile-editor.md).
+   The wide-screen @media block below replaces flex with grid + row-gap; the
+   gap value stays in sync. */
+.lg-shell{display:flex;flex-direction:column;gap:20px;max-width:760px;margin:0 auto;padding:24px 20px 48px}
 .lg-profile{min-width:0}
 /* The profile (with the View-as bar right above it) stays centered on the page; on wide screens
    the block sidebar floats off to the LEFT of that centered column (see the .lg-caddy rule). */
 
-/* View-as toggle (owner only) */
+/* View-as toggle (owner only) — spacing handled by .lg-shell's flex gap. */
 .lg-viewas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lg-charcoal);color:#cfd3cb;
-  border-radius:12px;padding:10px 14px;margin:0 0 20px;font:600 12.5px/1 var(--lg-font-sans)}
+  border-radius:12px;padding:10px 14px;margin:0;font:600 12.5px/1 var(--lg-font-sans)}
 .lg-viewas__label{font-weight:700}
 .lg-viewas__seg{display:flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
 .lg-viewas__seg a{padding:6px 14px;color:#cfd3cb;text-decoration:none;font:700 12px/1 var(--lg-font-sans)}
