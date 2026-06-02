@@ -268,7 +268,7 @@ final class Block
         return self::loadCatalogBlock($userId, $key);
     }
 
-    /** Filter an arbitrary key list to known layout keys, in order, de-duped. */
+    /** Filter an arbitrary key list to known layout keys (incl. freeform:<id>), in order, de-duped. */
     private static function normalizeLayout(array $order): array
     {
         $seen = [];
@@ -277,13 +277,26 @@ final class Block
             if (!is_string($k)) continue;
             // back-compat: the old combined 'craft' block became Skills + Instruments.
             foreach ($k === 'craft' ? ['skills', 'instruments'] : [$k] as $kk) {
-                if (isset(self::LAYOUT_BLOCKS[$kk]) && !isset($seen[$kk])) {
+                $known = isset(self::LAYOUT_BLOCKS[$kk]) || self::isFreeformKey($kk);
+                if ($known && !isset($seen[$kk])) {
                     $seen[$kk] = true;
                     $out[]     = $kk;
                 }
             }
         }
         return $out;
+    }
+
+    /** Per-user freeform sections: key format = "freeform:<8hex>". */
+    public const FREEFORM_KEY_PREFIX  = 'freeform:';
+    public const FREEFORM_KEY_PATTERN = '/^freeform:[a-f0-9]{8}$/';
+    public const FREEFORM_MAX_PER_USER = 12;
+    public const FREEFORM_TITLE_MAX    = 80;
+    public const FREEFORM_BODY_MAX     = 10000;
+
+    public static function isFreeformKey(string $key): bool
+    {
+        return (bool) preg_match(self::FREEFORM_KEY_PATTERN, $key);
     }
 
     /**
@@ -669,6 +682,127 @@ final class Block
             'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
             'text'    => $text,
         ];
+    }
+
+    // ---------- block: freeform (user-titled free-text section) ----------
+
+    /**
+     * Assemble a single freeform block — title + body + visibility, by its key.
+     * Returns null when the key isn't a valid freeform key or no row exists.
+     * Pattern mirrors loadAbout(): plain text in profile_sections.data JSONB,
+     * rendered with pre-wrap so line breaks survive.
+     */
+    public static function loadFreeform(int $userId, string $key): ?array
+    {
+        if (!self::isFreeformKey($key)) return null;
+        $s = Db::pg()->prepare('SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k');
+        $s->execute([':u' => $userId, ':k' => $key]);
+        $r = $s->fetch();
+        if (!$r) return null;
+        $d = json_decode((string)$r['data'], true) ?: [];
+        return [
+            'block'   => 'freeform',
+            'subject' => 'person',
+            'key'     => $key,
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'title'   => (string)($d['title'] ?? ''),
+            'body'    => (string)($d['body'] ?? ''),
+        ];
+    }
+
+    /** List every freeform block a user owns — id-keyed map of titles, in profile_sections sort_order. */
+    public static function listFreeformKeys(int $userId): array
+    {
+        $s = Db::pg()->prepare("SELECT key, data, sort_order FROM profile_sections WHERE user_id = :u AND key LIKE 'freeform:%' ORDER BY sort_order, key");
+        $s->execute([':u' => $userId]);
+        $out = [];
+        foreach ($s->fetchAll() as $r) {
+            $k = (string)$r['key'];
+            if (!self::isFreeformKey($k)) continue;
+            $d = json_decode((string)$r['data'], true) ?: [];
+            $out[$k] = (string)($d['title'] ?? '');
+        }
+        return $out;
+    }
+
+    /**
+     * Mint a fresh freeform block for a user. Inserts a new profile_sections row with
+     * a random key + empty data + given title; returns the new key. Caps per-user count
+     * at FREEFORM_MAX_PER_USER to keep the layout array sane.
+     */
+    public static function createFreeform(int $userId, string $title = ''): ?string
+    {
+        $existing = self::listFreeformKeys($userId);
+        if (count($existing) >= self::FREEFORM_MAX_PER_USER) return null;
+
+        // Generate a key that doesn't collide (~2^32 space; one retry is plenty).
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $key = self::FREEFORM_KEY_PREFIX . bin2hex(random_bytes(4));
+            if (isset($existing[$key])) continue;
+
+            $payload = ['title' => mb_substr(trim($title), 0, self::FREEFORM_TITLE_MAX), 'body' => ''];
+            $st = Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'members', :d::jsonb, 50)
+                ON CONFLICT (user_id, key) DO NOTHING
+            ");
+            if ($st->execute([':u' => $userId, ':k' => $key, ':d' => json_encode($payload, JSON_UNESCAPED_SLASHES)]) && $st->rowCount() > 0) {
+                return $key;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Upsert title + body + visibility for an existing freeform block. null param = keep.
+     * Returns the post-save shape, or null when the key isn't valid / row doesn't exist.
+     */
+    public static function saveFreeform(int $userId, string $key, ?string $title = null, ?string $body = null, ?string $visInput = null): ?array
+    {
+        if (!self::isFreeformKey($key)) return null;
+        $existing = self::loadFreeform($userId, $key);
+        if ($existing === null) return null;
+
+        $newTitle = $title === null
+            ? (string)$existing['title']
+            : mb_substr(trim($title), 0, self::FREEFORM_TITLE_MAX);
+        $newBody  = $body === null
+            ? (string)$existing['body']
+            : mb_substr((string)$body, 0, self::FREEFORM_BODY_MAX);
+        $payload  = ['title' => $newTitle, 'body' => $newBody];
+        $data     = json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+        if ($visInput !== null && self::visFromInput($visInput) !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 50)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':k' => $key, ':v' => self::visFromInput($visInput), ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'members', :d::jsonb, 50)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadFreeform($userId, $key);
+    }
+
+    /**
+     * Delete a freeform block — drops the profile_sections row AND removes the key
+     * from profile_layout (so the layout array stays consistent).
+     */
+    public static function deleteFreeform(int $userId, string $key): bool
+    {
+        if (!self::isFreeformKey($key)) return false;
+        Db::pg()->prepare('DELETE FROM profile_sections WHERE user_id = :u AND key = :k')
+            ->execute([':u' => $userId, ':k' => $key]);
+
+        // Strip from the persisted layout so we don't render a ghost entry.
+        $current = self::profileLayout($userId);
+        $next    = array_values(array_filter($current, static fn($k) => $k !== $key));
+        if ($next !== $current) self::saveProfileLayout($userId, $next);
+        return true;
     }
 
     // ---------- block: gallery (image grid; shared, profile + practice) ----------

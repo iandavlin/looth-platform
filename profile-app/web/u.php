@@ -278,6 +278,17 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
 .lg-about{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
+/* freeform titled block — same render model as about, distinct hooks for divergent polish */
+.lg-freeform{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:680px}
+.lg-freeform.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
+.lg-block--freeform .lg-bh{display:flex;align-items:center;gap:8px}
+.lg-freeform__rm{margin-left:auto;border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
+.lg-freeform__rm:hover{color:var(--lg-rust)}
+/* "+ New section" affordance under the profile body — owner only */
+.lg-freeform-add{display:flex;justify-content:center;margin:8px 0 16px}
+.lg-freeform-add__btn{border:1.5px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:14px;padding:14px 22px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-sage-d);transition:background .15s,border-color .15s}
+.lg-freeform-add__btn:hover:not([disabled]){background:var(--lg-sage-tint);border-color:var(--lg-sage);border-style:solid}
+.lg-freeform-add__btn[disabled]{opacity:.5;cursor:not-allowed}
 /* gallery block */
 .lg-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .lg-gphoto{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--lg-sage-tint)}
@@ -1344,6 +1355,49 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
       if (r.ok) location.reload();
       else { btn.disabled = false; alert('Could not change mode'); }
     }).catch(function () { btn.disabled = false; alert('Network error'); });
+  });
+})();
+/* Freeform titled block (owner) — create + delete. Title and body inline-edit
+   via the generic lg-edit handler (PUT /me/freeform?key=... {title|body}). */
+(function () {
+  var addBtn = document.getElementById('lg-freeform-add');
+  if (addBtn && !addBtn.disabled) {
+    addBtn.addEventListener('click', function () {
+      addBtn.disabled = true;
+      var prev = addBtn.textContent; addBtn.textContent = 'Adding…';
+      fetch('/profile-api/v0/me/freeform', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '' })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (res.ok) location.reload();
+          else {
+            addBtn.disabled = false; addBtn.textContent = prev;
+            alert('Could not add section: ' + (res.j && res.j.error || '?'));
+          }
+        })
+        .catch(function () {
+          addBtn.disabled = false; addBtn.textContent = prev;
+          alert('Network error.');
+        });
+    });
+  }
+
+  // Delete handler — event-delegated since blocks may come/go after reload.
+  document.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-freeform__rm[data-freeform-rm]');
+    if (!rm) return;
+    var key = rm.getAttribute('data-freeform-rm');
+    if (!key) return;
+    if (!confirm('Delete this section? This cannot be undone.')) return;
+    rm.disabled = true;
+    fetch('/profile-api/v0/me/freeform?key=' + encodeURIComponent(key), {
+      method: 'DELETE', credentials: 'include'
+    })
+      .then(function (r) { if (r.ok) location.reload(); else { rm.disabled = false; alert('Delete failed.'); } })
+      .catch(function () { rm.disabled = false; alert('Network error.'); });
   });
 })();
 </script>
