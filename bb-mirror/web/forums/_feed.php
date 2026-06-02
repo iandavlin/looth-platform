@@ -457,6 +457,21 @@ $header_cat = $scoped_forum
 
 <div class="page feed-page">
 
+  <?php if ($categories): ?>
+  <nav class="category-pills" aria-label="Categories">
+    <a class="category-pill<?= !$scoped_forum ? ' category-pill--active' : '' ?>"
+       href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>"<?= !$scoped_forum ? ' aria-current="page"' : '' ?>>All</a>
+    <?php foreach ($categories as $cat):
+      $cat_is_active = ((int)$cat['id'] === $active_cat_id);
+    ?>
+      <a class="category-pill<?= $cat_is_active ? ' category-pill--active' : '' ?>"
+         href="<?= feed_forum_url($cat, $slug_freq) ?>"<?= $cat_is_active ? ' aria-current="page"' : '' ?>>
+        <?= htmlspecialchars($cat['title']) ?>
+      </a>
+    <?php endforeach; ?>
+  </nav>
+  <?php endif; ?>
+
   <!-- Forum header -->
   <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?>"
           data-cat="<?= htmlspecialchars($header_cat) ?>">
@@ -478,21 +493,6 @@ $header_cat = $scoped_forum
               title="Set header image" aria-label="Set header image">&#9998;</button>
     </div>
   </header>
-
-  <?php if ($categories): ?>
-  <nav class="category-pills" aria-label="Categories">
-    <a class="category-pill<?= !$scoped_forum ? ' category-pill--active' : '' ?>"
-       href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>"<?= !$scoped_forum ? ' aria-current="page"' : '' ?>>All</a>
-    <?php foreach ($categories as $cat):
-      $cat_is_active = ((int)$cat['id'] === $active_cat_id);
-    ?>
-      <a class="category-pill<?= $cat_is_active ? ' category-pill--active' : '' ?>"
-         href="<?= feed_forum_url($cat, $slug_freq) ?>"<?= $cat_is_active ? ' aria-current="page"' : '' ?>>
-        <?= htmlspecialchars($cat['title']) ?>
-      </a>
-    <?php endforeach; ?>
-  </nav>
-  <?php endif; ?>
 
   <?php if ($pill_forums): ?>
   <nav class="subforum-pills" aria-label="<?= $pill_active_id ? 'Related forums' : 'Sub-forums' ?>">

@@ -2098,12 +2098,12 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
    SUBFORUM PILLS
    ══════════════════════════════════════════════════════════ */
 
-/* Top-level category row (tier 1) — sits above the leaf/subforum row */
+/* Top-level category row (tier 1) — sits above the forum header banner */
 .category-pills {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
-  margin: var(--s3) 0 0;
+  margin: 0 0 var(--s3);
 }
 .category-pill {
   display: inline-block;
