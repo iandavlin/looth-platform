@@ -2015,12 +2015,12 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 .nav-tree__chevron {
   flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 21px; height: 21px;
+  width: 22px; height: 22px;
   border: 1px solid var(--leaf-cap, var(--lg-line));
   border-radius: 50%;
   background: var(--bg-card, #fff);
   color: var(--nc, var(--lg-mute));
-  font-size: 9px; line-height: 1;
+  font-size: 13px; line-height: 1;
   transition: transform .2s, background .12s, color .12s, border-color .12s;
 }
 /* hover fills the button so it reads as the open control */
