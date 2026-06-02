@@ -63,6 +63,49 @@ function lg_membership_whoami(): ?array {
 }
 
 /**
+ * Mint a wp_rest nonce for the logged-in caller via loopback.
+ *
+ * The interactive ported surfaces (refund, affiliate, gift/subscription mgmt)
+ * POST to cookie+nonce-gated /wp-json/lg-member-sync/v1/* routes. A standalone
+ * page can't mint the nonce itself, so it loopback-fetches GET
+ * /wp-json/looth/v1/rest-nonce (forwarding the browser's WP cookies, exactly
+ * like lg_membership_whoami) and embeds the result where the shortcode did
+ * `echo $nonce`. Returns '' for anon / on failure (the JS then no-ops/403s,
+ * same as a logged-out shortcode visitor). Cached per request.
+ */
+if (!function_exists('lg_membership_rest_nonce')) {
+function lg_membership_rest_nonce(): string {
+    static $fetched = false, $nonce = '';
+    if ($fetched) return $nonce;
+    $fetched = true;
+    if (PHP_SAPI === 'cli') return '';
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/rest-nonce',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 5,
+        CURLOPT_HTTPHEADER     => [
+            'Host: ' . LG_MEMBERSHIP_HOST,
+            'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($code === 200 && is_string($body)) {
+        $j = json_decode($body, true);
+        if (is_array($j) && !empty($j['nonce'])) $nonce = (string) $j['nonce'];
+    }
+    return $nonce;
+}
+}
+
+/**
  * Build the §0a-compliant ctx array for lg_shared_render_site_header().
  * Pass-through from /whoami plus the consumer-responsibility fields
  * (active_nav, logout_url, logo_url, profile_url).

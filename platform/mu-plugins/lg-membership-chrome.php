@@ -137,3 +137,52 @@ function lg_membership_chrome_viewer(): array {
         'profile_url'   => '/profile/edit',
     ];
 }
+
+/**
+ * GET /wp-json/looth/v1/rest-nonce  →  { nonce: <wp_rest nonce for the caller> }
+ *
+ * The nonce-via-loopback bridge for the standalone membership surfaces. A
+ * standalone page (no WP boot) can't mint a wp_rest nonce, but the interactive
+ * surfaces (refund, affiliate withdrawal, gift mgmt, subscription mgmt) POST to
+ * the cookie+nonce-gated /wp-json/lg-member-sync/v1/* routes. Each surface
+ * server-side loopback-fetches this endpoint (forwarding the browser's WP
+ * cookies, same as lib/whoami.php) and embeds the returned nonce where the
+ * shortcode did `echo $nonce` — so the existing JS + REST routes work verbatim.
+ *
+ * Cookie-auth without a nonce: WP REST cookie auth normally requires an
+ * X-WP-Nonce to populate current_user, so we suppress the cookie-nonce error
+ * for this one route (below) and resolve the user from the logged_in cookie via
+ * wp_validate_auth_cookie() — the same primitive profile-whoami-shim uses.
+ * wp_set_current_user() before wp_create_nonce() ties the nonce to that user
+ * (matches RestController's post-login nonce mint).
+ */
+add_filter( 'rest_authentication_errors', static function ( $result ) {
+    if ( is_wp_error( $result ) && $result->get_error_code() === 'rest_cookie_invalid_nonce' ) {
+        $uri = (string) ( $_SERVER['REQUEST_URI'] ?? '' );
+        if ( strpos( $uri, '/looth/v1/rest-nonce' ) !== false ) {
+            return null;
+        }
+    }
+    return $result;
+}, 100 );
+
+add_action( 'rest_api_init', static function () {
+    register_rest_route( 'looth/v1', '/rest-nonce', [
+        'methods'             => 'GET',
+        'permission_callback' => '__return_true',
+        'callback'            => static function () {
+            $uid = 0;
+            foreach ( $_COOKIE as $cName => $cVal ) {
+                if ( strpos( $cName, 'wordpress_logged_in_' ) === 0 ) {
+                    $u = wp_validate_auth_cookie( (string) $cVal, 'logged_in' );
+                    if ( $u ) { $uid = (int) $u; break; }
+                }
+            }
+            if ( $uid <= 0 ) {
+                return new WP_REST_Response( [ 'error' => 'not_logged_in' ], 401 );
+            }
+            wp_set_current_user( $uid );
+            return new WP_REST_Response( [ 'nonce' => wp_create_nonce( 'wp_rest' ) ] );
+        },
+    ] );
+} );
