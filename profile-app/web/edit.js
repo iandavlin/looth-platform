@@ -15,9 +15,14 @@
 
   function applyRole() {
     $$('.section').forEach(s => { s.dataset.hidden = canSee[currentRole](s.dataset.vis) ? '0' : '1'; });
-    const loc = BOOT.profile.location || {};
-    const grant = currentRole === 'me' ? loc.grants.friends
-                : (loc.grants[currentRole === 'member' ? 'members' : 'public']);
+    // Defensive coalesce — BOOT.profile, .location, or .grants can each be
+    // undefined for profiles that don't have a location set yet. Previously
+    // `loc.grants.friends` threw a TypeError on load for such users.
+    const profile = BOOT.profile || {};
+    const loc     = profile.location || {};
+    const grants  = loc.grants || {};
+    const grant = currentRole === 'me' ? grants.friends
+                : (grants[currentRole === 'member' ? 'members' : 'public']);
     const dispLoc = $('#disp-loc');
     if (dispLoc && loc.text) {
       switch (grant) {
