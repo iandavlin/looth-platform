@@ -183,16 +183,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__item{display:flex;flex-direction:column;align-items:stretch;gap:7px;text-align:left;background:#fff;
   border:1px solid var(--lg-line);border-radius:11px;padding:8px;cursor:grab}
 .lg-caddy__item:hover{border-color:var(--lg-sage);box-shadow:0 1px 3px rgba(0,0,0,.05)}
-.lg-caddy__item:hover .lg-caddy__preview{background:var(--lg-sage-tint)}
 .lg-caddy__item.lg-sort-dragging{opacity:.45}
-.lg-caddy__preview{display:block;height:46px;border-radius:7px;overflow:hidden;background:var(--lg-cream);border:1px solid var(--lg-line)}
-.lg-caddy__preview svg{display:block;width:100%;height:100%}
-.lg-caddy__label{display:flex;align-items:center;gap:8px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-ink);padding:0 2px}
-.lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
-.lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
-.lg-caddy__filt{margin-left:auto;font:800 8px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);border:1px solid var(--lg-sage-3);border-radius:5px;padding:2px 5px}
-.lg-caddy__filt + .lg-caddy__plus{margin-left:8px}
-.lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
 /* builder palette — grouped sage bubble-pills (matches approved builder mockup) */
 .lg-caddy__grp{font:700 10px/1 var(--lg-font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--lg-mute);margin:16px 2px 9px}
 .lg-caddy__grp:first-child{margin-top:2px}
