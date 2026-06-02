@@ -424,6 +424,34 @@ function looth_render_craft_block(int $userId, string $role, string $headerVis):
  * resolve it SAME-SITE (e.g. instagram "ianhatesguitars" → /u/ianhatesguitars). Always
  * expand to the real platform URL here. Returns '' for an empty value.
  */
+/**
+ * Inline SVG glyph for a given socials kind. Used by the header links rail and
+ * (later) the visitor socrow. Lucide-style stroke icons (MIT) for big brands;
+ * neutral fallbacks for niche kinds (patreon/linktree/bandcamp). Returns the
+ * full <svg> element ready to drop into a button. 18×18 viewBox; size via CSS.
+ */
+function looth_social_icon(string $kind): string
+{
+    // Path data per kind. All paths designed for viewBox="0 0 24 24" + stroke fill.
+    static $paths = [
+        'web'       => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+        'email'     => '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+        'phone'     => '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+        'instagram' => '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".9" fill="currentColor"/>',
+        'x'         => '<path d="M4 4l16 16M20 4 4 20"/>',
+        'youtube'   => '<path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.42a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.42a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><path d="M10 9v6l5-3z" fill="currentColor"/>',
+        'facebook'  => '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
+        'tiktok'    => '<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>',
+        'patreon'   => '<circle cx="9" cy="11" r="6"/><line x1="18" y1="3" x2="18" y2="21"/>',
+        'linktree'  => '<path d="M12 3v18"/><path d="m5 8 7-5 7 5"/><path d="m5 14 7 5 7-5"/>',
+        'bandcamp'  => '<path d="M4 18l4-12h12l-4 12z"/>',
+    ];
+    $p = $paths[$kind] ?? '<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>';   // fallback = generic link
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18"'
+        . ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+        . ' aria-hidden="true">' . $p . '</svg>';
+}
+
 function looth_social_url(string $kind, string $value): string
 {
     $v = trim($value);
@@ -730,6 +758,46 @@ function looth_render_header_block(array $header, string $role, string $headerVi
         }
         if ($avail) echo '<button type="button" class="lg-light-add" id="lg-light-add">+ Status</button>';
         echo '</div>';
+    }
+
+    // Header links rail — iconified social/external links, surfaced UP from the
+    // dedicated socials block per Ian's brief (links live in the header). The
+    // socials block stays as the canonical inline editor; owner edits via the
+    // pencil here which jumps to that block.
+    if ($userId) {
+        $soc       = Block::loadSocials($userId);
+        $linkOrder = ($soc && isset($soc['fields']['ordered'])) ? (array)$soc['fields']['ordered'] : [];
+        $visible   = [];
+        foreach ($linkOrder as $l) {
+            $kind = (string)($l['kind'] ?? '');
+            $url  = (string)($l['url'] ?? '');
+            if ($kind === '' || $url === '') continue;
+            $href = looth_social_url($kind, $url);
+            if ($href === '') continue;
+            $visible[] = ['kind' => $kind, 'href' => $href, 'raw' => $url];
+        }
+        if ($visible || $isOwner) {
+            echo '<div class="lg-hlinks"' . ($isOwner ? ' data-hlinks-owner' : '') . '>';
+            foreach ($visible as $v) {
+                $title = $v['kind'] === 'web'
+                    ? preg_replace('#^https?://#i', '', $v['raw'])
+                    : ($v['kind'] === 'email' || $v['kind'] === 'phone' ? $v['raw'] : ucfirst($v['kind']));
+                echo '<a class="lg-hlinks__a" href="' . looth_h($v['href']) . '"'
+                   . ' rel="me noopener" target="_blank" title="' . looth_h((string)$title) . '"'
+                   . ' aria-label="' . looth_h(ucfirst($v['kind'])) . '">'
+                   . looth_social_icon($v['kind']) . '</a>';
+            }
+            if ($isOwner) {
+                // Pencil → jumps to the socials block (the inline editor lives there).
+                echo '<button type="button" class="lg-hlinks__edit" data-hlinks-edit'
+                   . ' aria-label="Edit links" title="Edit links">'
+                   . '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15"'
+                   . ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                   . '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>'
+                   . '</button>';
+            }
+            echo '</div>';
+        }
     }
 
     // Social actions slot (Connect / Message) — server-rendered widget; empty for
