@@ -322,13 +322,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-freeform{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:680px}
 .lg-freeform.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
 .lg-block--freeform .lg-bh{display:flex;align-items:center;gap:8px}
-/* Caddy row wrapper: lets the trash button sit alongside the draggable chip
-   without breaking the chip's own drag. Only freeform rows get the trash. */
-.lg-caddy__row{display:flex;align-items:stretch;gap:6px}
-.lg-caddy__row > .lg-caddy__item{flex:1;min-width:0}
-.lg-caddy__trash{flex:none;border:1px solid var(--lg-line);background:#fff;color:var(--lg-mute);border-radius:10px;cursor:pointer;padding:0 10px;font-size:14px;line-height:1;align-self:stretch}
-.lg-caddy__trash:hover{background:#fdf0e8;color:var(--lg-rust);border-color:var(--lg-rust)}
-.lg-caddy__trash:disabled{opacity:.5;cursor:wait}
+/* freeform permanent-delete ✕ on the block head (builder reskin retired the caddy trash) */
+.lg-freeform__rm{margin-left:auto;border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
+.lg-freeform__rm:hover{color:var(--lg-rust)}
+.lg-freeform__rm:disabled{opacity:.5;cursor:wait}
 /* "+ New section" affordance under the profile body — owner only */
 .lg-freeform-add{display:flex;justify-content:center;margin:8px 0 16px}
 .lg-freeform-add__btn{border:1.5px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:14px;padding:14px 22px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-sage-d);transition:background .15s,border-color .15s}
@@ -1504,13 +1501,13 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     });
   }
 
-  // Permanent-delete handler on the CADDY trash button. The in-block ✕ (lg-block__rm)
-  // already handles "remove from layout, keep data" via the generic layout-edit JS
-  // above; this only fires from the caddy where the data is truly retiring.
+  // Permanent-delete handler on the freeform block's own trash (✕). The generic
+  // lg-block__rm handles "remove from layout, keep data"; this one truly retires
+  // the section's data. Event-delegated since blocks come/go after reload.
   document.addEventListener('click', function (e) {
-    var rm = e.target.closest('.lg-caddy__trash[data-freeform-del]');
+    var rm = e.target.closest('.lg-freeform__rm[data-freeform-rm]');
     if (!rm) return;
-    var key = rm.getAttribute('data-freeform-del');
+    var key = rm.getAttribute('data-freeform-rm');
     if (!key) return;
     if (!confirm('Delete this section? This cannot be undone.')) return;
     rm.disabled = true;

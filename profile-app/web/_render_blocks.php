@@ -270,9 +270,10 @@ function looth_render_freeform_block(int $userId, string $key, string $role, str
            . ' data-edit-type="text" data-edit-placeholder="Section title (e.g. Experience, Education)">'
            . looth_h($hasT ? $title : '') . '</span>';
         echo ' ' . looth_pmp_control($key, (string)$ff['vis'], $headerVis);
-        // Note: the standard lg-block__rm (✕) injected by u.php removes from the
-        // LAYOUT (data preserved → block goes back to the caddy). Permanent
-        // delete happens from the caddy chip's trash button.
+        // The generic lg-block__rm (✕) injected by u.php removes from the LAYOUT
+        // (data preserved). This dedicated trash permanently deletes the section —
+        // the builder reskin retired the caddy chip that used to host delete.
+        echo ' <button type="button" class="lg-freeform__rm" data-freeform-rm="' . $kAttr . '" aria-label="Delete section" title="Delete section">×</button>';
     } else {
         echo looth_h($title !== '' ? $title : 'Section');
     }
