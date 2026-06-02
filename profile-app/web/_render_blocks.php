@@ -102,7 +102,25 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         'socials'     => static fn() => looth_render_socials_block($userId, $role, $headerVis),
     ];
     foreach (Block::profileLayout($userId) as $key) {
-        if (isset($renderers[$key])) ($renderers[$key])();
+        if (isset($renderers[$key])) {
+            ($renderers[$key])();
+        } elseif (Block::isFreeformKey($key)) {
+            // Freeform blocks are per-instance — dispatch by key prefix, not by static map.
+            looth_render_freeform_block($userId, $key, $role, $headerVis);
+        }
+    }
+
+    // Owner-only: "+ New section" affordance. Creates a fresh freeform block
+    // (POST /me/freeform) and reloads so the new empty section appears at the
+    // end of the layout, ready for inline title + body editing.
+    if ($role === 'me') {
+        $count = count(Block::listFreeformKeys($userId));
+        $cap   = Block::FREEFORM_MAX_PER_USER;
+        echo '<div class="lg-freeform-add"' . ($count >= $cap ? ' data-at-cap' : '') . '>';
+        echo '<button type="button" class="lg-freeform-add__btn" id="lg-freeform-add"'
+           . ($count >= $cap ? ' disabled aria-disabled="true" title="Section limit reached (' . (int)$cap . ')"' : ' title="Add a custom titled section"')
+           . '>＋ New section</button>';
+        echo '</div>';
     }
 
     // TODO(next increments): practices block — same shape.
@@ -172,6 +190,52 @@ function looth_render_about_block(int $userId, string $role, string $headerVis):
            . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
     } else {
         echo '<div class="lg-about">' . nl2br(looth_h($text)) . '</div>';
+    }
+    echo '</section>';
+}
+
+/**
+ * Freeform titled block — user-set title + free-text body. Same pre-wrap render
+ * model as About; differs by being multi-instance (multiple blocks per profile,
+ * keyed by `freeform:<8hex>`) and by carrying its own title.
+ */
+function looth_render_freeform_block(int $userId, string $key, string $role, string $headerVis): void
+{
+    $ff = Block::loadFreeform($userId, $key);
+    if ($ff === null) return;
+    $title   = (string)$ff['title'];
+    $body    = (string)$ff['body'];
+    $isOwner = ($role === 'me');
+
+    if ($title === '' && $body === '' && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ff['vis'])) && !$isOwner) return;
+
+    $kAttr   = looth_h($key);
+    $sectionUrl = '/profile-api/v0/me/freeform?key=' . rawurlencode($key);
+
+    echo '<section class="block lg-block lg-block--freeform" data-block="' . $kAttr . '" data-freeform-key="' . $kAttr . '">';
+    echo '<h3 class="lg-bh">';
+    if ($isOwner) {
+        $hasT = $title !== '';
+        echo '<span class="lg-edit lg-btitle' . ($hasT ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="title" data-edit-url="' . looth_h($sectionUrl) . '" data-edit-method="PUT"'
+           . ' data-edit-type="text" data-edit-placeholder="Section title (e.g. Experience, Education)">'
+           . looth_h($hasT ? $title : '') . '</span>';
+        echo ' ' . looth_pmp_control($key, (string)$ff['vis'], $headerVis);
+        echo ' <button type="button" class="lg-freeform__rm" data-freeform-rm="' . $kAttr . '" aria-label="Delete section" title="Delete section">×</button>';
+    } else {
+        echo looth_h($title !== '' ? $title : 'Section');
+    }
+    echo '</h3>';
+
+    if ($isOwner) {
+        $hasB = $body !== '';
+        echo '<div class="lg-freeform lg-edit' . ($hasB ? '' : ' lg-edit--empty') . '"'
+           . ' data-edit-field="body" data-edit-url="' . looth_h($sectionUrl) . '" data-edit-method="PUT"'
+           . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write something…">'
+           . ($hasB ? looth_h($body) : 'Write something…') . '</div>';
+    } else {
+        echo '<div class="lg-freeform">' . nl2br(looth_h($body)) . '</div>';
     }
     echo '</section>';
 }
