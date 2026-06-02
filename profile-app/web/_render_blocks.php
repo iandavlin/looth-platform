@@ -65,6 +65,10 @@ function looth_caddy_preview(string $key): string
         case 'socials':
             return $svg('<rect x="12" y="11" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="14" width="15" height="5" rx="2.5" fill="#9fb295"/><rect x="35" y="15" width="44" height="3" rx="1.5" fill="#cdd8c5"/><rect x="12" y="27" width="96" height="11" rx="5.5" fill="#fff" stroke="#d7ddcf"/><rect x="16" y="30" width="15" height="5" rx="2.5" fill="#bcae8f"/><rect x="35" y="31" width="36" height="3" rx="1.5" fill="#cdd8c5"/>');
     }
+    // Freeform blocks all share one preview shape — small heading + 3 body lines.
+    if (str_starts_with($key, 'freeform:')) {
+        return $svg('<rect x="12" y="10" width="56" height="6" rx="3" fill="#9fb295"/><rect x="12" y="22" width="96" height="4" rx="2" fill="#c8d3c0"/><rect x="12" y="30" width="96" height="4" rx="2" fill="#c8d3c0"/><rect x="12" y="38" width="64" height="4" rx="2" fill="#dbe2d4"/>');
+    }
     return '';
 }
 
@@ -222,7 +226,9 @@ function looth_render_freeform_block(int $userId, string $key, string $role, str
            . ' data-edit-type="text" data-edit-placeholder="Section title (e.g. Experience, Education)">'
            . looth_h($hasT ? $title : '') . '</span>';
         echo ' ' . looth_pmp_control($key, (string)$ff['vis'], $headerVis);
-        echo ' <button type="button" class="lg-freeform__rm" data-freeform-rm="' . $kAttr . '" aria-label="Delete section" title="Delete section">×</button>';
+        // Note: the standard lg-block__rm (✕) injected by u.php removes from the
+        // LAYOUT (data preserved → block goes back to the caddy). Permanent
+        // delete happens from the caddy chip's trash button.
     } else {
         echo looth_h($title !== '' ? $title : 'Section');
     }

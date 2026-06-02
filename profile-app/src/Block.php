@@ -117,11 +117,28 @@ final class Block
         return $out ?: ['about'];
     }
 
-    /** Block keys not currently on the profile — the caddy's "available to add" set, in canonical order. */
+    /**
+     * Block keys not currently on the profile — the caddy's "available to add" set.
+     * Returns an ordered map `[key => label]` covering both the canonical
+     * LAYOUT_BLOCKS keys AND any user-owned freeform blocks that have been
+     * removed from the layout (their stored title is the label; empty title
+     * falls back to "Untitled section"). LAYOUT_BLOCKS keys come first in
+     * canonical order, then freeform entries.
+     */
     public static function availableBlocks(int $userId): array
     {
         $present = array_flip(self::profileLayout($userId));
-        return array_values(array_filter(array_keys(self::LAYOUT_BLOCKS), static fn($k) => !isset($present[$k])));
+        $out = [];
+        foreach (self::LAYOUT_BLOCKS as $k => $cfg) {
+            if (!isset($present[$k])) $out[$k] = (string)$cfg['label'];
+        }
+        foreach (self::listFreeformKeys($userId) as $k => $title) {
+            if (!isset($present[$k])) {
+                $t = trim((string)$title);
+                $out[$k] = $t !== '' ? $t : 'Untitled section';
+            }
+        }
+        return $out;
     }
 
     // ---------- generic catalog-chip blocks (skills / services / instruments / music) ----------
