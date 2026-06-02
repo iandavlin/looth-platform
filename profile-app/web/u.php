@@ -104,6 +104,16 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-vchip--member{background:#fdf0d8;color:#8a6326}
 .lg-vchip--private{background:#f0e6e2;color:var(--lg-rust)}
 
+/* header banner — optional hero strip above the identity row (full-bleed against .lg-block padding 22/24) */
+.lg-banner{position:relative;width:calc(100% + 48px);margin:-22px -24px 20px;border-radius:15px 15px 0 0;overflow:hidden;background:var(--lg-sage-tint);aspect-ratio:1080/280;max-height:280px}
+.lg-banner__img{width:100%;height:100%;object-fit:cover;display:block}
+.lg-banner--empty{aspect-ratio:1080/120;max-height:120px;background:repeating-linear-gradient(45deg,var(--lg-sage-tint) 0,var(--lg-sage-tint) 10px,#eef2e9 10px,#eef2e9 20px);display:flex;align-items:center;justify-content:center}
+.lg-banner__set{position:absolute;right:12px;bottom:12px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.94);color:var(--lg-ink);border:0;border-radius:999px;padding:6px 12px 6px 10px;cursor:pointer;font:700 12px/1 var(--lg-font-sans);box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:2}
+.lg-banner__set:hover{background:#fff}
+.lg-banner--empty .lg-banner__set{position:static;box-shadow:none;background:#fff;border:1px dashed var(--lg-sage-3)}
+.lg-banner__rm{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:16px;line-height:1;z-index:2}
+.lg-banner__rm:hover{background:var(--lg-rust)}
+@media(max-width:560px){.lg-banner{aspect-ratio:1080/360;max-height:200px}.lg-banner--empty{aspect-ratio:1080/180}}
 /* header / identity card */
 .lg-idrow{display:flex;gap:20px;align-items:center}
 .lg-idrow__pic{width:96px;height:96px;border-radius:16px;flex:none;background:var(--lg-sage);color:#fff;
@@ -1262,6 +1272,52 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
         .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
         .catch(function () { alert('Network error on ' + f.name); next(); });
     })();
+  });
+})();
+
+/* Banner image (owner) — POST multipart on set / replace, DELETE on remove.
+   Max 8 MB. Same jpeg/png/webp validation as avatar (server re-checks too). */
+(function () {
+  var setBtn = document.getElementById('lg-banner-set');
+  var rmBtn  = document.getElementById('lg-banner-rm');
+  if (!setBtn) return;
+
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp';
+  input.style.display = 'none'; document.body.appendChild(input);
+
+  setBtn.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    var f = (input.files || [])[0]; input.value = '';
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { alert('Over 8 MB — pick a smaller image.'); return; }
+    var prevLabel = setBtn.querySelector('span'); var prev = prevLabel ? prevLabel.textContent : '';
+    if (prevLabel) prevLabel.textContent = 'Uploading…';
+    setBtn.disabled = true;
+    var fd = new FormData(); fd.append('banner', f);
+    fetch('/profile-api/v0/me/banner', { method: 'POST', credentials: 'include', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok) location.reload();
+        else {
+          if (prevLabel) prevLabel.textContent = prev;
+          setBtn.disabled = false;
+          alert('Banner upload failed: ' + (res.j && res.j.error || '?'));
+        }
+      })
+      .catch(function () {
+        if (prevLabel) prevLabel.textContent = prev;
+        setBtn.disabled = false;
+        alert('Network error.');
+      });
+  });
+
+  rmBtn && rmBtn.addEventListener('click', function () {
+    if (!confirm('Remove banner?')) return;
+    rmBtn.disabled = true;
+    fetch('/profile-api/v0/me/banner', { method: 'DELETE', credentials: 'include' })
+      .then(function (r) { if (r.ok) location.reload(); else { rmBtn.disabled = false; alert('Remove failed.'); } })
+      .catch(function () { rmBtn.disabled = false; alert('Network error.'); });
   });
 })();
 </script>
