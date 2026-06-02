@@ -281,12 +281,35 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* gallery block */
 .lg-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .lg-gphoto{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--lg-sage-tint)}
-.lg-gphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.lg-gphoto img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
+.lg-gallery--grid .lg-gphoto:hover img{transform:scale(1.04)}
 .lg-gphoto figcaption{position:absolute;bottom:0;left:0;right:0;font:600 11px/1.3 var(--lg-font-sans);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:16px 8px 6px}
-.lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1}
+.lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1;z-index:3}
 .lg-gphoto__rm:hover{background:var(--lg-rust)}
 .lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-d);font:700 12.5px/1.3 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px}
 .lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
+/* gallery — owner: display-mode toggle */
+.lg-gmode{display:inline-flex;gap:0;margin:0 0 12px;border:1px solid var(--lg-line);border-radius:999px;padding:2px;background:#fff}
+.lg-gmode__btn{border:0;background:transparent;font:600 12px/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
+.lg-gmode__btn:hover{color:var(--lg-ink)}
+.lg-gmode__btn[aria-pressed="true"]{background:var(--lg-sage-tint);color:var(--lg-ink)}
+/* gallery — carousel display mode */
+.lg-gallery--carousel{display:block}
+.lg-gallery--carousel.lg-gallery--edit{display:flex;flex-direction:column;gap:8px}
+.lg-carousel{position:relative;border-radius:12px;background:var(--lg-sage-tint);overflow:hidden}
+.lg-carousel__viewport{overflow:hidden;border-radius:12px}
+.lg-carousel__track{display:flex;transition:transform .35s ease;will-change:transform}
+.lg-carousel__track > .lg-gphoto{flex:0 0 100%;aspect-ratio:16/9;border-radius:0;background:#000}
+.lg-carousel__track > .lg-gphoto img{object-fit:contain}
+.lg-carousel__nav{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.94);color:var(--lg-ink);font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:2;display:grid;place-items:center}
+.lg-carousel__nav:hover{background:#fff}
+.lg-carousel__nav:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+.lg-carousel__nav--prev{left:10px}
+.lg-carousel__nav--next{right:10px}
+.lg-carousel__dots{display:flex;justify-content:center;gap:6px;padding:10px 0 6px}
+.lg-carousel__dot{width:8px;height:8px;border-radius:50%;border:0;background:var(--lg-line);cursor:pointer;padding:0;transition:background .15s,transform .15s}
+.lg-carousel__dot:hover{background:var(--lg-sage-3)}
+.lg-carousel__dot[aria-current="true"]{background:var(--lg-sage-d);transform:scale(1.2)}
 
 /* members-only gate */
 .lg-gate{text-align:center;background:#fff;border:1px solid var(--lg-line);border-radius:18px;padding:48px 30px;margin:0 0 16px}
@@ -395,6 +418,45 @@ window.addEventListener('load', function () {
     setTimeout(function () { map.invalidateSize(); }, 80);   // standalone-shell sizing fix
   });
 });
+</script>
+
+<script>
+/* Gallery carousel viewer — runs for everyone (visitor + owner). Activates on any
+   .lg-carousel inside this page; arrows / dots / touch-swipe navigate the track. */
+(function () {
+  document.querySelectorAll('.lg-carousel').forEach(function (car) {
+    var track = car.querySelector('.lg-carousel__track');
+    if (!track) return;
+    var slides = track.querySelectorAll('.lg-gphoto');
+    if (slides.length < 1) return;
+    var prev = car.querySelector('.lg-carousel__nav--prev');
+    var next = car.querySelector('.lg-carousel__nav--next');
+    var dots = car.querySelectorAll('.lg-carousel__dot');
+    var idx = 0;
+
+    function go(n) {
+      idx = Math.max(0, Math.min(slides.length - 1, n));
+      track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+      if (prev) prev.disabled = (idx === 0);
+      if (next) next.disabled = (idx === slides.length - 1);
+      dots.forEach(function (d, i) { d.setAttribute('aria-current', i === idx ? 'true' : 'false'); });
+    }
+    prev && prev.addEventListener('click', function () { go(idx - 1); });
+    next && next.addEventListener('click', function () { go(idx + 1); });
+    dots.forEach(function (d, i) { d.addEventListener('click', function () { go(i); }); });
+
+    // Touch swipe.
+    var sx = null;
+    track.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+    track.addEventListener('touchend', function (e) {
+      if (sx === null) return;
+      var dx = e.changedTouches[0].clientX - sx; sx = null;
+      if (Math.abs(dx) > 50) go(idx + (dx < 0 ? 1 : -1));
+    });
+
+    go(0);
+  });
+})();
 </script>
 
 <?php if (!$isOwner): ?>
@@ -1262,6 +1324,26 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
         .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
         .catch(function () { alert('Network error on ' + f.name); next(); });
     })();
+  });
+})();
+
+/* Gallery display-mode toggle (owner only) — PUT /me/gallery {display_mode}. */
+(function () {
+  var ctrl = document.querySelector('.lg-block--gallery .lg-gmode');
+  if (!ctrl) return;
+  ctrl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.lg-gmode__btn'); if (!btn) return;
+    if (btn.getAttribute('aria-pressed') === 'true') return;
+    var mode = btn.getAttribute('data-mode');
+    btn.disabled = true;
+    fetch('/profile-api/v0/me/gallery', {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_mode: mode })
+    }).then(function (r) {
+      if (r.ok) location.reload();
+      else { btn.disabled = false; alert('Could not change mode'); }
+    }).catch(function () { btn.disabled = false; alert('Network error'); });
   });
 })();
 </script>

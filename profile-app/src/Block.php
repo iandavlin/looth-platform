@@ -673,9 +673,11 @@ final class Block
 
     // ---------- block: gallery (image grid; shared, profile + practice) ----------
 
-    public const GALLERY_KEY      = 'gallery';
-    public const GALLERY_URL_BASE = '/profile-media/gallery';
-    public const GALLERY_MAX      = 24;
+    public const GALLERY_KEY            = 'gallery';
+    public const GALLERY_URL_BASE       = '/profile-media/gallery';
+    public const GALLERY_MAX            = 24;
+    public const GALLERY_DISPLAY_MODES  = ['grid', 'carousel'];
+    public const GALLERY_DISPLAY_DEFAULT = 'grid';
 
     private static function userUuid(int $userId): ?string
     {
@@ -693,9 +695,12 @@ final class Block
         $r = $s->fetch();
         $images = [];
         $title  = '';
+        $mode   = self::GALLERY_DISPLAY_DEFAULT;
         if ($r) {
             $d = json_decode((string)$r['data'], true) ?: [];
             $title = (string)($d['title'] ?? '');
+            $rawMode = (string)($d['display_mode'] ?? '');
+            if (in_array($rawMode, self::GALLERY_DISPLAY_MODES, true)) $mode = $rawMode;
             foreach (($d['images'] ?? []) as $im) {
                 if (is_array($im) && !empty($im['url'])) {
                     $images[] = ['url' => (string)$im['url'], 'caption' => (string)($im['caption'] ?? '')];
@@ -703,11 +708,12 @@ final class Block
             }
         }
         return [
-            'block'   => 'gallery',
-            'subject' => 'person',
-            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
-            'title'   => $title,
-            'images'  => $images,
+            'block'        => 'gallery',
+            'subject'      => 'person',
+            'vis'          => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'title'        => $title,
+            'display_mode' => $mode,
+            'images'       => $images,
         ];
     }
 
@@ -715,7 +721,7 @@ final class Block
      * Persist the gallery image list (used for add/remove/reorder/caption). Sanitizes
      * to URLs under THIS user's gallery dir (no foreign URLs). visInput optional.
      */
-    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null, ?string $title = null): array
+    public static function saveGalleryImages(int $userId, array $images, ?string $visInput = null, ?string $title = null, ?string $displayMode = null): array
     {
         $uuid   = self::userUuid($userId);
         $prefix = self::GALLERY_URL_BASE . '/' . $uuid . '/';
@@ -727,12 +733,18 @@ final class Block
             $clean[] = ['url' => $url, 'caption' => mb_substr((string)($im['caption'] ?? ''), 0, 200)];
             if (count($clean) >= self::GALLERY_MAX) break;
         }
-        // Title: null = keep whatever's stored (so photo add/remove + vis changes don't wipe it).
+        // null params = keep whatever's stored (so a partial PUT doesn't wipe other fields).
+        // Load once if either keep-fallback is needed.
+        $existing = ($title === null || $displayMode === null) ? self::loadGallery($userId) : null;
         $finalTitle = ($title === null)
-            ? self::loadGallery($userId)['title']
+            ? $existing['title']
             : mb_substr(trim($title), 0, 80);
+        $finalMode = ($displayMode === null)
+            ? $existing['display_mode']
+            : (in_array($displayMode, self::GALLERY_DISPLAY_MODES, true) ? $displayMode : self::GALLERY_DISPLAY_DEFAULT);
         $payload = ['images' => $clean];
         if ($finalTitle !== '') $payload['title'] = $finalTitle;
+        if ($finalMode !== self::GALLERY_DISPLAY_DEFAULT) $payload['display_mode'] = $finalMode;
         $data = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
         if ($visInput !== null && self::visFromInput($visInput) !== null) {
