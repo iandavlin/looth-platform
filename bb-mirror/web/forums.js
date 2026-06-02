@@ -20,10 +20,64 @@
   document.addEventListener('click', function (e) {
     var card = e.target.closest('.feed-card--topic[data-href]');
     if (!card) return;
-    if (e.target.closest('a, button, input, textarea, select, label, [role=\"button\"]')) return;
+    // Skip interactive elements AND images (images open the lightbox below).
+    if (e.target.closest('a, button, input, textarea, select, label, [role=\"button\"], img')) return;
     if (window.getSelection && String(window.getSelection()).length) return;
     window.location.href = card.dataset.href;
   });
+
+  // ── Image lightbox: click any forum image to view it full-size ──────────────
+  // Delegated so it covers lazily-loaded thread/body images. Picks the best URL:
+  // attachment link href (full-res) > a wrapping image link > the <img> src.
+  (function () {
+    var lb, lbImg;
+    function ensure() {
+      if (lb) return;
+      lb = document.createElement('div');
+      lb.className = 'lg-lightbox'; lb.hidden = true;
+      lb.innerHTML = '<button class="lg-lightbox__close" type="button" aria-label="Close">✕</button>'
+                   + '<img class="lg-lightbox__img" alt="">';
+      lbImg = lb.querySelector('.lg-lightbox__img');
+      document.body.appendChild(lb);
+      lb.addEventListener('click', function (e) { if (e.target !== lbImg) closeLb(); });
+    }
+    function openLb(url) {
+      if (!url) return;
+      ensure();
+      lbImg.src = url;
+      lb.hidden = false;
+      document.body.classList.add('ntm-active');   // reuse scroll-lock
+      requestAnimationFrame(function () { lb.classList.add('is-open'); });
+    }
+    function closeLb() {
+      if (!lb) return;
+      lb.classList.remove('is-open');
+      lb.hidden = true; lbImg.removeAttribute('src');
+      document.body.classList.remove('ntm-active');
+    }
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lb && !lb.hidden) closeLb();
+    });
+    function imgExt(href) { return href && /\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i.test(href); }
+
+    document.addEventListener('click', function (e) {
+      // 1) attachment-gallery image (wrapped in a.attachment--image → full-res href)
+      var alink = e.target.closest('a.attachment--image');
+      if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
+      // 2) feed cover image (wrapped in a.feed-card__cover) → lightbox, don't navigate
+      var cover = e.target.closest('.feed-card__cover');
+      if (cover && e.target.tagName === 'IMG') {
+        e.preventDefault(); openLb(e.target.currentSrc || e.target.src); return;
+      }
+      // 3) bare content / reply images (deferred ones have no src yet → skip)
+      var img = e.target.closest('.reply-stub__img, .post__body img, .feed-card__full-body img');
+      if (img && img.tagName === 'IMG' && img.getAttribute('src')) {
+        var wrap = img.closest('a[href]');
+        var href = (wrap && imgExt(wrap.getAttribute('href'))) ? wrap.getAttribute('href') : (img.currentSrc || img.src);
+        e.preventDefault(); openLb(href);
+      }
+    });
+  })();
 
   // ── 1. Corner hamburger ──────────────────────────────────────────────────
   // Desktop: default = nav visible; hamburger adds body.nav-closed to hide it.

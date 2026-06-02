@@ -2441,3 +2441,36 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: #586b3f; --leaf-cap: #99b27e; }
 .nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: #b8842b; --leaf-cap: #ecb351; }
 .nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: #323532; --leaf-cap: #a8aa9e; }
+
+/* ── Image lightbox (click any forum image) ───────────────────────────────── */
+.lg-lightbox {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(20, 22, 20, .88);
+  cursor: zoom-out;
+  opacity: 0; transition: opacity .15s ease;
+}
+.lg-lightbox.is-open { opacity: 1; }
+.lg-lightbox[hidden] { display: none; }
+.lg-lightbox__img {
+  max-width: 96vw; max-height: 92vh;
+  border-radius: 6px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .55);
+  background: #fff;
+  cursor: default;
+}
+.lg-lightbox__close {
+  position: absolute; top: 14px; right: 18px;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .14); color: #fff; border: none;
+  font-size: 20px; line-height: 1; cursor: pointer;
+  transition: background .12s;
+}
+.lg-lightbox__close:hover { background: rgba(255, 255, 255, .3); }
+
+/* Signal that forum images are clickable */
+.feed-card__cover-img, .reply-stub__img,
+.post__body img, .feed-card__full-body img,
+.attachment--image img { cursor: zoom-in; }
