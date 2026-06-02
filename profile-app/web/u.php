@@ -203,6 +203,17 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-light-menu{position:absolute;top:calc(100% + 4px);display:inline-flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--lg-line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;z-index:1000}
 .lg-light-menu button{display:flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;padding:7px 10px;border-radius:7px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink);text-align:left;white-space:nowrap}
 .lg-light-menu button:hover{background:var(--lg-sage-tint)}
+/* header links rail (iconified socials, surfaced UP from the dedicated socials block) */
+.lg-hlinks{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px}
+.lg-hlinks__a{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--lg-sage-tint);color:var(--lg-sage-d);text-decoration:none;border:1px solid transparent;transition:background .15s,border-color .15s,transform .15s}
+.lg-hlinks__a:hover{background:#fff;border-color:var(--lg-sage-3);color:var(--lg-ink);transform:translateY(-1px)}
+.lg-hlinks__a:focus-visible{outline:2px solid var(--lg-sage-d);outline-offset:2px}
+.lg-hlinks__a svg{display:block}
+.lg-hlinks__edit{margin-left:4px;width:28px;height:28px;border-radius:50%;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;color:var(--lg-sage-d);padding:0}
+.lg-hlinks__edit:hover{background:var(--lg-sage-tint);border-style:solid}
+.lg-hlinks[data-hlinks-owner]:empty::before,.lg-hlinks[data-hlinks-owner]:not(:has(.lg-hlinks__a))::before{content:"No links yet — add some";font:italic 500 12px/1.4 var(--lg-font-sans);color:var(--lg-mute);align-self:center}
+.lg-flash{animation:lg-flash 1.4s ease-out}
+@keyframes lg-flash{0%{box-shadow:0 0 0 2px var(--lg-sage-3),0 0 0 6px rgba(159,178,149,.18)}100%{box-shadow:0 0 0 0 transparent,0 0 0 0 transparent}}
 /* wide screens (≥1380px): a 3-column grid — caddy | profile | empty spacer — so the profile
    stays PAGE-centered while the block sidebar sits in the left gutter. The View-as bar spans the
    top, centered over the profile. The caddy is sticky + IN-FLOW (not fixed), so it never overlaps
@@ -1262,6 +1273,25 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
         .then(function (res) { if (!res.ok) alert('Upload failed (' + f.name + '): ' + (res.j && res.j.error || '?')); next(); })
         .catch(function () { alert('Network error on ' + f.name); next(); });
     })();
+  });
+})();
+
+/* Header links rail — owner pencil scrolls to the socials block (the canonical
+   inline editor). If the socials block isn't on the user's layout yet, the
+   handler does nothing visible; the owner can add it from the caddy. */
+(function () {
+  var btn = document.querySelector('.lg-hlinks__edit[data-hlinks-edit]');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var target = document.querySelector('.lg-block--socials');
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Briefly highlight the dest so the user sees where they landed.
+    target.classList.add('lg-flash');
+    setTimeout(function () { target.classList.remove('lg-flash'); }, 1400);
+    // Focus the add-link button if it's there (saves a click for the common case).
+    var add = target.querySelector('#lg-link-add');
+    if (add) setTimeout(function () { add.focus({ preventScroll: true }); }, 420);
   });
 })();
 </script>
