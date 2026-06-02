@@ -63,6 +63,7 @@ final class Block
         'instruments' => ['label' => 'Instruments', 'removable' => true],
         'music'       => ['label' => 'Music',       'removable' => true],
         'gallery'     => ['label' => 'Gallery',     'removable' => true],
+        'resume'      => ['label' => 'Resume',      'removable' => true],
         'connect'     => ['label' => 'Connections', 'removable' => true],
         'socials'     => ['label' => 'Links',       'removable' => true],
     ];
@@ -94,6 +95,7 @@ final class Block
             case 'instruments':
             case 'music':    $b = self::loadCatalogBlock($userId, $key); return $b !== null && !empty($b['items']);
             case 'gallery':  return !empty(self::loadGallery($userId)['images']);
+            case 'resume':   $r = self::loadResume($userId); return $r !== null && !empty($r['url']);
             case 'connect':  $c = self::loadConnect($userId, $userId); return $c !== null && (int)($c['fields']['count'] ?? 0) > 0;
             case 'socials':  $s = self::loadSocials($userId);  return $s !== null && !empty($s['fields']['ordered']);
         }
@@ -820,6 +822,30 @@ final class Block
         $next    = array_values(array_filter($current, static fn($k) => $k !== $key));
         if ($next !== $current) self::saveProfileLayout($userId, $next);
         return true;
+    }
+
+    // ---------- block: resume (single PDF; profile-only) ----------
+
+    /**
+     * Assemble the resume block — versioned PDF URL + per-resume visibility.
+     * Unlike most blocks the visibility lives on the users table (resume_visibility),
+     * not a profile_sections row: resume is a singleton credential per user, not a
+     * composable section with arbitrary data. Returns null for unknown user.
+     */
+    public static function loadResume(int $userId): ?array
+    {
+        $s = Db::pg()->prepare('SELECT resume_url, resume_version, resume_visibility FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $r = $s->fetch();
+        if (!$r) return null;
+        $vis = in_array($r['resume_visibility'], self::VIS_VALUES, true) ? $r['resume_visibility'] : 'members';
+        return [
+            'block'   => 'resume',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis($vis),
+            'url'     => $r['resume_url'] !== null ? (string)$r['resume_url'] : null,
+            'version' => (int)($r['resume_version'] ?? 0),
+        ];
     }
 
     // ---------- block: gallery (image grid; shared, profile + practice) ----------

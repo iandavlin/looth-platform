@@ -294,6 +294,18 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-freeform-add__btn{border:1.5px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:14px;padding:14px 22px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-sage-d);transition:background .15s,border-color .15s}
 .lg-freeform-add__btn:hover:not([disabled]){background:var(--lg-sage-tint);border-color:var(--lg-sage);border-style:solid}
 .lg-freeform-add__btn[disabled]{opacity:.5;cursor:not-allowed}
+/* resume block — single PDF, download button + owner replace/remove */
+.lg-resume{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lg-resume__a{display:inline-flex;align-items:center;gap:9px;background:var(--lg-sage-tint);color:var(--lg-ink);text-decoration:none;padding:9px 14px;border-radius:10px;font:700 13px/1 var(--lg-font-sans);transition:background .15s,transform .15s}
+.lg-resume__a:hover{background:var(--lg-sage-3);transform:translateY(-1px)}
+.lg-resume__set{background:none;border:1px solid var(--lg-line);border-radius:999px;padding:7px 12px;cursor:pointer;font:600 12px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-resume__set:hover:not([disabled]){background:var(--lg-sage-tint);border-color:var(--lg-sage-3)}
+.lg-resume__set[disabled]{opacity:.5;cursor:wait}
+.lg-resume__set--add{padding:11px 18px;border:1.5px dashed var(--lg-sage-3);border-radius:12px;font-size:13px}
+.lg-resume__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 6px}
+.lg-resume__rm:hover{color:var(--lg-rust)}
+.lg-resume--empty{flex-direction:column;align-items:flex-start;gap:6px}
+.lg-resume__hint{margin:0;font:italic 500 12px/1.4 var(--lg-font-sans);color:var(--lg-mute)}
 /* gallery block */
 .lg-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .lg-gphoto{margin:0;position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--lg-sage-tint)}
@@ -1412,6 +1424,42 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
     })
       .then(function (r) { if (r.ok) location.reload(); else { rm.disabled = false; alert('Delete failed.'); } })
       .catch(function () { rm.disabled = false; alert('Network error.'); });
+  });
+})();
+/* Resume block (owner) — PDF upload + delete. Server re-validates mime; this
+   just guards the obvious cases (size + accept=application/pdf). */
+(function () {
+  var setBtn = document.getElementById('lg-resume-set');
+  var rmBtn  = document.getElementById('lg-resume-rm');
+  if (!setBtn) return;
+
+  var input = document.createElement('input');
+  input.type = 'file'; input.accept = 'application/pdf,.pdf';
+  input.style.display = 'none'; document.body.appendChild(input);
+
+  setBtn.addEventListener('click', function () { input.click(); });
+  input.addEventListener('change', function () {
+    var f = (input.files || [])[0]; input.value = '';
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) { alert('Over 10 MB — pick a smaller PDF.'); return; }
+    var prev = setBtn.textContent;
+    setBtn.textContent = 'Uploading…'; setBtn.disabled = true;
+    var fd = new FormData(); fd.append('resume', f);
+    fetch('/profile-api/v0/me/resume', { method: 'POST', credentials: 'include', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok) location.reload();
+        else { setBtn.textContent = prev; setBtn.disabled = false; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
+      })
+      .catch(function () { setBtn.textContent = prev; setBtn.disabled = false; alert('Network error.'); });
+  });
+
+  rmBtn && rmBtn.addEventListener('click', function () {
+    if (!confirm('Remove resume?')) return;
+    rmBtn.disabled = true;
+    fetch('/profile-api/v0/me/resume', { method: 'DELETE', credentials: 'include' })
+      .then(function (r) { if (r.ok) location.reload(); else { rmBtn.disabled = false; alert('Remove failed.'); } })
+      .catch(function () { rmBtn.disabled = false; alert('Network error.'); });
   });
 })();
 </script>
