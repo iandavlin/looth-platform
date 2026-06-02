@@ -87,7 +87,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-viewas__label{font-weight:700}
 .lg-viewas__seg{display:flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
 .lg-viewas__seg a{padding:6px 14px;color:#cfd3cb;text-decoration:none;font:700 12px/1 var(--lg-font-sans)}
-.lg-viewas__seg a[aria-current="true"]{background:var(--lg-amber);color:#4a3c10}
+.lg-viewas__seg a[aria-current="true"]{background:var(--lg-sage);color:#fff}
 .lg-viewas__edit{margin-left:auto;background:#fff;color:var(--lg-ink);border-radius:999px;
   padding:7px 15px;text-decoration:none;font:700 12.5px/1 var(--lg-font-sans)}
 .lg-viewas__hint{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);color:#9aa091}
@@ -151,9 +151,13 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-link[draggable="true"]{cursor:grab}
 .lg-sort-dragging{opacity:.45}
 .lg-link.lg-sort-dragging{cursor:grabbing}
-/* whole-block reorder grip (owner/Me) */
-.lg-block__grip{display:inline-block;cursor:grab;color:var(--lg-mute);font-size:13px;line-height:1;letter-spacing:-2px;vertical-align:middle;margin-right:8px;user-select:none}
-.lg-block__grip:hover{color:var(--lg-sage-d)}
+/* whole-block reorder grip (owner/Me) — dot-grid, matches builder mockup */
+.lg-block__grip{display:inline-grid;grid-template-columns:1fr 1fr;gap:2px;cursor:grab;vertical-align:middle;margin-right:9px;user-select:none}
+.lg-block__grip i{display:block;width:3px;height:3px;border-radius:50%;background:var(--lg-sage-3)}
+.lg-block__grip:hover i{background:var(--lg-sage-d)}
+/* section icon chip (owner/Me) — injected before each block title */
+.lg-secic{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;
+  background:var(--lg-sage-tint);color:var(--lg-sage-d);font:800 10px/1 var(--lg-font-sans);vertical-align:middle;margin-right:9px}
 .lg-block.lg-sort-dragging{cursor:grabbing;outline:2px dashed var(--lg-sage-3);outline-offset:2px}
 /* per-block remove (owner) — injected next to the grip */
 .lg-block__rm{display:inline-block;border:0;background:none;cursor:pointer;color:var(--lg-mute);font:700 15px/1 var(--lg-font-sans);padding:0 4px;vertical-align:middle;margin-left:2px}
@@ -189,6 +193,24 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__filt{margin-left:auto;font:800 8px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);border:1px solid var(--lg-sage-3);border-radius:5px;padding:2px 5px}
 .lg-caddy__filt + .lg-caddy__plus{margin-left:8px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
+/* builder palette — grouped sage bubble-pills (matches approved builder mockup) */
+.lg-caddy__grp{font:700 10px/1 var(--lg-font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--lg-mute);margin:16px 2px 9px}
+.lg-caddy__grp:first-child{margin-top:2px}
+.lg-bubbles{display:flex;flex-direction:column;gap:8px}
+.lg-caddy__list .lg-bubble{flex-direction:row;align-items:center;gap:10px;padding:8px 13px;background:var(--lg-sage-tint);
+  border:1px solid transparent;border-radius:999px;cursor:grab;box-shadow:none;transition:border-color .15s,transform .12s,opacity .15s}
+.lg-caddy__list .lg-bubble:hover{border-color:var(--lg-sage-3);transform:translateY(-1px);box-shadow:none}
+.lg-caddy__list .lg-bubble:active{transform:scale(.98)}
+.lg-caddy__list .lg-bubble.is-used{opacity:.4;cursor:default;pointer-events:none}
+.lg-caddy__list .lg-bubble.lg-sort-dragging{opacity:.45}
+.lg-bubble__ic{width:27px;height:27px;border-radius:50%;background:var(--lg-sage);color:#fff;display:flex;
+  align-items:center;justify-content:center;font:800 10px/1 var(--lg-font-sans);flex:0 0 auto}
+.lg-bubble__lab{font:600 13.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-bubble__find{margin-left:auto;font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--lg-sage-d);border:1px solid var(--lg-sage-3);border-radius:5px;padding:2px 6px}
+.lg-bubble__multi{margin-left:auto;font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--lg-mute);border:1px solid var(--lg-line);border-radius:5px;padding:2px 6px}
+.lg-bubble--freeform{cursor:pointer}
 /* discovery-linkage: taxonomy blocks feed the member-directory search facets */
 .lg-filterable{font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:5px;padding:3px 6px;vertical-align:middle}
 .lg-findnote{display:flex;align-items:center;gap:7px;font:600 11.5px/1.4 var(--lg-font-sans);color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:9px;padding:8px 11px;margin:0 0 12px}
@@ -406,7 +428,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 
     <?php if ($isOwner): ?>
       <div class="lg-viewas" role="group" aria-label="Preview your profile as">
-        <span class="lg-viewas__label">👁 View as</span>
+        <span class="lg-viewas__label">View as</span>
         <span class="lg-viewas__seg">
           <a href="<?= looth_h($viewLink('public')) ?>" <?= $role==='public'?'aria-current="true"':'' ?>>Public</a>
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
@@ -414,30 +436,53 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
         </span>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">✚ Blocks</button>
         <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
-        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the 📷, the privacy chips) to edit it in place. Drag the ⠿ on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
+        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
       </div>
-      <?php $available = Block::availableBlocks($subjectId); ?>
-      <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a block to your profile">
+      <?php
+        $available = Block::availableBlocks($subjectId);
+        $availSet  = array_flip($available);
+        // Builder palette: real layout blocks grouped like the approved mockup.
+        $paletteGroups = [
+          'Core'   => ['about', 'instruments', 'skills', 'services', 'music'],
+          'Extras' => ['location', 'gallery', 'connect', 'socials'],
+          'Custom' => ['resume'],
+        ];
+        $bubbleIcons = [
+          'about' => 'Ab', 'instruments' => 'In', 'skills' => 'Sk', 'services' => 'Sv',
+          'music' => 'Mu', 'location' => 'Lo', 'gallery' => 'Ga', 'connect' => 'Co',
+          'socials' => 'So', 'resume' => 'Re', 'freeform' => 'Fr',
+        ];
+      ?>
+      <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a section to your profile">
       <div class="lg-caddy__head">
-        <strong>Add a block</strong>
+        <strong>Sections</strong>
         <button type="button" class="lg-caddy__close" id="lg-caddy-close" aria-label="Close">×</button>
       </div>
-      <p class="lg-caddy__hint">Tap a block to add it — or drag it onto your profile. Drag the ⠿ on a block to reorder; ✕ removes it back here.</p>
+      <p class="lg-caddy__hint">Drag a section into your profile — or tap to add. Sections marked <b>Filterable</b> tag you with site taxonomy so members can find you in search.</p>
       <div class="lg-caddy__list" id="lg-caddy-list">
-        <?php foreach ($available as $key => $label): $isFreeform = str_starts_with($key, 'freeform:'); $filt = isset(Block::CATALOG_BLOCKS[$key]); ?>
-          <div class="lg-caddy__row<?= $isFreeform ? ' lg-caddy__row--freeform' : '' ?>" data-caddy-row="<?= looth_h($key) ?>">
-            <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
-              <span class="lg-caddy__preview" aria-hidden="true"><?= looth_caddy_preview($key) ?></span>
-              <span class="lg-caddy__label"><span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($label) ?><?php if ($filt): ?><span class="lg-caddy__filt" title="Makes you findable in the member directory">Filterable</span><?php endif; ?><span class="lg-caddy__plus" aria-hidden="true">＋</span></span>
-            </button>
-            <?php if ($isFreeform): ?>
-              <button type="button" class="lg-caddy__trash" data-freeform-del="<?= looth_h($key) ?>"
-                      aria-label="Delete <?= looth_h($label) ?> permanently"
-                      title="Delete this section permanently">🗑</button>
+        <?php foreach ($paletteGroups as $grp => $keys): ?>
+          <h3 class="lg-caddy__grp"><?= looth_h($grp) ?></h3>
+          <div class="lg-bubbles">
+            <?php foreach ($keys as $key):
+              $b    = Block::LAYOUT_BLOCKS[$key];
+              $filt = isset(Block::CATALOG_BLOCKS[$key]);
+              $used = !isset($availSet[$key]);   // not available => already placed
+            ?>
+              <button type="button" class="lg-caddy__item lg-bubble<?= $used ? ' is-used' : '' ?>" draggable="<?= $used ? 'false' : 'true' ?>" data-block="<?= looth_h($key) ?>"<?= $used ? ' aria-disabled="true"' : '' ?>>
+                <span class="lg-bubble__ic" aria-hidden="true"><?= looth_h($bubbleIcons[$key] ?? '') ?></span>
+                <span class="lg-bubble__lab"><?= looth_h($b['label']) ?></span>
+                <?php if ($filt): ?><span class="lg-bubble__find" title="Makes you findable in the member directory">Filterable</span><?php endif; ?>
+              </button>
+            <?php endforeach; ?>
+            <?php if ($grp === 'Custom'): ?>
+              <button type="button" class="lg-caddy__item lg-bubble lg-bubble--freeform" id="lg-bubble-freeform" data-freeform-new="1">
+                <span class="lg-bubble__ic" aria-hidden="true"><?= looth_h($bubbleIcons['freeform']) ?></span>
+                <span class="lg-bubble__lab">Freeform</span>
+                <span class="lg-bubble__multi">add many</span>
+              </button>
             <?php endif; ?>
           </div>
         <?php endforeach; ?>
-        <span class="lg-caddy__empty"<?= $available ? ' hidden' : '' ?>>All blocks added ✓</span>
       </div>
     </aside>
     <?php endif; ?>
@@ -629,14 +674,29 @@ window.lgSortable = function (container, opts) {
       .catch(function () { alert('Network error.'); });
   }
 
-  // Inject a ⠿ grip + a remove ✕ into each body block's heading.
+  // 2-letter section badge per block (matches the builder palette bubbles).
+  var SECIC = { about: 'Ab', location: 'Lo', skills: 'Sk', services: 'Sv', instruments: 'In',
+    music: 'Mu', gallery: 'Ga', resume: 'Re', connect: 'Co', socials: 'So' };
+  function icFor(key) { if (!key) return ''; if (key.indexOf('freeform:') === 0) return 'Fr'; return SECIC[key] || ''; }
+
+  // Inject a dot-grid grip + section icon chip + a remove ✕ into each body block's heading.
   bodyBlocks().forEach(function (b) {
     var host = b.querySelector('.lg-bh') || b;
     if (!host.querySelector('.lg-block__grip')) {
       var grip = document.createElement('span');
       grip.className = 'lg-block__grip'; grip.setAttribute('title', 'Drag to reorder');
-      grip.setAttribute('aria-hidden', 'true'); grip.textContent = '⠿';
+      grip.setAttribute('aria-hidden', 'true');
+      grip.innerHTML = '<i></i><i></i><i></i><i></i><i></i><i></i>';
       host.insertBefore(grip, host.firstChild);
+    }
+    if (!host.querySelector('.lg-secic')) {
+      var ic = icFor(b.getAttribute('data-block'));
+      if (ic) {
+        var chip = document.createElement('span');
+        chip.className = 'lg-secic'; chip.setAttribute('aria-hidden', 'true'); chip.textContent = ic;
+        var g = host.querySelector('.lg-block__grip');
+        host.insertBefore(chip, g ? g.nextSibling : host.firstChild);
+      }
     }
     if (!host.querySelector('.lg-block__rm')) {
       var rm = document.createElement('button');
@@ -714,7 +774,13 @@ window.lgSortable = function (container, opts) {
   if (list) {
     list.addEventListener('click', function (e) {
       var item = e.target.closest('.lg-caddy__item');
-      if (item) addBlock(item.getAttribute('data-block'));      // tap-to-add (appends)
+      if (!item || item.classList.contains('is-used')) return;  // placed bubbles are inert
+      if (item.dataset.freeformNew) {                            // "add many" → reuse +New section flow
+        var fb = document.getElementById('lg-freeform-add');
+        if (fb) fb.click();
+        return;
+      }
+      addBlock(item.getAttribute('data-block'));                 // tap-to-add (appends)
     });
   }
 
@@ -737,7 +803,7 @@ window.lgSortable = function (container, opts) {
   if (list) {
     list.addEventListener('dragstart', function (e) {
       var item = e.target.closest('.lg-caddy__item');
-      if (!item) return;
+      if (!item || item.classList.contains('is-used') || item.dataset.freeformNew) return;
       caddyDragKey = item.getAttribute('data-block');
       item.classList.add('lg-sort-dragging');
       e.dataTransfer.effectAllowed = 'copy';
@@ -975,13 +1041,14 @@ window.lgSortable = function (container, opts) {
 </script>
 
 <script>
-/* Avatar single-source uploader (owner/Me). The header renders a 📷 affordance
+/* Avatar single-source uploader (owner/Me). The header renders a camera affordance
    (.lg-idrow__cam); clicking opens a file picker → POST the image to
    /me/avatar → the endpoint stores bytes, bumps avatar_version, sets the versioned
    served URL, and purges /whoami so mirrors re-pull. Reload to show the new image. */
 (function () {
   var cam = document.querySelector('.lg-idrow__cam');
   if (!cam) return;
+  var CAM_HTML = cam.innerHTML;   // restore the camera icon after a failed upload
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/jpeg,image/png,image/webp';
@@ -1000,9 +1067,9 @@ window.lgSortable = function (container, opts) {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (res.ok) { location.reload(); }
-        else { cam.textContent = '📷'; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
+        else { cam.innerHTML = CAM_HTML; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
       })
-      .catch(function () { cam.textContent = '📷'; alert('Network error.'); });
+      .catch(function () { cam.innerHTML = CAM_HTML; alert('Network error.'); });
   });
 })();
 </script>
