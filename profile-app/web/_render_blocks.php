@@ -343,24 +343,42 @@ function looth_render_resume_block(int $userId, string $role, string $headerVis)
  * visitors see read-only chips. Block vis on profile_sections key=$key. data-block/data-kind
  * tell the picker which block + catalog it drives.
  */
+
+/** "Filterable" badge — marks a block whose chips feed the member directory's search facets. */
+function looth_filterable_badge(): string
+{
+    return '<span class="lg-filterable" title="These tags make you findable in the member directory">Filterable</span>';
+}
+
+/** Owner-only banner explaining that a taxonomy block's chips drive directory search. */
+function looth_findnote(string $findable): string
+{
+    return '<div class="lg-findnote">'
+        . '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'
+        . 'Tags here add you to <b>' . looth_h($findable) . '</b> search — members filter the directory by these.</div>';
+}
+
 function looth_render_catalog_block(int $userId, string $role, string $headerVis, string $key): void
 {
     $block = Block::loadCatalogBlock($userId, $key);
     if ($block === null) return;
-    $items   = $block['items'];
-    $isOwner = ($role === 'me');
-    $label   = Block::LAYOUT_BLOCKS[$key]['label'] ?? ucfirst($key);
-    $kind    = Block::CATALOG_BLOCKS[$key]['kind'] ?? $key;
+    $items    = $block['items'];
+    $isOwner  = ($role === 'me');
+    $label    = Block::LAYOUT_BLOCKS[$key]['label'] ?? ucfirst($key);
+    $kind     = Block::CATALOG_BLOCKS[$key]['kind'] ?? $key;
+    $findable = ['skills' => 'Skills', 'services' => 'Services', 'instruments' => 'Instruments', 'music' => 'Genres'][$key] ?? $label;
 
     if (!$items && !$isOwner) return;                                  // empty + visitor → no block
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$block['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--' . looth_h($key) . '" data-block="' . looth_h($key) . '">';
     echo '<h3 class="lg-bh">' . looth_h($label);
+    if ($isOwner) echo ' ' . looth_filterable_badge();
     if ($isOwner) echo ' ' . looth_pmp_control($key, (string)$block['vis'], $headerVis);
     echo '</h3>';
 
     if ($isOwner) {
+        echo looth_findnote($findable);
         echo '<div class="lg-chips lg-cat-edit" data-block="' . looth_h($key) . '" data-kind="' . looth_h($kind) . '">';
         foreach ($items as $it) {
             echo '<span class="lg-chip lg-chip--edit" data-id="' . (int)$it['id'] . '">'

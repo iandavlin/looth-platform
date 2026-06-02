@@ -186,7 +186,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy__label{display:flex;align-items:center;gap:8px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-ink);padding:0 2px}
 .lg-caddy__grip{color:var(--lg-mute);font-size:12px;letter-spacing:-2px}
 .lg-caddy__plus{margin-left:auto;color:var(--lg-sage-d);font-weight:800;font-size:15px}
+.lg-caddy__filt{margin-left:auto;font:800 8px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);border:1px solid var(--lg-sage-3);border-radius:5px;padding:2px 5px}
+.lg-caddy__filt + .lg-caddy__plus{margin-left:8px}
 .lg-caddy__empty{color:var(--lg-mute);font:italic 500 13px/1.5 var(--lg-font-sans)}
+/* discovery-linkage: taxonomy blocks feed the member-directory search facets */
+.lg-filterable{font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:5px;padding:3px 6px;vertical-align:middle}
+.lg-findnote{display:flex;align-items:center;gap:7px;font:600 11.5px/1.4 var(--lg-font-sans);color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:9px;padding:8px 11px;margin:0 0 12px}
+.lg-findnote svg{flex:0 0 auto}
+.lg-findnote b{font-weight:800}
 /* header status lights (availability widgets) */
 .lg-lights{position:relative;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:22px}
 .lg-light{display:inline-flex;align-items:center;gap:7px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:999px;padding:5px 12px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-ink)}
@@ -417,11 +424,11 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       </div>
       <p class="lg-caddy__hint">Tap a block to add it — or drag it onto your profile. Drag the ⠿ on a block to reorder; ✕ removes it back here.</p>
       <div class="lg-caddy__list" id="lg-caddy-list">
-        <?php foreach ($available as $key => $label): $isFreeform = str_starts_with($key, 'freeform:'); ?>
+        <?php foreach ($available as $key => $label): $isFreeform = str_starts_with($key, 'freeform:'); $filt = isset(Block::CATALOG_BLOCKS[$key]); ?>
           <div class="lg-caddy__row<?= $isFreeform ? ' lg-caddy__row--freeform' : '' ?>" data-caddy-row="<?= looth_h($key) ?>">
             <button type="button" class="lg-caddy__item" draggable="true" data-block="<?= looth_h($key) ?>">
               <span class="lg-caddy__preview" aria-hidden="true"><?= looth_caddy_preview($key) ?></span>
-              <span class="lg-caddy__label"><span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($label) ?><span class="lg-caddy__plus" aria-hidden="true">＋</span></span>
+              <span class="lg-caddy__label"><span class="lg-caddy__grip" aria-hidden="true">⠿</span><?= looth_h($label) ?><?php if ($filt): ?><span class="lg-caddy__filt" title="Makes you findable in the member directory">Filterable</span><?php endif; ?><span class="lg-caddy__plus" aria-hidden="true">＋</span></span>
             </button>
             <?php if ($isFreeform): ?>
               <button type="button" class="lg-caddy__trash" data-freeform-del="<?= looth_h($key) ?>"
