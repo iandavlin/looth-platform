@@ -158,21 +158,25 @@ function lg_standalone_viewer_from_whoami(): array {
     $tier   = $authed && in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
               ? $whoami['tier'] : 'public';
     $name   = $authed ? (string) ($whoami['display_name'] ?? '') : '';
-    [$viewer] = lg_standalone_build_viewer($authed, $tier);
+    // Admins/editors (edit_archive_poc cap — same signal that shows the Edit pill)
+    // bypass tier gates with a preview badge, instead of getting walled out.
+    $isAdmin = ($whoami['capabilities']['edit_archive_poc'] ?? false) === true;
+    [$viewer] = lg_standalone_build_viewer($authed, $tier, $isAdmin);
     return [$viewer, $authed, $tier, $name];
 }
 
 function lg_standalone_viewer_from_preview(string $as): array {
     $authed = ($as !== 'public');
-    [$viewer] = lg_standalone_build_viewer($authed, $as);
+    // Preview mode deliberately views AS a tier — never admin, so the gate shows as a member sees it.
+    [$viewer] = lg_standalone_build_viewer($authed, $as, false);
     return [$viewer, $authed, $as, $authed ? 'Preview' : ''];
 }
 
-function lg_standalone_build_viewer(bool $authed, string $tier): array {
+function lg_standalone_build_viewer(bool $authed, string $tier, bool $isAdmin = false): array {
     $TAX = ['lite' => 'looth-lite', 'pro' => 'looth-pro'];
     if (!$authed) return [TierResolver::anonymous()];
     $tiers = isset($TAX[$tier]) ? [$TAX[$tier]] : [];
-    return [['is_admin' => false, 'is_delinquent' => false, 'tiers' => $tiers, 'preview_role' => null]];
+    return [['is_admin' => $isAdmin, 'is_delinquent' => false, 'tiers' => $tiers, 'preview_role' => null]];
 }
 
 function lg_standalone_render_article(array $layout, array $pc, array $viewer, bool $authed): string {
@@ -303,7 +307,13 @@ function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $a
 <style>
 body { margin: 0; background: #f0eee8; color: #323532;
        font-family: 'Jost', system-ui, -apple-system, sans-serif; }
-.lg-standalone-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+/* No width clamp here — the engine's .lg-article wrapper owns the readable-column
+   width (var(--lg-article-max), dash-adjustable) and centers itself, and the hero
+   full-bleeds out of it. A max-width here just bottlenecks the dash. */
+/* No top padding: the first block is always the full-bleed post-header hero, which
+   should sit flush under the nav. A top pad here leaves a band above the banner.
+   (Bottom pad stays for breathing room before the site footer.) */
+.lg-standalone-main { padding-block: 0 64px; }
 .lg-standalone-edit { position: fixed; right: 18px; bottom: 18px; z-index: 50;
   display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px;
   background: #323532; color: #f0eee8; border-radius: 999px; font-size: 14px;
@@ -327,17 +337,25 @@ body { margin: 0; background: #f0eee8; color: #323532;
 </head>
 <body>
 <?php
+    // Identity from /whoami VERBATIM, mirroring archive-poc/web/_chrome.php (the
+    // shared-header contract). lg_archive_poc_whoami() is static-cached this
+    // request — no second HTTP call. Previously avatar_url/capabilities were
+    // hardcoded null/[] here, so CPT headers showed an initial avatar + no admin
+    // affordances, diverging from /archive/ and /hub/.
+    $who = lg_archive_poc_whoami() ?: [];
     lg_shared_render_site_header([
         'authenticated' => $authed,
         'tier'          => $tier,
         'display_name'  => $viewerName,
-        'avatar_url'    => null,
-        'capabilities'  => [],
+        'avatar_url'    => $who['avatar_url'] ?? null,
+        'capabilities'  => (array) ($who['capabilities'] ?? []),
         'msg_unread'    => null,
         'notif_unread'  => null,
         'active_nav'    => '',
         'logout_url'    => '/wp-login.php?action=logout',
-        'profile_url'   => '/profile/edit',
+        'profile_url'   => !empty($who['slug'])
+            ? '/u/' . rawurlencode((string) $who['slug'])
+            : '/profile/edit',
     ]);
 ?>
 <?php if ($editUrl !== ''): ?>
@@ -371,6 +389,24 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <main class="lg-standalone-main" id="lg-main">
 <?= $articleHtml ?>
 </main>
+<script>
+/* Embed facade (YouTube/Vimeo) click-to-play — ported from lg-front.js so the
+   standalone renderer (not just the WP plugin) wires up every converted video. */
+(function(){
+  function ytSrc(id,start){var qs='autoplay=1&rel=0&modestbranding=1&playsinline=1';if(start&&+start>0)qs+='&start='+(+start);return 'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?'+qs;}
+  function vmSrc(id){return 'https://player.vimeo.com/video/'+encodeURIComponent(id)+'?autoplay=1&dnt=1&pip=1';}
+  document.addEventListener('click',function(e){
+    var f=e.target.closest&&e.target.closest('.lg-embed__facade');
+    if(!f||f.classList.contains('is-playing'))return;
+    var yt=f.getAttribute('data-yt-id'),vm=f.getAttribute('data-vimeo-id'),src=yt?ytSrc(yt,f.getAttribute('data-yt-start')):(vm?vmSrc(vm):'');
+    if(!src)return;e.preventDefault();
+    var ifr=document.createElement('iframe');ifr.src=src;
+    ifr.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; web-share');
+    ifr.setAttribute('allowfullscreen','');ifr.setAttribute('referrerpolicy','strict-origin-when-cross-origin');ifr.setAttribute('frameborder','0');
+    f.classList.add('is-playing');f.appendChild(ifr);
+  });
+})();
+</script>
 <?php lg_shared_render_site_footer(); ?>
 </body>
 </html>

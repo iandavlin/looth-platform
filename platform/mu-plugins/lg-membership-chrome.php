@@ -134,7 +134,11 @@ function lg_membership_chrome_viewer(): array {
         // §0a required. wp_logout_url() emits a nonce'd URL that returns to
         // the current page after sign-out, or home on anon (idempotent).
         'logout_url'    => wp_logout_url( $auth ? get_permalink() : home_url( '/' ) ),
-        'profile_url'   => '/profile/edit',
+        // Contract (Ian 2026-06-03): account chip → public profile /u/<slug>
+        // everywhere; /profile/edit only as the no-slug fallback.
+        'profile_url'   => ( $auth && $user->user_nicename )
+            ? '/u/' . rawurlencode( (string) $user->user_nicename )
+            : '/profile/edit',
     ];
 }
 

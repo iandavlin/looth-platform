@@ -44,7 +44,7 @@ final class Isolate
         'lg-fe-edit-btn',                /* FE editor entry button inline css */
         'lg-fe-editor',                  /* FE editor chrome (pills, contenteditable) */
         'lg-link-edit',                  /* link-edit pencil chrome (admin/author only) */
-        'lg-site-header',                /* cloned-BB masthead chrome */
+        'lg-shared-site-header',         /* shared canonical header CSS (/lg-shared/) */
         'lg-site-footer',                /* plugin-resident site footer chrome */
     ];
 
@@ -52,7 +52,6 @@ final class Isolate
         'lg-layout-v2-front',            /* our own front-end JS (lightbox + popout) */
         'lg-fe-editor',                  /* front-end inline editor (only loaded with ?lg_edit=1) */
         'lg-link-edit',                  /* quick link-edit pencil (admin/author, any view) */
-        'lg-site-header',                /* masthead interactions (search/mobile/poll) */
         'admin-bar',
         'hoverintent-js',                /* admin-bar dropdown intent */
         'jquery', 'jquery-core', 'jquery-migrate',
@@ -140,7 +139,7 @@ final class Isolate
      *  are missing from the page. For UI-chrome assets with highly
      *  specific selectors (#wpadminbar, dashicons) the layer demotion
      *  isn't needed anyway — their rules don't fight v2's cascade. */
-    private const NO_LAYER_WRAP = ['admin-bar', 'dashicons', 'lg-fe-editor', 'lg-link-edit', 'lg-site-header', 'lg-site-footer'];
+    private const NO_LAYER_WRAP = ['admin-bar', 'dashicons', 'lg-fe-editor', 'lg-link-edit', 'lg-shared-site-header', 'lg-site-footer'];
 
     /** Filterable so consumers (FeEditor) can extend at runtime. */
     private static function no_layer_wrap(): array

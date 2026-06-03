@@ -49,9 +49,10 @@ final class WpAssets
         wp_enqueue_style('admin-bar');
         wp_enqueue_script('admin-bar');
 
-        /* lg-site-header CSS/JS is enqueued by the BuddyBoss child theme so it
-           loads site-wide. Isolate.php still allowlists the `lg-site-header`
-           handle so it survives the dequeue pass on managed CPTs. */
+        /* The shared canonical header CSS (handle `lg-shared-site-header`,
+           /lg-shared/site-header.css) is enqueued site-wide by
+           SiteHeader::enqueue_assets(). Isolate.php allowlists that handle so it
+           survives the dequeue pass on managed CPTs. */
     }
 
     public static function enqueue_admin(string $hook): void
