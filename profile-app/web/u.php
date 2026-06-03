@@ -131,6 +131,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   overflow:hidden;background:var(--lg-sage-tint);
   position:relative;isolation:isolate;z-index:0}   /* contain Leaflet's z-index so it can't cover the header or menus */
 .lg-loc__map .leaflet-container,.lg-loc__pin .leaflet-container{height:100%;border-radius:12px;font:inherit}
+/* drop-off locations map — multi-pin Leaflet, one popup per drop-off */
+.lg-dropoffs__map{margin:6px 0 14px;height:320px;border-radius:12px;border:1px solid var(--lg-line);
+  overflow:hidden;background:var(--lg-sage-tint);position:relative;isolation:isolate;z-index:0}
+.lg-dropoffs__map .leaflet-container{height:100%;border-radius:12px;font:inherit}
+.lg-pinpop__name{display:block;font-weight:600;font-size:14px;color:var(--lg-ink);margin-bottom:2px}
+.lg-pinpop__addr,.lg-pinpop__hours,.lg-pinpop__notes{font-size:12.5px;color:var(--lg-mute);line-height:1.4}
+.lg-pinpop__hours{margin-top:3px}
+.lg-pinpop__notes{margin-top:3px;font-style:italic}
 /* location audience precision controls (owner) */
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
 .lg-loc__empty{font-size:13.5px;color:var(--lg-mute);margin:10px 0 0}
@@ -545,6 +553,50 @@ window.addEventListener('load', function () {
       L.circle([lat, lng], { radius: rad, color: '#87986a', fillColor: '#87986a', fillOpacity: 0.18, weight: 1 }).addTo(map);
     }
     setTimeout(function () { map.invalidateSize(); }, 80);   // standalone-shell sizing fix
+  });
+});
+</script>
+
+<script>
+/* Drop-off Locations map — Leaflet + OSM tiles (CDN, no API key). Reads pins from
+   the .lg-dropoffs__map[data-pins] div (JSON the renderer emitted), drops a marker
+   per drop-off, and binds a click-to-open popup with name / address / hours / notes.
+   Runs for visitor and owner alike; panning is allowed so all pins are reachable. */
+window.addEventListener('load', function () {
+  if (typeof L === 'undefined') return;
+  document.querySelectorAll('.lg-dropoffs__map[data-pins]').forEach(function (el) {
+    var pins;
+    try { pins = JSON.parse(el.getAttribute('data-pins')); } catch (e) { return; }
+    if (!Array.isArray(pins) || !pins.length) return;
+
+    var esc = function (v) {
+      var d = document.createElement('div');
+      d.textContent = (v === null || v === undefined) ? '' : String(v);
+      return d.innerHTML;
+    };
+
+    var map = L.map(el, { scrollWheelZoom: false }).setView([pins[0].lat, pins[0].lng], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+
+    var markers = [];
+    pins.forEach(function (p) {
+      if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+      var html = '<div class="lg-pinpop">'
+        + (p.n  ? '<strong class="lg-pinpop__name">'  + esc(p.n) + '</strong>' : '')
+        + (p.a  ? '<div class="lg-pinpop__addr">'     + esc(p.a) + '</div>'    : '')
+        + (p.h  ? '<div class="lg-pinpop__hours">'    + esc(p.h) + '</div>'    : '')
+        + (p.no ? '<div class="lg-pinpop__notes">'    + esc(p.no).replace(/\n/g, '<br>') + '</div>' : '')
+        + '</div>';
+      markers.push(L.marker([p.lat, p.lng]).addTo(map).bindPopup(html));
+    });
+
+    if (markers.length > 1) {
+      map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2));
+    } else if (markers.length === 1) {
+      map.setView(markers[0].getLatLng(), 14);
+    }
+    setTimeout(function () { map.invalidateSize(); }, 80);
   });
 });
 </script>
