@@ -1762,15 +1762,22 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
    ══════════════════════════════════════════════════════════ */
 
 :root {
-  --cat-acoustic:  #ecb351;   /* amber — resonance */
-  --cat-builds:    #c66845;   /* rust — construction */
-  --cat-repair:    #87986a;   /* sage — craft/restoration */
-  --cat-tools:     #6b6f6b;   /* muted — workshop */
-  --cat-business:  #4a5a36;   /* dark sage — professional */
-  --cat-market:    #b8860b;   /* dark goldenrod — trade */
-  --cat-general:   #a0998a;   /* warm grey — general */
-  --cat-sponsors:  #8a7a6a;   /* taupe — sponsors */
-  --cat-looths:    #6b8e9a;   /* muted teal — regional */
+  /* Category colour-coding — ONE brand palette (3 families) shared by the
+     sidebar pills (--nc), the feed-card rails (--cat-*), and the header banner.
+     Categories map to a family exactly as they do in the sidebar. */
+  --fam-sage:     #586b3f;
+  --fam-amber:    #b8842b;
+  --fam-charcoal: #323532;
+
+  --cat-repair:    var(--fam-sage);
+  --cat-business:  var(--fam-sage);
+  --cat-looths:    var(--fam-sage);
+  --cat-acoustic:  var(--fam-amber);
+  --cat-sponsors:  var(--fam-amber);
+  --cat-market:    var(--fam-amber);
+  --cat-builds:    var(--fam-charcoal);
+  --cat-tools:     var(--fam-charcoal);
+  --cat-general:   var(--fam-charcoal);
 }
 
 
@@ -2460,9 +2467,9 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 
 /* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
 /* Per-category accent (--nc) + lighter pill border tint (--leaf-cap), per brand family */
-.nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: #586b3f; --leaf-cap: #99b27e; }
-.nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: #b8842b; --leaf-cap: #ecb351; }
-.nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: #323532; --leaf-cap: #a8aa9e; }
+.nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: var(--fam-sage);     --leaf-cap: #99b27e; }
+.nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: var(--fam-amber);    --leaf-cap: #ecb351; }
+.nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: var(--fam-charcoal); --leaf-cap: #a8aa9e; }
 
 /* ── Image lightbox (click any forum image) ───────────────────────────────── */
 .lg-lightbox {
