@@ -1257,7 +1257,7 @@ body.nav-open .nav-overlay { display: block; }
   border: 1px solid var(--lg-line);
   border-radius: 8px;
   padding: var(--s4);
-  border-left: 3px solid transparent;
+  border-left: 6px solid transparent;   /* category colour rail — thicker for contrast */
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 .feed-card:hover {
@@ -2002,7 +2002,7 @@ body.ntm-active { overflow: hidden; }
   width: 100%;
   margin: 3px 0 2px;
   padding: 0;
-  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border: 2px solid var(--nc, var(--lg-line));   /* strong category-colour border */
   border-radius: 999px;
   background: var(--bg-card, #fff);
   color: var(--nc, var(--lg-ink));
@@ -2040,17 +2040,15 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px;
-  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border: 1px solid var(--nc, var(--lg-line));
   border-radius: 50%;
-  background: var(--bg-card, #fff);
-  color: var(--nc, var(--lg-mute));
+  background: var(--nc, var(--lg-sage-d));   /* filled button */
+  color: #fff;
   font-size: 13px; line-height: 1;
-  transition: transform .2s, background .12s, color .12s, border-color .12s;
+  transition: transform .2s, background .12s, color .12s, border-color .12s, filter .12s;
 }
-/* hover fills the button so it reads as the open control */
-.nav-tree__cat-pill:hover .nav-tree__chevron {
-  background: var(--nc, var(--lg-sage-d)); color: #fff; border-color: var(--nc, var(--lg-sage-d));
-}
+/* hover deepens the filled button */
+.nav-tree__cat-pill:hover .nav-tree__chevron { filter: brightness(.88); }
 .nav-tree__section--open > .nav-tree__cat-pill {
   background: var(--nc, var(--lg-sage-d));
   border-color: var(--nc, var(--lg-sage-d));
@@ -2071,7 +2069,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   display: block;
   margin: 3px 0;
   padding: 5px 12px;
-  border: 1px solid var(--leaf-cap, var(--lg-line));
+  border: 2px solid var(--leaf-cap, var(--lg-line));   /* stronger leaf border */
   border-radius: 999px;
   background: var(--bg-card, #fff);
   color: var(--lg-ink);
