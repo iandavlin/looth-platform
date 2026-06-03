@@ -1762,22 +1762,20 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
    ══════════════════════════════════════════════════════════ */
 
 :root {
-  /* Category colour-coding — ONE brand palette (3 families) shared by the
-     sidebar pills (--nc), the feed-card rails (--cat-*), and the header banner.
-     Categories map to a family exactly as they do in the sidebar. */
-  --fam-sage:     #586b3f;
-  --fam-amber:    #b8842b;
-  --fam-charcoal: #323532;
-
-  --cat-repair:    var(--fam-sage);
-  --cat-business:  var(--fam-sage);
-  --cat-looths:    var(--fam-sage);
-  --cat-acoustic:  var(--fam-amber);
-  --cat-sponsors:  var(--fam-amber);
-  --cat-market:    var(--fam-amber);
-  --cat-builds:    var(--fam-charcoal);
-  --cat-tools:     var(--fam-charcoal);
-  --cat-general:   var(--fam-charcoal);
+  /* Category colour-coding — ONE brand palette (lg-layout-v2 tokens.json),
+     shared by the sidebar pills (--nc), feed-card rails (--cat-*), and the
+     banner. Each of the 9 categories gets a distinct brand colour, spread for
+     max identifiability: the warm pair (amber/gold), the sage lightness ladder,
+     and the two darks. --on-* is the legible fg (text/glyph) on each colour. */
+  --cat-sponsors: #ecb351;  /* amber  (brand)        */  --on-sponsors: #1a1d1a;
+  --cat-market:   #b8842b;  /* gold   (brand)        */  --on-market:   #ffffff;
+  --cat-builds:   #c66845;  /* coral  (brand EXT)    */  --on-builds:   #ffffff;
+  --cat-repair:   #87986a;  /* sage   (brand)        */  --on-repair:   #ffffff;
+  --cat-acoustic: #586b3f;  /* deep sage (brand)     */  --on-acoustic: #ffffff;
+  --cat-business: #6f8fa6;  /* slate  (brand EXT)    */  --on-business: #1a1d1a;
+  --cat-general:  #99b27e;  /* mid sage (brand)      */  --on-general:  #1a1d1a;
+  --cat-tools:    #1a1d1a;  /* charcoal (brand)      */  --on-tools:    #ffffff;
+  --cat-looths:   #c2d5aa;  /* light sage (brand)    */  --on-looths:   #1a1d1a;
 }
 
 
@@ -2012,7 +2010,8 @@ body.ntm-active { overflow: hidden; }
   border: 2px solid var(--nc, var(--lg-line));   /* strong category-colour border */
   border-radius: 999px;
   background: var(--bg-card, #fff);
-  color: var(--nc, var(--lg-ink));
+  /* darken the category colour for the label so pale sages stay legible on white */
+  color: color-mix(in srgb, var(--nc, var(--lg-ink)) 68%, var(--lg-ink, #1a1d1a));
   font: 700 12.5px/1.15 var(--lg-font-sans);
   text-align: left;
   overflow: hidden;
@@ -2050,7 +2049,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   border: 1px solid var(--nc, var(--lg-line));
   border-radius: 50%;
   background: var(--nc, var(--lg-sage-d));   /* filled button */
-  color: #fff;
+  color: var(--on-nc, #fff);
   font-size: 13px; line-height: 1;
   transition: transform .2s, background .12s, color .12s, border-color .12s, filter .12s;
 }
@@ -2059,12 +2058,12 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 .nav-tree__section--open > .nav-tree__cat-pill {
   background: var(--nc, var(--lg-sage-d));
   border-color: var(--nc, var(--lg-sage-d));
-  color: #fff;
+  color: var(--on-nc, #fff);
 }
-/* open: pill is filled dark; the chevron button stays a light circle, rotated down */
+/* open: pill is filled; the chevron inverts (fg-coloured circle, category glyph) */
 .nav-tree__section--open > .nav-tree__cat-pill .nav-tree__chevron {
   transform: rotate(90deg);
-  background: #fff; color: var(--nc, var(--lg-sage-d)); border-color: #fff;
+  background: var(--on-nc, #fff); color: var(--nc, var(--lg-sage-d)); border-color: var(--on-nc, #fff);
 }
 
 /* Body hidden until the category is opened */
@@ -2091,7 +2090,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 .nav-tree__pill.nav-tree__item--active {
   background: var(--nc, var(--lg-sage-d));
   border-color: var(--nc, var(--lg-sage-d));
-  color: #fff;
+  color: var(--on-nc, #fff);
 }
 /* "View all" pill leads the group — subtle, with a lead-in caret */
 .nav-tree__pill--all { font-weight: 600; opacity: .9; }
@@ -2467,9 +2466,17 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 
 /* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
 /* Per-category accent (--nc) + lighter pill border tint (--leaf-cap), per brand family */
-.nav-section--repair, .nav-section--business, .nav-section--looths   { --nc: var(--fam-sage);     --leaf-cap: #99b27e; }
-.nav-section--acoustic, .nav-section--sponsors, .nav-section--market { --nc: var(--fam-amber);    --leaf-cap: #ecb351; }
-.nav-section--builds, .nav-section--tools, .nav-section--general     { --nc: var(--fam-charcoal); --leaf-cap: #a8aa9e; }
+.nav-section--sponsors { --nc: var(--cat-sponsors); --on-nc: var(--on-sponsors); }
+.nav-section--market   { --nc: var(--cat-market);   --on-nc: var(--on-market); }
+.nav-section--repair   { --nc: var(--cat-repair);   --on-nc: var(--on-repair); }
+.nav-section--builds   { --nc: var(--cat-builds);   --on-nc: var(--on-builds); }
+.nav-section--acoustic { --nc: var(--cat-acoustic); --on-nc: var(--on-acoustic); }
+.nav-section--general  { --nc: var(--cat-general);  --on-nc: var(--on-general); }
+.nav-section--looths   { --nc: var(--cat-looths);   --on-nc: var(--on-looths); }
+.nav-section--tools    { --nc: var(--cat-tools);    --on-nc: var(--on-tools); }
+.nav-section--business { --nc: var(--cat-business); --on-nc: var(--on-business); }
+/* leaf-pill border = a lighter mix of the category colour */
+[class*="nav-section--"] { --leaf-cap: color-mix(in srgb, var(--nc) 48%, #fff); }
 
 /* ── Image lightbox (click any forum image) ───────────────────────────────── */
 .lg-lightbox {
