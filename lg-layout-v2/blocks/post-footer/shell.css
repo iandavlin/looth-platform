@@ -315,6 +315,23 @@
     max-width: var(--lg-article-max);
     margin: 56px auto 0;
   }
+  /* WP's emoji detection script swaps emoji characters for <img class="emoji">
+     at runtime, but print_emoji_styles (core's img.emoji { height:1em }) is
+     dequeued site-wide for perf — so an emoji in a comment renders at full
+     image size. Pin it back to text size. !important to beat unlayered theme
+     img rules. */
+  .lg-post-footer__comments img.emoji,
+  .lg-post-footer__comments img.wp-smiley {
+    display: inline-block !important;
+    width: 1em !important;
+    height: 1em !important;
+    margin: 0 .07em !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    vertical-align: -0.1em !important;
+  }
   .lg-comments__title {
     font: 600 11px/1 var(--lg-font-sans);
     letter-spacing: 0.16em;

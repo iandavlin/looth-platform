@@ -137,4 +137,24 @@
   .lg-embed__facade.is-playing { cursor: default; background: #000; }
   .lg-embed__facade.is-playing .lg-embed__poster,
   .lg-embed__facade.is-playing .lg-embed__play { display: none; }
+
+  /* Editor-only placeholder for an embed with no URL yet (render.php emits
+     this only in editor mode). Gives the freshly-inserted block a visible,
+     clickable card so the author can hit Edit → set the URL. Readers never
+     see it. */
+  .lg-embed__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px dashed var(--lg-sage-3, #d4e0b8);
+    border-radius: 6px;
+    background: var(--lg-cream, #fbfbf8);
+  }
+  .lg-embed__placeholder-hint {
+    color: #777;
+    font-size: 14px;
+    padding: 16px 20px;
+    max-width: 40ch;
+  }
 }

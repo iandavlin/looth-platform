@@ -15,6 +15,7 @@
     --lg-article-max-wide: clamp(20rem, 96vw, 1320px);
     --lg-article-padding-inline: clamp(16px, 4vw, 48px);
     --lg-charcoal: #1a1d1a;
+    --lg-coral: #c66845;
     --lg-cream: #fbfbf8;
     --lg-cream-tint: #f7dcb4;
     --lg-cream-warm: #f7f5f2;
@@ -32,6 +33,7 @@
     --lg-shadow-card: 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
     --lg-shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
     --lg-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --lg-slate: #6f8fa6;
   }
   .lg-article {
     max-width: var(--lg-article-max);
@@ -80,6 +82,14 @@
     font-size: 15px;
     line-height: 1.4;
   }
+
+  /* Chapter timestamp deep-links (& any callout body link). Color flows from the
+     block's dash-adjustable link-color (--lg-link-color); on-brand sage fallback. */
+  .lg-callout .lg-ts-link {
+    color: var(--lg-link-color, #6b7c52);
+    text-decoration: none;
+  }
+  .lg-callout .lg-ts-link:hover { text-decoration: underline; }
 
   /* Eyebrow title — short uppercase label above the items list. */
   .lg-callout__title {
@@ -488,6 +498,26 @@
   .lg-embed__facade.is-playing { cursor: default; background: #000; }
   .lg-embed__facade.is-playing .lg-embed__poster,
   .lg-embed__facade.is-playing .lg-embed__play { display: none; }
+
+  /* Editor-only placeholder for an embed with no URL yet (render.php emits
+     this only in editor mode). Gives the freshly-inserted block a visible,
+     clickable card so the author can hit Edit → set the URL. Readers never
+     see it. */
+  .lg-embed__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px dashed var(--lg-sage-3, #d4e0b8);
+    border-radius: 6px;
+    background: var(--lg-cream, #fbfbf8);
+  }
+  .lg-embed__placeholder-hint {
+    color: #777;
+    font-size: 14px;
+    padding: 16px 20px;
+    max-width: 40ch;
+  }
 }
 
 /* event-header */
@@ -1104,6 +1134,22 @@
      semantic + accessibility correctness. */
   .lg-image__caption--long > p { margin: 0 0 0.7em; }
   .lg-image__caption--long > p:last-child { margin-bottom: 0; }
+
+  /* Editor-only: empty-caption placeholder. render.php emits the figcaption
+     even when image_text is blank (editor_mode only) so authors have a
+     clickable target to start a caption. data-lg-edit-prop exists only in
+     editor mode, so readers never see this; the placeholder vanishes the
+     moment text is typed (node is no longer :empty). */
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty {
+    display: block;
+    min-height: 1.4em;
+    cursor: text;
+  }
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty::before {
+    content: "Add a caption\2026";
+    opacity: 0.45;
+    font-style: italic;
+  }
 
   /* In a columns context (≥769px viewport — see columns/shell.css for
      the stack breakpoint) the image figure stretches to match the
@@ -1906,6 +1952,23 @@
   .lg-post-footer__comments {
     max-width: var(--lg-article-max);
     margin: 56px auto 0;
+  }
+  /* WP's emoji detection script swaps emoji characters for <img class="emoji">
+     at runtime, but print_emoji_styles (core's img.emoji { height:1em }) is
+     dequeued site-wide for perf — so an emoji in a comment renders at full
+     image size. Pin it back to text size. !important to beat unlayered theme
+     img rules. */
+  .lg-post-footer__comments img.emoji,
+  .lg-post-footer__comments img.wp-smiley {
+    display: inline-block !important;
+    width: 1em !important;
+    height: 1em !important;
+    margin: 0 .07em !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: none !important;
+    vertical-align: -0.1em !important;
   }
   .lg-comments__title {
     font: 600 11px/1 var(--lg-font-sans);

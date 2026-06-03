@@ -225,6 +225,22 @@
   .lg-image__caption--long > p { margin: 0 0 0.7em; }
   .lg-image__caption--long > p:last-child { margin-bottom: 0; }
 
+  /* Editor-only: empty-caption placeholder. render.php emits the figcaption
+     even when image_text is blank (editor_mode only) so authors have a
+     clickable target to start a caption. data-lg-edit-prop exists only in
+     editor mode, so readers never see this; the placeholder vanishes the
+     moment text is typed (node is no longer :empty). */
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty {
+    display: block;
+    min-height: 1.4em;
+    cursor: text;
+  }
+  .lg-image__caption[data-lg-edit-prop="image_text"]:empty::before {
+    content: "Add a caption\2026";
+    opacity: 0.45;
+    font-style: italic;
+  }
+
   /* In a columns context (≥769px viewport — see columns/shell.css for
      the stack breakpoint) the image figure stretches to match the
      column's height. The image fills its slot with object-fit: cover so

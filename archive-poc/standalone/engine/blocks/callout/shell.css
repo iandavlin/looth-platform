@@ -23,6 +23,14 @@
     line-height: 1.4;
   }
 
+  /* Chapter timestamp deep-links (& any callout body link). Color flows from the
+     block's dash-adjustable link-color (--lg-link-color); on-brand sage fallback. */
+  .lg-callout .lg-ts-link {
+    color: var(--lg-link-color, #6b7c52);
+    text-decoration: none;
+  }
+  .lg-callout .lg-ts-link:hover { text-decoration: underline; }
+
   /* Eyebrow title — short uppercase label above the items list. */
   .lg-callout__title {
     margin: 0 0 12px;

@@ -23,7 +23,25 @@ $caption = is_string($args['caption'] ?? null) ? (string) $args['caption']      
 $variant = is_string($args['variant'] ?? null) ? strtolower((string) $args['variant']) : 'variant-1';
 if (!in_array($variant, ['variant-1', 'variant-2'], true)) $variant = 'variant-1';
 
-if ($url === '') return;   /* no URL → no embed */
+$editorMode = !empty($ctx['editor_mode']) || !empty($ctx['can_edit']);
+
+if ($url === '') {
+    /* Readers see nothing. In the editor, emit a visible placeholder so the
+       block has an edit host: the <figure> is the first element, so the
+       Renderer wraps it with the <lg-edit> marker → pill → "Edit" opens the
+       embed-url picker. Without this, a freshly-inserted embed renders to ''
+       (Renderer drops empty output, emits no marker) and is invisible and
+       unreachable — you can add it but never set the URL. */
+    if (!$editorMode) return;
+    ?>
+<figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--empty">
+  <div class="lg-embed__frame lg-embed__placeholder" style="aspect-ratio: 16/9;">
+    <span class="lg-embed__placeholder-hint">No embed URL yet — click <strong>Edit</strong> and paste a YouTube, Vimeo, or Instagram link.</span>
+  </div>
+</figure>
+    <?php
+    return;
+}
 
 $safeCaption = htmlspecialchars($caption, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
 

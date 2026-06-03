@@ -143,6 +143,12 @@ $figureCls = 'lg-image lg-image--' . $variant . ($aspect !== '' ? ' lg-image--ha
 <?= $ind ?>    <p><?= $p ?></p>
 <?php endforeach; ?>
 <?= $ind ?>  </figcaption>
+<?php elseif ($editorMode): ?>
+<?php /* Editor-only: render an empty, clickable caption surface so authors can
+         place the cursor and start a caption even when image_text is blank.
+         Readers never hit this branch. Kept whitespace-free between the tags
+         so the :empty placeholder selector in shell.css matches. */ ?>
+<?= $ind ?>  <figcaption class="lg-image__caption lg-image__caption--long"<?= $textEditAttr ?>></figcaption>
 <?php endif; ?>
 <?= $ind ?></figure>
 <?php
