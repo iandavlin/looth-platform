@@ -56,8 +56,10 @@ function vp_parse(int $postId): array {
 
     if (!$vid) return ['layout'=>null, 'flag'=>'no video URL found', 'stats'=>[]];
 
-    $descLines = []; $chapters = []; $groups = []; $curIdx = -1;
+    $descLines = []; $chapters = []; $groups = []; $curIdx = -1; $droppedProse = [];
     $sectionLabels = '/^(timestamps?|chapters?|featured guest|guests?|links?|resources?|in this episode|tools.*)\s*:?\s*$/i';
+    // genuine trailing boilerplate to drop (vs. real description, which we now keep wherever it appears)
+    $boilerplate = '/^(aired on\b|keywords?\s*:|tags?\s*:|#\S|subscribe\b|follow (us|along)\b|find us\b|produced by\b)/i';
     $seenStructured = false;
 
     foreach ($lines as $ln) {
@@ -90,8 +92,10 @@ function vp_parse(int $postId): array {
             else { $groups[] = ['title'=>'Links', 'urls'=>[$ln]]; $curIdx = count($groups)-1; }
             $seenStructured = true; continue;
         }
-        // 6) prose -> description, only if we haven't hit structured content yet
-        if (!$seenStructured) { $descLines[] = $ln; } // trailing prose after structure is dropped (aired-on/keywords noise)
+        // 6) prose. Keep it as description wherever it appears (some posts list chapters BEFORE
+        //    the description); drop only recognized boilerplate (aired-on / keywords / hashtags).
+        if (preg_match($boilerplate, $ln)) { $droppedProse[] = $ln; }   // expected noise — silent
+        else { $descLines[] = $ln; }
         $curIdx = -1;
     }
 
@@ -149,8 +153,15 @@ function vp_parse(int $postId): array {
         '_meta' => ['importer'=>'video-parse/1', 'source_post'=>$postId, 'imported_at'=>gmdate('c')],
         'blocks' => $blocks,
     ];
+    // ---- soft review flags: heuristic judgement calls worth a human glance (not failures) ----
+    $review = [];
+    if (count($chapters) === 1)                       $review[] = 'lone chapter (possible false positive)';
+    if (array_filter($chapters, fn($c)=>trim($c['title'])===''))  $review[] = 'chapter w/ empty title';
+    if (preg_match($boilerplate, (string)$tagline))   $review[] = 'tagline looks like boilerplate';
+
     return ['layout'=>$layout, 'flag'=>null,
-            'stats'=>['desc_chars'=>strlen($desc),'chapters'=>count($chapters),'link_groups'=>count($groups),'acf_links'=>count($acfItems),'embed_only'=>$embedOnly]];
+            'stats'=>['desc_chars'=>strlen($desc),'chapters'=>count($chapters),'link_groups'=>count($groups),'acf_links'=>count($acfItems),'embed_only'=>$embedOnly],
+            'review'=>$review];
 }
 
 /* ---------------- runner ---------------- */
@@ -158,6 +169,7 @@ function vp_print_summary(int $id, array $r): void {
     echo "\n===== POST $id : ".get_the_title($id)." =====\n";
     if ($r['flag']) { echo "  FLAGGED: {$r['flag']}\n"; return; }
     echo "  stats: ".json_encode($r['stats'])."\n";
+    if (!empty($r['review'])) echo "  ⚑ REVIEW: ".implode('; ', $r['review'])."\n";
     foreach ($r['layout']['blocks'] as $b) {
         $t=$b['type']; $d='';
         if ($t==='post-header') $d='tagline: '.mb_substr($b['tagline'],0,70);
