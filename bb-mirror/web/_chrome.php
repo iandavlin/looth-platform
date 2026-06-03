@@ -46,6 +46,7 @@ function bb_mirror_cat_key(?string $parent_slug, ?string $own_slug = null): stri
         || str_contains($slug, 'sell') || str_contains($slug, 'classif'))          return 'market';
     if (str_contains($slug, 'sponsor'))                                             return 'sponsors';
     if (str_contains($slug, 'looth') && $slug !== 'looth-group-partners')          return 'looths';
+    if (str_contains($slug, 'suggestion') || str_contains($slug, 'bug-report'))    return 'suggestions';
 
     return 'general';
 }
@@ -99,13 +100,17 @@ function bb_mirror_left_nav(): void
     $general    = [];
     $sponsors   = [];
     $local      = [];
+    $solo       = [];   // standalone top-level forums that get their own pill (no group)
     foreach ($top as $t) {
         $kids       = $children[(int)$t['id']] ?? [];
         $slug       = (string)$t['slug'];
         $is_local   = str_contains($slug, 'looth') && $slug !== 'looth-group-partners';
         $is_sponsor = ((int)$t['id'] === 34044 || str_contains($slug, 'sponsor'));
+        $is_solo    = str_contains($slug, 'suggestion') || str_contains($slug, 'bug-report');
         if ($kids || $t['forum_type'] === 'category') {
             $containers[] = ['parent' => $t, 'kids' => $kids];
+        } elseif ($is_solo) {
+            $solo[] = $t;        // e.g. Suggestion Box / Bug Reporting — own pill, not in General
         } elseif ($is_local) {
             $local[] = $t;
         } elseif ($is_sponsor) {
@@ -219,7 +224,19 @@ function bb_mirror_left_nav(): void
       if ($general)  $render_group('general',  'General',      $general);
       if ($sponsors) $render_group('sponsors', 'Sponsors',     $sponsors);
       if ($local)    $render_group('looths',   'Local Looths', $local);
+
+      // Standalone forums (e.g. Suggestion Box) — their own navigable pill, no group.
+      foreach ($solo as $sf):
+          $sk    = bb_mirror_cat_key(null, (string)$sf['slug']);
+          $shref = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/' . $sf['slug'] . '/');
+          $sact  = ($active === (string)$sf['slug']
+                    || ($active_forum_id !== null && (int)$sf['id'] === $active_forum_id));
       ?>
+        <div class="nav-tree__section nav-section--<?= $sk ?>">
+          <a class="nav-tree__cat-pill nav-tree__cat-pill--solo nav-section--<?= $sk ?><?= $sact ? ' nav-tree__cat-pill--active' : '' ?>"
+             href="<?= $shref ?>"><span class="nav-tree__cat-name"><?= htmlspecialchars($sf['title']) ?></span></a>
+        </div>
+      <?php endforeach; ?>
 
     </nav>
     <?php

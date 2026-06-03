@@ -1101,15 +1101,14 @@ body.nav-open .nav-overlay { display: block; }
   width: 240px;
   flex-shrink: 0;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 69px;                       /* clear the 61px sticky site header (lg-chrome) so it isn't obscured */
+  height: calc(100vh - 85px);      /* fit below the header; scrolls internally if taller */
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--bg-card);  /* match the cards */
   border: 1px solid var(--lg-line);
   border-radius: 12px;
-  padding: var(--s8) var(--s3) var(--s8) var(--s4);
-  padding-top: 60px; /* space so content clears the hamburger corner */
+  padding: var(--s5) var(--s3) var(--s8) var(--s4);
   scrollbar-width: thin;
   scrollbar-color: var(--lg-line) transparent;
   margin: var(--s4) 0 var(--s4) var(--s4);
@@ -1776,6 +1775,7 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   --cat-general:  #99b27e;  /* mid sage (brand)      */  --on-general:  #1a1d1a;
   --cat-tools:    #1a1d1a;  /* charcoal (brand)      */  --on-tools:    #ffffff;
   --cat-looths:   #c2d5aa;  /* light sage (brand)    */  --on-looths:   #1a1d1a;
+  --cat-suggestions: #323532; /* ink (brand) — meta/feedback */ --on-suggestions: #ffffff;
 }
 
 
@@ -2007,7 +2007,9 @@ body.ntm-active { overflow: hidden; }
   width: 100%;
   margin: 3px 0 2px;
   padding: 0;
-  border: 2px solid var(--nc, var(--lg-line));   /* strong category-colour border */
+  /* subtle border in a light tint of the section colour (colour lives on the
+     filled chevron + label); pill background stays clean */
+  border: 1px solid color-mix(in srgb, var(--nc, var(--lg-line)) 38%, #fff);
   border-radius: 999px;
   background: var(--bg-card, #fff);
   /* darken the category colour for the label so pale sages stay legible on white */
@@ -2019,6 +2021,15 @@ body.ntm-active { overflow: hidden; }
 }
 button.nav-tree__cat-pill { cursor: pointer; }
 .nav-tree__cat-pill:hover { background: var(--lg-sage-tint); }
+
+/* Solo pill — a standalone forum (e.g. Suggestion Box): whole pill is a link,
+   no chevron, no children. */
+a.nav-tree__cat-pill--solo { text-decoration: none; cursor: pointer; }
+.nav-tree__cat-pill--solo .nav-tree__cat-name { padding-right: 13px; }
+.nav-tree__cat-pill--solo:hover { background: color-mix(in srgb, var(--nc) 12%, #fff); }
+.nav-tree__cat-pill--solo.nav-tree__cat-pill--active {
+  background: var(--nc); border-color: var(--nc); color: var(--on-nc);
+}
 
 /* Category name — an <a> (navigates) for real cats, a <span> for groups */
 .nav-tree__cat-name {
@@ -2075,7 +2086,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   display: block;
   margin: 3px 0;
   padding: 5px 12px;
-  border: 2px solid var(--leaf-cap, var(--lg-line));   /* stronger leaf border */
+  border: 1px solid color-mix(in srgb, var(--nc, var(--lg-line)) 30%, #fff);   /* subtle */
   border-radius: 999px;
   background: var(--bg-card, #fff);
   color: var(--lg-ink);
@@ -2475,6 +2486,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .nav-section--looths   { --nc: var(--cat-looths);   --on-nc: var(--on-looths); }
 .nav-section--tools    { --nc: var(--cat-tools);    --on-nc: var(--on-tools); }
 .nav-section--business { --nc: var(--cat-business); --on-nc: var(--on-business); }
+.nav-section--suggestions { --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
 /* leaf-pill border = a lighter mix of the category colour */
 [class*="nav-section--"] { --leaf-cap: color-mix(in srgb, var(--nc) 48%, #fff); }
 
