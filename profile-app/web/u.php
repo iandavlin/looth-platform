@@ -51,6 +51,12 @@ if ($isOwner) {
     $role = $viewer ? 'member' : 'public';
 }
 
+// Editor chrome (left Sections palette, inline-edit hints, legacy-edit link)
+// shows ONLY in true edit mode: the owner on their own "Me" view. In View-as
+// Member/Public the owner sees the profile EXACTLY as that audience does — no
+// sections bar — while the slim "View as" switcher stays so they can return.
+$editing = $isOwner && $role === 'me';
+
 // Subject tier badge: not resolvable from the spine post tier-drop — needs a
 // membership-tier lookup. Passed null for now (header renders no badge). FLAG.
 $tierBadge = null;
@@ -438,7 +444,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 <?php require __DIR__ . '/_chrome.php'; ?>
 
 <main class="main" id="lg-main">
-  <div class="lg-shell<?= $isOwner ? ' lg-shell--owner' : '' ?>">
+  <div class="lg-shell<?= $editing ? ' lg-shell--owner' : '' ?>">
 
     <?php if ($isOwner): ?>
       <div class="lg-viewas" role="group" aria-label="Preview your profile as">
@@ -448,10 +454,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
           <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
         </span>
+        <?php if ($editing): ?>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
         <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
         <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
+        <?php endif; /* /editing: Sections toggle + legacy + hint */ ?>
       </div>
+    <?php endif; /* /isOwner: View-as switcher */ ?>
+    <?php if ($editing): ?>
       <?php
         $available = Block::availableBlocks($subjectId);
         // Builder palette: real layout blocks grouped like the approved mockup.
