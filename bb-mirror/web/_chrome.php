@@ -392,27 +392,6 @@ function bb_mirror_new_topic_modal(): void
  * because config.php is bb-mirror-owned; lg_bb_mirror_whoami() is already loaded
  * from config.php before this file runs.
  */
-if (!function_exists('lg_bb_mirror_viewer_from_claims')) {
-function lg_bb_mirror_viewer_from_claims(array $claims): array {
-    // Identity + display straight from the verified token (§0c). Tier from the
-    // lg_tier cookie hint (validated against the known set). Capabilities left
-    // empty — bb-mirror renders no mod UI (single-mod model §3f); any sensitive
-    // cap check reconciles via /whoami at the action site, not in the header.
-    $lg   = (string)($_COOKIE['lg_tier'] ?? 'public');
-    $tier = in_array($lg, ['public', 'lite', 'pro'], true) ? $lg : 'public';
-    return [
-        'authenticated' => true,
-        'user_uuid'     => $claims['sub'] ?? null,
-        'wp_user_id'    => isset($claims['wp_user_id']) ? (int)$claims['wp_user_id'] : null,
-        'slug'          => $claims['slug'] ?? null,
-        'display_name'  => (string)($claims['display_name'] ?? ''),
-        'avatar_url'    => $claims['avatar_url'] ?? null,
-        'tier'          => $tier,
-        'capabilities'  => [],
-    ];
-}
-}
-
 if (!function_exists('lg_bb_mirror_viewer_from_whoami')) {
 function lg_bb_mirror_viewer_from_whoami(): array {
     // Existing loopback (lg_bb_mirror_whoami in config.php), normalized to the
@@ -439,26 +418,28 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     // the RS256 public key — no WP-boot loopback. Fall back to the whoami shim
     // when the cookie is absent/invalid so nothing breaks mid-rollout. The
     // is_readable guard keeps bb-mirror working even before the helper deploys.
+    // Header identity comes from /whoami — the single source of truth for
+    // display_name / avatar_url / tier / capabilities (header convergence Step 1;
+    // contract: docs/relay-header-convergence.md). The looth_id JWT is still
+    // verified, but ONLY as the identity anchor (sub) — never as a display or
+    // tier source (that was the bug: slug + lg_tier cookie instead of real name/photo).
     $verify_helper = '/srv/lg-shared/jwt-verify.php';
-    $claims = null;
+    $anchor_sub = null;
     if (is_readable($verify_helper)) {
         require_once $verify_helper;
         if (function_exists('lg_shared_verify_looth_id')) {
             $claims = lg_shared_verify_looth_id($_COOKIE['looth_id'] ?? null);
+            if ($claims !== null) $anchor_sub = $claims['sub'] ?? null;
         }
     }
-    if ($claims !== null) {
-        error_log('[shim-inline] JWT verified for ' . ($claims['sub'] ?? '?'));
-        $viewer = lg_bb_mirror_viewer_from_claims($claims);
-    } else {
-        error_log('[shim-fallback] looth_id absent/invalid, using whoami');
-        $viewer = lg_bb_mirror_viewer_from_whoami();
-    }
+    $viewer = lg_bb_mirror_viewer_from_whoami();
+    if ($anchor_sub && empty($viewer['user_uuid'])) $viewer['user_uuid'] = $anchor_sub;
     $authed = $viewer['authenticated'];
     $tier   = (string)$viewer['tier'];
     $caps   = (array)$viewer['capabilities'];
     $dname  = (string)$viewer['display_name'];
     $avatar = $viewer['avatar_url'] ?? null;
+    $slug   = $viewer['slug'] ?? null;
 
     if ($authed && $dname === '') {
         foreach ($_COOKIE as $name => $val) {
@@ -504,12 +485,12 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
         'active_nav'         => 'hub',     // light the The Hub nav item (§0a; key coordinated w/ lg-shell)
         'tier'               => $tier,
         'display_name'       => $dname,
-        'avatar_url'         => lg_bb_mirror_safe_avatar($avatar),   // non-gated default
+        'avatar_url'         => $avatar,   // verbatim from /whoami (matches /archive + /u); browser holds the gate cookie so the d= bp-full photo loads
         'capabilities'       => $caps,
         'msg_unread'         => null,
         'notif_unread'       => null,
         'logo_url'           => $logo_url,
-        'profile_url'        => '/profile/edit',
+        'profile_url'        => $slug ? '/u/' . rawurlencode((string)$slug) : '/profile/edit',
     ]);
 ?>
 
