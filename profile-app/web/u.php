@@ -428,7 +428,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       </div>
       <?php
         $available = Block::availableBlocks($subjectId);
-        $availSet  = array_flip($available);
         // Builder palette: real layout blocks grouped like the approved mockup.
         $paletteGroups = [
           'Core'   => ['about', 'instruments', 'skills', 'services', 'music'],
@@ -454,7 +453,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
             <?php foreach ($keys as $key):
               $b    = Block::LAYOUT_BLOCKS[$key];
               $filt = isset(Block::CATALOG_BLOCKS[$key]);
-              $used = !isset($availSet[$key]);   // not available => already placed
+              $used = !isset($available[$key]);   // not available => already placed
             ?>
               <button type="button" class="lg-caddy__item lg-bubble<?= $used ? ' is-used' : '' ?>" draggable="<?= $used ? 'false' : 'true' ?>" data-block="<?= looth_h($key) ?>"<?= $used ? ' aria-disabled="true"' : '' ?>>
                 <span class="lg-bubble__ic" aria-hidden="true"><?= looth_h($bubbleIcons[$key] ?? '') ?></span>
