@@ -150,10 +150,26 @@ if (array_key_exists('pin', $in)) {
     $params[':plng'] = $plng;
 }
 
-if (empty($set)) profile_app_json(400, ['error' => 'no_fields']);
+// Owner-set extras (address detail / hours / note) — stored in profile_sections
+// key='location' data JSONB, not the users table. May be the sole change in a call.
+$gotDetails = false;
+if (array_key_exists('details', $in) && is_array($in['details'])) {
+    $d = $in['details'];
+    Block::saveLocationExtras(
+        (int)$user['id'],
+        array_key_exists('address', $d) ? (string)$d['address'] : null,
+        array_key_exists('hours',   $d) ? (string)$d['hours']   : null,
+        array_key_exists('note',    $d) ? (string)$d['note']    : null
+    );
+    $gotDetails = true;
+}
 
-$sql = 'UPDATE users SET ' . implode(', ', $set) . ' WHERE id = :id';
-Db::pg()->prepare($sql)->execute($params);
+if (empty($set) && !$gotDetails) profile_app_json(400, ['error' => 'no_fields']);
+
+if (!empty($set)) {
+    $sql = 'UPDATE users SET ' . implode(', ', $set) . ' WHERE id = :id';
+    Db::pg()->prepare($sql)->execute($params);
+}
 
 // Return the re-assembled block so the editor (and the round-trip test) can read
 // back both tiers in one call.

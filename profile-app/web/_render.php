@@ -385,7 +385,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
 
 <?php endif; ?>
 
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 <script src="/profile/edit/edit.js"></script>
 </body>
 </html>

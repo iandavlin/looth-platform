@@ -138,7 +138,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   </div>
 </main>
 
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 
 <?php if ($isOwner): ?>
 <script>

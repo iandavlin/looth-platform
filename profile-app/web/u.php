@@ -149,6 +149,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-loc__line{display:flex;align-items:center;gap:9px;font-size:15px;color:var(--lg-ink)}
 .lg-loc__empty{font-size:13.5px;color:var(--lg-mute);margin:10px 0 0}
 .lg-loc__edit{position:relative;margin-top:12px}
+.lg-loc__addr{font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:8px}
+.lg-loc__hours{font:600 12.5px/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
+.lg-loc__note{font:400 13px/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
+.lg-loc__details{display:flex;flex-direction:column;gap:7px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--lg-line)}
+.lg-loc__f{font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-ink);background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:9px;padding:8px 10px}
+.lg-loc__f:focus{outline:none;border-color:var(--lg-sage)}
+.lg-loc__note-in{resize:vertical;min-height:38px;font-family:var(--lg-font-sans)}
+.lg-loc__details-save{align-self:flex-start}
 .lg-loc__aud{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:14px;padding-top:13px;border-top:1px dashed var(--lg-line)}
 .lg-loc__audrow{display:inline-flex;align-items:center;gap:8px}
 .lg-loc__audlabel{font:700 12px/1 var(--lg-font-sans);color:var(--lg-mute)}
@@ -539,7 +547,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   <div class="lg-caddy__backdrop" id="lg-caddy-backdrop" hidden></div>
 <?php endif; ?>
 
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 
 <script>
 /* Real map for the location block — Leaflet + OSM tiles (CDN, no WP, no API key).
@@ -1092,6 +1100,24 @@ window.lgSortable = function (container, opts) {
     });
   });
 })();
+
+/* Location extras editor (owner/Me) — save address-detail / hours / note →
+   PUT /me/location {details:{address,hours,note}} → reload. */
+(function () {
+  var box = document.getElementById('lg-loc-details');
+  if (!box) return;
+  var btn = box.querySelector('.lg-loc__details-save');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    function v(f) { var el = box.querySelector('[data-f="' + f + '"]'); return el ? el.value.trim() : ''; }
+    btn.disabled = true;
+    fetch('/profile-api/v0/me/location', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ details: { address: v('address'), hours: v('hours'), note: v('note') } }) })
+      .then(function (r) { if (r.ok) location.reload(); else { btn.disabled = false; alert('Could not save details.'); } })
+      .catch(function () { btn.disabled = false; alert('Could not save details.'); });
+  });
+})();
 </script>
 
 <script>
@@ -1444,12 +1470,12 @@ window.lgSortable = function (container, opts) {
             var row = document.createElement('div'); row.className = 'lg-craft-results__row';
             var added = has(m.id);
             var pick = document.createElement('button'); pick.type = 'button'; pick.className = 'pick';
-            pick.innerHTML = '<span>' + esc(m.name) + '</span><span class="' + (added ? 'added' : 't') + '">' + (added ? '✓ added' : '') + '</span>';
+            pick.innerHTML = '<span>' + esc(m.name) + '</span><span class="' + (added ? 'added' : 't') + '">' + (added ? 'added' : '') + '</span>';
             if (!added) pick.addEventListener('click', function () { addItem(m.id, m.name); render(); inp.focus(); });
             row.appendChild(pick);
             if (IS_ADMIN) {
               var del = document.createElement('button'); del.type = 'button'; del.className = 'del';
-              del.title = 'Remove from catalog (admin)'; del.textContent = '🗑';
+              del.title = 'Remove from catalog (admin)'; del.textContent = '×';
               del.addEventListener('click', function () {
                 if (!confirm('Remove “' + m.name + '” from the catalog for everyone?')) return;
                 fetch('/profile-api/v0/catalogs/' + kind + '/' + m.id, { method: 'DELETE', credentials: 'include' })

@@ -80,6 +80,7 @@ $_whoami = Whoami::resolve();
 <body>
 <?php
 lg_shared_render_site_header([
+    'logo_url'      => LG_PROFILE_APP_LOGO_URL,
     'authenticated' => (bool)($_whoami['authenticated'] ?? false),
     'tier'          => (string)($_whoami['tier'] ?? 'public'),
     'display_name'  => (string)($_whoami['display_name'] ?? ''),
@@ -151,6 +152,7 @@ const state = {
 };
 let curPage = 1;
 let curSort = <?= json_encode($sort) ?>;
+const DIR_ME_SLUG = <?= json_encode($_whoami['slug'] ?? null, JSON_UNESCAPED_SLASHES) ?>;
 
 function escH(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -220,21 +222,120 @@ function initMultiselect(root) {
 }
 
 // ---------- results + map ----------
+// Social-link glyphs (mirror of looth_social_icon in _render_blocks.php — the directory
+// API can't reach that PHP helper, so the icon set is duplicated here). 24x24 stroke.
+const SOC_ICONS = (() => {
+  const P = {
+    web:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"/>',
+    email:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    phone:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".9" fill="currentColor"/>',
+    x:'<path d="M4 4l16 16M20 4 4 20"/>',
+    youtube:'<path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.42a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58 2.78 2.78 0 0 0 1.94 2C5.12 20 12 20 12 20s6.88 0 8.6-.42a2.78 2.78 0 0 0 1.94-2A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/><path d="M10 9v6l5-3z" fill="currentColor"/>',
+    facebook:'<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
+    tiktok:'<path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>',
+    patreon:'<circle cx="9" cy="11" r="6"/><line x1="18" y1="3" x2="18" y2="21"/>',
+    linktree:'<path d="M12 3v18"/><path d="m5 8 7-5 7 5"/><path d="m5 14 7 5 7-5"/>',
+    bandcamp:'<path d="M4 18l4-12h12l-4 12z"/>',
+  };
+  const wrap = p => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+  const m = {_fb: wrap('<circle cx="12" cy="12" r="9"/><path d="M8 12h8"/>')};
+  Object.keys(P).forEach(k => m[k] = wrap(P[k]));
+  return m;
+})();
+// Absolute outbound URL for a stored handle (mirror of looth_social_url).
+function socUrl(kind, value) {
+  const v = (value || '').trim();
+  if (!v) return '';
+  if (kind === 'email') return 'mailto:' + v;
+  if (kind === 'phone') return 'tel:' + v.replace(/[^\d+]/g, '');
+  if (/^https?:\/\//i.test(v)) return v;
+  const h = v.replace(/^[@/]+/, '');
+  switch (kind) {
+    case 'web': return 'https://' + h;
+    case 'instagram': return 'https://instagram.com/' + h;
+    case 'x': return 'https://x.com/' + h;
+    case 'youtube': return 'https://youtube.com/@' + h;
+    case 'facebook': return 'https://facebook.com/' + h;
+    case 'tiktok': return 'https://tiktok.com/@' + h;
+    case 'patreon': return 'https://patreon.com/' + h;
+    case 'linktree': return 'https://linktr.ee/' + h;
+    case 'bandcamp': return h.indexOf('.') > -1 ? 'https://' + h : 'https://' + h + '.bandcamp.com';
+    default: return 'https://' + h;
+  }
+}
+// Avatar image -> initials fallback on load error (textContent = no XSS).
+function dirAviFallback(img) {
+  const d = document.createElement('div');
+  d.className = 'avi-sm';
+  d.textContent = img.getAttribute('data-ini') || '';
+  img.replaceWith(d);
+}
 function renderResults(items, append) {
   const wrap = document.getElementById('dir-results');
-  const html = items.map(it => `
-    <a class="dir-card" href="/u/${escH(it.slug)}">
-      <div class="row1">
-        <div class="avi-sm">${escH((it.display_name||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase())}</div>
-        <div><div class="name">${escH(it.display_name||'Member')}</div>
-        ${it.location?.text?`<div class="loc-row">${escH(it.location.text)}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
+  const html = items.map(it => {
+    const ini = escH((it.display_name||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase());
+    const avi = it.avatar_url
+      ? `<img class="avi-sm" src="${escH(it.avatar_url)}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
+      : `<div class="avi-sm">${ini}</div>`;
+    const banner = it.banner_url
+      ? `<div class="dir-card__banner"><img src="${escH(it.banner_url)}" alt=""></div>`
+      : '';
+    const links = (it.links||[]).map(l => {
+      const href = socUrl(l.kind, l.value);
+      if (!href) return '';
+      return `<a class="dir-link" href="${escH(href)}" target="_blank" rel="noopener noreferrer" title="${escH(l.kind)}" aria-label="${escH(l.kind)}">${SOC_ICONS[l.kind] || SOC_ICONS._fb}</a>`;
+    }).join('');
+    return `
+    <div class="dir-card">
+      <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
+        ${banner}
+        <div class="row1">
+          ${avi}
+          <div><div class="name">${escH(it.display_name||'Member')}</div>
+          ${it.location?.text?`<div class="loc-row">${escH(it.location.text)}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
+          </div>
         </div>
-      </div>
-      ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(h.name)}</span>`).join('')}</div>`:''}
-    </a>`).join('');
+        ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(h.name)}</span>`).join('')}</div>`:''}
+      </a>
+      ${links?`<div class="dir-links">${links}</div>`:''}
+    </div>`;
+  }).join('');
   if (append) wrap.insertAdjacentHTML('beforeend', html);
   else wrap.innerHTML = html || '<div class="dir-empty">no members match. try widening filters.</div>';
 }
+
+// A member card: first left-click zooms the map to that member's pin; clicking the
+// same card again (now the active card) opens their profile. Members with no map pin
+// (no Location block, or anonymized) just open the profile on the first click.
+function zoomToMember(main) {
+  const slug = main.dataset.slug;
+  const href = main.getAttribute('href');
+  const rec = pinMarkerBySlug[slug];
+  if (!rec || dirActiveSlug === slug) { window.location = href; return; }
+  dirActiveSlug = slug;
+  document.querySelectorAll('.dir-card.is-active').forEach(c => c.classList.remove('is-active'));
+  main.closest('.dir-card')?.classList.add('is-active');
+  const mapEl = document.getElementById('dir-map');
+  if (mapEl) mapEl.scrollIntoView({behavior: 'smooth', block: 'center'});
+  collapseDropoffs();
+  dirCluster.zoomToShowLayer(rec.marker, () => {
+    dirMap.setView([rec.lat, rec.lng], Math.max(dirMap.getZoom(), 13), {animate: true});
+    rec.marker.openPopup();
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const wrap = document.getElementById('dir-results');
+  if (!wrap) return;
+  wrap.addEventListener('click', (e) => {
+    const main = e.target.closest('.dir-card__main');
+    if (!main) return;   // social-link icons live outside .dir-card__main -> open normally
+    // Let ctrl/cmd/shift/alt/middle-click open the profile in a new tab as usual.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    zoomToMember(main);
+  });
+});
 
 async function loadPage(page, append) {
   const res = await fetch('/profile-api/v0/directory/members?' + buildQs(page), {credentials:'include'});
@@ -277,7 +378,7 @@ document.querySelectorAll('#dir-sort button').forEach(btn => btn.addEventListene
 let dirMap = null, dirCluster = null, lastPins = [], viewFilter = 'all';
 const pinIcon = L.divIcon({
   className: '',
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#b9450b;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
+  html: '<div style="width:14px;height:14px;border-radius:50%;background:var(--lg-rust);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',
   iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
 });
 // Anonymized "hidden member" pin — muted/grey so it reads as locked at a glance.
@@ -286,6 +387,46 @@ const pinIconGated = L.divIcon({
   html: '<div style="width:13px;height:13px;border-radius:50%;background:#9a948a;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);opacity:.9"></div>',
   iconSize: [13, 13], iconAnchor: [6.5, 6.5], popupAnchor: [0, -10],
 });
+// Drop-off child pins (revealed when a member "collapsed" pin is clicked) — a distinct
+// smaller teal dot so they read differently from the member's home pin.
+const pinIconDropoff = L.divIcon({
+  className: '',
+  html: '<div style="width:11px;height:11px;border-radius:50%;background:#0d7a6f;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)"></div>',
+  iconSize: [11, 11], iconAnchor: [5.5, 5.5], popupAnchor: [0, -9],
+});
+// A member pin that has drop-offs: same dot + a small count badge so it reads as a
+// "collapsed" group you can expand.
+function pinIconWithCount(n) {
+  return L.divIcon({
+    className: '',
+    html: '<div style="position:relative;width:14px;height:14px">'
+        + '<div style="width:14px;height:14px;border-radius:50%;background:var(--lg-rust);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>'
+        + '<div style="position:absolute;top:-7px;left:9px;min-width:14px;height:14px;padding:0 3px;border-radius:8px;background:#0d7a6f;color:#fff;border:1.5px solid #fff;font:700 9px/13px system-ui,sans-serif;text-align:center;box-sizing:border-box">' + n + '</div>'
+        + '</div>',
+    iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
+  });
+}
+let dirChildLayer = null, expandedSlug = null;
+let pinMarkerBySlug = {}, dirActiveSlug = null;
+function collapseDropoffs() {
+  if (dirChildLayer) dirChildLayer.clearLayers();
+  expandedSlug = null;
+}
+function expandDropoffs(p) {
+  if (!dirChildLayer) dirChildLayer = L.layerGroup().addTo(dirMap);
+  collapseDropoffs();
+  expandedSlug = p.slug;
+  const pts = [[p.lat, p.lng]];
+  (p.dropoffs || []).forEach(k => {
+    if (k.lat == null || k.lng == null) return;
+    const m = L.marker([k.lat, k.lng], {icon: pinIconDropoff})
+      .bindPopup('<div style="font-weight:600;font-size:12px;color:#1f1d1a">' + escH(k.name || 'Drop-off') + '</div>'
+        + '<div style="font-size:11px;color:#8a8478">' + escH(p.display_name) + '</div>');
+    dirChildLayer.addLayer(m);
+    pts.push([k.lat, k.lng]);
+  });
+  if (pts.length > 1) dirMap.fitBounds(pts, {padding: [48, 48], maxZoom: 14});
+}
 function initDirMap() {
   if (dirMap) return;
   dirMap = L.map('dir-map', {zoomControl: true, scrollWheelZoom: true}).setView([39, -98], 3);
@@ -296,12 +437,16 @@ function initDirMap() {
   // Cluster many overlapping pins into counts; spiderfy on click at max zoom.
   dirCluster = L.markerClusterGroup({chunkedLoading: true, maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false});
   dirMap.addLayer(dirCluster);
+  dirMap.on('click', collapseDropoffs);   // click empty map to collapse an expanded pin
   loadPins();
 }
 function plotPins(pins) {
   if (!dirMap) return;
   lastPins = pins;
   dirCluster.clearLayers();
+  collapseDropoffs();
+  pinMarkerBySlug = {};
+  dirActiveSlug = null;
   const pts = [];
   pins.forEach(p => {
     if (p.lat == null || p.lng == null) return;
@@ -310,13 +455,34 @@ function plotPins(pins) {
     if (p.gated) {
       m = L.marker([p.lat, p.lng], {icon: pinIconGated})
         .bindPopup(`<div style="font-size:13px;color:#6b665e;max-width:190px">${escH(p.message)}</div>`
-          + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:#b9450b;text-decoration:none">Sign in to view →</a>`);
+          + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:var(--lg-rust);text-decoration:none">Sign in to view</a>`);
     } else {
-      m = L.marker([p.lat, p.lng], {icon: pinIcon, title: p.display_name})
+      const hasKids = !!(p.dropoffs && p.dropoffs.length);
+      const isMe = !!(DIR_ME_SLUG && p.slug === DIR_ME_SLUG);
+      m = L.marker([p.lat, p.lng], {icon: hasKids ? pinIconWithCount(p.dropoffs.length) : pinIcon, title: p.display_name})
         .bindPopup(`<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
-          + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : ''));
+          + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : '')
+          + (hasKids ? `<div style="margin-top:4px;font-size:11px;color:#0d7a6f;font-weight:600">${p.dropoffs.length} drop-off location${p.dropoffs.length===1?'':'s'} — click pin to show</div>` : ''));
+      if (hasKids || isMe) {
+        m.on('click', (ev) => {
+          if (expandedSlug === p.slug) { collapseDropoffs(); return; }
+          if (p.dropoffs && p.dropoffs.length) { expandDropoffs(p); return; }
+          // Owner-self interim: the feed doesn't carry my drop-offs yet, but I own
+          // them so I can read them directly — lets the owner preview the expansion
+          // before the canonical feed change lands.
+          if (isMe) {
+            fetch('/profile-api/v0/me/dropoffs', {credentials:'include'})
+              .then(r => r.json())
+              .then(d => {
+                const items = (d.items || d.dropoffs || []).filter(k => k.lat != null && k.lng != null);
+                if (items.length) expandDropoffs(Object.assign({}, p, {dropoffs: items}));
+              }).catch(()=>{});
+          }
+        });
+      }
     }
     dirCluster.addLayer(m);
+    if (!p.gated && p.slug) pinMarkerBySlug[p.slug] = {marker: m, lat: p.lat, lng: p.lng};
     pts.push([p.lat, p.lng]);
   });
   if (pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
@@ -383,6 +549,6 @@ document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, 
   document.addEventListener('click', e => { if (!box.contains(e.target) && e.target !== input) close(); });
 })();
 </script>
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 </body>
 </html>

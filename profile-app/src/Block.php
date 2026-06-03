@@ -573,6 +573,20 @@ final class Block
         ];
         $clean = fn($p, $d) => (is_string($p) && in_array($p, self::LOCATION_PRECISION, true)) ? $p : $d;
 
+        // Owner-set extras (address detail / hours / note) live in profile_sections
+        // key='location' data JSONB — no users-table column needed. Empty by default.
+        $ex = ['address' => '', 'hours' => '', 'note' => ''];
+        $xs = Db::pg()->prepare("SELECT data FROM profile_sections WHERE user_id = :i AND key = 'location'");
+        $xs->execute([':i' => $userId]);
+        if ($xr = $xs->fetch()) {
+            $xd = json_decode((string)$xr['data'], true);
+            if (is_array($xd)) {
+                $ex['address'] = (string)($xd['address'] ?? '');
+                $ex['hours']   = (string)($xd['hours']   ?? '');
+                $ex['note']    = (string)($xd['note']    ?? '');
+            }
+        }
+
         return [
             'block'   => 'location',
             'subject' => 'person',
@@ -580,7 +594,31 @@ final class Block
             'members_precision' => $clean($r['location_members_precision'] ?? null, 'city'),
             'public_precision'  => $clean($r['location_public_precision']  ?? null, 'city'),
             'place'   => $place,
+            'address' => $ex['address'],
+            'hours'   => $ex['hours'],
+            'note'    => $ex['note'],
         ];
+    }
+
+    /**
+     * Upsert the location block's owner-set extras (address detail / hours / note)
+     * into profile_sections key='location' data JSONB. A null arg leaves that field
+     * unchanged. The row's visibility is unused for gating (the location block follows
+     * the precision model); we keep it 'members' as a harmless placeholder.
+     */
+    public static function saveLocationExtras(int $userId, ?string $addr, ?string $hours, ?string $note): array
+    {
+        $cur = self::loadLocation($userId);
+        $a = $addr  !== null ? mb_substr(trim($addr),  0, self::DROPOFFS_ADDR_MAX)  : (string)($cur['address'] ?? '');
+        $h = $hours !== null ? mb_substr(trim($hours), 0, self::DROPOFFS_HOURS_MAX) : (string)($cur['hours']   ?? '');
+        $n = $note  !== null ? mb_substr(trim($note),  0, self::DROPOFFS_NOTES_MAX) : (string)($cur['note']    ?? '');
+        $data = json_encode(['address' => $a, 'hours' => $h, 'note' => $n], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        Db::pg()->prepare("
+            INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+            VALUES (:u, 'location', 'members', :d::jsonb, 10)
+            ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+        ")->execute([':u' => $userId, ':d' => $data]);
+        return self::loadLocation($userId);
     }
 
     /**

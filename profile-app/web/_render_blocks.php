@@ -582,7 +582,7 @@ function looth_render_connect_block(int $userId, string $role, string $headerVis
     $mutuals = $f['mutuals'] ?? [];
     if ($mutuals) {
         $n = count($mutuals);
-        echo '<p class="lg-connect__mutual">🤝 ' . $n . ' mutual connection' . ($n === 1 ? '' : 's') . '</p>';
+        echo '<p class="lg-connect__mutual">' . $n . ' mutual connection' . ($n === 1 ? '' : 's') . '</p>';
     }
 
     $people = $f['connections'] ?? [];
@@ -673,6 +673,11 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
     $has     = !empty($loc['has']);
     if (!$has && !$isOwner) return;                                           // empty + visitor → no block
 
+    // Owner-set extras (address detail / hours / note); shown under the map.
+    $exA = trim((string)($loc['address'] ?? ''));
+    $exH = trim((string)($loc['hours']   ?? ''));
+    $exN = trim((string)($loc['note']    ?? ''));
+
     // Precision for THIS viewer.
     if ($isOwner)               $prec = 'street';
     elseif ($role === 'public') $prec = (string)$loc['public_precision'];
@@ -685,12 +690,19 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
     echo '<h3 class="lg-bh">Location</h3>';
 
     if ($disp !== null && $disp['text'] !== '') {
-        echo '<div class="lg-loc__line">📍 ' . looth_h((string)$disp['text']) . '</div>';
+        echo '<div class="lg-loc__line">' . looth_h((string)$disp['text']) . '</div>';
     }
     if ($disp !== null && $disp['lat'] !== null) {
         echo '<div class="lg-loc__map" data-kind="' . looth_h((string)$disp['kind']) . '"'
            . ' data-zoom="' . (int)$disp['zoom'] . '"'
            . ' data-lat="' . looth_h((string)$disp['lat']) . '" data-lng="' . looth_h((string)$disp['lng']) . '"></div>';
+    }
+
+    // Owner-set extras render whenever this viewer can see the location at all.
+    if ($disp !== null) {
+        if ($exA !== '') echo '<div class="lg-loc__addr">' . looth_h($exA) . '</div>';
+        if ($exH !== '') echo '<div class="lg-loc__hours">' . looth_h($exH) . '</div>';
+        if ($exN !== '') echo '<div class="lg-loc__note">' . nl2br(looth_h($exN)) . '</div>';
     }
 
     // Owner controls: change the actual location (search) + the two audience knobs.
@@ -700,13 +712,19 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         }
         echo '<div class="lg-loc__edit" id="lg-loc-edit">'
            . '<button type="button" class="lg-link__add lg-loc__change">'
-           . ($has ? '✎ Change location' : '＋ Set your location') . '</button></div>';
+           . ($has ? 'Change location' : 'Set your location') . '</button></div>';
         if ($has) {
             echo '<div class="lg-loc__aud">'
-               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">👥 Members see</span> '
+               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Members see</span> '
                . looth_prec_control('members', (string)$loc['members_precision']) . '</span>'
-               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">🌐 Public sees</span> '
+               . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Public sees</span> '
                . looth_prec_control('public', (string)$loc['public_precision']) . '</span>'
+               . '</div>';
+            echo '<div class="lg-loc__details" id="lg-loc-details">'
+               . '<input type="text" class="lg-loc__f" data-f="address" placeholder="Address / suite / details (optional)" value="' . looth_h($exA) . '">'
+               . '<input type="text" class="lg-loc__f" data-f="hours" placeholder="Hours (e.g. Mon–Fri 9–5)" value="' . looth_h($exH) . '">'
+               . '<textarea class="lg-loc__f lg-loc__note-in" data-f="note" rows="2" placeholder="Note (optional)">' . looth_h($exN) . '</textarea>'
+               . '<button type="button" class="lg-link__add lg-loc__details-save">Save details</button>'
                . '</div>';
         }
     }
@@ -994,7 +1012,7 @@ function looth_render_practice_header_block(array $header, string $role, string 
     if ($tierBadge) echo ' <span class="lg-tierpill">' . looth_h($tierBadge) . '</span>';
     echo '</h1>';
     if ($tagline !== '') echo '<p class="lg-idrow__glance">' . looth_h($tagline) . '</p>';
-    if ($loc !== '') echo '<div class="lg-loc__line" style="margin-top:8px">📍 ' . looth_h($loc) . '</div>';
+    if ($loc !== '') echo '<div class="lg-loc__line" style="margin-top:8px">' . looth_h($loc) . '</div>';
     if ($website) {
         $label = preg_replace('#^https?://#i', '', (string)$website);
         echo '<a class="lg-idrow__web" href="' . looth_h((string)$website) . '" rel="me noopener" target="_blank">' . looth_h($label) . ' ↗</a>';

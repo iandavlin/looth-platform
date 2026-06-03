@@ -27,6 +27,7 @@ use Looth\ProfileApp\Whoami;
 $_whoami = Whoami::resolve();
 
 lg_shared_render_site_header([
+    'logo_url'      => LG_PROFILE_APP_LOGO_URL,
     'authenticated' => (bool) ($_whoami['authenticated'] ?? false),
     'tier'          => (string) ($_whoami['tier'] ?? 'public'),
     'display_name'  => (string) ($_whoami['display_name'] ?? ''),

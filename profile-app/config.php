@@ -63,6 +63,12 @@ if ($env === 'live') {
     define('LG_PROFILE_APP_MYSQL_BILLING_DB', 'lg_membership');
 }
 
+// Canonical, env-correct site logo. Passed to the shared header/footer
+// (per the site-header.php contract) as an absolute URL so it resolves from
+// preview/sibling hosts too, not just the canonical origin.
+define('LG_PROFILE_APP_LOGO_URL',
+    'https://' . LG_PROFILE_APP_HOST . '/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
+
 // Hardcoded identity namespace — DO NOT CHANGE. The whole point of v5 is that
 // the same email computes the same UUID across services. lg-stripe-billing
 // will use this same constant. Rotating it would orphan every previously-

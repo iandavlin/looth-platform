@@ -76,7 +76,7 @@ function looth_render_practice(array $rendered, array $members): void {
     </div>
   </main>
 </div>
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 </body>
 </html>
 <?php

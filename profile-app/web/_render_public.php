@@ -155,7 +155,7 @@ function looth_render_public(array $rendered, string $viewerRole, int $userId): 
     </div>
   </main>
 </div>
-<?php lg_shared_render_site_footer(); ?>
+<?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
 <script>
 document.getElementById('report-link').addEventListener('click', e => {
   e.preventDefault();

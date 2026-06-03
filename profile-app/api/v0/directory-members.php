@@ -53,6 +53,30 @@ function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $
     return Block::locationDisplay($place, $precision);          // null when private for this audience
 }
 
+/**
+ * The drop-off points a viewer may see for a member, as map-pin kids [{lat,lng,name}].
+ * Honors the drop-off block's own visibility (owner-self/admin always; else
+ * public->public-only, members->members+public). NOT coarsened — these are storefront
+ * /partner addresses the owner deliberately published. Empty array when none visible.
+ */
+function dir_visible_dropoffs(?array $do, array $r, int $viewerUserId, bool $isAdmin, string $audience): array
+{
+    if (!$do) return [];
+    $dvis   = in_array($do['vis'], ['public', 'members', 'private'], true) ? $do['vis'] : 'members';
+    $canSee = ((int)$r['id'] === $viewerUserId) || $isAdmin
+              || $dvis === 'public'
+              || ($dvis === 'members' && $audience === 'members');
+    if (!$canSee) return [];
+    $dd = json_decode($do['data'], true) ?: [];
+    $kids = [];
+    foreach (($dd['items'] ?? []) as $it) {
+        if (!is_array($it) || !isset($it['lat'], $it['lng'])
+            || !is_numeric($it['lat']) || !is_numeric($it['lng'])) continue;
+        $kids[] = ['lat' => (float)$it['lat'], 'lng' => (float)$it['lng'], 'name' => (string)($it['name'] ?? '')];
+    }
+    return $kids;
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 
 $viewer       = Auth::currentUser();
@@ -151,6 +175,13 @@ $isAdmin  = Auth::isAdmin();   // admins see every member at full precision unle
 // Same precision/visibility path as the list (dir_member_display), so a pin never
 // leaks more than the card.
 if (!empty($_GET['pins'])) {
+    // Preload every drop-off block once (niche block -> small set), keyed by user_id,
+    // so a member pin can carry its visible drop-off points as expandable children
+    // ("collapsed pin" -> click to fan out the shop's drop-off locations).
+    $dropoffsByUser = [];
+    foreach ($pg->query("SELECT user_id, visibility, data FROM profile_sections WHERE key = 'dropoffs'")->fetchAll() as $dr) {
+        $dropoffsByUser[(int)$dr['user_id']] = ['vis' => (string)$dr['visibility'], 'data' => (string)$dr['data']];
+    }
     $pinSql = "SELECT u.id, u.display_name, u.slug,
                       u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                       u.lat, u.lng, u.location_members_precision, u.location_public_precision,
@@ -162,11 +193,15 @@ if (!empty($_GET['pins'])) {
     $pStmt->execute($params);
     $pins = [];
     while ($pr = $pStmt->fetch()) {
-        if (empty($pr['loc_on_profile'])) continue;          // opted off the map entirely
+        // Drop-off points this viewer may see (honors the drop-off block's visibility).
+        $kids = dir_visible_dropoffs($dropoffsByUser[(int)$pr['id']] ?? null, $pr, $viewerUserId, $isAdmin, $audience);
+
+        // Home pin at this viewer's precision; null when the Location block is off the
+        // profile (opted off the map) or private for this audience.
         $disp = dir_member_display($pr, $viewerUserId, $isAdmin, $audience);
         if ($disp && $disp['lat'] !== null && $disp['lng'] !== null) {
-            // Visible to this viewer — full card.
-            $pins[] = [
+            // Visible to this viewer — full card. Drop-offs fan out as children.
+            $pin = [
                 'slug'         => $pr['slug'] ?: (string)(int)$pr['id'],
                 'display_name' => $pr['display_name'],
                 'lat'          => (float)$disp['lat'],
@@ -174,12 +209,37 @@ if (!empty($_GET['pins'])) {
                 'text'         => $disp['text'],
                 'gated'        => false,
             ];
+            if ($kids) $pin['dropoffs'] = $kids;
+            $pins[] = $pin;
             continue;
         }
-        // Hidden for this viewer. Logged-out viewers still get an anonymized pin at
-        // CITY precision (density without identity) + a "sign in" nudge; the message
-        // reflects whether the member is members-only or fully private. Logged-in
-        // members keep the member-precision behavior (no gated pins).
+
+        // No visible home pin, but the member published drop-off locations — a shop using
+        // ONLY the drop-off block still belongs on the map. Anchor the card at the first
+        // drop-off; any others fan out as children (degrades to one clean pin for a single
+        // drop-off). Drop-off visibility was already enforced above.
+        if ($kids) {
+            $anchor = $kids[0];
+            $pin = [
+                'slug'         => $pr['slug'] ?: (string)(int)$pr['id'],
+                'display_name' => $pr['display_name'],
+                'lat'          => $anchor['lat'],
+                'lng'          => $anchor['lng'],
+                'text'         => $anchor['name'],
+                'gated'        => false,
+            ];
+            $rest = array_slice($kids, 1);
+            if ($rest) $pin['dropoffs'] = $rest;
+            $pins[] = $pin;
+            continue;
+        }
+
+        // Truly hidden for this viewer. A member who removed the Location block AND has no
+        // visible drop-offs stays off the map entirely. Otherwise: logged-out viewers get an
+        // anonymized CITY pin (density without identity) + a "sign in" nudge; the message
+        // reflects whether the member is members-only or fully private. Logged-in members
+        // keep the member-precision behavior (no gated pins).
+        if (empty($pr['loc_on_profile'])) continue;
         if ($audience !== 'public') continue;
         $gLat = Block::coarsen($pr['lat'] !== null ? (float)$pr['lat'] : null, 1);
         $gLng = Block::coarsen($pr['lng'] !== null ? (float)$pr['lng'] : null, 1);
@@ -197,7 +257,7 @@ if (!empty($_GET['pins'])) {
     profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
 }
 
-$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url,
+$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url,
                u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug,
                (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
@@ -236,6 +296,25 @@ if ($rows) {
         $highlightsByUser[(int)$h['user_id']][] = ['kind' => $h['kind'], 'slug' => $h['slug'], 'name' => $h['name']];
     }
 
+    // Social links per result, gated by each member's links-block visibility
+    // (owner-self/admin always; else public->public-only, members->members+public).
+    $socVis = [];
+    $svStmt = $pg->prepare("SELECT user_id, visibility FROM profile_sections WHERE key = 'socials' AND user_id IN ($hPh)");
+    $svStmt->execute($userIds);
+    while ($sv = $svStmt->fetch()) { $socVis[(int)$sv['user_id']] = (string)$sv['visibility']; }
+    $linksByUser = [];
+    $soStmt = $pg->prepare("SELECT user_id, kind, value FROM profile_socials WHERE user_id IN ($hPh) ORDER BY user_id, sort_order, id");
+    $soStmt->execute($userIds);
+    while ($so = $soStmt->fetch()) {
+        $suid = (int)$so['user_id'];
+        $svis = (isset($socVis[$suid]) && in_array($socVis[$suid], ['public', 'members', 'private'], true)) ? $socVis[$suid] : 'members';
+        $canSee = ($suid === $viewerUserId) || $isAdmin || $svis === 'public' || ($svis === 'members' && $audience === 'members');
+        if (!$canSee) continue;
+        $val = trim((string)$so['value']);
+        if ($val === '') continue;
+        $linksByUser[$suid][] = ['kind' => (string)$so['kind'], 'value' => $val];
+    }
+
     foreach ($rows as $r) {
         $subjectId = (int)$r['id'];
         // Per-audience precision (owner→street, admin→street unless private, else coarsened/hidden).
@@ -255,8 +334,10 @@ if ($rows) {
             'slug'         => $r['slug'] ?: (string)$subjectId,
             'display_name' => $r['display_name'],
             'avatar_url'   => $r['avatar_url'],
+            'banner_url'   => $r['banner_url'],
             'location'     => $loc,
             'highlights'   => $highlightsByUser[$subjectId] ?? [],
+            'links'        => $linksByUser[$subjectId] ?? [],
             'distance_mi'  => $dist,
         ];
     }

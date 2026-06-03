@@ -204,6 +204,11 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .dir-card .loc-row{color:var(--ink-mute);font-size:12.5px}
 .dir-card .hl-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .dir-card .hl-chips .hl{font-size:11px;padding:2px 7px;background:var(--accent-soft);color:var(--accent);border-radius:999px;font-weight:600}
+.dir-card__main{display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit}
+.dir-card img.avi-sm{object-fit:cover;background:#ece8e1}
+.dir-links{display:flex;flex-wrap:wrap;gap:6px;padding-top:2px;margin-left:52px}
+.dir-link{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;border:1px solid var(--line);color:var(--ink-mute);background:var(--panel);transition:color .1s,border-color .1s}
+.dir-link:hover{color:var(--accent);border-color:var(--accent)}
 .dir-map{height:340px;background:var(--line);border-bottom:1px solid var(--line)}
 .dir-empty{padding:48px;text-align:center;color:var(--ink-mute);font-style:italic}
 .dir-load-more{margin:24px auto;display:block}
