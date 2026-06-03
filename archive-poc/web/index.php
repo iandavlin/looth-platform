@@ -256,7 +256,7 @@ function tier_label(string $tier): string {
 const KIND_LABELS = [
     'article' => 'Articles', 'video' => 'Videos', 'loothprint' => 'Loothprints',
     'event' => 'Events', 'discussion' => 'Discussions', 'profile' => 'Profiles',
-    'benefit' => 'Benefits', 'misc' => 'Misc',
+    'benefit' => 'Benefits', 'sponsor-post' => 'Sponsor Posts', 'shorty' => 'Shorts', 'useful_links' => 'Useful Links', 'misc' => 'Misc',
 ];
 
 /** Primary CTA verb per kind. */

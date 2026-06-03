@@ -30,14 +30,14 @@ function archive_poc_kind_map(): array {
         'loothprint'      => 'loothprint',
         'loothcuts'       => 'loothprint',
         'document'        => 'loothprint',
-        'event'           => 'event',
         'member-benefit'  => 'benefit',
         'sponsor-product' => 'benefit',
         'sponsor-page'    => 'misc',
-        'sponsor-post'    => 'misc',
+        'sponsor-post'    => 'sponsor-post',
         'sponsor'         => 'misc',
-        'useful_links'    => 'misc',
-        'shorty'          => 'misc',
+        'useful_links'    => 'useful_links',
+        'shorty'          => 'shorty',
+        'event'           => 'event',
         // bbPress (not ACF)
         'topic'           => 'discussion',
     ];

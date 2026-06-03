@@ -10,9 +10,12 @@ const KIND_LABELS = {
   discussion: 'Discussions',
   profile: 'Profiles',
   benefit: 'Benefits',
+  'sponsor-post': 'Sponsor Posts',
+  'shorty': 'Shorts',
+  'useful_links': 'Useful Links',
   misc: 'Misc',
 };
-const KIND_ORDER = ['article','video','loothprint','event','discussion','profile','benefit','misc'];
+const KIND_ORDER = ['article','video','loothprint','discussion','profile','benefit','sponsor-post','shorty','useful_links','misc']; // 'event' intentionally omitted — Events not a search type
 
 const state = {
   q: '',
@@ -1086,7 +1089,7 @@ if (ssrPresent && !hasFilters) {
   const KIND_LABELS = {
     article:'Articles', video:'Videos', loothprint:'Loothprints',
     event:'Events', discussion:'Discussions', profile:'Profiles',
-    benefit:'Benefits', misc:'Misc',
+    benefit:'Benefits', 'sponsor-post':'Sponsor Posts', 'shorty':'Shorts', 'useful_links':'Useful Links', misc:'Misc',
   };
   const YT_RE = /(?:(?:m\.|www\.)?youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,15})/;
 
