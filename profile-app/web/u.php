@@ -473,7 +473,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
         // Section icons — line SVGs (stroke=currentColor inherits the bubble/badge color).
         $iconPaths = [
           'about'       => '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/>',
-          'instruments' => '<circle cx="10.6" cy="11.2" r="2.5"/><circle cx="8.4" cy="15.6" r="3.3"/><path d="M12.1 9.6 19.4 2.9"/><path d="M18.4 2 22 5l-1.7 1.7"/>',
+          'instruments' => '<path d="m11.9 12.1 4.514-4.514"/><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z"/><path d="m6 16 2 2"/><path d="M8.23 9.85A3 3 0 0 1 11 8a5 5 0 0 1 5 5 3 3 0 0 1-1.85 2.77l-.92.38A2 2 0 0 0 12 18a4 4 0 0 1-4 4 6 6 0 0 1-6-6 4 4 0 0 1 4-4 2 2 0 0 0 1.85-1.23z"/>',
           'skills'      => '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
           'services'    => '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
           'music'       => '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
@@ -760,7 +760,7 @@ window.lgSortable = function (container, opts) {
   // Section icon SVG per block (matches the builder palette bubbles).
   var SECIC_PATHS = {
     about:       '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/>',
-    instruments: '<circle cx="10.6" cy="11.2" r="2.5"/><circle cx="8.4" cy="15.6" r="3.3"/><path d="M12.1 9.6 19.4 2.9"/><path d="M18.4 2 22 5l-1.7 1.7"/>',
+    instruments: '<path d="m11.9 12.1 4.514-4.514"/><path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z"/><path d="m6 16 2 2"/><path d="M8.23 9.85A3 3 0 0 1 11 8a5 5 0 0 1 5 5 3 3 0 0 1-1.85 2.77l-.92.38A2 2 0 0 0 12 18a4 4 0 0 1-4 4 6 6 0 0 1-6-6 4 4 0 0 1 4-4 2 2 0 0 0 1.85-1.23z"/>',
     skills:      '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
     services:    '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
     music:       '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
