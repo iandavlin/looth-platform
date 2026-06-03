@@ -434,11 +434,26 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           'Extras' => ['location', 'gallery', 'connect', 'socials'],
           'Custom' => ['resume'],
         ];
-        $bubbleIcons = [
-          'about' => 'Ab', 'instruments' => 'In', 'skills' => 'Sk', 'services' => 'Sv',
-          'music' => 'Mu', 'location' => 'Lo', 'gallery' => 'Ga', 'connect' => 'Co',
-          'socials' => 'So', 'resume' => 'Re', 'freeform' => 'Fr',
+        // Section icons — line SVGs (stroke=currentColor inherits the bubble/badge color).
+        $iconPaths = [
+          'about'       => '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/>',
+          'instruments' => '<circle cx="10.6" cy="11.2" r="2.5"/><circle cx="8.4" cy="15.6" r="3.3"/><path d="M12.1 9.6 19.4 2.9"/><path d="M18.4 2 22 5l-1.7 1.7"/>',
+          'skills'      => '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
+          'services'    => '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
+          'music'       => '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
+          'location'    => '<path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+          'gallery'     => '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
+          'connect'     => '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
+          'socials'     => '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
+          'resume'      => '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>',
+          'freeform'    => '<path d="M16.5 4.5l3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>',
+          'credentials' => '<circle cx="12" cy="9" r="5"/><path d="M9 13.4 7.4 21l4.6-2.6L16.6 21 15 13.4"/>',
+          'practices'   => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.6 10l1.8 1.8 3.8-3.8"/><path d="M8.6 16h6.8"/>',
         ];
+        $icSvg = function ($key) use ($iconPaths) {
+          $p = $iconPaths[$key] ?? '';
+          return $p ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' . $p . '</svg>' : '';
+        };
       ?>
       <aside class="lg-caddy" id="lg-caddy" aria-hidden="true" aria-label="Add a section to your profile">
       <div class="lg-caddy__head">
@@ -456,14 +471,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
               $used = !isset($available[$key]);   // not available => already placed
             ?>
               <button type="button" class="lg-caddy__item lg-bubble<?= $used ? ' is-used' : '' ?>" draggable="<?= $used ? 'false' : 'true' ?>" data-block="<?= looth_h($key) ?>"<?= $used ? ' aria-disabled="true"' : '' ?>>
-                <span class="lg-bubble__ic" aria-hidden="true"><?= looth_h($bubbleIcons[$key] ?? '') ?></span>
+                <span class="lg-bubble__ic" aria-hidden="true"><?= $icSvg($key) ?></span>
                 <span class="lg-bubble__lab"><?= looth_h($b['label']) ?></span>
                 <?php if ($filt): ?><span class="lg-bubble__find" title="Makes you findable in the member directory">Filterable</span><?php endif; ?>
               </button>
             <?php endforeach; ?>
             <?php if ($grp === 'Custom'): ?>
               <button type="button" class="lg-caddy__item lg-bubble lg-bubble--freeform" id="lg-bubble-freeform" data-freeform-new="1">
-                <span class="lg-bubble__ic" aria-hidden="true"><?= looth_h($bubbleIcons['freeform']) ?></span>
+                <span class="lg-bubble__ic" aria-hidden="true"><?= $icSvg('freeform') ?></span>
                 <span class="lg-bubble__lab">Freeform</span>
                 <span class="lg-bubble__multi">add many</span>
               </button>
@@ -661,10 +676,26 @@ window.lgSortable = function (container, opts) {
       .catch(function () { alert('Network error.'); });
   }
 
-  // 2-letter section badge per block (matches the builder palette bubbles).
-  var SECIC = { about: 'Ab', location: 'Lo', skills: 'Sk', services: 'Sv', instruments: 'In',
-    music: 'Mu', gallery: 'Ga', resume: 'Re', connect: 'Co', socials: 'So' };
-  function icFor(key) { if (!key) return ''; if (key.indexOf('freeform:') === 0) return 'Fr'; return SECIC[key] || ''; }
+  // Section icon SVG per block (matches the builder palette bubbles).
+  var SECIC_PATHS = {
+    about:       '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 19a6.5 6.5 0 0 1 13 0"/>',
+    instruments: '<circle cx="10.6" cy="11.2" r="2.5"/><circle cx="8.4" cy="15.6" r="3.3"/><path d="M12.1 9.6 19.4 2.9"/><path d="M18.4 2 22 5l-1.7 1.7"/>',
+    skills:      '<path d="M12 3.5l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6 6.9 19.2l1-5.7-4.1-4 5.7-.8z"/>',
+    services:    '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
+    music:       '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
+    location:    '<path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    gallery:     '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
+    connect:     '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
+    socials:     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
+    resume:      '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>',
+    freeform:    '<path d="M16.5 4.5l3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>'
+  };
+  function icFor(key) {
+    if (!key) return '';
+    var k = key.indexOf('freeform:') === 0 ? 'freeform' : key;
+    var p = SECIC_PATHS[k];
+    return p ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
+  }
 
   // Inject a dot-grid grip + section icon chip + a remove ✕ into each body block's heading.
   bodyBlocks().forEach(function (b) {
@@ -680,7 +711,7 @@ window.lgSortable = function (container, opts) {
       var ic = icFor(b.getAttribute('data-block'));
       if (ic) {
         var chip = document.createElement('span');
-        chip.className = 'lg-secic'; chip.setAttribute('aria-hidden', 'true'); chip.textContent = ic;
+        chip.className = 'lg-secic'; chip.setAttribute('aria-hidden', 'true'); chip.innerHTML = ic;
         var g = host.querySelector('.lg-block__grip');
         host.insertBefore(chip, g ? g.nextSibling : host.firstChild);
       }
