@@ -106,7 +106,9 @@ function vp_parse(int $postId): array {
     if ($desc === '' && !$chapters && !$groups) return ['layout'=>null, 'flag'=>'only a URL, nothing to parse', 'stats'=>[]];
 
     // ---- assemble layout ----
-    $tagline = $desc !== '' ? mb_substr(preg_split('/(?<=[.!?])\s+/', $desc)[0] ?? $desc, 0, 180) : '';
+    // drop a leading event banner ("Looth Group Live — <date>") so the tagline starts at the real first sentence
+    $taglineSrc = preg_replace('/^\s*Looth Group Live\b[^\n]*\R+/iu', '', $desc);
+    $tagline = $taglineSrc !== '' ? mb_substr(preg_split('/(?<=[.!?])\s+/', $taglineSrc)[0] ?? $taglineSrc, 0, 180) : '';
     $blocks = [];
     $blocks[] = ['type'=>'post-header','tagline'=>$tagline,'show_read_time'=>true,'variant'=>'variant-1'];
     $blocks[] = ['type'=>'embed','url'=>$vid['url'],'caption'=>$title];
