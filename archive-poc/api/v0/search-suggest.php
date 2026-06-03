@@ -51,7 +51,7 @@ if ($needle !== '') {
         FROM content_item ci
         JOIN content_fts f ON f.rowid = ci.id
         WHERE content_fts MATCH ?
-          AND ci.kind != 'discussion'
+          AND ci.kind NOT IN ('discussion','event')
         ORDER BY bm25(content_fts) ASC
         LIMIT ?
     ");
@@ -71,7 +71,7 @@ if ($needle !== '') {
     $pc = $db->prepare("
         SELECT COUNT(*) FROM content_item ci
         JOIN content_fts f ON f.rowid = ci.id
-        WHERE content_fts MATCH ? AND ci.kind != 'discussion'
+        WHERE content_fts MATCH ? AND ci.kind NOT IN ('discussion','event')
     ");
     $pc->execute([$needle]);
     $posts_total = (int)$pc->fetchColumn();

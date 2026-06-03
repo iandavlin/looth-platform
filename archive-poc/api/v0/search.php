@@ -17,7 +17,7 @@ $limit    = max(1, min(100, param_int('limit', 24)));
 $offset   = max(0, param_int('offset', 0));
 
 // Build WHERE clauses + params.
-$where  = ['1=1'];
+$where  = ['1=1', "ci.kind != 'event'"];
 $params = [];
 
 if ($kind !== '' && in_array($kind, $ALLOWED_KINDS, true)) {
