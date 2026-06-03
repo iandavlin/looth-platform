@@ -800,6 +800,195 @@ The plan-switch / cancel modals show via the iframe for ADMINS only. Member-faci
 
 ---
 
+## 2026-06-01 — §3n creator-token refresh shipped (closes the one remaining gap)
+
+Per coordinator relay approving the ~2h build. The four pieces:
+
+### A. Token storage
+
+`lgpo_creator_refresh_token`, `lgpo_creator_token_expires_at`, `lgpo_creator_token_obtained_at` registered in `lgpo_register_settings`. Not editable via UI input — managed by the refresh helper + creator-OAuth callback. Settings page shows only status badge (healthy / expires-soon / expired / not-configured) + the obtained-at timestamp.
+
+### B. Refresh routines
+
+- `lgpo_persist_creator_tokens(array $token_body): bool` — takes Patreon's OAuth token-endpoint response, stamps the 3 options + `obtained_at = now`. Returns true when `access_token` is present. Keeps the old `refresh_token` if Patreon omits one (rotation is provider-discretionary).
+- `lgpo_refresh_creator_token(): array{ok, access_token|error}` — reads stored refresh_token, POSTs `grant_type=refresh_token` to Patreon's OAuth endpoint, persists the new pair on 200, returns the fresh access_token. Returns `{ok:false, error:string}` on any failure path (missing refresh_token, missing client creds, HTTP !=200, malformed body, persist failure).
+
+### C. Retry-on-401 in `fetch_all_members`
+
+Added at the top of the per-page response handling, gated to **one attempt per `fetch_all_members` call** via `$refreshed_once`. On 401:
+1. Call `lgpo_refresh_creator_token()`
+2. If ok → re-fetch the same page with the rotated token (`Authorization: Bearer <new>`)
+3. If refresh fails → `lgpo_alert_failure('sync.refresh_failed', ...)` + return null
+4. If the retry itself 401s → fall through to the (renamed-for-clarity) `sync.creator_token_401` alert — "401 after a refresh attempt" — and return null
+
+The original silent-death path (no refresh_token on file, manual-paste deployments) is preserved: refresh routine returns `{ok:false, error: 'no refresh_token on file …'}` → alert fires → operator gets the email.
+
+### D. One-shot creator-OAuth UI
+
+- `/patreon-connect?creator=1` admin-gated branch: `current_user_can('manage_options')` check on entry; plants state with `creator_mode:true` flag + `source:'creator-onboard'`; requests Patreon scope `campaigns campaigns.members campaigns.members[email] identity` (vs. the member-flow scope `identity identity[email] identity.memberships`).
+- Callback handler detects `creator_mode` in the parsed state payload BEFORE the identity fetch (creator OAuth is solely about capturing tokens — no membership lookup), re-checks `manage_options` defensively, calls `lgpo_persist_creator_tokens`, redirects to Settings with `?lgpo_creator=connected` (or `?lgpo_creator=fail` if persist fails).
+- Settings page renders a "Connect Creator Account" primary button + token-status pill (color-coded by time-to-expiry: green >24h, amber <24h, red expired or missing).
+
+### Dev-proof — `/tmp/refresh-smoke.php`
+
+Snapshot real `lgpo_creator_*` state → plant synthetic expired access + valid refresh → install `pre_http_request` filters that:
+1. Return 401 to first `campaign-members` call
+2. Return 200 + new token pair to `oauth2/token` POST
+3. Return 200 + one synthetic member to the retry `campaign-members` call
+
+Then invoke `LGPO_Sync_Engine::fetch_all_members` via reflection. Restore snapshot at end.
+
+**Result (verbatim):**
+
+```
+=== request log ===
+  [0] GET campaign-members (call #1) | auth=Bearer SYNTH_EXPIRED_ACCESS_TOKEN... | returned=401
+  [1] POST oauth2/token              | auth=n/a                                | returned=200
+  [2] GET campaign-members (call #2) | auth=Bearer SYNTH_NEW_ACCESS_TOKEN_FROM_REFRESH... | returned=200
+  call_seq: {"campaign_members":2,"oauth_token":1}
+
+=== outcome ===
+members returned: 1
+first member email: synth-refresh-smoke@example.invalid
+
+=== post-state on lgpo_creator_* options ===
+access_token  = SYNTH_NEW_ACCESS_TOKEN_FROM_REFRESH
+refresh_token = SYNTH_ROTATED_REFRESH_TOKEN
+expires_at    = 1783033516 (2026-07-02T23:05:16+00:00)
+obtained_at   = 1780355116 (2026-06-01T23:05:16+00:00)
+
+=== restore ===
+snapshot restored.
+```
+
+**End-to-end auto-healing confirmed:** expired token → 401 → refresh succeeds → retry succeeds → sweep returns members → token pair persisted. **No manual paste required**, satisfying the relay's "polling can't silently die" criterion at the literal level (alerts) AND the autonomous level (self-heals).
+
+### Admin-gate smoke
+
+- `/patreon-connect/?creator=1` no cookies → **403** (lgpo_handle_connect's `current_user_can('manage_options')` re-check)
+- `/patreon-connect/?creator=1` with claude_admin cookies → **302** to Patreon authorize with `scope=campaigns campaigns.members campaigns.members[email] identity`
+
+### Files changed this turn
+
+| Path | Change |
+|---|---|
+| `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/lg-patreon-onboard.php` | +3 register_setting (refresh_token, expires_at, obtained_at); `lgpo_persist_creator_tokens`, `lgpo_refresh_creator_token`; `?creator=1` branch in `lgpo_handle_connect` with admin gate + creator scope; creator-mode persistence branch in `lgpo_handle_callback`; Settings UI: "Connect Creator Account" button + token-status row |
+| `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/includes/class-lgpo-sync-engine.php` | `fetch_all_members` gets a one-shot refresh-on-401 retry that invokes `lgpo_refresh_creator_token` then re-fetches the same page with the rotated token; alert messages refined to distinguish "refresh failed" from "401 after refresh" |
+
+### Operator runbook (live cutover)
+
+1. Coordinator pastes the bootstrap creator access token into Settings → "Creator Access Token" (existing field, kept as fallback).
+2. Coordinator logs into Patreon as the creator account in the same browser.
+3. Click "Connect Creator Account" → goes through Patreon OAuth with creator scope → returns to Settings → token status flips to "healthy", obtained_at stamped, refresh_token captured.
+4. Manual paste field can be left as-is or cleared — the new tokens take priority for sweep calls; only the manual fallback comes into play if the OAuth pair is wiped.
+
+From then on, polling self-heals on every ~30-day token rotation. If Patreon ever revokes both the access AND refresh token (account-level reauthorization required), the failure alert fires with a clear "reconnect via Settings" message.
+
+---
+
+## 2026-06-01 — §3n Patreon launch onboarding (verify/harden pass)
+
+Per coordinator relay. Scope: VERIFY existing engine + HARDEN the gaps, don't
+rebuild. New scope: standalone `/join/` is a sibling lane's work; this lane
+ships the engine.
+
+### What I changed
+
+| Path | Change |
+|---|---|
+| `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/lg-patreon-onboard.php` | Added `/patreon-connect` rewrite + `lgpo_handle_connect` (authorize-entry URL). Added `lgpo_parse_state_payload`, `lgpo_terminal`, `lgpo_alert_failure`. Wired callback's 8 terminal sites through `lgpo_terminal` so the connect-flow gets redirected back to its return target while the legacy shortcode flow keeps its `wp_die` page. |
+| `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/includes/class-lgpo-sync-engine.php` | `LGPO_Sync_Engine::run` now calls `lgpo_alert_failure` on `validate_config` errors AND `fetch_all_members` returning null. `fetch_all_members` adds an explicit 401-specific alert (the canonical creator-token-expired failure mode). |
+| wp_options `bp-enable-private-network-public-content` | Appended `/patreon-connect/` so the URL is reachable to anon visitors pre-account (BB plugin decommissions at cut; this dev-only entry is harmless on live). |
+
+### Contract — authorize entry + return states (for the standalone `/join/` lane)
+
+**Entry URL:** `GET /patreon-connect/[?return=/path/]`
+
+- Default `return` target if omitted: `/manage-subscription/`
+- Path-only validation (must match `^/[^/]`) — protects against open-redirect / `//evil.com` payloads (smoke-confirmed: malicious value clamps to default)
+- Mints OAuth `state` (32-char), stores a JSON payload in a 10-minute transient: `{v:1, return_target, minted_at, source:'patreon-connect'}`
+- 302s to `https://www.patreon.com/oauth2/authorize` with scope `identity identity[email] identity.memberships`
+
+**Callback URL:** `GET /patreon-callback/` (existing, hardened)
+
+On terminal states, when the state was minted by `/patreon-connect`:
+`302 → <return_target>?onboarded=<status>` where `status` is one of:
+
+| Status | Meaning |
+|---|---|
+| `success` | New WP account created, password-setup email queued |
+| `already_onboarded` | `patreon_user_id` already maps to a WP user; role re-applied |
+| `not_a_patron` | OAuth succeeded but no active Looth Group membership found |
+| `email_collision` | Email matches an existing WP user; queued in `lgpo_pending` + admin notified |
+| `fail` | Token exchange / identity fetch / WP insert error (generic) |
+
+The standalone `/join/` page should read `?onboarded=<status>` on load and render the appropriate confirmation/error UI. The legacy `[lg_patreon_onboard]` shortcode entry (no return target on state) keeps its original `wp_die` HTML pages — no regression.
+
+### Dev-proof of the demote loop (key gate per §3n point 2)
+
+`/tmp/demote-smoke.php` ran via wp eval-file. Used `ReflectionClass` to invoke `LGPO_Sync_Engine::compare_member` directly with synthesized member records, no mutation to `apply_change`. Results:
+
+- **Scenario 1 — active_patron, tier 6401900 (looth3):** 1 matched, 1 unchanged, 0 updates ✓
+- **Scenario 2 — same user as former_patron:** proposed `action=downgrade current=looth3 new=looth1 reason=Patron status: former_patron` ✓
+
+`apply_change`'s wiring is unchanged (calls `RoleSourceWriter::report(uid, 'patreon', null)` then `Arbiter::sync(uid)` then `delete_user_meta('payment_source')`); that path is already exercised by the earlier promote/revert smoke against uid=1906 (handoff entry 2026-05-28). End-to-end the downgrade engine is sound.
+
+`lg_patreon_members` row for uid=7 was briefly mutated by `upsert_patreon_member_row` during the smoke and **restored to active_patron/Looth-Pro** at script end.
+
+### Failure-alerting verification
+
+`lgpo_alert_failure` round-trip confirmed:
+- `error_log` entries written for both test invocations (`p8.smoke` / `p8.smoke2`)
+- `wp_mail` queued through Fluent SMTP (Fluent intercepts before mailpit on dev — **two real emails landed at ian.davlin@gmail.com**; should ignore as smoke artifacts)
+
+The relay specifically wanted alerts to "the coordinator (devmsg/email), not just error_log." Email recipient is `lgpo_contact_email` (currently `ian.davlin@gmail.com`); falls back to `admin_email` if unset. Wired into:
+
+- `sync.validate_config` — missing creator token, campaign_id, tier_map
+- `sync.fetch_all_members` — generic API fetch failure
+- `sync.creator_token_401` — specific 401 with "creator token expired" subject (the canonical silent-death mode the relay warned about)
+
+### GAP — refresh-token lifecycle (not built, designed)
+
+**This is the only real launch-readiness gap I'm flagging.** The relay called it out specifically: "Refresh-token lifecycle (creator token for the member sweep + per-user tokens) survives so polling doesn't silently die."
+
+Current code:
+- `lgpo_creator_access_token` is stored as a plain string in WP options
+- `LGPO_Sync_Engine::fetch_all_members` uses it as-is via `Authorization: Bearer <token>` header
+- **No refresh logic anywhere.** No `refresh_token` is stored. No expires_at tracking.
+- When the token expires (~31 days for Patreon Creator tokens), the API returns 401 → `fetch_all_members` returns null → `run()` aborts → polling stops, silently except for `error_log`
+
+**With the failure-alerting added this turn, the "silently" becomes "loudly via email + error_log,"** so polling will fail visibly rather than dropping member churn syncs. That meets the spec's literal ask ("polling can't silently die"). But it's still a manual recovery: the operator gets an alert, has to re-issue a token from the Patreon developer portal, paste it into Settings → LG Patreon Onboard.
+
+**To eliminate manual recovery (proper refresh):** the OAuth flow returns `refresh_token` + `expires_in` alongside `access_token`. The shape of the fix:
+
+1. Capture `refresh_token` and `expires_at` (computed from `expires_in`) at token-creation time. Currently only `access_token` is persisted; refresh_token is discarded after the identity fetch.
+2. Add a per-tick (or daily) check: if `expires_at - now < 24h`, POST to `https://www.patreon.com/api/oauth2/token` with `grant_type=refresh_token` + the stored `refresh_token` + client_id/secret. Persist the new pair.
+3. On any 401 from `fetch_all_members`, run the refresh routine inline and retry once before giving up.
+
+**Catch:** the creator token currently in dev was manually pasted into the admin UI; there's no associated refresh_token persisted because the UI is just a single text field. To enable refresh, an operator has to do one OAuth dance against their creator account, the plugin captures the full pair. That's a UI change (one-shot creator-OAuth button in Settings) plus the refresh routine.
+
+Estimated effort: ~2 hours including the UI button + retry-on-401 plumbing. Defer for a separate scope (or pick up next turn) — flagging now for visibility. Until then, the failure alerts ensure no silent death.
+
+### Smoke results
+
+| Probe | URL | Result |
+|---|---|---|
+| Plain | `/patreon-connect/` | 302 → patreon authorize ✓ |
+| With return | `/patreon-connect/?return=/manage-subscription/` | 302 → patreon authorize (state carries `return_target`) ✓ |
+| Open-redirect attempt | `/patreon-connect/?return=//evil.com` | 302 → patreon authorize; transient `return_target` clamped to `/manage-subscription/` ✓ |
+| Transient round-trip | `set_transient` → `get_transient` → `lgpo_parse_state_payload` | Round-trips through Redis object cache ✓ |
+| Demote decision | `compare_member` w/ active_patron | unchanged ✓ |
+| Demote decision | `compare_member` w/ former_patron | `action=downgrade` ✓ |
+| Failure alert | `lgpo_alert_failure('p8.smoke',...)` | error_log entry + email queued (×2, real recipients reached) |
+
+### What this lane still owes (deferred)
+
+- **Refresh-token build** (designed above; ~2h scope) — failure alerts cover the operator-visibility need in the meantime
+- **E2E happy-path live OAuth dance** — requires a real Patreon test account; code review verified the path
+- **Standalone `/join/` page** — sibling lane (membership-pages) per relay; not my engine work
+
+---
+
 ## 2026-06-01 — mu-plugin mirror (deployed → repo)
 
 Per coordinator follow-up: the deployed mu-plugin files were live in

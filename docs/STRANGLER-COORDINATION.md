@@ -167,6 +167,10 @@ WP-plugin change is visible to everyone on dev (coordination point, not isolatio
 
 ## 1. Tier vocabulary
 
+> **📍 CANONICAL COPY MOVED → [`TIER-TAXONOMY.md`](TIER-TAXONOMY.md)** (single
+> source of truth, 2026-06-02). The section below is retained for context but
+> `TIER-TAXONOMY.md` wins on any disagreement.
+
 The user identity has two axes. Don't collapse them into one enum.
 
 ### Axis A — Authenticated?

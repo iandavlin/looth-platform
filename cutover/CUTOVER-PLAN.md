@@ -48,6 +48,7 @@ lane.
 | P7c | `edit_archive_poc` cap mu-plugin (registers cap; grants to administrator) | archive-poc | ⏳ |
 | P8 | Dev smoke of poller in dormant mode (no Stripe creds, clean boot, no nulls) | poller chat | ⏳ |
 | P9 | Patreon adapter built + tested against representative users | poller chat | ✅ shipped (BATCH-04B coexistence analysis ratified) |
+| P10 | File/key ownership posture on new box — webroot `looth-live`, `/srv` apps to per-app system users, **every secret/key (esp. `/etc/looth/jwt-private.pem`) group-readable by the consuming FPM pool**. Full audit + the dev legacy-ownership picture (why a blanket chown is wrong on dev): `docs/OWNERSHIP-CUTOVER-AUDIT.md` | **ubuntu** (sysadmin) | ⏳ audited 2026-06-02 |
 
 When P1, P3, P4, P5, P6, P7a–c, P8 are ✅, the new EC2 build can run
 end-to-end.
@@ -210,6 +211,18 @@ sudo rsync -avzP --exclude='cache/*' /var/www/html/wp-content/uploads/ \
 sudo mysql wp_loothgroup < <(curl -sL r2:.../wp_loothgroup-*.sql.gz | gunzip)
 sudo cp -r /srv/wp-content-uploads /var/www/html/wp-content/uploads
 sudo chown -R looth-live:looth-live /var/www/html/wp-content/
+
+# (7c-bis) OWNERSHIP/KEY POSTURE (P10, ubuntu) — blue-green means the dev box's
+#   legacy team-user ownership (ian/buck owning thousands of webroot files from the
+#   live-era per-user gating) does NOT propagate: only uploads + DB carry over, code
+#   is re-dropped fresh in 7d. So the new box starts clean — webroot looth-live (7c
+#   above), /srv apps owned by their per-app system users (Step 4). The one thing to
+#   GET RIGHT, because it silently broke for a week on dev (2026-05-25→06-02): every
+#   secret/key must be group-readable by the FPM pool that consumes it.
+#     chown root:<fpm-pool> /etc/looth/jwt-private.pem && chmod 640 ...
+#   (dev bug: key was root:profile-app 640, empty group; looth-dev FPM couldn't read
+#    it → looth_id mint threw + was swallowed → zero cookies for ALL members. Verify
+#    each key with `sudo -u <pool> test -r <keyfile>`.) Full picture: docs/OWNERSHIP-CUTOVER-AUDIT.md
 
 # (7d) Drop WP plugins + theme into new-box wp-content (zip-from-dev pattern)
 # Includes: lg-layout-v2 (sync header/constant version!), lg-patreon-stripe-poller,

@@ -59,7 +59,7 @@ if ($env === 'live') {
     define('LG_PROFILE_APP_WP_PATH',     '/var/www/dev');
     define('LG_PROFILE_APP_APP_ROOT',    '/home/ubuntu/projects/profile-app');
     define('LG_PROFILE_APP_PG_DSN',      'pgsql:host=/var/run/postgresql;dbname=profile_app');
-    define('LG_PROFILE_APP_MYSQL_DB',    'looth_dev');
+    define('LG_PROFILE_APP_MYSQL_DB',    'looth_import');
     define('LG_PROFILE_APP_MYSQL_BILLING_DB', 'lg_membership');
 }
 
