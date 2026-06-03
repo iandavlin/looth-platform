@@ -99,6 +99,7 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     $renderers = [
         'about'       => static fn() => looth_render_about_block($userId, $role, $headerVis),
         'location'    => static fn() => looth_render_location_block($userId, $role, $headerVis),
+        'dropoffs'    => static fn() => looth_render_dropoffs_block($userId, $role, $headerVis),
         'skills'      => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'skills'),
         'services'    => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'services'),
         'instruments' => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'instruments'),
@@ -710,6 +711,63 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         }
     }
 
+    echo '</section>';
+}
+
+/** One owner-editable drop-off card (name / address / hours / notes inputs). */
+function looth_dropoff_card(string $name, string $addr, string $hours, string $notes): string
+{
+    return '<div class="lg-dropoff lg-dropoff--edit">'
+         . '<button type="button" class="lg-link__rm lg-dropoff__rm" aria-label="Remove drop-off" title="Remove drop-off">×</button>'
+         . '<input type="text" class="lg-dropoff__f lg-dropoff__name-in" data-f="name" placeholder="Location name (e.g. The Shop)" value="' . looth_h($name) . '">'
+         . '<input type="text" class="lg-dropoff__f" data-f="address" placeholder="Street address" value="' . looth_h($addr) . '">'
+         . '<input type="text" class="lg-dropoff__f" data-f="hours" placeholder="Hours (e.g. Mon–Fri 9–5)" value="' . looth_h($hours) . '">'
+         . '<textarea class="lg-dropoff__f lg-dropoff__notes-in" data-f="notes" rows="2" placeholder="Notes (optional)">' . looth_h($notes) . '</textarea>'
+         . '</div>';
+}
+
+/**
+ * The drop-off-locations block — a list of business drop-off points, each with a
+ * name, address, hours and notes. Owner sees editable cards (add / remove / edit-in-
+ * place, persisted to me-dropoffs); a visitor sees the read-only list. Block-level
+ * pmp, header-ceiling-capped like every other block.
+ */
+function looth_render_dropoffs_block(int $userId, string $role, string $headerVis): void
+{
+    $do      = Block::loadDropoffs($userId);
+    if ($do === null) return;
+    $items   = $do['items'] ?? [];
+    $isOwner = ($role === 'me');
+
+    if (!$items && !$isOwner) return;                                              // empty + visitor → no block
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$do['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--dropoffs" data-block="dropoffs">';
+    echo '<h3 class="lg-bh">Drop-off Locations';
+    if ($isOwner) echo ' ' . looth_pmp_control('dropoffs', (string)$do['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-dropoffs lg-dropoffs--edit" id="lg-dropoffs-edit">';
+        foreach ($items as $it) {
+            echo looth_dropoff_card((string)$it['name'], (string)$it['address'], (string)$it['hours'], (string)$it['notes']);
+        }
+        echo '<button type="button" class="lg-link__add" id="lg-dropoff-add">+ Add drop-off</button>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-dropoffs">';
+        foreach ($items as $it) {
+            $name = (string)$it['name']; $addr = (string)$it['address'];
+            $hrs  = (string)$it['hours']; $note = (string)$it['notes'];
+            echo '<div class="lg-dropoff">';
+            if ($name !== '') echo '<div class="lg-dropoff__name">' . looth_h($name) . '</div>';
+            if ($addr !== '') echo '<div class="lg-dropoff__addr">' . looth_h($addr) . '</div>';
+            if ($hrs !== '')  echo '<div class="lg-dropoff__hours">' . looth_h($hrs) . '</div>';
+            if ($note !== '') echo '<div class="lg-dropoff__notes">' . nl2br(looth_h($note)) . '</div>';
+            echo '</div>';
+        }
+        echo '</div>';
+    }
     echo '</section>';
 }
 

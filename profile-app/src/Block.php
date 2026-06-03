@@ -58,6 +58,7 @@ final class Block
     public const LAYOUT_BLOCKS = [
         'about'       => ['label' => 'About',       'removable' => true],
         'location'    => ['label' => 'Location',    'removable' => true],
+        'dropoffs'    => ['label' => 'Drop-off Locations', 'removable' => true],
         'skills'      => ['label' => 'Skills',      'removable' => true],
         'services'    => ['label' => 'Services',    'removable' => true],
         'instruments' => ['label' => 'Instruments', 'removable' => true],
@@ -90,6 +91,7 @@ final class Block
         switch ($key) {
             case 'about':    $a = self::loadAbout($userId);    return $a !== null && trim((string)($a['text'] ?? '')) !== '';
             case 'location': $l = self::loadLocation($userId); return $l !== null && !empty($l['has']);
+            case 'dropoffs': $d = self::loadDropoffs($userId); return $d !== null && !empty($d['items']);
             case 'skills':
             case 'services':
             case 'instruments':
@@ -823,6 +825,95 @@ final class Block
         $next    = array_values(array_filter($current, static fn($k) => $k !== $key));
         if ($next !== $current) self::saveProfileLayout($userId, $next);
         return true;
+    }
+
+
+    // ---------- block: drop-off locations (business drop-off points; structured list) ----------
+
+    public const DROPOFFS_KEY       = 'dropoffs';
+    public const DROPOFFS_MAX_ITEMS = 20;
+    public const DROPOFFS_NAME_MAX  = 120;
+    public const DROPOFFS_ADDR_MAX  = 250;
+    public const DROPOFFS_HOURS_MAX = 250;
+    public const DROPOFFS_NOTES_MAX = 1000;
+
+    /**
+     * Assemble the drop-off-locations block — an ordered list of business drop-off
+     * points, each {name, address, hours, notes}, plus one block-level vis. Stored as
+     * a single profile_sections row (key='dropoffs', data JSONB {items:[...]}); no
+     * dedicated table / migration. Returns null only for an unknown user.
+     */
+    public static function loadDropoffs(int $userId): ?array
+    {
+        $pg = Db::pg();
+        $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
+        $e->execute([':i' => $userId]);
+        if (!$e->fetchColumn()) return null;
+
+        $s = $pg->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'dropoffs'");
+        $s->execute([':u' => $userId]);
+        $r = $s->fetch();
+        $items = [];
+        if ($r) {
+            $d = json_decode((string)$r['data'], true) ?: [];
+            foreach (($d['items'] ?? []) as $it) {
+                if (!is_array($it)) continue;
+                $items[] = [
+                    'name'    => (string)($it['name'] ?? ''),
+                    'address' => (string)($it['address'] ?? ''),
+                    'hours'   => (string)($it['hours'] ?? ''),
+                    'notes'   => (string)($it['notes'] ?? ''),
+                ];
+            }
+        }
+        return [
+            'block'   => 'dropoffs',
+            'subject' => 'person',
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'members'),
+            'items'   => $items,
+        ];
+    }
+
+    /**
+     * Replace the owner's drop-off list (and optionally its visibility) with the given
+     * items. Each item is trimmed + length-capped; wholly-empty rows are dropped; the
+     * list is capped at DROPOFFS_MAX_ITEMS. Upserts the profile_sections row, returns
+     * the post-save shape (or null for an unknown user).
+     */
+    public static function saveDropoffs(int $userId, array $items, ?string $visInput = null): ?array
+    {
+        $pg = Db::pg();
+        $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
+        $e->execute([':i' => $userId]);
+        if (!$e->fetchColumn()) return null;
+
+        $clean = [];
+        foreach ($items as $it) {
+            if (!is_array($it)) continue;
+            $name = mb_substr(trim((string)($it['name'] ?? '')),    0, self::DROPOFFS_NAME_MAX);
+            $addr = mb_substr(trim((string)($it['address'] ?? '')), 0, self::DROPOFFS_ADDR_MAX);
+            $hrs  = mb_substr(trim((string)($it['hours'] ?? '')),   0, self::DROPOFFS_HOURS_MAX);
+            $note = mb_substr(trim((string)($it['notes'] ?? '')),   0, self::DROPOFFS_NOTES_MAX);
+            if ($name === '' && $addr === '' && $hrs === '' && $note === '') continue;   // skip empty rows
+            $clean[] = ['name' => $name, 'address' => $addr, 'hours' => $hrs, 'notes' => $note];
+            if (count($clean) >= self::DROPOFFS_MAX_ITEMS) break;
+        }
+        $data = json_encode(['items' => $clean], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($visInput !== null && self::visFromInput($visInput) !== null) {
+            $pg->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, 'dropoffs', :v, :d::jsonb, 50)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':v' => self::visFromInput($visInput), ':d' => $data]);
+        } else {
+            $pg->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, 'dropoffs', 'members', :d::jsonb, 50)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $userId, ':d' => $data]);
+        }
+        return self::loadDropoffs($userId);
     }
 
     // ---------- block: resume (single PDF; profile-only) ----------

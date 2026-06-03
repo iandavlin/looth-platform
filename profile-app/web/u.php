@@ -265,6 +265,18 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-link__rm:hover{color:var(--lg-rust)}
 .lg-link__add{align-self:flex-start;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:6px 14px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
 .lg-link__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
+.lg-dropoffs{display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.lg-dropoff{background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:12px 14px}
+.lg-dropoff__name{font:700 15px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-dropoff__addr{font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:3px}
+.lg-dropoff__hours{font:600 12.5px/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
+.lg-dropoff__notes{font:400 13px/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
+.lg-dropoff--edit{position:relative;display:flex;flex-direction:column;gap:7px;padding-right:34px}
+.lg-dropoff--edit .lg-dropoff__rm{position:absolute;top:8px;right:8px}
+.lg-dropoff__f{width:100%;box-sizing:border-box;font:500 13.5px/1.3 var(--lg-font-sans);color:var(--lg-ink);background:#fff;border:1px solid var(--lg-line);border-radius:7px;padding:7px 9px}
+.lg-dropoff__f:focus{outline:none;border-color:var(--lg-sage);box-shadow:0 0 0 2px var(--lg-sage-tint)}
+.lg-dropoff__name-in{font-weight:700}
+.lg-dropoff__notes-in{resize:vertical;min-height:38px;font-family:var(--lg-font-sans)}
 .lg-link-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .lg-link-form select,.lg-link-form input{border:1px solid var(--lg-line);border-radius:8px;padding:7px 10px;font:600 13px/1 var(--lg-font-sans)}
 .lg-link-form button{border:0;border-radius:8px;padding:8px 14px;font:700 12.5px/1 var(--lg-font-sans);cursor:pointer}
@@ -437,7 +449,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
         // Builder palette: real layout blocks grouped like the approved mockup.
         $paletteGroups = [
           'Core'   => ['about', 'instruments', 'skills', 'services', 'music'],
-          'Extras' => ['location', 'gallery', 'connect', 'socials'],
+          'Extras' => ['location', 'dropoffs', 'gallery', 'connect', 'socials'],
           'Custom' => ['resume'],
         ];
         // Section icons — line SVGs (stroke=currentColor inherits the bubble/badge color).
@@ -448,6 +460,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           'services'    => '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
           'music'       => '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
           'location'    => '<path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+          'dropoffs'    => '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/><path d="M12 12.5v4"/><path d="M9.8 14.6 12 16.8l2.2-2.2"/>',
           'gallery'     => '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
           'connect'     => '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
           'socials'     => '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
@@ -877,6 +890,7 @@ window.lgSortable = function (container, opts) {
     'about':           { url: BASE + '/me/about',    m: 'PATCH', k: 'visibility' },
     'gallery':         { url: BASE + '/me/gallery',  m: 'PUT',   k: 'visibility' },
     'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
+    'dropoffs':        { url: BASE + '/me/dropoffs', m: 'PUT',   k: 'visibility' },
     'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
     'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }
   };
@@ -1234,6 +1248,62 @@ window.lgSortable = function (container, opts) {
     itemSelector: '.lg-link',
     tailSelector: '#lg-link-add',
     onDrop: function () { put(collect()); }
+  });
+})();
+</script>
+
+<script>
+/* Drop-offs editor (owner/Me) — add/remove/edit cards; PUT the whole list to me-dropoffs.
+   Saves on field blur (change) and on remove; no full re-render, so editing keeps focus. */
+(function () {
+  var wrap = document.getElementById('lg-dropoffs-edit');
+  if (!wrap) return;
+  var addBtn = document.getElementById('lg-dropoff-add');
+
+  function collect() {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-dropoff'), function (card) {
+      function v(f) { var el = card.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
+      return { name: v('name'), address: v('address'), hours: v('hours'), notes: v('notes') };
+    });
+  }
+  function cardEl() {
+    var card = document.createElement('div'); card.className = 'lg-dropoff lg-dropoff--edit';
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm lg-dropoff__rm';
+    rm.setAttribute('aria-label', 'Remove drop-off'); rm.title = 'Remove drop-off'; rm.textContent = '×';
+    card.appendChild(rm);
+    function inp(f, ph, cls) {
+      var el = document.createElement('input'); el.type = 'text';
+      el.className = 'lg-dropoff__f' + (cls ? ' ' + cls : '');
+      el.setAttribute('data-f', f); el.placeholder = ph; return el;
+    }
+    card.appendChild(inp('name', 'Location name (e.g. The Shop)', 'lg-dropoff__name-in'));
+    card.appendChild(inp('address', 'Street address', ''));
+    card.appendChild(inp('hours', 'Hours (e.g. Mon–Fri 9–5)', ''));
+    var ta = document.createElement('textarea');
+    ta.className = 'lg-dropoff__f lg-dropoff__notes-in';
+    ta.setAttribute('data-f', 'notes'); ta.rows = 2; ta.placeholder = 'Notes (optional)';
+    card.appendChild(ta);
+    return card;
+  }
+  function put(items) {
+    fetch('/profile-api/v0/me/dropoffs', { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-dropoff__rm');
+    if (rm) { rm.closest('.lg-dropoff').remove(); put(collect()); }
+  });
+  wrap.addEventListener('change', function (e) {
+    if (e.target.closest('.lg-dropoff')) put(collect());
+  });
+  addBtn && addBtn.addEventListener('click', function () {
+    var card = cardEl();
+    wrap.insertBefore(card, addBtn);
+    var f = card.querySelector('[data-f="name"]'); if (f) f.focus();
   });
 })();
 </script>
