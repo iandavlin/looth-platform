@@ -102,8 +102,25 @@ function vp_parse(int $postId): array {
     }
     $groups = array_values(array_filter($groups, fn($g)=> !empty($g['urls'])));
 
+    // ACF related-links repeater (post_related_links_repeater): description+url pairs many posts
+    // store outside post_content. Built as proper items (label = the curated description).
+    $seenUrls = [];
+    foreach ($groups as $g) foreach ($g['urls'] as $u) $seenUrls[$u] = true;
+    $acfItems = [];
+    $relCount = (int) get_post_meta($postId, 'post_related_links_repeater', true);
+    for ($i = 0; $i < $relCount; $i++) {
+        $u = trim((string) get_post_meta($postId, "post_related_links_repeater_{$i}_post_related_link_url", true));
+        if ($u === '' || isset($seenUrls[$u]) || str_contains($u, $vid['id'])) continue;
+        $d = trim((string) get_post_meta($postId, "post_related_links_repeater_{$i}_post_related_link_description", true));
+        $acfItems[] = ['icon'=>vp_icon($u), 'label'=>($d !== '' ? $d : vp_host($u)), 'url'=>$u, 'description'=>''];
+        $seenUrls[$u] = true;
+    }
+
     $desc = trim(implode("\n\n", $descLines));
-    if ($desc === '' && !$chapters && !$groups) return ['layout'=>null, 'flag'=>'only a URL, nothing to parse', 'stats'=>[]];
+    // URL-only post (bare embed, no prose/chapters/links/related): fall through to emit a minimal
+    // embed-only layout (post-header + embed + post-footer), tier-gated like any other,
+    // rather than bailing. The video URL was already found above (else $vid was null → flagged).
+    $embedOnly = ($desc === '' && !$chapters && !$groups && !$acfItems);
 
     // ---- assemble layout ----
     // drop a leading event banner ("Looth Group Live — <date>") so the tagline starts at the real first sentence
@@ -124,6 +141,7 @@ function vp_parse(int $postId): array {
         $items = array_map(fn($u)=>['icon'=>vp_icon($u),'label'=>vp_host($u),'url'=>$u,'description'=>''], $g['urls']);
         $blocks[] = ['type'=>'callout','variant'=>'links','title'=>$g['title'],'items'=>$items];
     }
+    if ($acfItems) $blocks[] = ['type'=>'callout','variant'=>'links','title'=>'Related Links','items'=>$acfItems];
     $blocks[] = ['type'=>'post-footer','show_author'=>true,'show_related'=>true,'show_comments'=>true,'show_share'=>true];
 
     $layout = [
@@ -132,7 +150,7 @@ function vp_parse(int $postId): array {
         'blocks' => $blocks,
     ];
     return ['layout'=>$layout, 'flag'=>null,
-            'stats'=>['desc_chars'=>strlen($desc),'chapters'=>count($chapters),'link_groups'=>count($groups)]];
+            'stats'=>['desc_chars'=>strlen($desc),'chapters'=>count($chapters),'link_groups'=>count($groups),'acf_links'=>count($acfItems),'embed_only'=>$embedOnly]];
 }
 
 /* ---------------- runner ---------------- */
