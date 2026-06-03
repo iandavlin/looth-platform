@@ -1728,6 +1728,30 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   color: var(--hdr-accent, var(--lg-sage-d));
 }
 
+/* "+ New post" CTA in the banner — All + category views (leaf views use the
+   "+ Post here" button in the sort bar). Bottom-right of the banner. */
+.forum-header__new-post {
+  position: absolute;
+  right: var(--s4); bottom: var(--s4);
+  z-index: 2;
+  padding: 9px 18px;
+  background: var(--accent, #586b3f);
+  color: #fff; border: 0;
+  border-radius: 999px;
+  font: 600 13.5px var(--font-body);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .14);
+  transition: background .12s, transform .04s;
+}
+.forum-header__new-post:hover { background: var(--accent-hover, #44502f); }
+.forum-header__new-post:active { transform: translateY(1px); }
+@media (max-width: 640px) {
+  .forum-header__new-post {
+    position: static;
+    margin: 0 var(--s4) var(--s4);
+  }
+}
+
 @media (max-width: 640px) {
   .forum-header__body { padding: var(--s4); }
   .forum-header__title { font-size: 22px; }

@@ -140,8 +140,6 @@ function bb_mirror_left_nav(): void
     ?>
     <nav class="nav-tree" aria-label="Forum navigation">
 
-      <button class="nav-new-post" id="ntm-open" type="button" aria-haspopup="dialog">+ New post</button>
-
       <a class="nav-tree__item nav-tree__root <?= $root_active ? 'nav-tree__item--active' : '' ?>"
          href="<?= $root_href ?>">
         All activity

@@ -550,7 +550,7 @@
   var ntmLoading  = document.getElementById('ntm-loading');
   var ntmAnon     = document.getElementById('ntm-anon');
 
-  if (ntmOverlay && ntmOpen) {
+  if (ntmOverlay) {   // modal init no longer requires #ntm-open (button moved to the header banner / leaf "Post here")
     var ntmNonce     = null;
     var ntmAuthState = 'idle'; // idle | loading | anon | authed
     var ntmQuill     = null;   // Quill instance (lazy)
@@ -683,7 +683,7 @@
       return html;
     }
 
-    ntmOpen.addEventListener('click', function () { ntmShowOverlay(null); });
+    if (ntmOpen) ntmOpen.addEventListener('click', function () { ntmShowOverlay(null); });
     ntmCancel.addEventListener('click', ntmHideOverlay);
     ntmBackdrop.addEventListener('click', ntmHideOverlay);
 

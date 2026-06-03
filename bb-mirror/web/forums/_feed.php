@@ -445,6 +445,9 @@ $header_cat = $scoped_forum
               data-forum-id="<?= $scoped_forum ? (int)$scoped_forum['id'] : 0 ?>"
               title="Set header image" aria-label="Set header image">&#9998;</button>
     </div>
+    <?php if (!$is_postable_forum): // All + category views: post-anywhere CTA (leaf views use the "+ Post here" button in the sort bar) ?>
+      <button class="forum-header__new-post" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
+    <?php endif; ?>
   </header>
 
   <!-- Sort bar (+ post button, right-aligned) -->
