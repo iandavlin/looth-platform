@@ -863,6 +863,8 @@ final class Block
                     'address' => (string)($it['address'] ?? ''),
                     'hours'   => (string)($it['hours'] ?? ''),
                     'notes'   => (string)($it['notes'] ?? ''),
+                    'lat'     => (isset($it['lat']) && is_numeric($it['lat'])) ? (float)$it['lat'] : null,
+                    'lng'     => (isset($it['lng']) && is_numeric($it['lng'])) ? (float)$it['lng'] : null,
                 ];
             }
         }
@@ -880,12 +882,49 @@ final class Block
      * list is capped at DROPOFFS_MAX_ITEMS. Upserts the profile_sections row, returns
      * the post-save shape (or null for an unknown user).
      */
+    /**
+     * Geocode a free-text drop-off address to [lat,lng] via Nominatim (OSM) —
+     * same provider + User-Agent as bin/geocode.php and the location picker.
+     * No API key. Returns null on miss/error; the caller leaves the pin off.
+     */
+    private static function geocodeDropoff(string $addr): ?array
+    {
+        $addr = trim($addr);
+        if ($addr === '') return null;
+        $host = getenv('LOOTH_NOMINATIM_HOST') ?: 'https://nominatim.openstreetmap.org';
+        $url  = $host . '/search?' . http_build_query(['q' => $addr, 'format' => 'json', 'limit' => 1]);
+        $ctx  = stream_context_create(['http' => [
+            'method'        => 'GET',
+            'header'        => "User-Agent: looth-profile-app/0.3 (admin: ian.davlin@gmail.com)
+Accept: application/json
+",
+            'timeout'       => 5,
+            'ignore_errors' => true,
+        ]]);
+        $resp = @file_get_contents($url, false, $ctx);
+        if ($resp === false) return null;
+        $data = json_decode($resp, true);
+        if (!is_array($data) || empty($data[0]['lat']) || empty($data[0]['lon'])) return null;
+        return ['lat' => (float)$data[0]['lat'], 'lng' => (float)$data[0]['lon']];
+    }
+
     public static function saveDropoffs(int $userId, array $items, ?string $visInput = null): ?array
     {
         $pg = Db::pg();
         $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
         $e->execute([':i' => $userId]);
         if (!$e->fetchColumn()) return null;
+
+        // Preserve already-resolved pin coordinates: match incoming rows to the
+        // stored ones by address, so editing name/hours/notes never re-geocodes.
+        $prevCoords = [];
+        $prevShape  = self::loadDropoffs($userId);
+        foreach (($prevShape['items'] ?? []) as $p) {
+            $pa = mb_strtolower(trim((string)($p['address'] ?? '')));
+            if ($pa !== '' && $p['lat'] !== null && $p['lng'] !== null) {
+                $prevCoords[$pa] = ['lat' => (float)$p['lat'], 'lng' => (float)$p['lng']];
+            }
+        }
 
         $clean = [];
         foreach ($items as $it) {
@@ -895,7 +934,22 @@ final class Block
             $hrs  = mb_substr(trim((string)($it['hours'] ?? '')),   0, self::DROPOFFS_HOURS_MAX);
             $note = mb_substr(trim((string)($it['notes'] ?? '')),   0, self::DROPOFFS_NOTES_MAX);
             if ($name === '' && $addr === '' && $hrs === '' && $note === '') continue;   // skip empty rows
-            $clean[] = ['name' => $name, 'address' => $addr, 'hours' => $hrs, 'notes' => $note];
+
+            // Pin coords: client-supplied wins; else reuse the stored coord for an
+            // unchanged address; else geocode the address once.
+            $lat = (isset($it['lat']) && is_numeric($it['lat'])) ? (float)$it['lat'] : null;
+            $lng = (isset($it['lng']) && is_numeric($it['lng'])) ? (float)$it['lng'] : null;
+            if (($lat === null || $lng === null) && $addr !== '') {
+                $ak = mb_strtolower($addr);
+                if (isset($prevCoords[$ak])) {
+                    $lat = $prevCoords[$ak]['lat']; $lng = $prevCoords[$ak]['lng'];
+                } else {
+                    $geo = self::geocodeDropoff($addr);
+                    if ($geo !== null) { $lat = $geo['lat']; $lng = $geo['lng']; }
+                }
+            }
+
+            $clean[] = ['name' => $name, 'address' => $addr, 'hours' => $hrs, 'notes' => $note, 'lat' => $lat, 'lng' => $lng];
             if (count($clean) >= self::DROPOFFS_MAX_ITEMS) break;
         }
         $data = json_encode(['items' => $clean], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

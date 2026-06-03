@@ -56,6 +56,8 @@ if ($hasItems) {
             'address' => (string)($item['address'] ?? ''),
             'hours'   => (string)($item['hours'] ?? ''),
             'notes'   => (string)($item['notes'] ?? ''),
+            'lat'     => $item['lat'] ?? null,   // optional: seed exact pin coords; else server geocodes
+            'lng'     => $item['lng'] ?? null,
         ];
     }
 } else {

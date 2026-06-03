@@ -747,6 +747,27 @@ function looth_render_dropoffs_block(int $userId, string $role, string $headerVi
     if ($isOwner) echo ' ' . looth_pmp_control('dropoffs', (string)$do['vis'], $headerVis);
     echo '</h3>';
 
+    // Map of every drop-off that has resolved coordinates. Rendered for owner and
+    // visitor alike; the Leaflet init in u.php plots a pin per entry with a popup.
+    $pins = [];
+    foreach ($items as $it) {
+        $lat = $it['lat'] ?? null; $lng = $it['lng'] ?? null;
+        if ($lat === null || $lng === null) continue;
+        $pins[] = [
+            'n'   => (string)$it['name'],
+            'a'   => (string)$it['address'],
+            'h'   => (string)$it['hours'],
+            'no'  => (string)$it['notes'],
+            'lat' => (float)$lat,
+            'lng' => (float)$lng,
+        ];
+    }
+    if ($pins) {
+        echo '<div class="lg-dropoffs__map" data-pins="'
+           . looth_h(json_encode($pins, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))
+           . '"></div>';
+    }
+
     if ($isOwner) {
         echo '<div class="lg-dropoffs lg-dropoffs--edit" id="lg-dropoffs-edit">';
         foreach ($items as $it) {
