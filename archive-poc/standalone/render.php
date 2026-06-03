@@ -325,14 +325,24 @@ body { margin: 0; background: #f0eee8; color: #323532;
   font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.15); }
 .lg-standalone-comments:hover { background: #f4f1e8; }
 .lg-cmodal[hidden] { display: none; }
-.lg-cmodal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; }
-.lg-cmodal__backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
-.lg-cmodal__panel { position: relative; width: min(720px,94vw); height: min(80vh,900px); background: #fff;
-  border-radius: 12px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.35); display: flex; flex-direction: column; }
-.lg-cmodal__head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-  border-bottom: 1px solid #e3ddd0; font-weight: 700; }
-.lg-cmodal__close { background: none; border: 0; font-size: 22px; line-height: 1; cursor: pointer; color: #323532; }
-.lg-cmodal__frame { flex: 1; width: 100%; border: 0; }
+.lg-cmodal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box; }
+.lg-cmodal__backdrop { position: absolute; inset: 0; background: rgba(26,29,26,.5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+/* Panel hugs its content (frame is auto-sized to the comments view via a
+   postMessage height handshake — see the script below + lg-comments-frame.php),
+   so a sparse thread no longer floats in a tall empty box. Caps at 86vh. */
+.lg-cmodal__panel { position: relative; width: min(640px,96vw); max-height: min(86vh,920px); background: #fff;
+  border-radius: 16px; overflow: hidden; box-shadow: 0 16px 48px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.12);
+  display: flex; flex-direction: column; }
+.lg-cmodal__head { display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid #eee7da; background: #f7f5f2; }
+.lg-cmodal__head-title { font-weight: 700; font-size: 16px; color: #1a1d1a; }
+.lg-cmodal__head-count { font-size: 13px; font-weight: 600; color: #87986a; }
+.lg-cmodal__close { margin-left: auto; background: none; border: 0; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 8px;
+  font-size: 22px; line-height: 1; cursor: pointer; color: #6b6b66; transition: background .15s, color .15s; }
+.lg-cmodal__close:hover { background: #ece7db; color: #1a1d1a; }
+.lg-cmodal__frame { width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease; }
 </style>
 </head>
 <body>
@@ -368,7 +378,11 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <div class="lg-cmodal" id="lg-cmodal" role="dialog" aria-modal="true" aria-label="Comments" hidden>
   <div class="lg-cmodal__backdrop" data-lg-cmodal-close></div>
   <div class="lg-cmodal__panel">
-    <div class="lg-cmodal__head"><span>Comments</span><button type="button" class="lg-cmodal__close" data-lg-cmodal-close aria-label="Close">&times;</button></div>
+    <div class="lg-cmodal__head">
+      <span class="lg-cmodal__head-title">Comments</span>
+      <?php if ($commentsCount > 0): ?><span class="lg-cmodal__head-count"><?= number_format($commentsCount) ?></span><?php endif; ?>
+      <button type="button" class="lg-cmodal__close" data-lg-cmodal-close aria-label="Close">&times;</button>
+    </div>
     <iframe class="lg-cmodal__frame" id="lg-cmodal-frame" title="Comments" data-src="<?= htmlspecialchars($commentsUrl, ENT_QUOTES, 'UTF-8') ?>"></iframe>
   </div>
 </div>
@@ -378,11 +392,19 @@ body { margin: 0; background: #f0eee8; color: #323532;
       modal=document.getElementById('lg-cmodal'),
       frame=document.getElementById('lg-cmodal-frame');
   if(!btn||!modal||!frame)return;
-  function openModal(){ if(!frame.src) frame.src=frame.getAttribute('data-src'); modal.hidden=false; }
-  function closeModal(){ modal.hidden=true; }
+  function openModal(){ if(!frame.src) frame.src=frame.getAttribute('data-src'); modal.hidden=false; document.body.style.overflow='hidden'; }
+  function closeModal(){ modal.hidden=true; document.body.style.overflow=''; }
   btn.addEventListener('click',openModal);
   modal.addEventListener('click',function(e){ if(e.target.hasAttribute('data-lg-cmodal-close'))closeModal(); });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!modal.hidden)closeModal(); });
+  /* Auto-size the iframe to the comments view's content height (posted by
+     lg-comments-frame.php), so the panel hugs the thread instead of leaving a
+     tall void. Clamp to 82vh; taller threads scroll inside the iframe. */
+  window.addEventListener('message',function(e){
+    if(e.origin!==location.origin||!e.data||typeof e.data.lgCommentsHeight!=='number')return;
+    var cap=Math.round(window.innerHeight*0.82);
+    frame.style.height=Math.max(220,Math.min(e.data.lgCommentsHeight,cap))+'px';
+  });
 })();
 </script>
 <?php endif; ?>
