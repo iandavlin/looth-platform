@@ -35,21 +35,28 @@ function lp_parse(int $postId): array {
     $post = get_post($postId);
     if (!$post) return ['layout' => null, 'flag' => 'no such post', 'stats' => []];
 
-    $fileId = (int) get_post_meta($postId, 'loothprint_3d_file', true);
-    if (!$fileId) return ['layout' => null, 'flag' => 'no loothprint_3d_file', 'stats' => []];
+    // CPT-aware field map. loothcuts is the same shape with a `loothcut_` prefix; its
+    // download is `cnc_file` and its prose lives in an ACF field, not post_content.
+    $pre     = $post->post_type === 'loothcuts' ? 'loothcut' : 'loothprint';
+    $fileKey = $pre === 'loothcut' ? 'loothcut_cnc_file' : 'loothprint_3d_file';
+
+    $fileId = (int) get_post_meta($postId, $fileKey, true);
+    if (!$fileId) return ['layout' => null, 'flag' => "no $fileKey", 'stats' => []];
 
     $title    = html_entity_decode(get_the_title($postId), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $featured = (int) get_post_meta($postId, '_thumbnail_id', true);
-    $images   = array_values(array_filter(array_map('intval', (array) maybe_unserialize(get_post_meta($postId, 'loothprint_more_images', true)))));
-    $video    = trim((string) get_post_meta($postId, 'loothprint_video_instructions', true));
-    $onshape  = trim((string) get_post_meta($postId, 'loothprint_onshape_link', true));
-    $coffee   = trim((string) get_post_meta($postId, 'loothprint_buy_me_a_coffee', true));
-    $license  = trim((string) get_post_meta($postId, 'loothprint_creative_commons', true));
+    $images   = array_values(array_filter(array_map('intval', (array) maybe_unserialize(get_post_meta($postId, "{$pre}_more_images", true)))));
+    $video    = trim((string) get_post_meta($postId, "{$pre}_video_instructions", true));
+    $onshape  = trim((string) get_post_meta($postId, "{$pre}_onshape_link", true));
+    $coffee   = trim((string) get_post_meta($postId, "{$pre}_buy_me_a_coffee", true));
+    $license  = trim((string) get_post_meta($postId, "{$pre}_creative_commons", true));
     $tier     = wp_get_post_terms($postId, 'tier', ['fields' => 'slugs']);
     $tier     = is_wp_error($tier) ? [] : $tier;
 
-    // ---- post_content -> prose paragraphs + lifted bare URLs ----
-    $text = lp_clean($post->post_content);
+    // ---- prose -> paragraphs + lifted bare URLs. loothprint prose = post_content;
+    //      loothcuts prose = the `about_your_loothcut` ACF field. ----
+    $rawDesc = $pre === 'loothcut' ? (string) get_post_meta($postId, 'loothcut_about_your_loothcut', true) : $post->post_content;
+    $text = lp_clean($rawDesc);
     $descLines = []; $bodyUrls = [];
     foreach (preg_split('/\n{2,}/', $text) as $para) {
         $para = trim(preg_replace('/[ \t]+/', ' ', $para));
