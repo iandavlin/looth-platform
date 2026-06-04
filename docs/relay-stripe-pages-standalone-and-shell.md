@@ -51,12 +51,19 @@ TASK: Port the ENTIRE Stripe membership operation to standalone surfaces in the
 membership-pages repo (/home/ubuntu/projects/membership-pages). Each page must
 render VERBATIM identical to its current WP-shortcode output — ONLY the chrome
 changes: no BB theme, wrap in /srv/lg-shared/site-header.php + site-footer.php
-(same pattern as the already-shipped join.php / manage-subscription.php /
+(same pattern as the already-shipped manage-subscription.php /
 membership-guide.php).
 
 SOURCE OF TRUTH: Wp/Pages.php (PAGES registry) + Wp/Shortcodes.php (render methods).
 
-ALREADY DONE (skip): membership-guide, manage-subscription, join.
+ALREADY DONE (skip): membership-guide, manage-subscription.
+
+NOT DONE — DO NOT SKIP /lgjoin/. It is the real outstanding work: the lg_join
+Stripe tier-picker + checkout, which has NO standalone file and still renders as
+the full WP/Elementor page. The existing join.php is the /join/ PATREON FUNNEL
+ONLY and DELIBERATELY OMITS the checkout (its own header: "checkout is dormant
+now and is intentionally NOT built here"). /join/ (funnel) != /lgjoin/ (Stripe
+checkout). Treating "join" as done is wrong — corrected 2026-06-03.
 
 PORT THESE (slug — shortcode):
   connect-your-patreon            — lg_patreon_onboard   (SPLIT the Patreon-connect funnel out of join.php into its own page; don't touch join.php's funnel yet)
@@ -70,10 +77,18 @@ PORT THESE (slug — shortcode):
   welcome                         — lg_subscription_success   (transient, no nav)
   regional-pricing-not-available  — lg_regional_fail          (transient, no nav)
 
-PER-PAGE: add the nginx location to nginx-snippet.conf mirroring the existing
-/join/ + /manage-subscription/ blocks (alias + try_files + front-controller
-location + assets location + PHP-deny). File the nginx install/reload in the
-sudo-queue (coordinator applies).
+ROUTING (Ian 2026-06-03 — NO nginx birds-nest, NO iframes):
+- Do NOT add a per-page nginx location. Use ONE front-controller `web/router.php`
+  + ONE nginx location matching all membership slugs (regex alternation) that
+  fastcgi-passes to router.php with the slug as a param — mirror archive-poc's
+  single render.php pattern. router.php holds the slug→{file,visibility} registry,
+  applies the admin-gate, and `include`s the matching page file. One assets
+  location + one PHP-deny. Fold the existing per-page blocks (membership-guide,
+  manage-subscription) INTO the single location.
+- NO new iframes — every page is a native verbatim port of its lg_* shortcode body.
+  (manage-subscription's existing Stripe-panel iframe is the one tolerated legacy
+  exception until that panel is itself ported.)
+- coordinator applies the single nginx location via the sudo-queue.
 
 DATA: read page/subscription data via the existing lib/*-data.php pattern
 (lg_membership_db / lg_membership_poller_db). Identity via lib/whoami.php

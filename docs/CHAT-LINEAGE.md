@@ -171,3 +171,14 @@ Not a chat replacement (no prior chat existed), but a scope expansion + rename w
 - **Why:** the modals attach to the header (bell, message icon are IN the header), share design tokens, share data sources. One chat owning the whole shell = one coordination point. archive-poc gets P3 off their plate and stays content-focused.
 - **Artifacts renamed:** `briefing-lg-bp-mirror.md` → `briefing-lg-shell.md`; `lg-bp-mirror/` dir → `lg-shell/`; coord doc + menu updated
 - **Side effect:** P3 reversal note sent to archive-poc ([reply-to-archive-poc-p3-reversal.md](reply-to-archive-poc-p3-reversal.md))
+
+## 2026-06-04 — coordinator: clean handoff to fresh successor
+
+- **Previous:** `34c73878-3c14-41f6-b56f-8d5195ea47e4` (last active: 2026-06-03 PM)
+- **New:** *(Ian to spawn fresh + capture ID)*
+- **Reason:** context fullness; clean handoff before forced compaction
+- **Carried over:** `STRANGLER-COORDINATION.md` (contract), live `LANE-LEDGER.md`, the
+  `handoff-coordinator-2026-06-03-pm.md` snapshot, current `CHATS-MENU.md` + this log. Fresh
+  successor briefing at `docs/briefing-coordinator-successor.md` (rewritten 2026-06-04; prior
+  05-28 copy archived to `strangler-handoffs/2026-06-04-coordinator-successor-prior.md`)
+- **Lost:** in-conversation reasoning from the retired session; all destinations are in the docs

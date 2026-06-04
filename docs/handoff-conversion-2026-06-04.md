@@ -12,7 +12,7 @@ loothcuts + documents done, and a working article parser**. All deterministic pa
 | loothprint | 165 / 166 | **1** | `tools/loothprint-parse.php` | only **3666** "Jack Brace part Deux" (no `loothprint_3d_file`) |
 | loothcuts | 7 / 7 | 0 | loothprint-parse (CPT-aware) | done |
 | document | 4 / 6 | **2** | loothprint-parse (`document` branch) | **46552, 46009** flagged (no PDF/file — inline-content docs) |
-| post-imgcap | 12 / 63 | **51** | `tools/article-parse.php` | parser built + validated on 7; **batch not yet run** |
+| post-imgcap | 14 / 63 | **49** | `tools/article-parse.php` | validated on 9 (added **49197, 2707** w/ teaser-paywall); inline-HTML only — ACF-repeater posts still need 2nd pass; **batch not yet run** |
 | useful_links | 0 / 39 | 39 | — | not started |
 | sponsor-post | 0 / 18 | 18 | — | not started |
 | member-benefit | 0 / 6 | 6 | — | not started |
@@ -38,11 +38,11 @@ Gate cookie for curl verify: `loothdev_auth=<$loothdev_token>` (non-`/billing` p
 ## Open items / stragglers
 - **20210** (video, oembed-only) + **3666** (loothprint, no file) + **46552/46009** (documents, no PDF) — hand-finish.
 - **base64-embedded article images:** some articles (e.g. **67638** Erlewine Archive) embed images as base64 data-URIs in post_content → `image_id` null, bloated blob, no srcset. Decide: extract to real attachments vs leave. The caption model still works on them.
-- **post-imgcap member-tier gating UNRESOLVED:** articles have no money-shot block, so a `looth-lite` article (e.g. 67638) renders **fully to anon** (no auto-gate). Decision needed before batch: leave articles public, or insert a `paywall` section block (teaser-then-gate) for tiered posts.
+- **post-imgcap member-tier gating — RESOLVED (Ian 6/4): teaser-then-paywall.** Articles have no money-shot block, so insert a `paywall` section block at the natural teaser→payoff boundary, `tier` = the post's tier (looth-lite). Members at that tier+ get the full layout; anon gets teaser + CTA, payoff trimmed server-side (crawler-safe). Proven on **49197** (gate before "The Results") and **2707** (gate before "Routing the Headstock"). For the batch, the parser needs to emit the paywall automatically (or splice it) — boundary pick is editorial: gate where the how-to/payoff begins. Splice helper used this session: `/tmp/splice-paywall.php <file> <heading-text> <label>`. NB: base64-image articles (67638) still render fully — no auto-gate, and they may want hand-gating too.
 - **shorty (shorts, 29)** + banger/freebie-video/etc. — NOT in the managed-CPT route. `shorty` is video-shaped → run `video-parse` + add `shorty` to the nginx CPT alternation in `strangler-archive-poc.conf`. Sysadmin (me/ubuntu), not a relay.
 
 ## Next steps (recommended order)
-1. Decide article member-gating (above) → then **aggregate dry-run over the 51 post-imgcap** (inline-HTML vs ACF `img_cap` repeater split + flags) → batch.
+1. Article member-gating decided (teaser-then-paywall). Next: teach `article-parse` to auto-emit the `paywall` block (heuristic: gate before the first section-heading past the intro/first-image, tier = post tier), then **aggregate dry-run over the 49 post-imgcap** (inline-HTML vs ACF `img_cap` repeater split + flags) → batch. Remaining inline-HTML posts: 1234, 12327, 14204, 14347, 14973, 23114 (rest are ACF-repeater, need 2nd pass). 14204 has warts (unresolved image_ids, title-echo tagline, URL-as-heading).
 2. **useful_links (39)** — new simple links-callout parser.
 3. sponsor-post (18), member-benefit (6) — small recipes.
 4. shorty onboarding (route + video-parse).

@@ -25,6 +25,9 @@
 
 | Date | Item | Section anchor |
 |---|---|---|
+| 2026-06-04 | **nginx single-location WIRED + verified** (Ian "wire it"). Snippet swapped in place (`strangler-membership.conf`), `nginx -t`+reload OK (backup `/tmp/strangler-membership.conf.bak.20260604-002334`). All 12 slugs 200 via router; admin gate correct (anon→stub, manage-subscription→sign-in, join→funnel, no-cookie→403); admin lgjoin→real tier picker; 0 Elementor. sudo-queue `membership-2026-06-03-1` RESOLVED. | "2026-06-04 — nginx wired" |
+| 2026-06-04 | **lgjoin + lggift verbatim-ported.** Full ports of `Shortcodes::join()` + `redeemGift()` on the router stack; vendored `web/lg-shortcodes.css`. Slim billing API live in TEST mode (`pk_test_`, 2 tiers). | "lgjoin verbatim port" / "lggift verbatim port" |
+| 2026-06-03 | **Single-router milestone.** `web/router.php` (slug→{file,visibility} registry + central admin gate) + nginx rewritten to ONE location → router.php (no birds-nest) + 5 scaffold surfaces (lgjoin, lggift-buy, lggift, my-gifts, test-checklist) so EVERY menu item lands on a real standalone surface. Uncommitted for review. | "2026-06-03 — single-router milestone" |
 | 2026-06-01 | **P8 ✅ — dormant-mode smoke passed.** Code audit + filter-mocked empty-key in-process run + HTTP smoke. All Stripe-touching paths guarded; hot path never instantiates StripeClient. | "2026-06-01 — P8 dormant-mode" |
 | 2026-06-01 | **mu-plugin mirror.** lg-membership-chrome.php + lg-membership-chrome/{template,stripe-panel-template}.php deployed → repo at `platform/mu-plugins/`. Byte-identical with deployed (incl. clickjacking headers). | "2026-06-01 — mu-plugin mirror" |
 | 2026-06-01 | **/manage-subscription/ shipped** (commit f7ca461 coordinator-side). Read-only Patreon + admin-gated Stripe iframe to `/__lg-stripe-panel/` (clickjacking headers verified shipping). | "2026-06-01 — Standalone /manage-subscription/" |
@@ -47,6 +50,216 @@
 - `subscriber` role has author-level posting caps (security)
 - `customer` role residue from old buddyforms flow
 - `bp_read` asymmetry: subscriber yes, looth1-4 no
+
+---
+
+## 2026-06-03 — single-router milestone
+
+Per `relay-stripe-pages-standalone-and-shell.md` (2026-06-03) FIRST MILESTONE:
+router + ONE nginx location + 5 scaffolds so every account-menu item lands on a
+real standalone surface. Done; verbatim body ports come next.
+
+### What shipped (all uncommitted, in `/home/ubuntu/projects/membership-pages/`)
+
+| File | Change |
+|---|---|
+| `web/router.php` | **New.** Single front controller. `LG_MS_PAGES` registry: slug → `[file, visibility]` for all 13 surfaces (12 menu + the `/join/` funnel). Resolves slug from `LG_MS_SLUG` fastcgi param (REQUEST_URI fallback), looks it up, builds `$ctx = lg_membership_header_ctx('')`, applies `lg_membership_admin_gate_or_exit()` when `visibility==='admin'`, then `include`s the page file. 404 on unknown slug, 500 on missing file. Mirrors archive-poc's `render.php`. |
+| `web/lgjoin.php`, `web/lggift-buy.php`, `web/lggift.php`, `web/my-gifts.php`, `web/test-checklist.php` | **New scaffolds.** Each is a self-contained admin-gated front controller (config + whoami + shared header/footer + `_admin-gate`) rendering the shared shell + a "verbatim port pending" placeholder that names the exact source method. |
+| `nginx-snippet.conf` | **Rewritten.** Was per-slug blocks; now ONE assets mount (`^~ /membership-pages/`, PHP-denied) + ONE regex location matching all 13 slugs → `router.php` with `LG_MS_SLUG $1` + `QUERY_STRING $args`. Folds every former per-slug block into the single location. |
+
+### Visibility model (router registry)
+
+- `admin` — `manage_options`-only pre-launch: membership-guide (was `always`), connect-your-patreon, affiliate-earnings, request-refund, welcome, regional-pricing-not-available, lgjoin, lggift-buy, lggift, my-gifts, test-checklist.
+- `member` — manage-subscription only (the member-visible exception; no admin gate).
+- `public` — join (the Patreon funnel; not one of the 12).
+
+The router gate is **authoritative**; existing page files that also call `lg_membership_admin_gate_or_exit()` keep it as harmless defense-in-depth.
+
+### Verbatim-port source map (for the next pass)
+
+| slug | shortcode | source method |
+|---|---|---|
+| lgjoin | `lg_join` | `Shortcodes::join()` — src/Wp/Shortcodes.php:2822 (checkout → `/billing/v1/checkout`, TEST mode — biggest) |
+| lggift-buy | `lg_gift` | `Shortcodes::gift()` — src/Wp/Shortcodes.php:42 |
+| lggift | `lg_redeem_gift` | `Shortcodes::redeemGift()` — src/Wp/Shortcodes.php:4041 |
+| my-gifts | `lg_my_gifts` | `Shortcodes::myGifts()` — src/Wp/Shortcodes.php:5252 (REST mutations need `lg_membership_rest_nonce()`) |
+| test-checklist | `lg_test_checklist` | `TestChecklist::render()` — src/Wp/TestChecklist.php:655 (no Stripe/REST — lowest-risk) |
+
+### Smoke (CLI — `php -l` clean on all 6 new files)
+
+- bad slug → `404 no such surface` ✓
+- `slug=test-checklist`, anon → admin-gate stub (`lg-gate`), not the page ✓
+- `slug=lgjoin`, whoami mocked admin → full shared shell (`lg-chrome`) + scaffold body ✓
+- `slug=request-refund` (existing built page) via router, admin → renders, no fatal ✓
+- `slug=manage-subscription` (member-visible), anon → renders sign-in view, NOT the admin stub (gate correctly bypassed) ✓
+
+Full HTTP smoke through nginx awaits the coordinator applying sudo-queue
+`membership-2026-06-03-1` (snippet `cp` + reload — I don't edit `/etc/nginx`).
+Verify loop is in that request's `why:`. Stale `membership-2026-06-02-4` marked
+SUPERSEDED (same file/command, old per-slug content).
+
+### lgjoin verbatim port — DONE (2026-06-04)
+
+`web/lgjoin.php` is now the full verbatim port of `Shortcodes::join()` (was a
+scaffold). Body + JS copied as-is; only the chrome + WP server helpers swapped:
+- `wp_get_current_user()` → `wordpress_logged_in_*` cookie → `wp_users` lookup
+- `home_url()`/`rest_url()` → `lg_ms_home()` (`https://HOST/…`)
+- `lookupActiveSub()` → same SQL vs the poller DB (active sub → 302 `/manage-subscription/`)
+- `esc_html`/`esc_attr`/`esc_js`/`wp_json_encode` → `lg_membership_h` / `lg_ms_esc_js` / `json_encode`
+
+Browser flow unchanged — talks to the Slim billing API
+(`/billing/v1/{products,config,checkout,affiliate-click,return}`) + WP REST
+`/wp-json/lg-member-sync/v1/auth` directly. Styles: vendored
+`web/lg-shortcodes.css` (verbatim from the plugin; 33KB, self-contained).
+
+**Verified:** `php -l` clean; router render (admin mock) → shared header +
+tier mount + correct `ENDPOINTS` (`/billing/v1/*`) + Stripe basil, no PHP
+errors (82KB). Slim API live in **TEST mode**: `/billing/v1/config` →
+`pk_test_…`; `/billing/v1/products` → 2 tiers (looth2 LITE, looth3 PRO, 3
+prices each). Full browser end-to-end (load tiers → checkout) is blocked on
+the nginx single-location apply (`membership-2026-06-03-1`).
+
+### lggift verbatim port — DONE (2026-06-04)
+
+`web/lggift.php` is the full verbatim port of `Shortcodes::redeemGift()`
+(Shortcodes.php:4041). Server helpers swapped (cookie→wp_users, poller-DB
+active-sub + `gift_codes.recipient_email` stapled-email lookups, `get_user_by`
+→ wp_users SELECT, wrong-user early-return rendered in the shell). Redeem
+POSTs to Slim `/billing/v1/redeem`; auth via WP REST `/…/auth` — JS copied
+verbatim. **Verified:** `php -l` clean; router render (admin mock) → shared
+header + redeem form + `ENDPOINT`=`/billing/v1/redeem` + correct `AUTH_URL`,
+no PHP errors. (Caught + fixed a `*/`-in-docblock parse bug.)
+
+### 2026-06-04 — nginx WIRED + my-gifts & lggift-buy ported + DB-secret fix
+
+**nginx single-location is LIVE** (Ian: "wire it"). Applied
+`membership-2026-06-03-1` myself (sysadmin): backup
+`/tmp/strangler-membership.conf.bak.20260604-002334`, `nginx -t` + reload OK.
+All 12 slugs route through `router.php`. Smoke: anon admin-slugs → gate stub,
+manage-subscription → sign-in, join → funnel, no-cookie → 403, zero Elementor
+(true standalone).
+
+**my-gifts.php** — full verbatim port of `Shortcodes::myGifts()` (self-styled).
+Reads gift codes from poller DB; mutations → `/…/me/gift-{send,resend,reassign,void}`
+with the `wp_rest` nonce from the bridge (`lg_membership_rest_nonce`). Live admin
+render confirmed (dashboard + real nonce in CFG). Cap note: gate is the router's
+manage_options for now; add a `manage_gift_codes` signal when it goes member-visible.
+
+**lggift-buy.php** — full verbatim port of `Shortcodes::gift()` (~1,890-line body
+included BYTE-FOR-BYTE; WP funcs shimmed: esc_*/home_url/rest_url/wp_login_url/
+wp_lostpassword_url/get_permalink/is_user_logged_in/wp_json_encode). Self-styled
+(inline <style>). Live admin render confirmed (gift panel + ENDPOINTS → /billing/v1/*).
+
+**DB-secret fix (DB-reload casualty).** `/etc/lg-membership-db` still pointed at
+the stale `looth_dev`; wp-config (and `/etc/lg-events-db`) run on `looth_import`.
+So every membership surface was reading the wrong WP DB → poller-DB creds
+(`lgms_db_*`) unresolved → my-gifts/manage-subscription/lggift/lgjoin data broken.
+Fixed `DB_NAME=looth_dev→looth_import` (backup `/tmp/lg-membership-db.bak.*`).
+After the fix: my-gifts dashboard loads; lgjoin `lookupActiveSub` now works →
+active-sub admin (iandavlin) correctly 302s to /manage-subscription/, sub-less
+admin (gerryhayes) gets the tier picker. **Cutover gotcha: the membership secret
+must track wp-config's DB_NAME after any reload.**
+
+Ports done: lgjoin, lggift, my-gifts, lggift-buy — all verified live for admin.
+
+### test-checklist — DONE (2026-06-04, action-nonce bridge built)
+
+All 5 surfaces are now ported. test-checklist was the hardest (most WP-coupled)
+and is done via two pieces:
+
+**1. Action-nonce bridge extension (WP-side).** The standalone surfaces could only
+mint a `wp_rest` nonce; test-checklist's JS drives `admin-ajax.php` with
+`lgms_test_feedback` / `lgms_test_wipe` action nonces. Extended the rest-nonce
+route to accept `?action=<name>` (whitelist: wp_rest, lgms_test_feedback,
+lgms_test_wipe; the lgms_test_* ones require manage_options):
+  - `platform/mu-plugins/lg-membership-chrome.php` — edited the
+    `looth/v1/rest-nonce` callback; deployed to
+    `/var/www/dev/wp-content/mu-plugins/` (backup `/tmp/lg-membership-chrome.php.bak.*`,
+    chown looth-dev:loothdevs, byte-identical to repo).
+  - `membership-pages/lib/whoami.php` — `lg_membership_rest_nonce($action='')`
+    now takes an action + caches per-action (backward-compatible; my-gifts'
+    no-arg call still mints wp_rest).
+
+**2. test-checklist.php port.** `TestChecklist::render()` ported as a vendored
+class `LgMsTestChecklist` so the body's `self::SECTIONS/SEVERITY/fetchFeedback/
+itemLabel/linkifyText` resolve unchanged — SECTIONS registry + linkifyText +
+render body copied byte-for-byte; only `fetchFeedback()`'s DB handle swapped to
+`lg_membership_poller_db()`. WP funcs the body calls shimmed (esc_*/wp_json_encode/
+current_user_can/get_the_ID/get_post_field/admin_url/wp_create_nonce→bridge/
+checked/home_url/wp_get_current_user). AJAX submit/status/wipe still POST to
+WP `admin-ajax.php` (handlers unchanged, server-side).
+
+**Verified live (admin):** renders 13 sections / 91 items / 16 feedback rows,
+complete `</html>`, real `AJAX_URL`/`FB_NONCE`/`WIPE_NONCE`/`ADMIN_EMAIL`.
+End-to-end nonce proof: bridged `lgms_test_feedback` nonce → admin-ajax
+`feedback_status` passes `check_ajax_referer` (handler runs); bogus nonce → 403.
+
+### 2026-06-04 — Connect-your-Patreon button fix (reload casualty) + lgjoin perf
+
+- **Connect-your-Patreon dumped to login.** `/join/`'s CTA → `/patreon-connect`
+  → BuddyBoss private-network gate 302'd anon to wp-login (`bp-auth=1&action=bpnoaccess`).
+  The poller's OAuth handler (`lgpo_handle_connect`, `/patreon-connect/`) is built +
+  registered — it was just bounced before running because `/patreon-connect/` had
+  dropped from the BB anon-allowlist (`wp_options.bp-enable-private-network-public-content`)
+  on the DB reload (the §3n handoff added it; reload wiped it). Re-appended
+  `/patreon-connect/` + cache flush → now 302s straight to patreon.com/oauth2/authorize.
+  Also pointed `join.php`'s `$patreon_connect` at the trailing-slash URL to skip a 301 hop.
+- **`$become_patron` link fixed** — was hardcoded to a 404 slug
+  (`patreon.com/loothgroup/membership`); now reads the `lgpo_patreon_link` option
+  (= `https://www.patreon.com/cw/theloothgroup/membership`), same source as
+  manage-subscription. (Open Q to Ian: keep `/membership` deep-link or bare `/cw/theloothgroup`.)
+- **lgjoin slow plans** — `loadProducts()` was awaiting geolocation (`/cdn-cgi/trace`
+  302 + external ipapi.co, ~0.7–2.5s) before fetching the 46ms products call. Now
+  renders plans immediately; country detection runs in the background and only
+  re-fetches if a region with actual regional pricing turns up.
+
+### Membership-pages DB-reload casualty checklist (re-run after any dev reload)
+
+1. `/etc/lg-membership-db` `DB_NAME` must match wp-config (currently `looth_import`,
+   not stale `looth_dev`) — else all surfaces read the wrong WP DB + poller creds fail.
+2. `wp_options.bp-enable-private-network-public-content` must include `/patreon-connect/`
+   (and `/connect-your-patreon/`, `/patreon-callback/`, `/lgjoin/`) — else anon
+   Connect-your-Patreon bounces to wp-login.
+
+### 2026-06-04 — Patreon-onboard findings → HANDED TO COORDINATOR (do not fix in-lane)
+
+Ian connected a real Patreon user (Mikelle Davlin) on dev; account created but never
+logged in. Investigated (no fixes applied per Ian's "hand off to coord"). Temp audit
+mu-plugin `wp-content/mu-plugins/lg-user-audit.php` (+ log `wp-content/lg-user-audit.log`)
+left in place — **remove after coord review.** Findings (all poller-plugin / cross-cutting):
+
+1. **OAuth callback never logs the user in.** `lgpo_handle_callback`
+   (lg-patreon-onboard.php:974–1009) does `wp_insert_user` → `get_password_reset_key`
+   → emails a set-password link → `lgpo_terminal('success')`. No `wp_set_auth_cookie`
+   anywhere. So a freshly-connected member lands ANON and must set a password via
+   email + sign in manually. DECISION for coord: auto-login on OAuth (identity already
+   proven → add `wp_set_auth_cookie($uid,true)` on the success + already_onboarded
+   paths) vs keep the email flow.
+2. **Onboard ↔ sweep identity split.** The callback never writes/reconciles
+   `lg_patreon_members` (sweep-owned). Mikelle's Patreon id 13299272 still maps there to
+   a GHOST `wp_user_id=1802` (stale from a pre-reload sweep, synced 5/7) while the real
+   OAuth user was a different ID. Onboard should upsert/repoint `lg_patreon_members.wp_user_id`.
+3. **Raw WP user-delete is NOT robust.** Confirmed via audit log: dash delete fires
+   `wp_delete_user` cleanly, BUT it orphans `lg_patreon_members` + `lg_role_sources`
+   rows and leaves the email-keyed `wp_user_bridge` dangling. Clean teardown = the
+   test-checklist email-wipe (`TestChecklist::handleAjaxWipeEmail`/`wipeQueries`).
+   Consider a `deleted_user` hook to clean poller rows, or document the wipe tool as canonical.
+4. **whoami bridge for new OAuth users.** Onboard-created users need a `wp_user_bridge`
+   row or `/whoami` returns anon (logged-in-but-walled). Confirm realtime bridge-create
+   covers OAuth onboards (profile-app lane).
+5. The member-sweep has NO `wp_insert_user` path (`compare_member` skips `skipped_no_wp`),
+   so it never recreates a deleted user — ruled out as a cause.
+
+These are poller-lane / profile-app changes, not membership-pages standalone. Routing to
+coordinator for ownership + the auto-login decision.
+
+### All 5 ports complete
+
+lgjoin, lggift, my-gifts, lggift-buy, test-checklist — all verbatim-ported,
+served by the single router, verified live for admin. Stripe-touching flows wire
+to the Slim billing API in TEST mode. Remaining cross-cutting: nothing blocking;
+all changes uncommitted for review (nginx + DB-secret + mu-plugin applied on dev,
+backups in /tmp).
 
 ---
 

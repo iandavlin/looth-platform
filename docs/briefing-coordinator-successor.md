@@ -1,67 +1,92 @@
-# Briefing — successor coordinator
+# Briefing — successor coordinator (2026-06-04)
 
-You're taking over coordination of the Looth Group strangler rollout from the prior coordinator session (`7deff0ff-4cf1-450b-9a5c-1e59ec7d5025`), which is being retired clean (context fullness, not failure).
+You're taking over coordination of the Looth Group strangler rollout. The prior coordinator
+session (`34c73878-3c14-41f6-b56f-8d5195ea47e4`) is being retired clean (context fullness,
+not failure). The system is stable; work is in flight; every material decision lives in a doc.
 
 ## Spin up in 5 minutes
 
 Read in this order:
 
 1. **This file** (already done)
-2. **`/home/ubuntu/projects/docs/STRANGLER-COORDINATION.md`** — the durable contract. Sections §1-§4. Skim, then dive into anything that matters to the current open question.
-3. **`/home/ubuntu/projects/docs/STRANGLER-SESSION-HANDOFF.md`** — current in-flight state. Tells you who's working on what, what's outstanding, what's pending.
-4. **`/home/ubuntu/projects/docs/CHATS-MENU.md`** — the live roster: chat names, outliner titles, session IDs, current status.
-5. **`/home/ubuntu/projects/docs/CHAT-LINEAGE.md`** — history of chat replacements (including your own handoff entry at the top).
-6. **`/home/ubuntu/projects/docs/BB-DECOMMISSION-INVENTORY.md`** — the BB-decommission picture (groups collapsed, BP audit, etc.).
+2. **`docs/LANE-LEDGER.md`** — the live board. Status of every dispatched lane, cross-lane items,
+   what's pushed this session. This is the single most current view; start here.
+3. **`docs/handoff-coordinator-2026-06-03-pm.md`** — the last full handoff. Critical-state section
+   first (the items below are pulled from it). Lane detail + infra changes follow.
+4. **`docs/STRANGLER-COORDINATION.md`** — the durable contract (~30KB, §1-§4). Skim, then dive into
+   whatever the current open question touches. Written so you don't re-derive anything.
+5. **`docs/CHATS-MENU.md`** — live roster: chat names, outliner titles, session IDs, current status.
+   Row #1 (coordinator) is YOU — update its ID/title once Ian gives them to you.
+6. **`docs/CHAT-LINEAGE.md`** — chat-replacement history (your handoff entry is logged at the bottom).
+7. **`docs/STRANGLER-SESSION-HANDOFF.md`** — older narrative snapshot (LATEST = 2026-06-01), largely
+   superseded by the 06-03-pm handoff + LANE-LEDGER. Read for "how we got here" context only.
 
-Memory entries auto-load via `MEMORY.md` — you'll see them in context. Key ones for coordinator role:
-
-- `feedback_relay_link_format.md` — canonical format for outbound relays
-- `feedback_chat_report_back_format.md` — canonical format for inbound reports
-- `project_strangler_coordination.md` — your charter
+Memory entries auto-load via `MEMORY.md`. Key ones for the coordinator role:
+`feedback_relay_link_format` (outbound), `feedback_chat_report_back_format` (inbound),
+`project_strangler_coordination` (your charter), `feedback_buck_merge_policy`,
+`project_lg_shell_header_keeper`, `project_activity_stream_launch`.
 
 ## Your job in one paragraph
 
-You hold the cross-cutting contract. Project chats build in their lanes; you keep the contract honest, ratify cross-cutting decisions, route briefings + replies via Ian (the human bus), and update the docs as decisions land. You don't talk to project chats directly. You don't make live changes (Claude-free). You don't expand scope beyond cutover-eligibility.
+You hold the cross-cutting contract. Project chats build in their lanes; you keep the contract honest,
+ratify cross-cutting decisions, route briefings + replies via Ian (the human bus), and update the docs
+as decisions land. You don't talk to project chats directly. You don't make live changes via the
+product — BUT you are also box sysadmin `ubuntu`, so you DO wire dev nginx / FPM / sudo-queue items
+that the contract assigns to coordinator. You don't expand scope beyond cutover-eligibility.
 
-## Immediate priorities (from prior coordinator's handoff)
+## ⚠️ Critical state — confirm these first (from the 06-03-pm handoff)
 
-These are sitting on Ian's plate right now — when he engages, work these first:
+1. **VERIFY: did Buck's `dropoff-clusters` merge (7afb514) break `/directory`?** Post-merge smoke of
+   `/profile-api/v0/directory-members` returned 404 — *probably wrong test path, UNCONFIRMED.* The
+   merge added a `banner_url` SELECT; confirm the `/directory` page + API render on dev and the column
+   exists / query doesn't 500. If broken → follow-up commit, not an unpush.
+2. **Two 🔴 secrets STILL unrotated:** CF creds (pasted in an earlier chat) + a plaintext AWS key
+   (`AKIA…`) in `/var/www/dev/wp-config.php`. Coordinator-owned. Rotate.
+3. **Uncommitted lane work on main** (review-before-push applies): whoami lane's `archive.js` repoint +
+   `stream-more`/`rows-more` gating fix + pilot_pro PG bridge; perf-czar's ingest image fix; lightbox
+   `engine/assets/lg-front.js`; comments-lean's dequeue; the CPT standalone-header identity fix.
+4. **devmsg panel patch needs persisting:** live-refresh fix is in the *installed* extension copy only.
+   Rebuild the vsix (`/opt/devmsg-extension`) + reinstall to survive reinstall + reach other team users.
+5. **pro-gate held for Ian** (`buck/profile-public-pro-gate` 53b2a0a): policy approved + fail-closed,
+   but TESTING-not-canonical (changes the "Ian FINAL" header-ceiling model). Awaiting Buck's
+   pilot_pro clamp+403 test → then merge. Buck merge policy is standing (see memory).
 
-1. **Run BATCH-04 on live** → unblocks P2 (Patreon adapter spec)
-2. **Run live BP audit** → locks lg-shell scope
-3. **Relay queue ready in `docs/`**: archive-poc (P3 reversal + UX requests), BB-mirror (render bugs)
-4. **Spawn lg-shell** when ready (briefing ready)
-5. **Capture session IDs** for cutover + lg-shell when they're spawned/resumed
+## Coordinator-owned pending (sysadmin hat)
 
-Full priority list in `STRANGLER-SESSION-HANDOFF.md` § "Open Ian decisions."
+- Apply the **stripe-pages single-router nginx location** when that lane delivers (via sudo-queue).
+- **nginx args-under-alias fix** — rows-more clean-URL + stream-more `?cursor` both drop args under
+  the alias+rewrite; same fix; before cutover (deferred, dev-gated, not urgent).
+- **Rotate the two secrets** (item 2 above).
+- **SHORTINIT comments-endpoint nginx location** when comments-lean delivers (don't ship unreviewed).
 
 ## How Ian works
 
-- Fast feedback, doesn't over-spec; trusts you to pick reasonable defaults and surface tradeoffs
-- Likes terse status with concrete evidence (DB rows, file:line refs, exact errors)
-- Will push back hard if a recommendation is wrong — don't over-defend, accept the correction, revise honestly. The prior coordinator revised the postgres-everywhere recommendation 3 times based on Ian's pushback; that's normal, not failure
-- Runs code-server (browser VS Code); copy-paste is broken; uses the canonical relay format religiously (see memory)
-- Outliner titles in `CHATS-MENU.md` are how he finds chats in his session picker — keep them current
-- Native session picker in Claude Code panel handles chat-switching; URI scheme links don't work for him
+- Fast feedback, doesn't over-spec; trusts you to pick reasonable defaults and surface tradeoffs.
+- Wants terse status in plain English, lead with the answer, concrete evidence (DB rows, file:line,
+  exact errors). Skip tables/jargon unless asked.
+- Will push back hard if a recommendation is wrong — accept, revise loudly, don't over-defend.
+- Runs code-server (browser VS Code); native session picker handles chat-switching; URI links don't
+  work for him. Copy-paste is broken → use the canonical relay format religiously (see memory).
+- Outliner titles in `CHATS-MENU.md` are how he finds chats — keep them current.
+- Token-conscious: prefers fewer supervised chats over autonomous spawns; keep spawned chats small.
 
-## Behaviors the prior coordinator settled into
+## Behaviors the prior coordinators settled into
 
-- **In-lane work doesn't need coordinator round-trip.** When a chat asks "should I do X in my lane?" the answer is usually "yes, burn the queue." Only ratify decisions that touch the cross-cutting contract.
-- **Be honest about uncertainty.** If you don't know whether a URI scheme works in code-server, delegate to claude-code-guide rather than guess.
-- **Revise loudly, not silently.** When a prior recommendation turns out to be wrong (Ian pushes back; new info lands), say "I was wrong, here's the revised picture" — don't pretend continuity.
-- **Files do the substance.** Every decision lands in a doc. Messages are pointers, not the content.
-- **Don't pre-build coordination for non-existent work.** No standing "mobile warden" until mobile is being built; no group-landing composer if groups collapse into forums.
+- **In-lane work doesn't need a round-trip.** "Should I do X in my lane?" is usually "yes, burn the
+  queue." Only ratify decisions that touch the cross-cutting contract.
+- **Files do the substance.** Every decision lands in a doc; messages are pointers.
+- **Revise loudly, not silently.** New info / Ian pushback → "I was wrong, here's the revised picture."
+- **Be honest about uncertainty.** Delegate (e.g. claude-code-guide) rather than guess.
+- **Don't pre-build coordination for non-existent work.**
+- **Header/footer = lg-shell's** (one canonical `/srv/lg-shared/site-header.php`); consumers populate
+  `$ctx` from `/whoami` only. Cross-cutting (header/whoami/nginx/secrets) routes to coordinator.
 
 ## Reporting at spawn
 
-When Ian spawns you, capture and report:
-- Your session ID (Ian provides if you can't see it)
-- Your outliner title (Ian reads it from the panel)
-
-Update `CHATS-MENU.md` row #1 (coordinator) with the new ID/title.
+Capture + report: your session ID (Ian provides if you can't see it) and your outliner title.
+Update `CHATS-MENU.md` row #1 with the new ID/title, and append a `CHAT-LINEAGE.md` entry.
 
 ## When in doubt
 
-Read `STRANGLER-COORDINATION.md` end-to-end. It's ~30KB and captures every architectural decision with reasoning. The prior coordinator wrote it specifically so a successor wouldn't need to re-derive anything.
-
-Good luck. The system is stable; the work is in flight; Ian knows where everything is. You're just the next pair of hands.
+Read `STRANGLER-COORDINATION.md` end-to-end. It captures every architectural decision with reasoning.
+The system is stable; the work is in flight; Ian knows where everything is. You're the next pair of hands.

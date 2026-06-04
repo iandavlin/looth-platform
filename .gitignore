@@ -28,3 +28,7 @@ id_ed25519*
 .DS_Store
 *.swp
 *~
+
+# coordinator: stray dumps/archives — never track
+*.sqlite.bak.*
+download-*.tar.gz
