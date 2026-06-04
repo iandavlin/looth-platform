@@ -246,8 +246,17 @@ function lg_materialize_collect_media_ids(array $layout): array {
     $ids = [];
     $walk = function ($node) use (&$walk, &$ids): void {
         if (!is_array($node)) return;
-        foreach (['image_id', 'featured_image_id'] as $k) {
+        // image_id (image block), featured_image_id, file_id (download block).
+        // Every attachment a block resolves at render must be pre-resolved into
+        // the blob's `media` map — the standalone path has no WP to call.
+        foreach (['image_id', 'featured_image_id', 'file_id'] as $k) {
             if (!empty($node[$k]) && is_numeric($node[$k])) $ids[(int) $node[$k]] = true;
+        }
+        // gallery block: image_ids is a flat array of attachment ids
+        if (!empty($node['image_ids']) && is_array($node['image_ids'])) {
+            foreach ($node['image_ids'] as $iid) {
+                if (is_numeric($iid)) $ids[(int) $iid] = true;
+            }
         }
         // Repeater/gallery rows that carry their own image_id.
         if (!empty($node['items']) && is_array($node['items'])) {
