@@ -411,12 +411,21 @@ $client_state = [
 <body class="view-discover<?= $happening_now ? ' has-live' : '' ?>">
 <?php $lg_active_nav = ''; // front page is none of the nav sections — show all, incl. Archive
 require __DIR__ . '/_chrome.php'; ?>
-<?php if ($happening_now): $hn = $happening_now; ?>
+<?php if ($happening_now): $hn = $happening_now;
+  // Tier-gate the Join link: the join URL is a members-only Zoom link, so only
+  // viewers entitled to the event's tier get it; everyone else sees an upgrade
+  // CTA. The banner itself still shows to all (live promo / FOMO).
+  $hn_rank       = ['public' => 0, 'lite' => 1, 'pro' => 2];
+  $hn_ev_tier    = $hn['tier'] ?: 'public';
+  $hn_entitled   = ($hn_rank[$viewer_tier] ?? 0) >= ($hn_rank[$hn_ev_tier] ?? 0);
+  $hn_join_url   = $hn_entitled ? ($hn['event_join_url'] ?: $hn['url']) : '/lgjoin';
+  $hn_join_label = $hn_entitled ? 'Join →' : 'Upgrade to join →';
+?>
 <aside class="live-banner" role="status">
   <span class="live-banner__dot">🔴</span>
   <span class="live-banner__label">LIVE NOW</span>
   <span class="live-banner__title"><?= h($hn['title']) ?></span>
-  <a class="live-banner__cta" href="<?= h($hn['event_join_url'] ?: $hn['url']) ?>" target="_blank" rel="noopener">Join →</a>
+  <a class="live-banner__cta" href="<?= h($hn_join_url) ?>" target="_blank" rel="noopener"><?= h($hn_join_label) ?></a>
 </aside>
 <?php endif; ?>
 <?php if (!$is_member && $signup_banner): ?>
