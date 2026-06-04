@@ -103,6 +103,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-viewas__edit{margin-left:auto;background:#fff;color:var(--lg-ink);border-radius:999px;
   padding:7px 15px;text-decoration:none;font:700 12.5px/1 var(--lg-font-sans)}
 .lg-viewas__hint{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);color:#9aa091}
+.lg-viewas__vis{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:6px;padding-left:12px;border-left:1px solid rgba(255,255,255,.18)}
+.lg-viewas__vis-lbl{font:700 12px/1 var(--lg-font-sans)}
+.lg-viewas__vis .lg-vchip{font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer}
+.lg-viewas__vis-note{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);opacity:.8}
 
 /* Block shell */
 .lg-block{position:relative;background:#fff;border:1px solid var(--lg-line);border-radius:16px;padding:22px 24px;margin:0 0 16px}
@@ -461,6 +465,17 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <a href="<?= looth_h($viewLink('public')) ?>" <?= $role==='public'?'aria-current="true"':'' ?>>Public</a>
           <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
           <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
+        </span>
+        <?php
+          $hVis  = Block::normalizeVis(Block::headerCeiling($subjectId));
+          $hNote = $hVis === 'public'  ? 'Anyone can view your profile.'
+                 : ($hVis === 'private' ? 'Only you can see your profile.'
+                 : 'Members-only â set Public to let anyone view it.');
+        ?>
+        <span class="lg-viewas__vis">
+          <span class="lg-viewas__vis-lbl">Profile visibility</span>
+          <?= looth_pmp_control('header', $hVis, '') ?>
+          <span class="lg-viewas__vis-note"><?= looth_h($hNote) ?></span>
         </span>
         <?php if ($editing): ?>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
