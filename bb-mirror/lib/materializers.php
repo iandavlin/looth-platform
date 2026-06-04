@@ -54,6 +54,24 @@ function bb_mirror_person_for(int $uid, PDO $db): array {
     if (!$uid) return ['name' => '', 'slug' => ''];
     $u = get_userdata($uid);
     if (!$u) return ['name' => '', 'slug' => ''];
+
+    // Guard: never let a transient test fixture overwrite a mirrored person.
+    // WP user IDs are recyclable across DB reloads, so a "staple" fixture (or a
+    // single-char placeholder name) occupying an ID at sync time would clobber
+    // the real human who later holds that ID — the "T" thread-author bug, 6/2.
+    // On skip, preserve any existing mirrored row so the denormalized
+    // author_name keeps the real value. See project_bb_mirror_person_staleness.
+    $nicename = (string)$u->user_nicename;
+    $display  = (string)$u->display_name;
+    if (str_starts_with($nicename, 'tst-staple-') || mb_strlen(trim($display)) <= 1) {
+        $existing = $db->prepare("SELECT display_name, slug FROM person WHERE id = ?");
+        $existing->execute([$uid]);
+        if ($row = $existing->fetch()) {
+            return ['name' => $row['display_name'], 'slug' => $row['slug']];
+        }
+        return ['name' => $display, 'slug' => $nicename];
+    }
+
     $sql = bb_mirror_upsert_sql('person',
         ['id','slug','display_name','avatar_url','is_moderator','sync_at']);
     $db->prepare($sql)->execute([
