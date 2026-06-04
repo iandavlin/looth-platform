@@ -470,7 +470,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           $hVis  = Block::normalizeVis(Block::headerCeiling($subjectId));
           $hNote = $hVis === 'public'  ? 'Anyone can view your profile.'
                  : ($hVis === 'private' ? 'Only you can see your profile.'
-                 : 'Members-only â set Public to let anyone view it.');
+                 : 'Members-only. Set Public to let anyone view it.');
         ?>
         <span class="lg-viewas__vis">
           <span class="lg-viewas__vis-lbl">Profile visibility</span>
