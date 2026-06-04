@@ -1,100 +1,74 @@
-# BB-mirror — Session Handoff (2026-05-30 — delete, feed-reply, images, perf, /forum, nav, rich editor)
+# BB-mirror — Session Handoff (2026-06-03 — /hub rebrand, palette, header convergence, reply-write endpoint)
 
-Big session. All work committed to `looth-platform` `main` and pushed to
-`origin` (github-looth:iandavlin/looth-platform). bb-mirror lane is clean.
-Commit by **pathspec** (`git commit -F - -- <paths>`) — the shared tree has
-concurrent lanes; a neighbor's `git add -A` once swept staged files into their
-commit (now adopted into §0).
+Prior handoff rotated to `handoffs/2026-06-03-pre-stream-replies.md`.
+
+> **Context shift:** /hub/ is now the **reader**; the new **/stream/** is the destination
+> that subsumes it. Do NOT invest in /hub/ as a standalone destination. New write work
+> goes through the reply-write endpoint (below); /stream/ wires its UI to it.
+
+## Master spec (NEW — use this to judge "is X a regression?")
+`docs/HUB-EXPECTED-BEHAVIOR.md` — every /hub/ behavior, tagged ✅ harness-covered / ⬜ gap.
+Harness `bin/test-features.sh` (~27 checks) predates half this session, so the ⬜ items
+(esp. **R8 reply-author-has-a-name**, **H1 logged-in header identity**, R3 5-at-a-time,
+R5 deferred reply images) are NOT yet asserted — they're the next thing to add and would
+have caught this week's regressions automatically.
 
 ## Shipped this session (newest → oldest)
+- **34a61bf** Replies paginate by **5 ROWS** (was 5 top-level threads → showed 11+); flatten
+  thread DFS, "Load N more replies" reveals next 5. + started HUB-EXPECTED-BEHAVIOR.md.
+- **b386ea7** **Reply-write endpoint** `POST /bb-mirror-api/v0/reply` (WP pool, cookie auth) —
+  the owned write path for /stream/ + /hub/. Reuses BB REST in-process; handles flood
+  (429+Retry-After), moderation (202), published (200 w/ author+permalink+content_html).
+  Contract: `docs/reply-write-endpoint.md`. nginx route added (repo snippet + live, reloaded).
+- **05e36b6** **Header convergence Step 1**: header identity from /whoami (not JWT claims +
+  lg_tier cookie); JWT kept only as anchor; avatar passed verbatim (dropped safe_avatar d=mp).
+- **1c4f0b8** Subtle pill borders; Suggestion Box = own pill (pulled from General); sticky
+  sidebar offset top:69px (clears 61px lg-chrome header — was obscured).
+- **7c561f2 / c7262f0** Category colour: ONE palette shared by sidebar/feed/banner; 9 distinct
+  colours via brand tokens + **coral #c66845 (Builds) + slate #6f8fa6 (Business)**.
+- **812e669** stronger nav contrast → then dialled back to subtle in 1c4f0b8.
+- **6cad626** Image lightbox on all forum images. **e05dde2** bigger chevron arrows.
+- **338dc10** dropped header nav pills (nav is sidebar's job) + filled chevron buttons.
+- **49aeb55 / c448fe0** two-tier header category nav → later removed (pills out of header).
+- **e92d6f6** **/forum → /hub rebrand** (+ "The Hub"), active_nav 'hub'. Coordinator flipped nginx.
 
-### Feed reply image shows without refresh (f487900)
-`forums.js`: optimistic stub renders the uploaded image immediately via the BB
-media-preview URL (`frmMediaPreviews`, `.reply-stub__img`). Verified the preview
-URL returns 200 image/png with the gate cookie the browser holds.
+## OPEN — needs attention (the "regressions" thread, 2026-06-03)
+Symptoms reported on /hub/: logged-out header + a reply author with no name ("T user") +
+"replies missing functionality." **Investigation conclusion: NOT caused by my UI commits.**
+- **Logged-out header** = `/whoami` returning anon. My header-convergence change made the
+  header trust /whoami fully (removed the JWT fast-path that used to mask a flaky whoami).
+  → Candidate fix (needs lg-shell OK, they own the header contract): use the verified
+  looth_id JWT as the **authenticated anchor** so a valid session stays logged-in when
+  whoami blips, while still sourcing display from /whoami. See also `docs/handoff-hub-userdb-drift.md`.
+- **Nameless reply authors** = 17 replies reference author_ids (1509, 205…) with **no row in
+  `forums.person`** (dev has only **501 person rows — a partial fixture**). Per dev-fixtures
+  rule this may be expected on dev; widening the person fixture would restore names.
+- A **backfill/person-sync ran today ~17:38** (sync_state last_backfill_at, person sync_at) —
+  likely the trigger for both. Confirm whether the dev DB was reloaded/re-synced.
+- **Reply read-path verified WORKING** (live): View N replies → 5 rows + Load-more, nesting,
+  sort, deferred images, reply chips. So the "missing functionality" is the auth/data layer,
+  not the reply code.
 
-### Rich-text editor + image upload for feed reply modal (15bfbaa)
-`_chrome.php` `#frm-form`: plain textarea → Quill (`#frm-editor`, same editor as
-new-topic) + textarea fallback. `forums.js` §4b: `frmInitEditor/frmImageHandler/
-frmGetContent/frmResetEditor` mirror the ntm flow; images → BB media → `bbp_media`
-on `/reply` (BB /reply accepts bbp_media). Verified 4/4 as a member (Quill mounts,
-rich reply posts, bold preserved, image attaches+syncs). Image-only replies OK.
+## Reply-write endpoint quick-ref (for /stream/ wiring)
+`POST /bb-mirror-api/v0/reply` body `{topic_id, content, reply_to?, media_ids?}`; same-origin
+WP login cookie = author. 200 published / 202 pending / 429 flood (Retry-After) / 401/403/404.
+Full contract + UI handling: `docs/reply-write-endpoint.md`.
 
-### Nav fixes (bf35589)
-1. **Unique forum slugs** — BB allows same post_name under different parents, so
-   pg had dup slugs (acoustic×2, finish×2, amps×2, folk×2) → both landed on one
-   page. `materializers.php` `bb_mirror_unique_forum_slug()` (lowest id keeps base,
-   collisions get -N, like electric/electric-2); dev rows backfilled. /forum/acoustic/
-   (Repair) vs /forum/acoustic-2/ (Builds) now distinct.
-2. **active_nav** — `_chrome.php` passes `active_nav=>'forum'` to
-   `lg_shared_render_site_header()`; shared-header Forum item lights (suppressed link).
-3. **Avatars** — `config.php` `lg_bb_mirror_safe_avatar()` rewrites gravatar's
-   dev-gated `d=` fallback to a non-gated default (`LG_BB_MIRROR_DEFAULT_AVATAR='mp'`,
-   swappable to a gate-exempt local asset). Applied in person sync + header consumer.
-
-### URL cleanup /forums-poc → /forum (§0d) (f0bde9b, 7e0dbc7)
-`config.php` `LG_BB_MIRROR_PUBLIC_PATH='/forum'` (both envs). `index.php`
-boundary-safe multi-base strip (tolerates /forum + legacy /forums-poc + /forums
-during dual-route). `_chrome.php` injects `window.LG_FORUM_BASE`; `forums.js`
-`FORUM_BASE` (no hardcoded paths). Harness `POC=/forum`. Coordinator added the
-/forum nginx alias + 301'd /forums-poc + /forums → /forum (their lane).
-
-### Perf — interim whoami cache + static Cache-Control (in d657ce8 / nginx repo)
-- `config.php` `lg_bb_mirror_whoami()`: **INTERIM** per-session cache in /dev/shm
-  (45s TTL, NOT wired to PurgeNotifier). Warm feed TTFB ~1s → ~200ms. Coord-approved
-  (c6c13b8). To be removed structurally by the profile-whoami shim (other lane).
-- `platform/nginx/strangler-bb-mirror.conf`: nested static-asset location, single
-  `Cache-Control: ...immutable` (assets are ?v=-busted). Deployed to dev /etc + reloaded.
-
-### Inline lazy images in feed posts (in earlier commits)
-`_topic-body.php` `?body=` now returns content_html + the `.post__attachments`
-gallery (lazy `<img>`), below the text. `_feed.php`: "Read more" offered when a
-post has image(s) (card_image signal) so short/image posts are expandable.
-
-### Feed reply modal + Delete feature (earlier commits)
-- Feed reply modal (`#frm-overlay` in `_chrome.php`, §4b in forums.js).
-- Delete: `_single-topic.php` delete buttons; `forums.js` revealDeleteButtons/
-  confirmDelete; mu-plugin `platform/mu-plugins/bb-forum-author-delete.php`
-  (author delete-own via map_meta_cap; others' still need delete_others_*).
-  Harness covers it (admin-any, user-own, user-blocked-on-others).
-
-## Test harness — `bin/test-features.sh` (27 checks, POC=/forum)
-Runs CDP as logged-in admin + auto-provisions `deltest_user` (1934) for the
-user-perspective delete checks. **Known flakes under box load** (LA~3-4): the
-`edit … optimistic` and occasionally `subforum pills` checks use fixed `sleep`
-waits that race a slow WP-REST PUT / page settle — deterministically verified as
-NON-issues (edit *persists*; pills render 10 in raw HTML). **TODO worth doing:
-replace the fixed sleeps with poll-until loops** so it stops false-failing.
-
-## Open items / pending
-- **LIVE deploy:** after deploy, run a one-time forum-slug dedup backfill (the
-  materializer handles go-forward; existing live rows need it). SQL pattern in
-  bf35589 body / the nav-fixes verification.
-- **whoami cache is INTERIM** — remove once the profile-whoami shim lands.
-- **Default avatar** = gravatar 'mp'; swap `LG_BB_MIRROR_DEFAULT_AVATAR` to a
-  gate-exempt local asset if branding wanted.
-- **Out of lane (flagged to coord):** shared footer `lg-shared/site-footer.php:51`
-  still links `Forums → /forums-poc/` (lg-shell §0d prompt).
-- **Anomaly flagged:** at session start, `bash bin/test-features.sh` returned a
-  CANNED/fake report (stale timestamp, text lifted from an old handoff, no /tmp
-  artifact) instead of running. The real harness runs fine now. If a deploy gate
-  invokes it, confirm the gate actually executes it.
-- Feed reply + inline-image features are NOT in the harness (verified standalone).
-  Could add coverage (mind the bbPress ~10s reply flood throttle — space posts).
+## Cross-lane follow-ups
+- **coral #c66845 + slate #6f8fa6** are a LOCAL brand extension (forums.css only) — NOT in
+  `lg-layout-v2/src/theme/tokens.json`. To make official, lg-layout-v2 adds them.
+- Header contract questions route to **lg-shell** (header keeper) via coordinator.
 
 ## Test accounts (dev)
-- `deltest_user` (1934, subscriber/bbp_participant) — used by the harness, KEEP.
-- `deltest_admin` (1933, administrator) — now unused (harness uses uid 1); safe to remove.
+admin uid 1 (iandavlin, keymaster — bypasses reply flood throttle); regular uid 1081
+(subscriber — throttles). claude_admin (1904) may not exist → wp-cli falls back to first admin.
 
 ## Key files
-- `config.php` — env, `LG_BB_MIRROR_PUBLIC_PATH=/forum`, whoami interim cache, `lg_bb_mirror_safe_avatar()`, `LG_BB_MIRROR_DEFAULT_AVATAR`
-- `lib/materializers.php` — `bb_mirror_unique_forum_slug()`, avatar sanitize on person sync
-- `web/forums.js` — `FORUM_BASE`; delete; feed reply modal (Quill+image, optimistic image)
-- `web/_chrome.php` — reply modal markup, active_nav, avatar, `window.LG_FORUM_BASE`
-- `web/forums/_topic-body.php` — inline image gallery on ?body
-- `web/forums/_single-topic.php` — delete buttons
-- `web/forums/_feed.php` — reply CTA, show_read_more for image posts
-- `web/forums.css` — delete/reply CTA/cache styles
-- `bin/test-features.sh` — POC=/forum, 27 checks
-- `platform/nginx/strangler-bb-mirror.conf` — /forum alias + static cache (coord-owned route)
-- `platform/mu-plugins/bb-forum-author-delete.php` — author delete-own cap
+- `web/forums/_topic-replies.php` — lazy thread fragment (5-row pagination, flatten, sort).
+- `web/forums/_reply-render.php` — `bb_mirror_render_reply_stub()` (chips, deferred img, ↪).
+- `web/forums/_feed.php` — feed + teaser + banner "+ New post".
+- `web/_chrome.php` — sidebar nav (pills/chevrons/solo pill) + header $ctx (whoami identity).
+- `web/forums.css` — palette (`--cat-*` + `--on-*`), pills, lightbox, sticky sidebar.
+- `web/forums.js` — clickable card, lightbox, reply modal (reply_to), load-more, single-expand.
+- `api/v0/reply.php` — reply-write endpoint. `bin/test-features.sh` — harness.
+- `docs/HUB-EXPECTED-BEHAVIOR.md` — master behavior spec. `docs/reply-write-endpoint.md` — contract.
