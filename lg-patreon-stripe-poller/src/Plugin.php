@@ -175,6 +175,7 @@ final class Plugin
             MemberTools::boot();
             Wp\UserProfile::boot();
             Wp\UserLifecycleAdmin::boot();
+            Wp\AdminRoleCapture::boot();
 
             // Quick links on the Plugins admin page row for this plugin.
             $pluginFile = defined( 'LGPO_PLUGIN_FILE' )
