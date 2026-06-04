@@ -50,6 +50,16 @@ final class UserLifecycle
 
     private const ERASE_PATH = '/profile-api/v0/internal/erase-user';
 
+    /** wp_user_ids currently being torn down — lets the deleted_user safety
+     *  net skip the user we are already handling, avoiding re-entrancy when
+     *  teardown() itself calls wp_delete_user(). */
+    private static array $handling = [];
+
+    public static function isHandling( int $wpUserId ): bool
+    {
+        return isset( self::$handling[ $wpUserId ] );
+    }
+
     /**
      * @return array{
      *   mode:string, dry_run:bool, wp_user_id:int, customer_id:?int, email:?string,
@@ -152,10 +162,13 @@ final class UserLifecycle
             if ( $mode === self::MODE_TOMBSTONE ) {
                 $result['sentinel_id'] = $reassign;
             }
+            self::$handling[ $wpUserId ] = true;
             try {
                 wp_delete_user( $wpUserId, $reassign ?? '' );
             } catch ( Throwable $e ) {
                 $result['errors'][] = 'wp_delete_user: ' . $e->getMessage();
+            } finally {
+                unset( self::$handling[ $wpUserId ] );
             }
         }
 

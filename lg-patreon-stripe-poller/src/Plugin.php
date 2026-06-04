@@ -144,6 +144,13 @@ final class Plugin
         // Admin-only QA checklist for partners testing the stack.
         add_action( 'init', [ Wp\TestChecklist::class, 'register' ] );
 
+        // Safety net: any path that deletes a WP user (native dashboard delete,
+        // WP-CLI, REST) fans out a teardown so the other stores never orphan.
+        // Fires AFTER wp_delete_user, so content is already gone — this just
+        // cleans the cross-store rows. Guarded against re-entrancy from our own
+        // UserLifecycle::teardown (which calls wp_delete_user itself).
+        add_action( 'deleted_user', [ self::class, 'onDeletedUser' ], 10, 1 );
+
         // Welcome modal: print celebratory modal in the footer when the
         // current user has just been upgraded into a paid tier (looth2+).
         // Triggered by the _lg_pending_welcome user meta which Arbiter
@@ -167,12 +174,31 @@ final class Plugin
             Admin::boot();
             MemberTools::boot();
             Wp\UserProfile::boot();
+            Wp\UserLifecycleAdmin::boot();
 
             // Quick links on the Plugins admin page row for this plugin.
             $pluginFile = defined( 'LGPO_PLUGIN_FILE' )
                 ? plugin_basename( LGPO_PLUGIN_FILE )
                 : 'lg-patreon-stripe-poller/lg-patreon-onboard.php';
             add_filter( "plugin_action_links_{$pluginFile}", [ self::class, 'pluginActionLinks' ] );
+        }
+    }
+
+    /**
+     * deleted_user safety net. Fired by WordPress after any user delete; fans
+     * out a teardown so the cross-store rows (lg_membership, profile-app, BP,
+     * discovery) never orphan. Skips the user we're already tearing down (our
+     * own teardown calls wp_delete_user) to avoid re-entrancy.
+     */
+    public static function onDeletedUser( int $wpUserId ): void
+    {
+        if ( UserLifecycle::isHandling( $wpUserId ) ) {
+            return;
+        }
+        try {
+            UserLifecycle::teardown( $wpUserId, UserLifecycle::MODE_NUKE, false );
+        } catch ( \Throwable $e ) {
+            error_log( 'LGMS deleted_user fan-out failed for #' . $wpUserId . ': ' . $e->getMessage() );
         }
     }
 
