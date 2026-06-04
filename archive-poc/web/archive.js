@@ -6,6 +6,8 @@ const KIND_LABELS = {
   article: 'Articles',
   video: 'Videos',
   loothprint: 'Loothprints',
+  loothcuts: 'Loothcuts',
+  document: 'Documents',
   event: 'Events',
   discussion: 'Discussions',
   profile: 'Profiles',
@@ -15,7 +17,7 @@ const KIND_LABELS = {
   'useful_links': 'Useful Links',
   misc: 'Misc',
 };
-const KIND_ORDER = ['article','video','loothprint','discussion','profile','benefit','sponsor-post','shorty','useful_links','misc']; // 'event' intentionally omitted — Events not a search type
+const KIND_ORDER = ['article','video','loothprint','loothcuts','document','discussion','profile','benefit','sponsor-post','shorty','useful_links']; // 'event' + 'misc' intentionally omitted — not user-facing search types
 
 const state = {
   q: '',
@@ -1087,7 +1089,7 @@ if (ssrPresent && !hasFilters) {
   enrichExternalCards();
 
   const KIND_LABELS = {
-    article:'Articles', video:'Videos', loothprint:'Loothprints',
+    article:'Articles', video:'Videos', loothprint:'Loothprints', loothcuts:'Loothcuts', document:'Documents',
     event:'Events', discussion:'Discussions', profile:'Profiles',
     benefit:'Benefits', 'sponsor-post':'Sponsor Posts', 'shorty':'Shorts', 'useful_links':'Useful Links', misc:'Misc',
   };

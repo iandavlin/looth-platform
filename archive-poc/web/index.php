@@ -254,7 +254,7 @@ function tier_label(string $tier): string {
 }
 
 const KIND_LABELS = [
-    'article' => 'Articles', 'video' => 'Videos', 'loothprint' => 'Loothprints',
+    'article' => 'Articles', 'video' => 'Videos', 'loothprint' => 'Loothprints', 'loothcuts' => 'Loothcuts', 'document' => 'Documents',
     'event' => 'Events', 'discussion' => 'Discussions', 'profile' => 'Profiles',
     'benefit' => 'Benefits', 'sponsor-post' => 'Sponsor Posts', 'shorty' => 'Shorts', 'useful_links' => 'Useful Links', 'misc' => 'Misc',
 ];

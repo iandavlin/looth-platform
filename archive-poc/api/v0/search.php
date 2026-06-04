@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/_bootstrap.php';
 
-$ALLOWED_KINDS = ['article','video','loothprint','discussion','profile','benefit','sponsor-post','shorty','useful_links','misc'];
+$ALLOWED_KINDS = ['article','video','loothprint','loothcuts','document','discussion','profile','benefit','sponsor-post','shorty','useful_links','misc'];
 $ALLOWED_TIERS = ['public','lite','pro'];
 $ALLOWED_SORTS = ['newest','oldest','liked','active','relevance','viewed','least_viewed','discussed','random'];
 
