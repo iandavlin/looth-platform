@@ -147,7 +147,22 @@ function lg_materialize_build_blob(int $post_id): ?array {
     $ids = lg_materialize_collect_media_ids($layout);
     if ($thumb_id > 0) $ids[$thumb_id] = true;          // GateCta poster reads media[thumb_id]
     foreach (array_keys($ids) as $mid) {
-        if ($mid > 0) $media[(string) $mid] = \LG\LayoutV2\WpMedia::resolve((int) $mid);
+        if ($mid <= 0) continue;
+        $m = \LG\LayoutV2\WpMedia::resolve((int) $mid);
+        // Defensive srcset filter: the dev clone reload left some attachments whose metadata
+        // lists size-variant filenames that don't exist on disk (the `-1` collision mismatch).
+        // Those bake into srcset as 404 candidates → the browser picks one → broken <img>.
+        // Drop any size whose file is absent so only real candidates reach the blob.
+        if (!empty($m['sizes']) && is_array($m['sizes'])) {
+            $base = ($pth = get_attached_file((int) $mid)) ? dirname($pth) : '';
+            if ($base !== '') {
+                foreach ($m['sizes'] as $sz => $info) {
+                    $fn = basename((string) ($info['url'] ?? ''));
+                    if ($fn !== '' && !file_exists($base . '/' . $fn)) unset($m['sizes'][$sz]);
+                }
+            }
+        }
+        $media[(string) $mid] = $m;
     }
 
     // ── Site-global options (gate-cta copy + brand/dash snapshot) ──────────

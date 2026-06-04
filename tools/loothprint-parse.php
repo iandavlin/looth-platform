@@ -45,7 +45,11 @@ function lp_parse(int $postId): array {
 
     $title    = html_entity_decode(get_the_title($postId), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $featured = (int) get_post_meta($postId, '_thumbnail_id', true);
-    $images   = array_values(array_filter(array_map('intval', (array) maybe_unserialize(get_post_meta($postId, "{$pre}_more_images", true)))));
+    $imagesAll = array_values(array_filter(array_map('intval', (array) maybe_unserialize(get_post_meta($postId, "{$pre}_more_images", true)))));
+    // more_images can contain non-image attachments (e.g. a self-hosted .mp4 demo) — an <img>
+    // can't render those. Keep image mime-types only; count drops for the review stat.
+    $images       = array_values(array_filter($imagesAll, fn($iid) => strpos((string) get_post_mime_type($iid), 'image/') === 0));
+    $droppedMedia = count($imagesAll) - count($images);
     $video    = trim((string) get_post_meta($postId, "{$pre}_video_instructions", true));
     $onshape  = trim((string) get_post_meta($postId, "{$pre}_onshape_link", true));
     $coffee   = trim((string) get_post_meta($postId, "{$pre}_buy_me_a_coffee", true));
@@ -119,7 +123,8 @@ function lp_parse(int $postId): array {
     ];
     return ['layout' => $layout, 'flag' => null,
             'stats' => ['tier' => $tier[0] ?? 'public', 'images' => count($images), 'has_video' => $video !== '',
-                        'support_rows' => count($support), 'has_license' => $license !== '', 'desc_chars' => strlen($desc)]];
+                        'support_rows' => count($support), 'has_license' => $license !== '', 'desc_chars' => strlen($desc),
+                        'dropped_media' => $droppedMedia]];
 }
 
 /* ---------------- runner ---------------- */
