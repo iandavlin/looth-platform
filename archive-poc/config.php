@@ -51,6 +51,10 @@ define('LG_ARCHIVE_POC_SQLITE',   LG_ARCHIVE_POC_APP_ROOT . '/index.sqlite');
 define('LG_ARCHIVE_POC_ROWS_JSON',LG_ARCHIVE_POC_APP_ROOT . '/rows.json');
 define('LG_ARCHIVE_POC_WP_LOAD',  LG_ARCHIVE_POC_WP_PATH . '/wp-load.php');
 
+// Site display timezone (matches WP's America/New_York). The web tier runs
+// WP-free (default UTC), so event times are formatted against this explicitly.
+if (!defined('LG_ARCHIVE_POC_TZ')) define('LG_ARCHIVE_POC_TZ', 'America/New_York');
+
 // Dash-driven front-page config (sponsors, looths, CTAs). JSON file written
 // atomically by the /_config webhook (lg-layout-v2 dash → loopback). Falls
 // back to PHP-constant defaults baked into index.php when missing.

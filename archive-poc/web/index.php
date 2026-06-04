@@ -284,10 +284,13 @@ function rel_time(int $ts): string {
 function event_date_block(array $it): array {
     $ts = (int) ($it['event_start_at'] ?? 0);
     if (!$ts) return ['mon' => '—', 'day' => '?', 'dow' => '', 'time' => '', 'rel' => ''];
-    $mon  = strtoupper(gmdate('M', $ts));
-    $day  = gmdate('j', $ts);
-    $dow  = gmdate('D', $ts);                          // Sun, Mon, Tue, ...
-    $time = gmdate('g:i A', $ts) . ' UTC';
+    // Format in the site timezone (ET) so the rail matches the event page,
+    // which renders "12:00 PM ET". The web tier is WP-free / UTC by default.
+    $dt = (new DateTime('@' . $ts))->setTimezone(new DateTimeZone(LG_ARCHIVE_POC_TZ));
+    $mon  = strtoupper($dt->format('M'));
+    $day  = $dt->format('j');
+    $dow  = $dt->format('D');                          // Sun, Mon, Tue, ...
+    $time = $dt->format('g:i A') . ' ET';
     $now = time();
     $delta = $ts - $now;
     if ($delta < 0)            $rel = '';

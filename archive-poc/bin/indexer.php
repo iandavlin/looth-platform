@@ -152,7 +152,7 @@ function archive_poc_extract_event_fields(int $post_id): array {
             // Build "YYYY-MM-DD HH:MM:SS" from "YYYYMMDD" + optional time
             $date = (strlen($sd) === 8) ? substr($sd,0,4).'-'.substr($sd,4,2).'-'.substr($sd,6,2) : $sd;
             $time = $st !== '' ? $st : '00:00:00';
-            $ts = strtotime("$date $time UTC");
+            $ts = ($d = date_create("$date $time", wp_timezone())) ? $d->getTimestamp() : false;
             if ($ts) $out['start'] = $ts;
         }
     }
@@ -160,7 +160,7 @@ function archive_poc_extract_event_fields(int $post_id): array {
         $ed = (string) get_post_meta($post_id, 'events_end_date_and_time', true);
         if ($ed !== '') {
             $date = (strlen($ed) === 8) ? substr($ed,0,4).'-'.substr($ed,4,2).'-'.substr($ed,6,2) : $ed;
-            $ts = strtotime("$date 23:59:59 UTC");
+            $ts = ($d = date_create("$date 23:59:59", wp_timezone())) ? $d->getTimestamp() : false;
             if ($ts) $out['end'] = $ts;
         }
         // Fallback: 2-hour default duration if start is known
