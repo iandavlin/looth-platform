@@ -64,17 +64,31 @@ usort($top, function ($a, $b) use ($by_id, $sort) {
     return $sort === 'oldest' ? $d : -$d;
 });
 
-// Paginate top-level threads: 5 per page, "Load more" fetches the next page
-// (offset > 0) and appends. Each thread carries its full descendant subtree.
-$PER       = 5;
-$offset    = max(0, (int)($_GET['offset'] ?? 0));
-$total_top = count($top);
-$page      = array_slice($top, $offset, $PER);
+// Flatten the whole thread into ONE ordered list of reply ROWS (DFS: each
+// top-level thread immediately followed by its descendants), then paginate by 5
+// — "only 5 replies open at a time", with a "Load N more" button revealing the
+// next 5. Two visual tiers: top-level + one child indent; depth ≥ 2 shows a
+// "↪ @parent" prefix so context survives the flatten + page boundaries.
+$ordered = [];
+$flatten = function (int $rid, int $depth, ?string $parent_author) use (&$flatten, &$by_id, &$ordered) {
+    $ordered[] = ['rid' => $rid, 'depth' => $depth, 'pa' => $parent_author];
+    foreach ($by_id[$rid]['_children'] as $cid) {
+        $flatten($cid, $depth + 1, (string)($by_id[$rid]['author_name'] ?? 'Anonymous'));
+    }
+};
+foreach ($top as $rid) {
+    $flatten($rid, 0, null);
+}
+
+$PER    = 5;
+$offset = max(0, (int)($_GET['offset'] ?? 0));
+$total  = count($ordered);
+$page   = array_slice($ordered, $offset, $PER);
 
 header('Content-Type: text/html; charset=utf-8');
 
-// Newest/Oldest toggle — first page only, and only with >1 top-level thread.
-if ($offset === 0 && $total_top > 1) {
+// Newest/Oldest toggle — first page only, and only when there's more than one reply.
+if ($offset === 0 && $total > 1) {
     echo '<div class="replies-sort" data-topic-id="' . $tid . '">';
     foreach (['newest' => 'Newest', 'oldest' => 'Oldest'] as $key => $label) {
         echo '<button type="button" class="replies-sort__btn' . ($sort === $key ? ' is-active' : '')
@@ -83,30 +97,20 @@ if ($offset === 0 && $total_top > 1) {
     echo '</div>';
 }
 
-// Flatten each thread to 2 visual tiers (DFS): top-level + a single child indent.
-// Replies deeper than a direct child render at the child indent with a "↪ @parent"
-// prefix so the conversation stays legible without runaway nesting.
-$walk = function (int $rid, int $depth, ?string $parent_author) use (&$walk, &$by_id) {
-    $node = $by_id[$rid];
+foreach ($page as $row) {
     bb_mirror_render_reply_stub(
-        $node,
-        $depth >= 1,                              // is_child (one indent tier)
-        true,                                     // defer image behind "Show image"
-        true,                                     // per-reply Reply button
-        $depth >= 2 ? $parent_author : null       // "↪ @author" for deep replies
+        $by_id[$row['rid']],
+        $row['depth'] >= 1,                              // is_child (one indent tier)
+        true,                                            // defer image behind "Show image"
+        true,                                            // per-reply Reply button
+        $row['depth'] >= 2 ? $row['pa'] : null           // "↪ @author" for deep replies
     );
-    foreach ($node['_children'] as $cid) {
-        $walk($cid, $depth + 1, (string)($node['author_name'] ?? 'Anonymous'));
-    }
-};
-foreach ($page as $rid) {
-    $walk($rid, 0, null);
 }
 
-// Load-more control when more top-level threads remain.
-if ($offset + $PER < $total_top) {
+// Load-more — reveals the next 5 reply rows.
+if ($offset + $PER < $total) {
     $next = $offset + $PER;
-    $more = min($PER, $total_top - $next);
+    $more = min($PER, $total - $next);
     echo '<button class="replies-loadmore" type="button"'
        . ' data-topic-id="' . $tid . '"'
        . ' data-sort="' . htmlspecialchars($sort) . '"'
