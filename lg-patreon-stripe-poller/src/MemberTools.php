@@ -410,58 +410,31 @@ final class MemberTools
         return "Lifted email ban on {$email}.";
     }
 
+    /**
+     * Thin wrapper over the canonical UserLifecycle::teardown so this legacy
+     * email-keyed button can never drift from the one teardown path. Resolves
+     * email -> wp_user_id -> teardown('nuke'); for the rare orphan customer
+     * with no WP account, delegates to UserLifecycle::purgeOrphanCustomer
+     * (same membership ops). banEmailAfter is layered on top here because the
+     * email ban is independent of the user record.
+     */
     private static function doNuke( string $email, bool $banEmailAfter = false ): string
     {
         $wpUser = get_user_by( 'email', $email );
         $cust   = self::loadCustomer( $email );
 
         $cancelled = [];
-        if ( $cust !== null ) {
-            $pdo  = Db::pdo();
-            $stmt = $pdo->prepare( "SELECT stripe_subscription_id FROM subscriptions WHERE customer_id = ? AND status IN ('active','trialing','past_due')" );
-            $stmt->execute( [ (int) $cust['id'] ] );
-            $stripeIds = array_column( $stmt->fetchAll( \PDO::FETCH_ASSOC ), 'stripe_subscription_id' );
-
-            if ( $stripeIds !== [] ) {
-                $client = new \LGMS\Stripe\Client();
-                foreach ( $stripeIds as $sid ) {
-                    if ( $sid === '' || $sid === null ) continue;
-                    try {
-                        $client->cancelSubscription( (string) $sid );
-                        $cancelled[] = (string) $sid;
-                    } catch ( Throwable $e ) {
-                        if ( stripos( $e->getMessage(), 'No such subscription' ) === false ) {
-                            throw new \RuntimeException( "Stripe cancel failed for {$sid}: " . $e->getMessage() );
-                        }
-                    }
-                }
-            }
-        }
-
-        if ( $cust !== null ) {
-            $pdo = Db::pdo();
-            $cid = (int) $cust['id'];
-            $pdo->prepare( 'DELETE FROM gift_recipients_pending WHERE stripe_checkout_session_id IN (SELECT stripe_session_id FROM gift_codes WHERE purchased_by = ?)' )->execute( [ $cid ] );
-            $pdo->prepare( 'UPDATE gift_codes SET recipient_email = NULL, recipient_name = NULL, gift_message = NULL, email_sent_at = NULL WHERE recipient_email = ?' )->execute( [ $email ] );
-            $pdo->prepare( 'DELETE FROM gift_codes WHERE purchased_by = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM admin_action_log WHERE customer_id = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM entitlements WHERE customer_id = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM subscriptions WHERE customer_id = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE customer_id = ?)' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM orders WHERE customer_id = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM wp_user_bridge WHERE customer_id = ?' )->execute( [ $cid ] );
-            $pdo->prepare( 'DELETE FROM customers WHERE id = ?' )->execute( [ $cid ] );
-        }
-
+        $errors    = [];
         if ( $wpUser ) {
-            if ( in_array( 'administrator', (array) $wpUser->roles, true ) ) {
-                throw new \RuntimeException( 'Refusing to nuke an administrator account. Demote first.' );
-            }
-            try {
-                Db::pdo()->prepare( 'DELETE FROM lg_role_sources WHERE wp_user_id = ?' )->execute( [ (int) $wpUser->ID ] );
-            } catch ( Throwable $_ ) {}
-            require_once ABSPATH . 'wp-admin/includes/user.php';
-            wp_delete_user( (int) $wpUser->ID );
+            $r         = UserLifecycle::teardown( (int) $wpUser->ID, UserLifecycle::MODE_NUKE, false );
+            $cancelled = $r['stripe_cancelled'];
+            $errors    = $r['errors'];
+        } elseif ( $cust !== null ) {
+            $r         = UserLifecycle::purgeOrphanCustomer( (int) $cust['id'], false );
+            $cancelled = $r['stripe_cancelled'];
+            $errors    = $r['errors'];
+        } else {
+            throw new \RuntimeException( "No WP user or lg_membership customer for {$email}." );
         }
 
         $banMsg = '';
@@ -479,7 +452,8 @@ final class MemberTools
         }
 
         $cancelMsg = $cancelled !== [] ? ' Cancelled Stripe subs: ' . implode( ', ', $cancelled ) . '.' : '';
-        return "Nuked {$email}.{$cancelMsg}{$banMsg}";
+        $errMsg    = $errors !== [] ? ' Issues: ' . implode( '; ', $errors ) : '';
+        return "Nuked {$email}.{$cancelMsg}{$banMsg}{$errMsg}";
     }
 
     private static function loadCustomer( string $email ): ?array

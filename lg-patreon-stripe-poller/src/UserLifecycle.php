@@ -175,6 +175,28 @@ final class UserLifecycle
         return $result;
     }
 
+    /**
+     * Cancel Stripe + purge the lg_membership rows for a customer that has no
+     * bridged WP user (orphan customer). Reuses the same membership ops as the
+     * full teardown so there is no second cleanup path to drift. Used by the
+     * legacy email-keyed MemberTools nuke when no WP account exists.
+     *
+     * @return array{customer_id:int, counts:array<string,int>, stripe_cancelled:array<int,string>, errors:array<int,string>}
+     */
+    public static function purgeOrphanCustomer( int $customerId, bool $dryRun = false ): array
+    {
+        $errors    = [];
+        $email     = self::customerEmail( $customerId );
+        $cancelled = self::cancelStripeSubs( $customerId, $dryRun, $errors );
+        $counts    = self::runOps( self::membershipOps( $customerId, 0, $email ), $dryRun, $errors );
+        return [
+            'customer_id'      => $customerId,
+            'counts'           => $counts,
+            'stripe_cancelled' => $cancelled,
+            'errors'           => $errors,
+        ];
+    }
+
     // -------------------------------------------------------------------------
     // Bridge resolution
     // -------------------------------------------------------------------------

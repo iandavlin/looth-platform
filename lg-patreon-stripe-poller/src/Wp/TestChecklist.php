@@ -350,35 +350,27 @@ final class TestChecklist
     }
 
     /**
-     * Actually performs the deletes. Same table set as wipeCounts(); each
-     * DELETE is independent so a failure on one table doesn't block the
-     * others.
+     * Actually performs the wipe. Delegates to the canonical
+     * UserLifecycle::teardown('nuke') so the tester-fixture wipe can never
+     * drift from the one teardown path (and now also cancels Stripe subs +
+     * cleans profile-app/discovery, which the old per-table wipe never did).
+     * For an orphan customer with no WP account, falls back to the shared
+     * membership-only purge.
      *
-     * @return array<string,int>  rows deleted per table
+     * @return array<string,int>  rows removed per store (+ wp_user flag)
      */
     private static function wipePerform( int $custId, int $wpId, string $email ): array
     {
-        $deleted = [];
-        $pdo     = \LGMS\Db::pdo();
-        $sets    = self::wipeQueries( $custId, $wpId, $email );
-        foreach ( $sets as $label => $q ) {
-            try {
-                $stmt = $pdo->prepare( $q['delete'] );
-                $stmt->execute( $q['params'] );
-                $deleted[ $label ] = $stmt->rowCount();
-            } catch ( \Throwable $e ) {
-                $deleted[ $label ] = 0; // Table absent or already empty.
-            }
-        }
         if ( $wpId > 0 ) {
-            \LGMS\Wp\RestController::eraseBuddypressFootprint( $wpId );
-            $deleted['bp_*_rows'] = 1; // Aggregate signal — exact per-table counts not surfaced.
-            require_once ABSPATH . 'wp-admin/includes/user.php';
-            if ( wp_delete_user( $wpId ) ) {
-                $deleted['wp_user'] = 1;
-            }
+            $r = \LGMS\UserLifecycle::teardown( $wpId, \LGMS\UserLifecycle::MODE_NUKE, false );
+            $deleted = $r['counts'];
+            $deleted['wp_user'] = get_userdata( $wpId ) ? 0 : 1;
+            return $deleted;
         }
-        return $deleted;
+        if ( $custId > 0 ) {
+            return \LGMS\UserLifecycle::purgeOrphanCustomer( $custId, false )['counts'];
+        }
+        return [];
     }
 
     /**
