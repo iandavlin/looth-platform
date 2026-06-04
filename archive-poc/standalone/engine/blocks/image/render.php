@@ -72,7 +72,7 @@ if ($displayUrl === '') $displayUrl = $url;   /* fallback when no intermediate s
    in the figcaption underneath. Newlines collapsed to spaces so the
    single-line pill at the lightbox bottom reads cleanly even when the
    author entered multiple paragraphs. */
-$lightboxCaption = $imageText !== '' ? trim(preg_replace('/\s+/', ' ', $imageText)) : '';
+$lightboxCaption = $alt !== '' ? $alt : ($imageText !== '' ? trim(preg_replace('/\s+/', ' ', $imageText)) : '');
 
 /* Split `image_text` on blank lines into paragraphs for the figcaption. */
 $textParagraphs = [];

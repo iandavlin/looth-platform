@@ -31,9 +31,44 @@ function lp_icon(string $url): string {
 }
 
 /** @return array{layout:?array, flag:?string, stats:array} */
+/** `document` is a thin sibling: a PDF download (file_upload attachment or pdf_url), a
+ *  thumbnail, and a usually-empty description. No gallery/video/onshape. Routes /document/<id>/. */
+function lp_parse_document(int $postId, $post): array {
+    $fileId = (int) get_post_meta($postId, 'file_upload', true);
+    $pdfUrl = trim((string) (get_post_meta($postId, 'pdf_url', true) ?: get_post_meta($postId, 'download_url', true)));
+    if (!$fileId && $pdfUrl === '') return ['layout' => null, 'flag' => 'no document file (file_upload/pdf_url)', 'stats' => []];
+
+    $title    = html_entity_decode(get_the_title($postId), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $featured = (int) get_post_meta($postId, '_thumbnail_id', true);
+    $tier     = wp_get_post_terms($postId, 'tier', ['fields' => 'slugs']); $tier = is_wp_error($tier) ? [] : $tier;
+
+    $text = lp_clean($post->post_content);
+    $descLines = [];
+    foreach (preg_split('/\n{2,}/', $text) as $para) { $para = trim(preg_replace('/[ \t]+/', ' ', $para)); if ($para !== '') $descLines[] = $para; }
+    $desc    = implode("\n\n", $descLines);
+    $tagline = $desc !== '' ? mb_substr(preg_split('/(?<=[.!?])\s+/', $desc)[0] ?? $desc, 0, 180) : '';
+
+    $blocks = [];
+    $blocks[] = ['type' => 'post-header', 'title' => $title, 'tagline' => $tagline, 'featured_image_id' => $featured ?: null,
+                 'show_byline' => true, 'show_categories' => true, 'show_tags' => true];
+    if ($desc !== '') $blocks[] = ['type' => 'wysiwyg', 'style' => 'panel',
+                                   'html' => make_clickable('<p>' . implode('</p><p>', array_map('esc_html', $descLines)) . '</p>')];
+    // the money shot — PDF. Prefer the attachment (ext/size auto-derive); else the raw URL.
+    $blocks[] = $fileId ? ['type' => 'download', 'file_id' => $fileId]
+                        : ['type' => 'download', 'url' => $pdfUrl, 'label' => $title, 'ext' => 'PDF', 'icon' => 'file-pdf'];
+    $blocks[] = ['type' => 'post-footer', 'show_author' => true, 'show_related' => true];
+
+    return ['layout' => ['schema' => 1, '_meta' => ['importer' => 'loothprint-parse/1', 'source_post' => $postId, 'imported_at' => gmdate('c')], 'blocks' => $blocks],
+            'flag' => null,
+            'stats' => ['tier' => $tier[0] ?? 'public', 'images' => 0, 'has_video' => false, 'support_rows' => 0,
+                        'has_license' => false, 'desc_chars' => strlen($desc), 'dropped_media' => 0,
+                        'doc_file' => $fileId ? "attachment:$fileId" : 'url']];
+}
+
 function lp_parse(int $postId): array {
     $post = get_post($postId);
     if (!$post) return ['layout' => null, 'flag' => 'no such post', 'stats' => []];
+    if ($post->post_type === 'document') return lp_parse_document($postId, $post);
 
     // CPT-aware field map. loothcuts is the same shape with a `loothcut_` prefix; its
     // download is `cnc_file` and its prose lives in an ACF field, not post_content.
