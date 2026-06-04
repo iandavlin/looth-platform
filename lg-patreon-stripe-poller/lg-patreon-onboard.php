@@ -56,6 +56,31 @@ function lgpo_apply_role_via_arbiter( int $wp_user_id, string $tier ): void {
     }
 }
 
+/**
+ * Log the just-onboarded member into WordPress so they land authenticated
+ * instead of anonymous (lifecycle G1). A bare wp_set_auth_cookie is NOT enough:
+ * the looth_id JWT — what the fast /whoami path reads — is minted on the
+ * `wp_login` action (platform/mu-plugins/profile-auth.php). So we fire wp_login
+ * explicitly, which mints the JWT and runs every other login integration just
+ * as a password login would. Must run before any output (we're on
+ * template_redirect, headers not yet sent).
+ */
+function lgpo_login_user( $user ): void {
+    if ( ! $user instanceof WP_User ) {
+        $user = get_user_by( 'id', (int) $user );
+    }
+    if ( ! $user instanceof WP_User ) {
+        return;
+    }
+    if ( headers_sent() ) {
+        error_log( 'lgpo_login_user: headers already sent, cannot set auth cookie for #' . $user->ID );
+        return;
+    }
+    wp_set_current_user( $user->ID, $user->user_login );
+    wp_set_auth_cookie( $user->ID, true );
+    do_action( 'wp_login', $user->user_login, $user );
+}
+
 // Stripe side + arbiter: hook the LGMS lifecycle if the namespace is loaded.
 if ( class_exists( '\\LGMS\\Plugin' ) ) {
     register_activation_hook( __FILE__, [ '\\LGMS\\Plugin', 'activate' ] );
@@ -928,9 +953,9 @@ function lgpo_handle_callback() {
     if ( $existing_by_patreon ) {
         lgpo_apply_role_via_arbiter( (int) $existing_by_patreon->ID, $wp_role );
         update_user_meta( $existing_by_patreon->ID, 'payment_source', 'patreon' );
+        lgpo_login_user( $existing_by_patreon );
         lgpo_terminal( 'already_onboarded', $state_payload,
-            'Your account is already connected! Your membership has been verified and your access level updated. '
-            . '<a href="' . esc_url( wp_login_url() ) . '">Log in here</a>.'
+            'Your account is already connected and you\'re now logged in! Your membership has been verified and your access level updated.'
         );
     }
 
@@ -993,22 +1018,26 @@ function lgpo_handle_callback() {
     // sees it on later cross-source merges (e.g. user later signs up for Stripe).
     lgpo_apply_role_via_arbiter( (int) $user_id, $wp_role );
 
+    // Log them straight in (lifecycle G1) — they connected via Patreon, so land
+    // them authenticated instead of bouncing to a password screen.
+    lgpo_login_user( (int) $user_id );
+
+    // Still email a set-password link so they can log in again later without
+    // re-running the Patreon OAuth dance.
     $reset_key  = get_password_reset_key( get_user_by( 'id', $user_id ) );
     $reset_link = network_site_url( "wp-login.php?action=rp&key={$reset_key}&login=" . rawurlencode( $username ), 'login' );
 
     $subject = 'Welcome to The Looth Group — Set Your Password';
     $message = "Hey {$patreon_name},\n\n"
-        . "Your account on loothgroup.com has been created and linked to your Patreon membership.\n\n"
+        . "Your account on loothgroup.com has been created and linked to your Patreon membership. You're already logged in.\n\n"
         . "Username: {$username}\n\n"
-        . "Set your password here:\n{$reset_link}\n\n"
-        . "Once you've set your password, you can log in at " . wp_login_url() . "\n\n"
+        . "Set a password here so you can log back in anytime:\n{$reset_link}\n\n"
         . "Welcome to the group.\n— Ian";
 
     wp_mail( $patreon_email, $subject, $message );
 
     lgpo_terminal( 'success', $state_payload,
-        'Your account has been created! Check your email at <strong>' . esc_html( $patreon_email ) . '</strong> for a link to set your password. '
-        . 'If you don\'t see it, check your spam folder.'
+        'Your account has been created and you\'re now logged in! We\'ve also emailed a set-password link to <strong>' . esc_html( $patreon_email ) . '</strong> so you can log back in anytime.'
     );
 }
 
