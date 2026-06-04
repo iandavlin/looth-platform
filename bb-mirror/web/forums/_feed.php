@@ -296,6 +296,7 @@ if ($topics) {
                COALESCE(r.author_name, 'Anonymous') AS author_name,
                p.slug AS author_slug,
                LEFT(r.content_text, 200) AS excerpt,
+               r.content_html,
                r.created_at,
                reply_img.url AS reply_image_url
           FROM reply r
@@ -477,13 +478,19 @@ $header_cat = $scoped_forum
       $rtime       = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
       $start_time  = $topic['created_at'] ? feed_rel_time($topic['created_at']) : '—';
       $author      = htmlspecialchars($topic['author_name']);
-      $excerpt     = feed_op_excerpt($topic);
+      // OP excerpt: format from content_html so @mentions + URLs are clickable.
+      // Falls back to the plain content_text teaser if there's no HTML.
+      $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 220, $db);
+      if ($excerpt === '') $excerpt = feed_op_excerpt($topic);
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
       $card_image  = $topic['card_image'] ?? null;
 
       // One teaser reply (newest); full thread lazy-loads via ?replies=<id>.
       $teaser    = $reply_teaser[$topic_id] ?? null;
+      if ($teaser) {
+          $teaser['excerpt_html'] = bb_mirror_format_snippet((string)($teaser['content_html'] ?? ''), 200, $db);
+      }
       $has_more  = $reply_count > ($teaser ? 1 : 0);
 
       // Category color key for this topic's forum
@@ -497,6 +504,12 @@ $header_cat = $scoped_forum
       $plain_full    = strip_tags($full_html);
       $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
       $embed_url     = feed_first_embed_url($full_html);
+
+      // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
+      $reply_cta = '<button class="feed-card__reply-cta feed-card__reply-cta--inline" type="button" data-frm-open'
+                 . ' data-topic-id="' . $topic_id . '"'
+                 . ' data-forum-id="' . (int)$topic['forum_id'] . '"'
+                 . ' data-topic-title="' . htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) . '">&#8617; Reply</button>';
     ?>
     <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>">
       <div class="feed-card__meta-top">
@@ -521,12 +534,14 @@ $header_cat = $scoped_forum
               <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
                 <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 36) ?>
                 <span>Started by <a class="feed-card__op-author" href="<?= $turl ?>"><?= $author ?></a> &middot; <?= $start_time ?></span>
+                <?= $reply_cta ?>
               </div>
             </div>
           <?php else: ?>
             <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
               <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
               <span>Started by <a class="feed-card__op-author" href="<?= $turl ?>"><?= $author ?></a> &middot; <?= $start_time ?></span>
+              <?= $reply_cta ?>
             </div>
           <?php endif; ?>
           <?php if ($embed_url): ?>
@@ -557,13 +572,6 @@ $header_cat = $scoped_forum
           <?php endif; ?>
         </div>
       <?php endif; ?>
-
-      <div class="feed-card__actions">
-        <button class="feed-card__reply-cta" type="button" data-frm-open
-                data-topic-id="<?= $topic_id ?>"
-                data-forum-id="<?= (int)$topic['forum_id'] ?>"
-                data-topic-title="<?= htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) ?>">&#8617; Reply</button>
-      </div>
 
     </article>
     <?php endforeach; ?>

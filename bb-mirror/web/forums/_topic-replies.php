@@ -25,6 +25,7 @@ $rs = $db->prepare("
            COALESCE(r.author_name, 'Anonymous') AS author_name,
            p.slug AS author_slug,
            LEFT(r.content_text, 200) AS excerpt,
+           r.content_html,
            r.created_at,
            reply_img.url AS reply_image_url
       FROM forums.reply r
@@ -98,8 +99,11 @@ if ($offset === 0 && $total > 1) {
 }
 
 foreach ($page as $row) {
+    $node = $by_id[$row['rid']];
+    // Resolve @mentions + clickable URLs for this reply's teaser text.
+    $node['excerpt_html'] = bb_mirror_format_snippet((string)($node['content_html'] ?? ''), 200, $db);
     bb_mirror_render_reply_stub(
-        $by_id[$row['rid']],
+        $node,
         $row['depth'] >= 1,                              // is_child (one indent tier)
         true,                                            // defer image behind "Show image"
         true,                                            // per-reply Reply button

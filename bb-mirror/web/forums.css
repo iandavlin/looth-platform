@@ -774,6 +774,8 @@ img { max-width: 100%; display: block; }
   color: #fff;
   border-color: var(--lg-sage-d, #6b7c52);
 }
+/* Inline variant: rides the "Started by …" byline row, pushed to the right. */
+.feed-card__reply-cta--inline { margin-left: auto; flex: 0 0 auto; }
 /* Reply modal context line ("Replying to <title>") */
 .frm-context { margin: 0 0 var(--s2); color: var(--fg-muted); font: 400 13px/1.45 var(--font-body); }
 .frm-context__title { font-weight: 600; }
@@ -1574,6 +1576,16 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   word-break: break-word;
 }
 
+/* Clickable URLs + @mentions inside teaser excerpts (feed OP + reply stubs). */
+.reply-stub__excerpt a,
+.feed-card__op-excerpt a {
+  color: var(--lg-sage-d, #6b7c52);
+  text-decoration: none;
+}
+.reply-stub__excerpt a:hover,
+.feed-card__op-excerpt a:hover { text-decoration: underline; }
+.bb-mention { font-weight: 600; }
+
 .reply-stub__full          { display: inline; }
 .reply-stub__full[hidden]  { display: none; }  /* [hidden] must beat the inline rule */
 .reply-stub__expand {
@@ -1813,17 +1825,24 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
 .feed-card__full-body ol { padding-left: 1.5em; margin: 0 0 12px; }
 
 .feed-card__read-more {
-  background: none;
-  border: none;
-  padding: 4px 0;
-  margin: 8px 0 4px;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(135,152,106,0.10);
+  border: 1px solid var(--border);
+  padding: 7px 16px;
+  margin: 10px 0 4px;
+  border-radius: 999px;
   font: 600 12px/1 var(--lg-font-sans, sans-serif);
   color: var(--lg-sage-d, #6b7c52);
   cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
 }
-.feed-card__read-more:hover { color: var(--lg-sage, #87986a); }
+.feed-card__read-more:hover {
+  background: var(--lg-sage-d, #6b7c52);
+  border-color: var(--lg-sage-d, #6b7c52);
+  color: #fff;
+}
 
 /* ══════════════════════════════════════════════════════════
    NEW TOPIC BUTTON + MODAL

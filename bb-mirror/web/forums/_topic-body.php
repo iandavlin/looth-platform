@@ -12,6 +12,7 @@
  * .post__attachments gallery so the shared CSS applies.
  */
 require __DIR__ . '/../../config.php';
+require_once __DIR__ . '/_reply-render.php';
 $db = bb_mirror_db();
 
 $tid = (int)($_GET['body'] ?? 0);
@@ -35,7 +36,7 @@ if (!$row) {
 }
 
 header('Content-Type: text/html; charset=utf-8');
-echo $row['content_html'];
+echo bb_mirror_resolve_mentions((string)$row['content_html'], $db);
 
 // -- Attachments below the text -----------------------------------------------
 $astmt = $db->prepare(

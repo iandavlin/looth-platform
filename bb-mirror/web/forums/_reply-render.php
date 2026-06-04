@@ -40,6 +40,152 @@ if (!function_exists('feed_rel_time')) {
     }
 }
 
+if (!function_exists('bb_mirror__safe_href')) {
+    /** Allow only http(s) and site-relative ("/...") hrefs through to output. */
+    function bb_mirror__safe_href(string $href): bool
+    {
+        return $href !== '' && (str_starts_with($href, 'http://')
+            || str_starts_with($href, 'https://')
+            || str_starts_with($href, '/'));
+    }
+}
+
+if (!function_exists('bb_mirror_resolve_mentions')) {
+    /**
+     * Make BuddyBoss-sourced content_html actually clickable:
+     *   1. Resolve the unresolved `{{mention_user_id_N}}` placeholder hrefs that
+     *      BuddyBoss leaves in stored content → /members/<slug>/ (looked up from
+     *      forums.person; falls back to '#' if the user is gone).
+     *   2. Auto-link bare URLs that were typed as plain text (BuddyBoss does not
+     *      store them as anchors).
+     * Returns full HTML — structure preserved. Used for the expanded topic body.
+     */
+    function bb_mirror_resolve_mentions(string $html, PDO $db): string
+    {
+        if (trim($html) === '') return $html;
+
+        // 1. Resolve {{mention_user_id_N}} → /members/<slug>/
+        if (preg_match_all('/\{\{mention_user_id_(\d+)\}\}/', $html, $m)) {
+            $ids = array_values(array_unique(array_map('intval', $m[1])));
+            $in  = implode(',', array_fill(0, count($ids), '?'));
+            $st  = $db->prepare("SELECT id, slug FROM forums.person WHERE id IN ($in)");
+            $st->execute($ids);
+            $slug = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $slug[(int)$row['id']] = (string)$row['slug'];
+            }
+            foreach ($ids as $id) {
+                // Escape the slug into the href: user_nicename is WP-constrained
+                // to [a-z0-9._-] today, but don't trust that for an attribute we
+                // emit raw in the full-body path.
+                $url = isset($slug[$id])
+                    ? htmlspecialchars('/members/' . $slug[$id] . '/', ENT_QUOTES)
+                    : '#';
+                $html = str_replace('{{mention_user_id_' . $id . '}}', $url, $html);
+            }
+        }
+
+        // 2. Auto-link bare URLs — but ONLY in the segments OUTSIDE existing
+        //    <a>…</a>. BuddyBoss bodies sometimes store <a href=url>url</a>;
+        //    linkifying that anchor's text would nest anchors (malformed: the
+        //    HTML parser then splits it into an empty + a real anchor).
+        $linkify = function (string $seg): string {
+            return preg_replace_callback(
+                '~(^|[\s>])(https?://[^\s<>"]+)~i',
+                function ($mm) {
+                    $url = $mm[2];
+                    $trail = '';
+                    while ($url !== '' && strpbrk(substr($url, -1), '.,;:!?)') !== false) {
+                        $trail = substr($url, -1) . $trail;
+                        $url   = substr($url, 0, -1);
+                    }
+                    return $mm[1] . '<a href="' . htmlspecialchars($url, ENT_QUOTES)
+                         . '" target="_blank" rel="noopener nofollow">'
+                         . htmlspecialchars($url, ENT_QUOTES) . '</a>' . $trail;
+                },
+                $seg
+            );
+        };
+        $parts = preg_split('~(<a\b[^>]*>.*?</a>)~is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+        foreach ($parts as $i => $seg) {
+            if ($i % 2 === 0) $parts[$i] = $linkify($seg); // even = outside anchors
+        }
+        $html = implode('', $parts);
+
+        return $html;
+    }
+}
+
+if (!function_exists('bb_mirror_format_snippet')) {
+    /**
+     * Teaser-safe formatted excerpt: resolves mentions + URLs (via
+     * bb_mirror_resolve_mentions) then walks the DOM emitting ONLY text and
+     * <a> anchors (mentions + links), truncated to ~$limit visible chars. All
+     * other tags are dropped (their text flows inline). Output is safe HTML.
+     */
+    function bb_mirror_format_snippet(string $html, int $limit, PDO $db): string
+    {
+        $html = bb_mirror_resolve_mentions($html, $db);
+        if (trim($html) === '') return '';
+
+        $doc = new DOMDocument();
+        libxml_use_internal_errors(true);
+        $doc->loadHTML('<?xml encoding="utf-8"?><div id="__bbroot">' . $html . '</div>',
+            LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        $root = $doc->getElementById('__bbroot');
+        if (!$root) return '';
+
+        $budget = $limit;
+        $out    = '';
+
+        $take = function (string $t) use (&$budget): string {
+            if ($budget <= 0 || $t === '') return '';
+            if (mb_strlen($t) > $budget) {
+                $t = rtrim(mb_substr($t, 0, $budget)) . '…';
+                $budget = 0;
+            } else {
+                $budget -= mb_strlen($t);
+            }
+            return $t;
+        };
+
+        $walk = function ($node) use (&$walk, &$out, &$budget, $take) {
+            foreach ($node->childNodes as $c) {
+                if ($budget <= 0) return;
+                if ($c->nodeType === XML_TEXT_NODE) {
+                    $out .= htmlspecialchars($take($c->nodeValue), ENT_QUOTES, 'UTF-8');
+                } elseif ($c->nodeType === XML_ELEMENT_NODE) {
+                    $tag = strtolower($c->nodeName);
+                    if ($tag === 'a') {
+                        $href = $c->getAttribute('href');
+                        $txt  = $take($c->textContent);
+                        $isMention = str_contains($c->getAttribute('class'), 'bp-suggestions-mention')
+                                  || str_starts_with(ltrim($c->textContent), '@');
+                        if ($href !== '' && bb_mirror__safe_href($href)) {
+                            $cls = $isMention ? ' class="bb-mention"' : '';
+                            $ext = str_starts_with($href, 'http') ? ' target="_blank" rel="noopener nofollow"' : '';
+                            $out .= '<a href="' . htmlspecialchars($href, ENT_QUOTES) . '"' . $cls . $ext . '>'
+                                  . htmlspecialchars($txt, ENT_QUOTES, 'UTF-8') . '</a>';
+                        } else {
+                            $out .= htmlspecialchars($txt, ENT_QUOTES, 'UTF-8');
+                        }
+                    } else {
+                        $walk($c);
+                        // Keep words from running together across block boundaries.
+                        if ($budget > 0 && in_array($tag, ['p', 'br', 'li', 'blockquote', 'div'], true)) {
+                            $out .= ' ';
+                        }
+                    }
+                }
+            }
+        };
+        $walk($root);
+
+        return trim($out);
+    }
+}
+
 if (!function_exists('bb_mirror_render_reply_stub')) {
     /**
      * Render one .reply-stub row.
@@ -80,7 +226,11 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         if ($reply_to_author !== null && $reply_to_author !== '') {
             echo '<span class="reply-stub__reply-to">&#8618; @' . htmlspecialchars($reply_to_author) . '</span> ';
         }
-        if ($reply_short !== '') {
+        if (!empty($r['excerpt_html'])) {
+            // Pre-formatted by the caller (bb_mirror_format_snippet): resolved
+            // @mentions + clickable URLs, already truncated + safe HTML.
+            echo '<span class="reply-stub__excerpt">' . $r['excerpt_html'] . '</span>';
+        } elseif ($reply_short !== '') {
             echo '<span class="reply-stub__excerpt">' . htmlspecialchars($reply_short);
             if ($reply_rest) {
                 echo '<span class="reply-stub__full" hidden>' . htmlspecialchars($reply_rest) . '</span>'
