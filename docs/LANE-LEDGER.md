@@ -38,3 +38,10 @@ Legend: 🟢 green/done · 🟡 in-flight · ⚪ dispatched, not started · 🔵
 ## Pushed this session (on main)
 - bb-mirror: 05e36b6 (Step 1), 1c4f0b8 (pill borders/suggestion-box/sticky offset), 7c561f2 (9-color palette), c7262f0 (palette unification).
 - Coordinator: siteurl (DB, not git), nginx lockdown (conf + .bak).
+
+## 2026-06-04 — user-lifecycle + git-lane restructure (coordinator)
+- **user-lifecycle DELETE** 🟢 done + integration-proven. Canonical `UserLifecycle::teardown(wpId,mode,dryRun)` (nuke|tombstone), WP Users-screen row+bulk actions, `deleted_user` safety net, legacy doNuke/TestChecklist folded to wrappers; profile-app `internal/erase-user` endpoint. Coordinator wired the nginx route + ran the joint nuke on a full-footprint throwaway (1893): WP user/posts/comments + bridge + 6 profile rows erased over the route; media-delete masked by a root-owned fixture file (artifact, not a bug); discovery skipped (DSN). Commits 91718f5/1c2ad4e/3b0acf9/2db2258 — committed, push handed to git-tsar.
+- **user-lifecycle LOGIN** ⚪ dispatched. poller → `briefing-login-poller.md` (G1 onboard auto-login+JWT, G2 cache purge, G3 dash-role capture, Phase-3 canonical provision). shim+profile-app → `briefing-login-identity.md` (G4 uuid-stable mint/email-change, G7 reliable bridge-create). Full audit+plan: `docs/USER-LIFECYCLE-AUDIT.md`.
+- **git tsar** 🆕 role created (`briefing-git-tsar.md`) — sole merge/push gateway + per-lane worktrees; running the off-main migration now. Worktree transfer mechanism coordinator-tested.
+- **Buck sub-coordinator** 🆕 role created (`briefing-buck-subcoord.md`) — owns all Buck branches per the standing merge policy; frees main coord.
+- **Coordinator follow-ups owed:** provision poller a scoped `discovery` DSN (`LG_DISCOVERY_DSN`); one-time sweep of orphaned `wp_user_bridge` rows (G5 backlog).
