@@ -779,9 +779,9 @@ function looth_dropoff_card(string $name, string $addr, string $hours, string $n
  * place, persisted to me-dropoffs); a visitor sees the read-only list. Block-level
  * pmp, header-ceiling-capped like every other block.
  */
-function looth_render_dropoffs_block(int $userId, string $role, string $headerVis): void
+function looth_render_dropoffs_block(int $userId, string $role, string $headerVis, string $loadKey = 'dropoffs', string $pmpBlock = 'dropoffs'): void
 {
-    $do      = Block::loadDropoffs($userId);
+    $do      = Block::loadDropoffs($userId, $loadKey);
     if ($do === null) return;
     $items   = $do['items'] ?? [];
     $isOwner = ($role === 'me');
@@ -791,7 +791,7 @@ function looth_render_dropoffs_block(int $userId, string $role, string $headerVi
 
     echo '<section class="block lg-block lg-block--dropoffs" data-block="dropoffs">';
     echo '<h3 class="lg-bh">Drop-off Locations';
-    if ($isOwner) echo ' ' . looth_pmp_control('dropoffs', (string)$do['vis'], $headerVis);
+    if ($isOwner) echo ' ' . looth_pmp_control($pmpBlock, (string)$do['vis'], $headerVis);
     echo '</h3>';
 
     // Map of every drop-off that has resolved coordinates. Rendered for owner and
@@ -1027,6 +1027,12 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
                     Block::practiceBlockKey('about', $practiceId), $editing,
                     '/profile-api/v0/me/practice-about?practice=' . $practiceId,
                     'practice-about'
+                );
+            } elseif ($key === 'dropoffs') {
+                looth_render_dropoffs_block(
+                    $ownerId, $role, $headerVis,
+                    Block::practiceBlockKey('dropoffs', $practiceId),
+                    'practice-dropoffs'
                 );
             }
         }

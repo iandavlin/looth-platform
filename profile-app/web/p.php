@@ -66,6 +66,8 @@ $viewLink = fn(string $v): string => '/p/' . rawurlencode($slugSafe) . '?view=' 
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($name) ?> · Looth</title>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>
 <style>
 body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--lg-font-sans);font-size:15px;line-height:1.6}
 /* The View-as bar and the first practice-header block are direct children of
@@ -178,6 +180,29 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   .lg-caddy__backdrop{display:none}
 }
 @media(max-width:560px){.lg-idrow{flex-direction:column;text-align:center;align-items:center}}
+/* drop-off locations (business storefront) */
+.lg-dropoffs{display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.lg-dropoff{background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:12px 14px}
+.lg-dropoff__name{font:700 15px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-dropoff__addr{font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:3px}
+.lg-dropoff__hours{font:600 12.5px/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
+.lg-dropoff__notes{font:400 13px/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
+.lg-dropoff--edit{position:relative;display:flex;flex-direction:column;gap:7px;padding-right:34px}
+.lg-dropoff--edit .lg-dropoff__rm{position:absolute;top:8px;right:8px}
+.lg-dropoff__f{width:100%;box-sizing:border-box;font:500 13.5px/1.3 var(--lg-font-sans);color:var(--lg-ink);background:#fff;border:1px solid var(--lg-line);border-radius:7px;padding:7px 9px}
+.lg-dropoff__f:focus{outline:none;border-color:var(--lg-sage);box-shadow:0 0 0 2px var(--lg-sage-tint)}
+.lg-dropoff__name-in{font-weight:700}
+.lg-dropoff__notes-in{resize:vertical;min-height:38px;font-family:var(--lg-font-sans)}
+.lg-dropoffs__map{margin:6px 0 14px;height:320px;border-radius:12px;border:1px solid var(--lg-line);overflow:hidden;background:var(--lg-sage-tint);position:relative;isolation:isolate;z-index:0}
+.lg-dropoffs__map .leaflet-container{height:100%;border-radius:12px;font:inherit}
+.lg-pinpop__name{display:block;font-weight:600;font-size:14px;color:var(--lg-ink);margin-bottom:2px}
+.lg-pinpop__addr,.lg-pinpop__hours,.lg-pinpop__notes{font-size:12.5px;color:var(--lg-mute);line-height:1.4}
+.lg-pinpop__hours{margin-top:3px}
+.lg-pinpop__notes{margin-top:3px;font-style:italic}
+.lg-link__rm{border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
+.lg-link__rm:hover{color:var(--lg-rust)}
+.lg-link__add{align-self:flex-start;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:6px 14px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-link__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
 </style>
 </head>
 <body class="mode-view">
@@ -462,7 +487,8 @@ window.lgSortable = function (container, opts) {
   var BASE = '/profile-api/v0', PID = <?= (int)$practiceId ?>;
   var EP = {
     'practice-header': { url: BASE + '/me/practice-header?practice=' + PID, m: 'PATCH', k: 'visibility' },
-    'practice-about':  { url: BASE + '/me/practice-about?practice='  + PID, m: 'PATCH', k: 'visibility' }
+    'practice-about':  { url: BASE + '/me/practice-about?practice='  + PID, m: 'PATCH', k: 'visibility' },
+    'practice-dropoffs': { url: BASE + '/me/practice-block?practice=' + PID + '&block=dropoffs', m: 'PUT', k: 'visibility' }
   };
   var TIERS = ['public', 'members', 'private'];
   var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private' };
@@ -570,6 +596,90 @@ window.lgSortable = function (container, opts) {
   });
 })();
 </script>
+<script>
+/* Drop-offs editor (owner/Me) — add/remove/edit cards; PUT the whole list to the
+   generic practice-block endpoint. Ported from the profile lane (u.php). */
+(function () {
+  var wrap = document.getElementById('lg-dropoffs-edit');
+  if (!wrap) return;
+  var PID = <?= (int)$practiceId ?>;
+  var URL = '/profile-api/v0/me/practice-block?practice=' + PID + '&block=dropoffs';
+  var addBtn = document.getElementById('lg-dropoff-add');
+  function collect() {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-dropoff'), function (card) {
+      function v(f) { var el = card.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
+      return { name: v('name'), address: v('address'), hours: v('hours'), notes: v('notes') };
+    });
+  }
+  function cardEl() {
+    var card = document.createElement('div'); card.className = 'lg-dropoff lg-dropoff--edit';
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm lg-dropoff__rm';
+    rm.setAttribute('aria-label', 'Remove drop-off'); rm.title = 'Remove drop-off'; rm.textContent = '\u00d7';
+    card.appendChild(rm);
+    function inp(f, ph, cls) {
+      var el = document.createElement('input'); el.type = 'text';
+      el.className = 'lg-dropoff__f' + (cls ? ' ' + cls : '');
+      el.setAttribute('data-f', f); el.placeholder = ph; return el;
+    }
+    card.appendChild(inp('name', 'Location name (e.g. The Shop)', 'lg-dropoff__name-in'));
+    card.appendChild(inp('address', 'Street address', ''));
+    card.appendChild(inp('hours', 'Hours (e.g. Mon\u2013Fri 9\u20135)', ''));
+    var ta = document.createElement('textarea');
+    ta.className = 'lg-dropoff__f lg-dropoff__notes-in';
+    ta.setAttribute('data-f', 'notes'); ta.rows = 2; ta.placeholder = 'Notes (optional)';
+    card.appendChild(ta);
+    return card;
+  }
+  function put(items) {
+    fetch(URL, { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-dropoff__rm');
+    if (rm) { rm.closest('.lg-dropoff').remove(); put(collect()); }
+  });
+  wrap.addEventListener('change', function (e) {
+    if (e.target.closest('.lg-dropoff')) put(collect());
+  });
+  addBtn && addBtn.addEventListener('click', function () {
+    var card = cardEl();
+    wrap.insertBefore(card, addBtn);
+    var f = card.querySelector('[data-f="name"]'); if (f) f.focus();
+  });
+})();
+</script>
 <?php endif; ?>
+<script>
+/* Drop-off Locations map — Leaflet + OSM tiles. Reads pins from the
+   .lg-dropoffs__map[data-pins] div; runs for visitor and owner alike. */
+window.addEventListener('load', function () {
+  if (typeof L === 'undefined') return;
+  document.querySelectorAll('.lg-dropoffs__map[data-pins]').forEach(function (el) {
+    var pins;
+    try { pins = JSON.parse(el.getAttribute('data-pins')); } catch (e) { return; }
+    if (!Array.isArray(pins) || !pins.length) return;
+    var esc = function (v) { var d = document.createElement('div'); d.textContent = (v == null) ? '' : String(v); return d.innerHTML; };
+    var map = L.map(el, { scrollWheelZoom: false }).setView([pins[0].lat, pins[0].lng], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '\u00a9 OpenStreetMap' }).addTo(map);
+    var markers = [];
+    pins.forEach(function (p) {
+      if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+      var html = '<div class="lg-pinpop">'
+        + (p.n  ? '<strong class="lg-pinpop__name">'  + esc(p.n) + '</strong>' : '')
+        + (p.a  ? '<div class="lg-pinpop__addr">'     + esc(p.a) + '</div>'    : '')
+        + (p.h  ? '<div class="lg-pinpop__hours">'    + esc(p.h) + '</div>'    : '')
+        + (p.no ? '<div class="lg-pinpop__notes">'    + esc(p.no).replace(/\n/g, '<br>') + '</div>' : '')
+        + '</div>';
+      markers.push(L.marker([p.lat, p.lng]).addTo(map).bindPopup(html));
+    });
+    if (markers.length > 1) { map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2)); }
+    else if (markers.length === 1) { map.setView(markers[0].getLatLng(), 14); }
+    setTimeout(function () { map.invalidateSize(); }, 80);
+  });
+});
+</script>
 </body>
 </html>

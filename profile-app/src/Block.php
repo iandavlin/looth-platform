@@ -881,15 +881,15 @@ final class Block
      * a single profile_sections row (key='dropoffs', data JSONB {items:[...]}); no
      * dedicated table / migration. Returns null only for an unknown user.
      */
-    public static function loadDropoffs(int $userId): ?array
+    public static function loadDropoffs(int $userId, string $key = self::DROPOFFS_KEY): ?array
     {
         $pg = Db::pg();
         $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
         $e->execute([':i' => $userId]);
         if (!$e->fetchColumn()) return null;
 
-        $s = $pg->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'dropoffs'");
-        $s->execute([':u' => $userId]);
+        $s = $pg->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $items = [];
         if ($r) {
@@ -946,7 +946,7 @@ Accept: application/json
         return ['lat' => (float)$data[0]['lat'], 'lng' => (float)$data[0]['lon']];
     }
 
-    public static function saveDropoffs(int $userId, array $items, ?string $visInput = null): ?array
+    public static function saveDropoffs(int $userId, array $items, ?string $visInput = null, string $key = self::DROPOFFS_KEY): ?array
     {
         $pg = Db::pg();
         $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
@@ -956,7 +956,7 @@ Accept: application/json
         // Preserve already-resolved pin coordinates: match incoming rows to the
         // stored ones by address, so editing name/hours/notes never re-geocodes.
         $prevCoords = [];
-        $prevShape  = self::loadDropoffs($userId);
+        $prevShape  = self::loadDropoffs($userId, $key);
         foreach (($prevShape['items'] ?? []) as $p) {
             $pa = mb_strtolower(trim((string)($p['address'] ?? '')));
             if ($pa !== '' && $p['lat'] !== null && $p['lng'] !== null) {
@@ -995,17 +995,17 @@ Accept: application/json
         if ($visInput !== null && self::visFromInput($visInput) !== null) {
             $pg->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'dropoffs', :v, :d::jsonb, 50)
+                VALUES (:u, :k, :v, :d::jsonb, 50)
                 ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':v' => self::visFromInput($visInput), ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':v' => self::visFromInput($visInput), ':d' => $data]);
         } else {
             $pg->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'dropoffs', 'members', :d::jsonb, 50)
+                VALUES (:u, :k, 'members', :d::jsonb, 50)
                 ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':d' => $data]);
         }
-        return self::loadDropoffs($userId);
+        return self::loadDropoffs($userId, $key);
     }
 
     // ---------- block: resume (single PDF; profile-only) ----------
@@ -1299,7 +1299,8 @@ Accept: application/json
      * appears here. WS3 widens this set (services, gallery, links, drop-offs).
      */
     public const PRACTICE_LAYOUT_BLOCKS = [
-        'about' => ['label' => 'About', 'removable' => true],
+        'about'    => ['label' => 'About', 'removable' => true],
+        'dropoffs' => ['label' => 'Drop-off Locations', 'removable' => true],
     ];
 
     /**
