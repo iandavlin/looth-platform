@@ -609,6 +609,7 @@ $header_cat = $scoped_forum
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
     <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
        class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Hot</a>
+    <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_toolbar_search($hub_filters, $sort_param); ?>
     <button class="feed-compact-toggle" type="button" aria-pressed="false"
             title="Toggle compact view" aria-label="Toggle compact view">
       <span class="feed-compact-toggle__icon" aria-hidden="true">&#9636;</span>
@@ -734,7 +735,10 @@ $header_cat = $scoped_forum
     ?>
     <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>">
       <div class="feed-card__meta-top">
-        <span class="feed-card__forum-ctx"><?= $ctx ?></span>
+        <span class="feed-card__forum-ctx">
+          <span class="feed-card__kind-badge feed-card__kind-badge--discussion">Discussion</span>
+          <?= $ctx ?>
+        </span>
         <time class="feed-card__time" title="<?= htmlspecialchars((string)$topic['event_time']) ?>"><?= $rtime ?></time>
       </div>
 

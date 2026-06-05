@@ -2636,6 +2636,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card__kind-badge--event        { color: #2f4a7a; background: #dfe7f5; }
 .feed-card__kind-badge--sponsor-post { color: #9a4a12; background: #f7e7d6; }
 .feed-card__kind-badge--loothprint   { color: #5a3a7a; background: #ece1f3; }
+.feed-card__kind-badge--discussion   { color: #4a4636; background: #e6e2d6; }
 .feed-card__kind-dur { display: inline-block; margin-left: 4px; font: 600 10px/1.4 var(--font-body); color: var(--lg-mute); vertical-align: middle; }
 
 /* Inline provider embed in a feed card (lazily built by forums.js §2e) */
@@ -2900,3 +2901,16 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-rail__row.is-muted.is-on { background: transparent; }
 .hub-rail__row.is-muted.is-on .hub-rail__nm { color: var(--lg-ink); font-weight: 400; }
 .hub-chip--muted { background: #f3e6dd; border-color: #e6cab2; color: #8a4f23; }
+
+/* Search + author filter moved into the feed toolbar (the sort-bar gap).
+   Own margin-left:auto so it shares the free space with the toggles' auto-margin
+   and lands centered between the sort tabs and the view toggles. */
+.feed-toolbar-search { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.feed-toolbar-search + .feed-compact-toggle { margin-left: 12px; } /* toggles sit just right of search, not auto-shoved to the edge */
+.hub-tsearch { display: flex; align-items: center; gap: 6px; background: #fff;
+  border: 1px solid var(--lg-line); border-radius: 999px; padding: 6px 12px; }
+.hub-tsearch__ico { color: var(--lg-mute); font-size: 13px; line-height: 1; }
+.hub-tsearch__in { border: 0; background: transparent; outline: none;
+  font: 500 13px/1 var(--lg-font-sans); color: var(--lg-ink); width: 132px; }
+.hub-tsearch--author .hub-tsearch__in { width: 116px; }
+.hub-tsearch__in::placeholder { color: var(--lg-mute); }

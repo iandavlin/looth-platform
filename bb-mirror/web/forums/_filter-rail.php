@@ -80,13 +80,6 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
     arsort($cats);
     ?>
     <div class="hub-rail">
-      <form class="search-form search-form--sidebar" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>">
-        <label class="search-form__label" for="q">Search the Hub</label>
-        <input class="search-form__input" id="q" name="q" type="search"
-               placeholder="Search the Hub…" value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off">
-        <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
-      </form>
-
       <h4 class="hub-rail__h">Type <small>· toggle to mute</small></h4>
       <div class="hub-rail__group">
         <?php foreach ($type_order as $key):
@@ -101,15 +94,39 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
           hub_rail_row('cat', (string)$key, hub_cat_label((string)$key), (int)$n, $filters, $muted, $sort);
         endforeach; ?>
       </div>
+    </div>
+    <?php
+}
 
-      <h4 class="hub-rail__h">Authors</h4>
-      <form class="search-form search-form--sidebar" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>">
-        <?php // preserve current type/cat/sort when submitting an author filter
-        if (!empty($filters['types'])) echo '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
-        if (!empty($filters['cats']))  echo '<input type="hidden" name="cat"  value="' . htmlspecialchars(implode(',', $filters['cats'])) . '">';
-        if ($sort !== 'new')           echo '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">'; ?>
-        <input class="search-form__input" name="author" type="search"
-               placeholder="Filter by author…" value="<?= htmlspecialchars((string)($filters['author'] ?? '')) ?>" autocomplete="off">
+/**
+ * Search + author filter for the feed toolbar (moved out of the rail). Two
+ * compact GET forms that preserve the current filters/sort so search and
+ * author-filter compose with the active facets.
+ */
+function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
+{
+    $keep = function (array $skip) use ($filters, $sort): string {
+        $h = '';
+        if (!in_array('type', $skip, true)   && !empty($filters['types']))  $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
+        if (!in_array('cat', $skip, true)    && !empty($filters['cats']))   $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
+        if (!in_array('author', $skip, true) && !empty($filters['author'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars((string)$filters['author']) . '">';
+        if ($sort !== 'new')                                                $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
+        return $h;
+    };
+    $action = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/');
+    ?>
+    <div class="feed-toolbar-search">
+      <form class="hub-tsearch hub-tsearch--q" method="get" action="<?= $action ?>" role="search">
+        <?= $keep(['author']) // a Hub text search keeps facets but clears any author filter via its own field ?>
+        <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
+        <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub…"
+               value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off" aria-label="Search the Hub">
+      </form>
+      <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search">
+        <?= $keep(['author']) ?>
+        <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
+        <input class="hub-tsearch__in" name="author" type="search" placeholder="Filter by author…"
+               value="<?= htmlspecialchars((string)($filters['author'] ?? '')) ?>" autocomplete="off" aria-label="Filter by author">
       </form>
     </div>
     <?php
