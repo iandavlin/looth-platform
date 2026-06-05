@@ -206,7 +206,8 @@ function render_reply(
       </div>
       <div class="post__content">
         <div class="post__head">
-          <span class="post__author"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></span>
+          <?php $pslug = $r['author_slug'] ?? null; ?>
+          <?php if ($pslug): ?><a class="post__author" href="/u/<?= rawurlencode((string)$pslug) ?>"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></a><?php else: ?><span class="post__author"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></span><?php endif; ?>
           <?php if ($is_op): ?>
             <span class="badge badge--op">OP</span>
           <?php endif; ?>
@@ -326,7 +327,8 @@ $fh_image      = $forum['header_image_url'] ?: null;
       </div>
       <div class="post__content">
         <div class="post__head">
-          <span class="post__author"><?= htmlspecialchars($topic['author_name'] ?: 'Anonymous') ?></span>
+          <?php $pslug = $topic['author_slug'] ?? null; ?>
+          <?php if ($pslug): ?><a class="post__author" href="/u/<?= rawurlencode((string)$pslug) ?>"><?= htmlspecialchars($topic['author_name'] ?: 'Anonymous') ?></a><?php else: ?><span class="post__author"><?= htmlspecialchars($topic['author_name'] ?: 'Anonymous') ?></span><?php endif; ?>
           <span class="badge badge--op">OP</span>
           <?php if ($op_is_mod): ?>
             <span class="badge badge--mod">MOD</span>

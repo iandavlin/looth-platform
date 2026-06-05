@@ -39,7 +39,7 @@ $stmt = $db->prepare("
     WITH q AS (SELECT websearch_to_tsquery('english', ?) AS tsq),
     topic_hits AS (
       SELECT 'topic' AS kind, t.id, t.id AS topic_id, t.slug AS topic_slug,
-             t.title, t.author_name, t.created_at,
+             t.title, t.author_name, p.slug AS author_slug, t.created_at,
              ts_rank(t.search_doc, q.tsq) * 2.0 AS rank,
              ts_headline('english', COALESCE(t.content_text,''), q.tsq,
                          'MaxWords=24, MinWords=10, ShortWord=2') AS snippet,
@@ -47,6 +47,7 @@ $stmt = $db->prepare("
         FROM topic t
         CROSS JOIN q
         JOIN forum f ON f.id = t.forum_id
+        LEFT JOIN person p ON p.id = t.author_id
         LEFT JOIN forum pf ON pf.id = f.parent_forum_id
        WHERE t.status IN ('publish','closed')
          AND f.visibility = 'public'
@@ -54,7 +55,7 @@ $stmt = $db->prepare("
     ),
     reply_hits AS (
       SELECT 'reply' AS kind, r.id, r.topic_id, t.slug AS topic_slug,
-             t.title, r.author_name, r.created_at,
+             t.title, r.author_name, p.slug AS author_slug, r.created_at,
              ts_rank(r.search_doc, q.tsq) AS rank,
              ts_headline('english', COALESCE(r.content_text,''), q.tsq,
                          'MaxWords=24, MinWords=10, ShortWord=2') AS snippet,
@@ -63,6 +64,7 @@ $stmt = $db->prepare("
         CROSS JOIN q
         JOIN topic t ON t.id = r.topic_id
         JOIN forum f ON f.id = r.forum_id
+        LEFT JOIN person p ON p.id = r.author_id
         LEFT JOIN forum pf ON pf.id = f.parent_forum_id
        WHERE r.status = 'publish'
          AND t.status IN ('publish','closed')
@@ -125,7 +127,7 @@ function fmt_ts_search($ts): string {
                 <p class="feed-card__op-excerpt"><?= $r['snippet'] /* ts_headline marked HTML */ ?></p>
                 <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
                   <?= bb_mirror_avatar($r['author_name'] ?: 'A', $r['author_name'] ?: 'anon', 36) ?>
-                  <span>by <a class="feed-card__op-author" href="<?= htmlspecialchars($href) ?>"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></a></span>
+                  <?php $sslug = $r['author_slug'] ?? null; ?><span>by <?php if ($sslug): ?><a class="feed-card__op-author" href="/u/<?= rawurlencode((string)$sslug) ?>"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></a><?php else: ?><span class="feed-card__op-author"><?= htmlspecialchars($r['author_name'] ?: 'Anonymous') ?></span><?php endif; ?></span>
                 </div>
               </div>
             </div>
