@@ -39,8 +39,34 @@ function hub_toggle(array $filters, string $facet, string $val): array
     return $filters;
 }
 
+/** A /hub/ URL that flips a sticky mute, preserving current filters + sort. */
+function hub_mute_url(array $filters, string $sort, string $facet, string $key): string
+{
+    $base = hub_url($filters, $sort); // already htmlspecialchars'd
+    $sep  = strpos($base, '?') !== false ? '&amp;' : '?';
+    return $base . $sep . 'mute_toggle=' . $facet . ':' . urlencode($key);
+}
+
+/** One rail row: clickable name (filter) + count + sticky mute switch. */
+function hub_rail_row(string $facet, string $key, string $label, int $n, array $filters, array $muted, string $sort): void
+{
+    $mkey   = $facet === 'type' ? 'types' : 'cats';
+    $on     = in_array($key, $filters[$mkey], true);     // filtered-to
+    $is_mut = in_array($key, $muted[$mkey], true);       // sticky-muted
+    $f_url  = hub_url(hub_toggle($filters, $facet, $key), $sort);
+    $m_url  = hub_mute_url($filters, $sort, $facet === 'type' ? 't' : 'c', $key);
+    ?>
+    <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?>">
+      <a class="hub-rail__nm" href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
+      <span class="hub-rail__ct"><?= $n ?></span>
+      <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= $m_url ?>"
+         title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($label) ?>"></a>
+    </div>
+    <?php
+}
+
 /** Render the control rail into the left-nav slot. */
-function hub_render_rail(array $facets, array $filters, string $sort = 'new'): void
+function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new'): void
 {
     $types = $facets['types'] ?? [];
     $cats  = $facets['cats']  ?? [];
@@ -61,29 +87,19 @@ function hub_render_rail(array $facets, array $filters, string $sort = 'new'): v
         <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
       </form>
 
-      <h4 class="hub-rail__h">Type</h4>
+      <h4 class="hub-rail__h">Type <small>· toggle to mute</small></h4>
       <div class="hub-rail__group">
         <?php foreach ($type_order as $key):
           if (!isset($types[$key])) continue;
-          $on  = in_array($key, $filters['types'], true);
-          $url = hub_url(hub_toggle($filters, 'type', $key), $sort); ?>
-          <a class="hub-rail__row<?= $on ? ' is-on' : '' ?>" href="<?= $url ?>">
-            <span class="hub-rail__nm"><?= htmlspecialchars(hub_type_label($key)) ?></span>
-            <span class="hub-rail__ct"><?= (int)$types[$key] ?></span>
-          </a>
-        <?php endforeach; ?>
+          hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+        endforeach; ?>
       </div>
 
-      <h4 class="hub-rail__h">Categories</h4>
+      <h4 class="hub-rail__h">Categories <small>· toggle to mute</small></h4>
       <div class="hub-rail__group">
         <?php foreach ($cats as $key => $n):
-          $on  = in_array($key, $filters['cats'], true);
-          $url = hub_url(hub_toggle($filters, 'cat', $key), $sort); ?>
-          <a class="hub-rail__row<?= $on ? ' is-on' : '' ?>" href="<?= $url ?>">
-            <span class="hub-rail__nm"><?= htmlspecialchars(hub_cat_label((string)$key)) ?></span>
-            <span class="hub-rail__ct"><?= (int)$n ?></span>
-          </a>
-        <?php endforeach; ?>
+          hub_rail_row('cat', (string)$key, hub_cat_label((string)$key), (int)$n, $filters, $muted, $sort);
+        endforeach; ?>
       </div>
 
       <h4 class="hub-rail__h">Authors</h4>
@@ -99,9 +115,10 @@ function hub_render_rail(array $facets, array $filters, string $sort = 'new'): v
     <?php
 }
 
-/** Render the active-filter chip bar at the top of the feed. */
-function hub_render_chipbar(array $filters, string $sort = 'new'): void
+/** Render the active-filter + muted chip bar at the top of the feed. */
+function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'): void
 {
+    // Active (transient) filter chips — removing returns to the unfiltered set.
     $chips = [];
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort)];
@@ -109,15 +126,25 @@ function hub_render_chipbar(array $filters, string $sort = 'new'): void
         $f = $filters; $f['author'] = '';
         $chips[] = ['By', $filters['author'], hub_url($f, $sort)];
     }
-    if (!$chips) return;
+    // Sticky "Muted" chips — removing un-mutes (distinct styling, always shown).
+    $mchips = [];
+    foreach ($muted['types'] as $v) $mchips[] = ['Muted', hub_type_label($v), hub_mute_url($filters, $sort, 't', $v)];
+    foreach ($muted['cats']  as $v) $mchips[] = ['Muted', hub_cat_label($v),  hub_mute_url($filters, $sort, 'c', $v)];
+
+    if (!$chips && !$mchips) return;
     ?>
     <div class="hub-chipbar">
-      <span class="hub-chipbar__lab">Filters</span>
-      <span class="hub-chipbar__and">AND</span>
-      <?php foreach ($chips as [$k, $v, $rm]): ?>
-        <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
+      <?php if ($chips): ?>
+        <span class="hub-chipbar__lab">Filters</span>
+        <span class="hub-chipbar__and">AND</span>
+        <?php foreach ($chips as [$k, $v, $rm]): ?>
+          <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
+        <?php endforeach; ?>
+        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'author' => ''], $sort) ?>">Reset all</a>
+      <?php endif; ?>
+      <?php foreach ($mchips as [$k, $v, $rm]): ?>
+        <span class="hub-chip hub-chip--muted"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>
       <?php endforeach; ?>
-      <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'author' => ''], $sort) ?>">Reset all</a>
     </div>
     <?php
 }

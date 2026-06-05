@@ -172,6 +172,22 @@ $content_tiers = array_keys(array_filter($tier_rank, fn($r) => $r <= $tier_rank[
 // -- Control sidebar: active filter selection (site-wide /hub/ only) --
 require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
 $hub_filters = hub_filters_parse();
+$hub_muted   = hub_mute_parse();
+
+// Sticky-mute toggle: flip the cookie + 302 back to the feed (no JS, headers
+// not yet sent — chrome only outputs inside bb_mirror_chrome_header()).
+if (isset($_GET['mute_toggle'])) {
+    $parts = explode(':', (string)$_GET['mute_toggle'], 2);
+    if (count($parts) === 2 && in_array($parts[0], ['t', 'c'], true) && $parts[1] !== '') {
+        $hub_muted = hub_mute_apply_toggle($hub_muted, $parts[0], $parts[1]);
+        setcookie('hub_mute', hub_mute_serialize($hub_muted), [
+            'expires'  => time() + 31536000, 'path' => '/',
+            'secure'   => true, 'httponly' => true, 'samesite' => 'Lax',
+        ]);
+    }
+    header('Location: ' . html_entity_decode(hub_url($hub_filters, $sort_param)));
+    return;
+}
 
 // -- Resolve scope into forum_ids array (for header image query) --
 $scope_ids = null; // null = site-wide
@@ -294,13 +310,18 @@ if ($scoped_forum) {
     foreach ($content_tiers as $i => $tv) $tier_ph[] = ':ctier' . $i;
     $tier_in = $tier_ph ? implode(',', $tier_ph) : "''"; // never empty -> no rows
 
-    // Server-side AND filter (Type ∩ Category ∩ Author) on the union's output.
-    [$hub_where, $hub_binds] = hub_filter_where($hub_filters, $_forum_cat_map);
+    // Server-side AND filter (Type ∩ Category ∩ Author) + sticky mute exclusions,
+    // merged into one outer WHERE on the union's output.
+    [$f_clauses, $hub_binds]  = hub_filter_where($hub_filters, $_forum_cat_map);
+    [$m_clauses, $mute_binds] = hub_mute_clause($hub_muted, $_forum_cat_map);
+    $all_clauses = array_merge($f_clauses, $m_clauses);
+    $hub_binds   = $hub_binds + $mute_binds;
+    $hub_where   = $all_clauses ? 'WHERE ' . implode(' AND ', $all_clauses) : '';
 
     // Facet counts + stash so the chrome renders the control rail into the
     // left-nav slot (Option A: rail replaces forum nav on the site-wide feed).
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'filters' => $hub_filters, 'sort' => $sort_param];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param];
 
     $topic_sql = "
       SELECT * FROM (
@@ -578,7 +599,7 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </header>
 
-  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $sort_param); ?>
+  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity">

@@ -2886,3 +2886,17 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-chipbar__reset { margin-left: auto; font-size: 13px; font-weight: 600;
   color: var(--lg-rust, #c8772f); text-decoration: none; }
 .hub-chipbar__reset:hover { text-decoration: underline; }
+
+/* Sticky mute switch (per Type/Category row) + muted row/chip states */
+.hub-sw { flex: none; width: 32px; height: 18px; border-radius: 20px; background: #cfc9ba;
+  position: relative; text-decoration: none; transition: background .15s; }
+.hub-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: left .15s; }
+.hub-sw.is-on { background: var(--lg-sage, #87986a); }
+.hub-sw.is-on::after { left: 16px; }
+.hub-rail__row.is-muted .hub-rail__nm,
+.hub-rail__row.is-muted .hub-rail__ct { opacity: .45; }
+/* a muted row is never also filtered-on, but guard the override anyway */
+.hub-rail__row.is-muted.is-on { background: transparent; }
+.hub-rail__row.is-muted.is-on .hub-rail__nm { color: var(--lg-ink); font-weight: 400; }
+.hub-chip--muted { background: #f3e6dd; border-color: #e6cab2; color: #8a4f23; }

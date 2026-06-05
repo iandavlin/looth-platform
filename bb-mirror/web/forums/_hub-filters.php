@@ -124,15 +124,14 @@ function hub_cat_forum_ids(array $forum_cat_map): array
 
 /**
  * Build the server-side AND filter for the union's outer WHERE.
- * Returns [sql_fragment, named_binds]. sql_fragment is '' when no filter is set.
- * Operates on the union's output columns: card_type, content_kind, forum_id,
- * author_name.
+ * Returns [clauses[], named_binds] — the caller assembles the WHERE (so filter
+ * and mute clauses merge into one). Operates on the union's output columns:
+ * card_type, content_kind, forum_id, author_name.
  */
-function hub_filter_where(array $filters, array $forum_cat_map, ?int &$content_visible = null): array
+function hub_filter_where(array $filters, array $forum_cat_map): array
 {
     $and   = [];
     $binds = [];
-    $content_visible = 1; // does the current filter permit content rows at all?
 
     // -- Type: OR within (discussions => topics; kinds => content) --
     if ($filters['types']) {
@@ -150,8 +149,6 @@ function hub_filter_where(array $filters, array $forum_cat_map, ?int &$content_v
             $or[] = "(u.card_type = 'content' AND u.content_kind IN (" . implode(',', $ph) . "))";
         }
         $and[] = $or ? '(' . implode(' OR ', $or) . ')' : '1=0';
-        // content shown only if at least one content kind was chosen
-        if (!$kinds) $content_visible = 0;
     }
 
     // -- Category: forum threads only (content has no category) --
@@ -166,7 +163,6 @@ function hub_filter_where(array $filters, array $forum_cat_map, ?int &$content_v
         $and[] = $ids
             ? "(u.card_type = 'topic' AND u.forum_id IN (" . implode(',', $ids) . "))"
             : '1=0';
-        $content_visible = 0; // a category filter excludes content entirely
     }
 
     // -- Author: single, by name (across both sources) --
@@ -175,5 +171,78 @@ function hub_filter_where(array $filters, array $forum_cat_map, ?int &$content_v
         $binds[':hauthor'] = $filters['author'];
     }
 
-    return [$and ? 'WHERE ' . implode(' AND ', $and) : '', $binds];
+    return [$and, $binds];
+}
+
+/* ----------------------------------------------------------------------------
+ * Sticky mute (increment 2) — per-user, persisted in the `hub_mute` cookie
+ * (interim; profile-app becomes the source of truth later). Muting a Type or
+ * Category hides it from the feed entirely (server-side, not render-then-hide).
+ * Cookie format: comma-separated tokens, "t:<typekey>" / "c:<catkey>".
+ * -------------------------------------------------------------------------- */
+
+function hub_mute_parse(): array
+{
+    $types = []; $cats = [];
+    foreach (array_filter(explode(',', (string)($_COOKIE['hub_mute'] ?? ''))) as $tok) {
+        $tok = trim($tok);
+        if (strpos($tok, 't:') === 0)      $types[] = substr($tok, 2);
+        elseif (strpos($tok, 'c:') === 0)  $cats[]  = substr($tok, 2);
+    }
+    return [
+        'types' => array_values(array_unique(array_filter($types))),
+        'cats'  => array_values(array_unique(array_filter($cats))),
+    ];
+}
+
+function hub_mute_serialize(array $muted): string
+{
+    $out = [];
+    foreach ($muted['types'] as $t) $out[] = 't:' . $t;
+    foreach ($muted['cats']  as $c) $out[] = 'c:' . $c;
+    return implode(',', $out);
+}
+
+/** Flip one key in the muted set. $facet is 't' (type) or 'c' (category). */
+function hub_mute_apply_toggle(array $muted, string $facet, string $val): array
+{
+    $key = $facet === 't' ? 'types' : 'cats';
+    $set = $muted[$key];
+    $i   = array_search($val, $set, true);
+    if ($i === false) $set[] = $val; else array_splice($set, $i, 1);
+    $muted[$key] = array_values($set);
+    return $muted;
+}
+
+/**
+ * Exclusion clauses for muted Types/Categories.
+ * Returns [clauses[], binds] to AND into the union's outer WHERE.
+ */
+function hub_mute_clause(array $muted, array $forum_cat_map): array
+{
+    $and = []; $binds = [];
+
+    $kinds = []; $disc = false;
+    foreach ($muted['types'] as $t) {
+        if ($t === 'discussions') { $disc = true; continue; }
+        $kinds[] = $t;
+    }
+    if ($disc) $and[] = "NOT (u.card_type = 'topic')";
+    if ($kinds) {
+        $ph = [];
+        foreach ($kinds as $i => $k) { $ph[] = ":muk$i"; $binds[":muk$i"] = $k; }
+        $and[] = "NOT (u.card_type = 'content' AND u.content_kind IN (" . implode(',', $ph) . "))";
+    }
+
+    if ($muted['cats']) {
+        $cat_forums = hub_cat_forum_ids($forum_cat_map);
+        $ids = [];
+        foreach ($muted['cats'] as $c) {
+            foreach ($cat_forums[$c] ?? [] as $fid) $ids[] = (int)$fid;
+        }
+        $ids = array_values(array_unique($ids));
+        if ($ids) $and[] = "NOT (u.card_type = 'topic' AND u.forum_id IN (" . implode(',', $ids) . "))";
+    }
+
+    return [$and, $binds];
 }
