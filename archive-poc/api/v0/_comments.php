@@ -41,6 +41,48 @@ if (!defined('LG_COMMENTS_TYPES')) {
     ]);
 }
 
+/**
+ * Comment-reactions palette (Ian-approved 2026-06-05, sourced from the BuddyBoss
+ * bb_reaction set — 7 reactions, menu_order 0-6). Single source of truth for the
+ * read render (comments.php), the write validation (comment-react.php) AND the
+ * client picker. Reactions are stored BY SLUG (stable across re-skins), one per
+ * (comment, user).
+ *
+ *  - type 'emoji' → rendered from `char` (unicode), no asset needed.
+ *  - type 'image' → served WP-free as a static file from web/reactions/ at the URL
+ *    LG_REACTIONS_ASSET_BASE . file (the dev cookie gate sits in front; the modal
+ *    iframe always carries the cookie).
+ *
+ * NOTE on 'like': on CONTENT cards "like" is the existing discovery.likes path
+ * (whoami-identity). A COMMENT is not a content item, so it cannot key into
+ * discovery.likes — here 'like' is stored like any other reaction in
+ * discovery.comment_reactions. Kept first in the palette to match the BB order.
+ */
+if (!defined('LG_REACTIONS_ASSET_BASE')) {
+    define('LG_REACTIONS_ASSET_BASE', '/archive-poc/reactions/');
+}
+if (!function_exists('lg_reactions_palette')) {
+function lg_reactions_palette(): array {
+    return [
+        ['slug' => 'like',          'label' => 'Like',          'type' => 'emoji', 'char' => '👍'],
+        ['slug' => 'ouch',          'label' => 'Ouch',          'type' => 'image', 'file' => 'ouch.png'],
+        ['slug' => 'wow',           'label' => 'Wow',           'type' => 'emoji', 'char' => '😮'],
+        ['slug' => 'lol',           'label' => 'LOL',           'type' => 'emoji', 'char' => '😂'],
+        ['slug' => 'shop',          'label' => 'Shop',          'type' => 'image', 'file' => 'shop.png'],
+        ['slug' => 'take-my-money', 'label' => 'Take my money', 'type' => 'image', 'file' => 'take-my-money.png'],
+        ['slug' => 'brain',         'label' => 'Brain',         'type' => 'emoji', 'char' => '🧠'],
+    ];
+}
+}
+if (!function_exists('lg_reactions_slugs')) {
+/** Flat allowlist of valid reaction slugs (write validation). */
+function lg_reactions_slugs(): array {
+    static $s = null;
+    if ($s === null) $s = array_map(static fn($r) => $r['slug'], lg_reactions_palette());
+    return $s;
+}
+}
+
 if (!function_exists('lg_comments_pdo')) {
 /**
  * Postgres handle for the comments store. Identical shape to lg_likes_pdo(): the
@@ -212,5 +254,103 @@ function lg_comments_uuids_for_wp_ids(array $wpIds): array {
         if ($wid > 0 && lg_comments_is_uuid($u)) $map[$wid] = $u;
     }
     return $map;
+}
+}
+
+/* ── Reactions on comments ───────────────────────────────────────────────────
+   Stored in discovery.comment_reactions, keyed (comment_id, user_wp_id): ONE
+   reaction per user per comment (BuddyBoss model — choosing a new reaction
+   replaces the old). Identity is the WP user id (the comment-lane participation
+   gate is the WP login cookie, not /whoami — so unbridged members can react);
+   user_uuid is stored too when the member bridges, for future cross-surface use.
+   Counts read WP-free on the archive-poc pool; the viewer's own pick is resolved
+   on the WP pool (comment-post.php GET) where the cookie is validated. */
+
+if (!function_exists('lg_reactions_for_comments')) {
+/**
+ * Aggregate reaction counts for a set of comment ids.
+ * @return array<int,array<string,int>> comment_id => [slug => count] (only non-zero)
+ */
+function lg_reactions_for_comments(PDO $pdo, array $commentIds): array {
+    $ids = array_values(array_filter(array_map('intval', $commentIds), static fn($i) => $i > 0));
+    if (!$ids) return [];
+    $ph  = implode(',', array_fill(0, count($ids), '?'));
+    $st  = $pdo->prepare(
+        "SELECT comment_id, slug, COUNT(*) AS c
+           FROM comment_reactions
+          WHERE comment_id IN ($ph)
+          GROUP BY comment_id, slug");
+    $st->execute($ids);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $out[(int) $r['comment_id']][(string) $r['slug']] = (int) $r['c'];
+    }
+    return $out;
+}
+}
+
+if (!function_exists('lg_reactions_mine')) {
+/**
+ * The viewer's own reaction per comment (one slug each, where present).
+ * @return array<int,string> comment_id => slug
+ */
+function lg_reactions_mine(PDO $pdo, array $commentIds, int $wpUserId): array {
+    $ids = array_values(array_filter(array_map('intval', $commentIds), static fn($i) => $i > 0));
+    if (!$ids || $wpUserId <= 0) return [];
+    $ph  = implode(',', array_fill(0, count($ids), '?'));
+    $st  = $pdo->prepare(
+        "SELECT comment_id, slug FROM comment_reactions
+          WHERE user_wp_id = ? AND comment_id IN ($ph)");
+    $st->execute(array_merge([$wpUserId], $ids));
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $out[(int) $r['comment_id']] = (string) $r['slug'];
+    return $out;
+}
+}
+
+if (!function_exists('lg_reactions_set')) {
+/**
+ * Set / change / clear the viewer's reaction on one comment. Idempotent toggle:
+ * picking the slug you already have removes it; picking a different slug replaces
+ * it; otherwise inserts. The comment must exist (FK enforces it anyway).
+ *
+ * @return array{counts:array<string,int>, mine:?string} post-write state for the comment
+ */
+function lg_reactions_set(PDO $pdo, int $commentId, int $wpUserId, ?string $uuid, string $slug): array {
+    if (!in_array($slug, lg_reactions_slugs(), true)) {
+        throw new InvalidArgumentException('bad_slug');
+    }
+    $uuid = lg_comments_is_uuid($uuid) ? strtolower((string) $uuid) : null;
+    $pdo->beginTransaction();
+    try {
+        $cur = $pdo->prepare('SELECT slug FROM comment_reactions WHERE comment_id=? AND user_wp_id=?');
+        $cur->execute([$commentId, $wpUserId]);
+        $existing = $cur->fetchColumn();
+        if ($existing === $slug) {
+            // same reaction → toggle off
+            $pdo->prepare('DELETE FROM comment_reactions WHERE comment_id=? AND user_wp_id=?')
+                ->execute([$commentId, $wpUserId]);
+            $mine = null;
+        } else {
+            // insert or switch — keyed on (comment_id, user_wp_id)
+            $up = $pdo->prepare(
+                'INSERT INTO comment_reactions (comment_id, user_wp_id, user_uuid, slug)
+                 VALUES (?,?,?::uuid,?)
+                 ON CONFLICT (comment_id, user_wp_id)
+                 DO UPDATE SET slug = EXCLUDED.slug, user_uuid = EXCLUDED.user_uuid, created_at = now()');
+            $up->execute([$commentId, $wpUserId, $uuid, $slug]);
+            $mine = $slug;
+        }
+        // fresh counts for just this comment
+        $cnt = $pdo->prepare('SELECT slug, COUNT(*) c FROM comment_reactions WHERE comment_id=? GROUP BY slug');
+        $cnt->execute([$commentId]);
+        $counts = [];
+        foreach ($cnt->fetchAll(PDO::FETCH_ASSOC) as $r) $counts[(string) $r['slug']] = (int) $r['c'];
+        $pdo->commit();
+        return ['counts' => $counts, 'mine' => $mine];
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }
 }
