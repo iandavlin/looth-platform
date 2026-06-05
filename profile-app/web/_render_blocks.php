@@ -839,6 +839,47 @@ function looth_render_dropoffs_block(int $userId, string $role, string $headerVi
     echo '</section>';
 }
 
+/**
+ * Practice (business) Location block — one geocoded address + hours + note, with a
+ * single map pin. Reuses the drop-off card/map CSS. Owner edits inline; visitors see
+ * the read-only address. Block-level pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_location_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $loc     = Block::loadPracticeLocation($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$loc['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$loc['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--location" data-block="location">';
+    echo '<h3 class="lg-bh">Location';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-location', (string)$loc['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($loc['lat'] !== null && $loc['lng'] !== null) {
+        $pins = [['n' => '', 'a' => (string)$loc['address'], 'h' => (string)$loc['hours'],
+                  'no' => (string)$loc['note'], 'lat' => (float)$loc['lat'], 'lng' => (float)$loc['lng']]];
+        echo '<div class="lg-dropoffs__map" data-pins="'
+           . looth_h(json_encode($pins, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"></div>';
+    }
+
+    if ($isOwner) {
+        echo '<div class="lg-dropoffs lg-dropoffs--edit" id="lg-ploc-edit">';
+        echo '<div class="lg-dropoff lg-dropoff--edit">';
+        echo '<input type="text" class="lg-dropoff__f lg-dropoff__name-in" data-f="address" placeholder="Shop address (street, city)" value="' . looth_h((string)$loc['address']) . '">';
+        echo '<input type="text" class="lg-dropoff__f" data-f="hours" placeholder="Hours (e.g. Mon–Fri 9–5)" value="' . looth_h((string)$loc['hours']) . '">';
+        echo '<textarea class="lg-dropoff__f lg-dropoff__notes-in" data-f="note" rows="2" placeholder="Notes (parking, entrance, appointment-only…)">' . looth_h((string)$loc['note']) . '</textarea>';
+        echo '</div></div>';
+    } else {
+        echo '<div class="lg-dropoffs"><div class="lg-dropoff">';
+        if ($loc['address'] !== '') echo '<div class="lg-dropoff__addr">' . looth_h((string)$loc['address']) . '</div>';
+        if ($loc['hours'] !== '')   echo '<div class="lg-dropoff__hours">' . looth_h((string)$loc['hours']) . '</div>';
+        if ($loc['note'] !== '')    echo '<div class="lg-dropoff__notes">' . nl2br(looth_h((string)$loc['note'])) . '</div>';
+        echo '</div></div>';
+    }
+    echo '</section>';
+}
+
 /** The profile-header (identity) block — the author-identity card. */
 function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = '', int $userId = 0): void
 {
@@ -1028,6 +1069,8 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
                     '/profile-api/v0/me/practice-about?practice=' . $practiceId,
                     'practice-about'
                 );
+            } elseif ($key === 'location') {
+                looth_render_practice_location_block($ownerId, $practiceId, $role, $headerVis);
             } elseif ($key === 'dropoffs') {
                 looth_render_dropoffs_block(
                     $ownerId, $role, $headerVis,

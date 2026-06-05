@@ -488,7 +488,8 @@ window.lgSortable = function (container, opts) {
   var EP = {
     'practice-header': { url: BASE + '/me/practice-header?practice=' + PID, m: 'PATCH', k: 'visibility' },
     'practice-about':  { url: BASE + '/me/practice-about?practice='  + PID, m: 'PATCH', k: 'visibility' },
-    'practice-dropoffs': { url: BASE + '/me/practice-block?practice=' + PID + '&block=dropoffs', m: 'PUT', k: 'visibility' }
+    'practice-dropoffs': { url: BASE + '/me/practice-block?practice=' + PID + '&block=dropoffs', m: 'PUT', k: 'visibility' },
+    'practice-location': { url: BASE + '/me/practice-block?practice=' + PID + '&block=location', m: 'PUT', k: 'visibility' }
   };
   var TIERS = ['public', 'members', 'private'];
   var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private' };
@@ -648,6 +649,25 @@ window.lgSortable = function (container, opts) {
     var card = cardEl();
     wrap.insertBefore(card, addBtn);
     var f = card.querySelector('[data-f="name"]'); if (f) f.focus();
+  });
+})();
+</script>
+<script>
+/* Location editor (owner/Me) — one geocoded address + hours + note; PUT on field
+   blur to the generic practice-block endpoint (server geocodes the address). */
+(function () {
+  var wrap = document.getElementById('lg-ploc-edit');
+  if (!wrap) return;
+  var PID = <?= (int)$practiceId ?>;
+  var URL = '/profile-api/v0/me/practice-block?practice=' + PID + '&block=location';
+  function val(f) { var el = wrap.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
+  wrap.addEventListener('change', function () {
+    fetch(URL, { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: val('address'), hours: val('hours'), note: val('note') }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
   });
 })();
 </script>

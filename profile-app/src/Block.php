@@ -1008,6 +1008,73 @@ Accept: application/json
         return self::loadDropoffs($userId, $key);
     }
 
+    /**
+     * Practice (business) Location block — a SELF-CONTAINED JSONB record in the
+     * OWNER's profile_sections under 'location:p<id>' (NOT the users-table profile
+     * model, which belongs to a person). One address, geocoded to a single pin;
+     * owner-set hours + note; one block-level visibility. Default 'public' — a shop
+     * wants to be found — still capped by the practice-header ceiling at render.
+     */
+    public static function loadPracticeLocation(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('location', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $addr  = (string)($d['address'] ?? '');
+        $hours = (string)($d['hours']   ?? '');
+        $note  = (string)($d['note']    ?? '');
+        $lat   = (isset($d['lat']) && is_numeric($d['lat'])) ? (float)$d['lat'] : null;
+        $lng   = (isset($d['lng']) && is_numeric($d['lng'])) ? (float)$d['lng'] : null;
+        return [
+            'block'   => 'location',
+            'has'     => ($addr !== '' || $hours !== '' || $note !== ''),
+            'address' => $addr, 'hours' => $hours, 'note' => $note,
+            'lat'     => $lat, 'lng' => $lng,
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /**
+     * Upsert the practice location. Geocodes the address (Nominatim, via the shared
+     * drop-off helper) only when it actually changed, so editing hours/note never
+     * re-geocodes. A missing key leaves that field unchanged; visibility optional.
+     */
+    public static function savePracticeLocation(int $ownerId, int $practiceId, array $in): array
+    {
+        $key = self::practiceBlockKey('location', $practiceId);
+        $cur = self::loadPracticeLocation($ownerId, $practiceId);
+        $addr  = array_key_exists('address', $in) ? mb_substr(trim((string)$in['address']), 0, self::DROPOFFS_ADDR_MAX)  : $cur['address'];
+        $hours = array_key_exists('hours',   $in) ? mb_substr(trim((string)$in['hours']),   0, self::DROPOFFS_HOURS_MAX) : $cur['hours'];
+        $note  = array_key_exists('note',    $in) ? mb_substr(trim((string)$in['note']),    0, self::DROPOFFS_NOTES_MAX) : $cur['note'];
+
+        $lat = $cur['lat']; $lng = $cur['lng'];
+        if ($addr !== $cur['address']) {
+            $lat = null; $lng = null;
+            if ($addr !== '') { $geo = self::geocodeDropoff($addr); if ($geo !== null) { $lat = $geo['lat']; $lng = $geo['lng']; } }
+        }
+        $data = json_encode(['address' => $addr, 'hours' => $hours, 'note' => $note, 'lat' => $lat, 'lng' => $lng],
+                            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = (array_key_exists('visibility', $in) && self::visFromInput($in['visibility']) !== null)
+             ? self::visFromInput($in['visibility']) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 10)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 10)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeLocation($ownerId, $practiceId);
+    }
+
     // ---------- block: resume (single PDF; profile-only) ----------
 
     /**
@@ -1300,6 +1367,7 @@ Accept: application/json
      */
     public const PRACTICE_LAYOUT_BLOCKS = [
         'about'    => ['label' => 'About', 'removable' => true],
+        'location' => ['label' => 'Location', 'removable' => true],
         'dropoffs' => ['label' => 'Drop-off Locations', 'removable' => true],
     ];
 
