@@ -170,7 +170,7 @@ $tier_rank     = ['public' => 0, 'lite' => 1, 'pro' => 2];
 $content_tiers = array_keys(array_filter($tier_rank, fn($r) => $r <= $tier_rank[$viewer_tier]));
 
 // -- Control sidebar: active filter selection (site-wide /hub/ only) --
-require_once __DIR__ . '/_hub-filters.php';
+require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
 $hub_filters = hub_filters_parse();
 
 // -- Resolve scope into forum_ids array (for header image query) --
@@ -296,6 +296,11 @@ if ($scoped_forum) {
 
     // Server-side AND filter (Type ∩ Category ∩ Author) on the union's output.
     [$hub_where, $hub_binds] = hub_filter_where($hub_filters, $_forum_cat_map);
+
+    // Facet counts + stash so the chrome renders the control rail into the
+    // left-nav slot (Option A: rail replaces forum nav on the site-wide feed).
+    $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'filters' => $hub_filters, 'sort' => $sort_param];
 
     $topic_sql = "
       SELECT * FROM (
@@ -572,6 +577,8 @@ $header_cat = $scoped_forum
       <button class="forum-header__new-post" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
     <?php endif; ?>
   </header>
+
+  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $sort_param); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity">

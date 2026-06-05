@@ -2850,3 +2850,39 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-text-toggle[data-level="2"] .feed-text-toggle__icon { font-size: 18px; }
 .feed-text-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
 .feed-text-toggle[aria-pressed="true"] { background: var(--lg-charcoal); color: #fff; border-color: var(--lg-charcoal); }
+
+/* ============================================================================
+   Hub control sidebar (Option A — rail replaces the forum nav on the feed)
+   Increment 1: search + Type/Category facets (counts, click-to-filter) +
+   Author filter + active-filter chip bar. Mute switches = incr 2.
+   ========================================================================== */
+.hub-rail { display: flex; flex-direction: column; gap: 2px; }
+.hub-rail .search-form--sidebar { margin: 0 0 4px; }
+.hub-rail__h { margin: 14px 2px 5px; font: 600 11px/1 var(--lg-font-sans, sans-serif);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--lg-mute); }
+.hub-rail__h:first-of-type { margin-top: 6px; }
+.hub-rail__group { display: flex; flex-direction: column; }
+.hub-rail__row { display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border-radius: 7px; font-size: 14px; color: var(--lg-ink); text-decoration: none;
+  transition: background .12s, color .12s; }
+.hub-rail__row:hover { background: var(--lg-sage-tint, #eef2e3); }
+.hub-rail__nm { flex: 1; min-width: 0; }
+.hub-rail__ct { font-size: 12px; color: var(--lg-mute); }
+.hub-rail__row.is-on { background: var(--lg-sage, #87986a); color: #fff; font-weight: 600; }
+.hub-rail__row.is-on .hub-rail__ct { color: rgba(255,255,255,.82); }
+
+/* Active-filter chip bar above the feed */
+.hub-chipbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #dcd6c8);
+  border-radius: 12px; padding: 8px 12px; margin-bottom: var(--s3, 12px); }
+.hub-chipbar__lab { font-size: 12px; font-weight: 600; color: var(--lg-mute); }
+.hub-chipbar__and { background: var(--lg-rust, #c8772f); color: #fff; border-radius: 5px;
+  padding: 1px 6px; font: 700 11px/1.4 var(--lg-font-sans, sans-serif); }
+.hub-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--lg-sage-tint, #eef1e6);
+  border: 1px solid #d3dcc0; color: #3f4a28; border-radius: 16px; padding: 3px 6px 3px 11px; font-size: 13px; }
+.hub-chip b { font-weight: 700; }
+.hub-chip__x { color: inherit; text-decoration: none; font-weight: 700; opacity: .6; padding: 0 2px; }
+.hub-chip__x:hover { opacity: 1; }
+.hub-chipbar__reset { margin-left: auto; font-size: 13px; font-weight: 600;
+  color: var(--lg-rust, #c8772f); text-decoration: none; }
+.hub-chipbar__reset:hover { text-decoration: underline; }

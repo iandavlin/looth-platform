@@ -499,6 +499,11 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 
 <div class="bb-layout">
   <aside class="bb-layout__nav" id="bb-nav">
+    <?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')):
+        // Option A: the Hub control rail replaces the forum nav on the unified feed.
+        $__r = $GLOBALS['__bb_hub_rail'];
+        hub_render_rail($__r['facets'], $__r['filters'], $__r['sort'] ?? 'new');
+    else: ?>
     <?php bb_mirror_left_nav(); ?>
 
     <nav class="bb-mirror__searchbar bb-mirror__searchbar--sidebar" aria-label="Forum search">
@@ -511,6 +516,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
         <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
       </form>
     </nav>
+    <?php endif; ?>
   </aside>
   <main class="bb-layout__content bb-mirror__main" id="lg-main">
 <?php
