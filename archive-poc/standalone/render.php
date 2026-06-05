@@ -292,6 +292,31 @@ function lg_standalone_css_href(string $css): string {
     return $url;
 }
 
+/** Externalize the engine front-end JS to a content-hashed, cacheable file under
+ *  /archive-poc/assets/ and return its URL. This is the SAME assets/lg-front.js
+ *  the WP plugin enqueues (vendored into engine/assets/), so the standalone path
+ *  wires the identical front-end behaviors — the image-block LIGHTBOX above all,
+ *  plus embed-facade click-to-play, share-copy, gallery carousel, and the
+ *  broken-image placeholder. Without it the lightbox markup (data-lg-lightbox)
+ *  and CSS (.lg-lightbox, already in the bundle) are present but inert. Mirrors
+ *  lg_standalone_css_href: global + deterministic → written once, then browser-
+ *  cached. Returns '' on read/write failure so the caller can fall back to inline. */
+function lg_standalone_front_js_href(): string {
+    $src = __DIR__ . '/engine/assets/lg-front.js';
+    $js  = @file_get_contents($src);
+    if ($js === false || $js === '') return '';
+    $dir  = __DIR__ . '/../web/assets';
+    $hash = substr(md5($js), 0, 16);
+    $file = "$dir/lg-v2-front.$hash.js";
+    $url  = "/archive-poc/assets/lg-v2-front.$hash.js";
+    if (is_file($file)) return $url;
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) return '';
+    $tmp = "$file.tmp." . getmypid();
+    if (@file_put_contents($tmp, $js) === false) return '';
+    if (!@rename($tmp, $file)) { @unlink($tmp); return is_file($file) ? $url : ''; }
+    return $url;
+}
+
 function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0): string {
     $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
 
@@ -422,24 +447,21 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <main class="lg-standalone-main" id="lg-main">
 <?= $articleHtml ?>
 </main>
+<?php /* Front-end behaviors — the SAME assets/lg-front.js the WP plugin enqueues,
+         externalized + browser-cached. This is what wires the image-block lightbox
+         on public standalone pages (the markup + CSS are already present but inert
+         without it); it also covers embed-facade click-to-play — which the
+         standalone renderer used to re-implement inline here — plus share-copy,
+         gallery carousel, and the broken-image placeholder. Deferred so it never
+         blocks paint, matching WpAssets. */ ?>
+<?php $frontJsHref = lg_standalone_front_js_href(); ?>
+<?php if ($frontJsHref !== ''): ?>
+<script src="<?= $frontJsHref ?>" defer></script>
+<?php else: /* externalize failed (e.g. assets dir not writable) — inline as a fallback */ ?>
 <script>
-/* Embed facade (YouTube/Vimeo) click-to-play — ported from lg-front.js so the
-   standalone renderer (not just the WP plugin) wires up every converted video. */
-(function(){
-  function ytSrc(id,start){var qs='autoplay=1&rel=0&modestbranding=1&playsinline=1';if(start&&+start>0)qs+='&start='+(+start);return 'https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?'+qs;}
-  function vmSrc(id){return 'https://player.vimeo.com/video/'+encodeURIComponent(id)+'?autoplay=1&dnt=1&pip=1';}
-  document.addEventListener('click',function(e){
-    var f=e.target.closest&&e.target.closest('.lg-embed__facade');
-    if(!f||f.classList.contains('is-playing'))return;
-    var yt=f.getAttribute('data-yt-id'),vm=f.getAttribute('data-vimeo-id'),src=yt?ytSrc(yt,f.getAttribute('data-yt-start')):(vm?vmSrc(vm):'');
-    if(!src)return;e.preventDefault();
-    var ifr=document.createElement('iframe');ifr.src=src;
-    ifr.setAttribute('allow','autoplay; encrypted-media; picture-in-picture; web-share');
-    ifr.setAttribute('allowfullscreen','');ifr.setAttribute('referrerpolicy','strict-origin-when-cross-origin');ifr.setAttribute('frameborder','0');
-    f.classList.add('is-playing');f.appendChild(ifr);
-  });
-})();
+<?= (string) @file_get_contents(__DIR__ . '/engine/assets/lg-front.js') ?>
 </script>
+<?php endif; ?>
 <?php lg_shared_render_site_footer(); ?>
 </body>
 </html>
