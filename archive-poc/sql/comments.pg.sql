@@ -61,3 +61,8 @@ GRANT USAGE, SELECT ON SEQUENCE comments_id_seq TO "looth-dev";
 -- profile-app stays a read-only cross-schema consumer (future composite views),
 -- matching the existing discovery grants. Harmless if it never reads this table.
 GRANT SELECT ON comments TO "profile-app";
+
+-- bb-mirror (the Hub feed) reads comment counts to badge content cards in the
+-- unified feed + power the inline comment modal — same read-only cross-schema
+-- consumer pattern it already uses for discovery.content_item.
+GRANT SELECT ON comments TO "bb-mirror";
