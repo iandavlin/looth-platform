@@ -1075,6 +1075,81 @@ Accept: application/json
         return self::loadPracticeLocation($ownerId, $practiceId);
     }
 
+    public const HOURS_NOTE_MAX = 500;
+
+    /**
+     * Practice (business) Hours block — a structured 7-day schedule (Mon..Sun),
+     * each day {o:open, c:close, x:closed}, plus a free note. JSONB in the OWNER's
+     * profile_sections under 'hours:p<id>'. Default visibility 'public' (a shop wants
+     * its hours found), still capped by the practice-header ceiling at render.
+     */
+    public static function loadPracticeHours(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('hours', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $rawDays = (isset($d['days']) && is_array($d['days'])) ? $d['days'] : [];
+        $days = []; $has = false;
+        for ($i = 0; $i < 7; $i++) {
+            $row = is_array($rawDays[$i] ?? null) ? $rawDays[$i] : [];
+            $o = self::clampTime((string)($row['o'] ?? ''));
+            $c = self::clampTime((string)($row['c'] ?? ''));
+            $x = !empty($row['x']);
+            $days[] = ['o' => $o, 'c' => $c, 'x' => $x];
+            if ($x || $o !== '' || $c !== '') $has = true;
+        }
+        $note = (string)($d['note'] ?? '');
+        if ($note !== '') $has = true;
+        return [
+            'block' => 'hours', 'has' => $has, 'days' => $days, 'note' => $note,
+            'vis'   => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /** Upsert the weekly hours. Accepts days[7] {o|open, c|close, x|closed} + note + visibility. */
+    public static function savePracticeHours(int $ownerId, int $practiceId, array $in): array
+    {
+        $key = self::practiceBlockKey('hours', $practiceId);
+        $inDays = (isset($in['days']) && is_array($in['days'])) ? $in['days'] : [];
+        $days = [];
+        for ($i = 0; $i < 7; $i++) {
+            $row = is_array($inDays[$i] ?? null) ? $inDays[$i] : [];
+            $days[] = [
+                'o' => self::clampTime((string)($row['o'] ?? $row['open']  ?? '')),
+                'c' => self::clampTime((string)($row['c'] ?? $row['close'] ?? '')),
+                'x' => !empty($row['x']) || !empty($row['closed']),
+            ];
+        }
+        $note = mb_substr(trim((string)($in['note'] ?? '')), 0, self::HOURS_NOTE_MAX);
+        $data = json_encode(['days' => $days, 'note' => $note], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = (array_key_exists('visibility', $in) && self::visFromInput($in['visibility']) !== null)
+             ? self::visFromInput($in['visibility']) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 12)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 12)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeHours($ownerId, $practiceId);
+    }
+
+    /** HH:MM (24h) or empty. Anything malformed collapses to '' (treated as closed). */
+    private static function clampTime(string $t): string
+    {
+        $t = trim($t);
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) ? $t : '';
+    }
+
     // ---------- block: resume (single PDF; profile-only) ----------
 
     /**
@@ -1369,6 +1444,7 @@ Accept: application/json
         'about'    => ['label' => 'About', 'removable' => true],
         'location' => ['label' => 'Location', 'removable' => true],
         'dropoffs' => ['label' => 'Drop-off Locations', 'removable' => true],
+        'hours'    => ['label' => 'Hours', 'removable' => true],
     ];
 
     /**

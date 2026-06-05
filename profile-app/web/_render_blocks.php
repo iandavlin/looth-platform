@@ -880,6 +880,57 @@ function looth_render_practice_location_block(int $ownerId, int $practiceId, str
     echo '</section>';
 }
 
+/**
+ * Practice (business) Hours block — a 7-row weekly schedule. Owner edits inline
+ * (per-day Closed toggle + open/close time inputs + a note); visitors see the
+ * read-only schedule. Block-level pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_hours_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $h       = Block::loadPracticeHours($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$h['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$h['vis'])) && !$isOwner) return;
+    $labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    echo '<section class="block lg-block lg-block--hours" data-block="hours">';
+    echo '<h3 class="lg-bh">Hours';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-hours', (string)$h['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-hours lg-hours--edit" id="lg-phours-edit">';
+        foreach ($labels as $i => $lab) {
+            $d = $h['days'][$i];
+            echo '<div class="lg-hours__row" data-d="' . $i . '">';
+            echo '<span class="lg-hours__day">' . $lab . '</span>';
+            echo '<label class="lg-hours__cl"><input type="checkbox" data-f="closed"' . ($d['x'] ? ' checked' : '') . '> Closed</label>';
+            echo '<input type="time" class="lg-hours__t" data-f="open" value="' . looth_h($d['o']) . '">';
+            echo '<span class="lg-hours__sep">to</span>';
+            echo '<input type="time" class="lg-hours__t" data-f="close" value="' . looth_h($d['c']) . '">';
+            echo '</div>';
+        }
+        echo '<textarea class="lg-dropoff__f lg-dropoff__notes-in lg-hours__note" data-f="note" rows="2" placeholder="Note (holidays, by appointment, etc.)">' . looth_h((string)$h['note']) . '</textarea>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-hours">';
+        foreach ($labels as $i => $lab) {
+            $d = $h['days'][$i];
+            echo '<div class="lg-hours__row">';
+            echo '<span class="lg-hours__day">' . $lab . '</span>';
+            if ($d['x'] || $d['o'] === '' || $d['c'] === '') {
+                echo '<span class="lg-hours__val lg-hours__val--closed">Closed</span>';
+            } else {
+                echo '<span class="lg-hours__val">' . looth_h($d['o']) . ' – ' . looth_h($d['c']) . '</span>';
+            }
+            echo '</div>';
+        }
+        if ($h['note'] !== '') echo '<div class="lg-dropoff__notes lg-hours__note">' . nl2br(looth_h((string)$h['note'])) . '</div>';
+        echo '</div>';
+    }
+    echo '</section>';
+}
+
 /** The profile-header (identity) block — the author-identity card. */
 function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = '', int $userId = 0): void
 {
@@ -1077,6 +1128,8 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
                     Block::practiceBlockKey('dropoffs', $practiceId),
                     'practice-dropoffs'
                 );
+            } elseif ($key === 'hours') {
+                looth_render_practice_hours_block($ownerId, $practiceId, $role, $headerVis);
             }
         }
         // Staff roster is auto-derived (the practice_members list): pinned last,

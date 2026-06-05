@@ -21,7 +21,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 
-const PRACTICE_BLOCKS = ['dropoffs', 'location'];   // WS3 widens this (hours, links)
+const PRACTICE_BLOCKS = ['dropoffs', 'location', 'hours'];   // WS3 widens this (links)
 
 $user   = Auth::requireUser();
 $uid    = (int) $user['id'];
@@ -42,6 +42,7 @@ $key = Block::practiceBlockKey($block, $pid);
 if ($method === 'GET') {
     if ($block === 'dropoffs') profile_app_json(200, Block::loadDropoffs($ownerId, $key) ?? ['error' => 'not_found']);
     if ($block === 'location') profile_app_json(200, Block::loadPracticeLocation($ownerId, $pid));
+    if ($block === 'hours')    profile_app_json(200, Block::loadPracticeHours($ownerId, $pid));
     profile_app_json(400, ['error' => 'unknown_block']);
 }
 
@@ -63,6 +64,10 @@ if ($block === 'dropoffs') {
 
 if ($block === 'location') {
     profile_app_json(200, ['ok' => true, 'location' => Block::savePracticeLocation($ownerId, $pid, $in)]);
+}
+
+if ($block === 'hours') {
+    profile_app_json(200, ['ok' => true, 'hours' => Block::savePracticeHours($ownerId, $pid, $in)]);
 }
 
 profile_app_json(400, ['error' => 'unknown_block']);

@@ -203,6 +203,19 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-link__rm:hover{color:var(--lg-rust)}
 .lg-link__add{align-self:flex-start;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:6px 14px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
 .lg-link__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
+/* business hours (weekly schedule) */
+.lg-hours{display:flex;flex-direction:column;gap:2px}
+.lg-hours__row{display:flex;align-items:center;gap:10px;padding:6px 2px;border-bottom:1px solid var(--lg-line)}
+.lg-hours__row:last-child{border-bottom:0}
+.lg-hours__day{flex:0 0 60px;font:700 13.5px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-hours__val{font:500 13.5px/1.2 var(--lg-font-sans);color:var(--lg-charcoal)}
+.lg-hours__val--closed{color:var(--lg-mute);font-style:italic}
+.lg-hours--edit .lg-hours__row{flex-wrap:wrap;gap:8px}
+.lg-hours__cl{display:inline-flex;align-items:center;gap:5px;font:600 12.5px/1 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-hours__t{font:500 13px/1 var(--lg-font-sans);color:var(--lg-ink);background:#fff;border:1px solid var(--lg-line);border-radius:7px;padding:5px 7px}
+.lg-hours__t:focus{outline:none;border-color:var(--lg-sage);box-shadow:0 0 0 2px var(--lg-sage-tint)}
+.lg-hours__sep{color:var(--lg-mute);font-size:12.5px}
+.lg-hours__note{margin-top:8px}
 </style>
 </head>
 <body class="mode-view">
@@ -489,7 +502,8 @@ window.lgSortable = function (container, opts) {
     'practice-header': { url: BASE + '/me/practice-header?practice=' + PID, m: 'PATCH', k: 'visibility' },
     'practice-about':  { url: BASE + '/me/practice-about?practice='  + PID, m: 'PATCH', k: 'visibility' },
     'practice-dropoffs': { url: BASE + '/me/practice-block?practice=' + PID + '&block=dropoffs', m: 'PUT', k: 'visibility' },
-    'practice-location': { url: BASE + '/me/practice-block?practice=' + PID + '&block=location', m: 'PUT', k: 'visibility' }
+    'practice-location': { url: BASE + '/me/practice-block?practice=' + PID + '&block=location', m: 'PUT', k: 'visibility' },
+    'practice-hours':    { url: BASE + '/me/practice-block?practice=' + PID + '&block=hours',    m: 'PUT', k: 'visibility' }
   };
   var TIERS = ['public', 'members', 'private'];
   var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private' };
@@ -665,6 +679,32 @@ window.lgSortable = function (container, opts) {
     fetch(URL, { method: 'PUT', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: val('address'), hours: val('hours'), note: val('note') }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  });
+})();
+</script>
+<script>
+/* Hours editor (owner/Me) — collect the 7-day grid + note; PUT the whole schedule
+   to the generic practice-block endpoint on any change. */
+(function () {
+  var wrap = document.getElementById('lg-phours-edit');
+  if (!wrap) return;
+  var PID = <?= (int)$practiceId ?>;
+  var URL = '/profile-api/v0/me/practice-block?practice=' + PID + '&block=hours';
+  function collect() {
+    var days = Array.prototype.map.call(wrap.querySelectorAll('.lg-hours__row'), function (row) {
+      function g(f) { var el = row.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
+      var cl = row.querySelector('[data-f="closed"]');
+      return { o: g('open'), c: g('close'), x: !!(cl && cl.checked) };
+    });
+    var nt = wrap.querySelector('[data-f="note"]');
+    return { days: days, note: nt ? nt.value : '' };
+  }
+  wrap.addEventListener('change', function () {
+    fetch(URL, { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collect()) })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
       .catch(function () { alert('Network error.'); });
