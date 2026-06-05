@@ -12,7 +12,7 @@ loothcuts + documents done, and a working article parser**. All deterministic pa
 | loothprint | 165 / 166 | **1** | `tools/loothprint-parse.php` | only **3666** "Jack Brace part Deux" (no `loothprint_3d_file`) |
 | loothcuts | 7 / 7 | 0 | loothprint-parse (CPT-aware) | done |
 | document | 4 / 6 | **2** | loothprint-parse (`document` branch) | **46552, 46009** flagged (no PDF/file — inline-content docs) |
-| post-imgcap | 14 / 63 | **49** | `tools/article-parse.php` | validated on 9 (added **49197, 2707** w/ teaser-paywall); inline-HTML only — ACF-repeater posts still need 2nd pass; **batch not yet run** |
+| post-imgcap | **61 / 63** | **2** | `article-parse.php` (inline) + `article-acf-parse.php` (ACF) | **DONE.** 7 inline-HTML + 35 ACF-repeater + 5 ACF single-row essays + 7 post_content essays. Remaining 2 are deferred, not failures: **43773** = a PDF in an `<iframe>` (belongs in the *document* flow, not article) and **14204** = content imgs hotlinked from ukuleles.com (all 404). |
 | useful_links | 0 / 39 | 39 | — | not started |
 | sponsor-post | 0 / 18 | 18 | — | not started |
 | member-benefit | 0 / 6 | 6 | — | not started |
@@ -42,7 +42,15 @@ Gate cookie for curl verify: `loothdev_auth=<$loothdev_token>` (non-`/billing` p
 - **shorty (shorts, 29)** + banger/freebie-video/etc. — NOT in the managed-CPT route. `shorty` is video-shaped → run `video-parse` + add `shorty` to the nginx CPT alternation in `strangler-archive-poc.conf`. Sysadmin (me/ubuntu), not a relay.
 
 ## Next steps (recommended order)
-1. Article member-gating decided (teaser-then-paywall). Next: teach `article-parse` to auto-emit the `paywall` block (heuristic: gate before the first section-heading past the intro/first-image, tier = post tier), then **aggregate dry-run over the 49 post-imgcap** (inline-HTML vs ACF `img_cap` repeater split + flags) → batch. Remaining inline-HTML posts: 1234, 12327, 14204, 14347, 14973, 23114 (rest are ACF-repeater, need 2nd pass). 14204 has warts (unresolved image_ids, title-echo tagline, URL-as-heading).
+**post-imgcap conversion is COMPLETE (61/63).**
+
+### How the post-imgcap batch was done (for re-runs / the next CPTs)
+- **ACF model** → `tools/article-acf-parse.php` (NEW, self-contained). `LG_PARSE_POST=<id>` (single/verbose) or `LG_PARSE_ALL=1` (batch → `/tmp/lg-acf-<id>.json`). Row sub-fields: `img_cap_repeater_image` (single), `gallery2` (serialized gallery — 17 rows), `img_cap_repeater_text` (HTML → figcaption if lone-image + short + link-free, else panel), `repeater_oembed` (youtube/instagram → `embed` block — 21 rows). Auto-emits the `paywall` after row-0 blocks for non-public tiers; markdown-bold + Ian's aspect/pairing built in.
+- **Gating** = teaser-then-paywall via `/tmp/splice-paywall.php <file> <mode> <label>` — modes `heading:<substr>` | `index:<n>` | `split:<nParas>` (splits a single essay panel). Single-row ACF essays + post_content-only essays were split-gated at 2 paras.
+- **post_content-only essays** (rows=0) → inline `article-parse.php`; the 2 with a stray empty repeater row that the inline guard refuses (27753, 23896) were built from post_content via the one-off `/tmp/essay-build.php`.
+- ⚠️ **`article-parse.php` is back at its committed (HEAD) state** — last session's inline-parser improvements (resize-variant `ap_resolve_aid`, junk/avatar filter, title-echo + bare-URL + trailing-orphan heading drops, Elementor `<style>` strip + overlong-heading demote) were reverted in the working tree. The 7 inline articles were already materialized with those fixes (baked into `_lg_layout_v2` + blobs), so nothing live is broken — but re-running the inline parser on a NEW inline post won't have them. `article-acf-parse.php` carries its own copies of the still-relevant filters. Re-apply to `article-parse.php` if/when more inline posts appear.
+
+### Next CPTs
 2. **useful_links (39)** — new simple links-callout parser.
 3. sponsor-post (18), member-benefit (6) — small recipes.
 4. shorty onboarding (route + video-parse).
