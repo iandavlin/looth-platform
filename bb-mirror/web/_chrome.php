@@ -145,9 +145,10 @@ function bb_mirror_left_nav(): void
     ?>
     <nav class="nav-tree" aria-label="Forum navigation">
 
-      <a class="nav-tree__item nav-tree__root <?= $root_active ? 'nav-tree__item--active' : '' ?>"
+      <a class="nav-tree__root <?= $root_active ? 'nav-tree__root--active' : '' ?>"
          href="<?= $root_href ?>">
-        All activity
+        <span class="nav-tree__root-icon" aria-hidden="true">&#9776;</span>
+        <span class="nav-tree__root-label">All activity</span>
       </a>
 
       <?php
@@ -494,20 +495,20 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ]);
 ?>
 
-<nav class="bb-mirror__searchbar" aria-label="Forum search">
-  <form class="search-form" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>">
-    <label class="search-form__label" for="q">Search forums</label>
-    <input class="search-form__input" id="q" name="q" type="search"
-           placeholder="Search topics + replies…"
-           value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>"
-           autocomplete="off">
-    <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
-  </form>
-</nav>
-
 <div class="bb-layout">
   <aside class="bb-layout__nav" id="bb-nav">
     <?php bb_mirror_left_nav(); ?>
+
+    <nav class="bb-mirror__searchbar bb-mirror__searchbar--sidebar" aria-label="Forum search">
+      <form class="search-form search-form--sidebar" method="get" action="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/') ?>">
+        <label class="search-form__label" for="q">Search forums</label>
+        <input class="search-form__input" id="q" name="q" type="search"
+               placeholder="Search topics + replies…"
+               value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>"
+               autocomplete="off">
+        <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
+      </form>
+    </nav>
   </aside>
   <main class="bb-layout__content bb-mirror__main" id="lg-main">
 <?php

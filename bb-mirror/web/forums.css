@@ -799,7 +799,7 @@ img { max-width: 100%; display: block; }
   background: #fff;
   box-sizing: border-box;
 }
-.post-edit__quill { background: #fff; max-height: 320px; overflow-y: auto; }
+.post-edit__quill { background: #fff; }  /* cap/scroll on inner .ql-editor, not the container (tooltip clip) */
 .post-edit .ql-toolbar.ql-snow {
   border: 1px solid var(--border); border-bottom: 0;
   border-radius: var(--r-sm) var(--r-sm) 0 0;
@@ -809,7 +809,7 @@ img { max-width: 100%; display: block; }
   border-radius: 0 0 var(--r-sm) var(--r-sm);
   font: 14px var(--font-body);
 }
-.post-edit .ql-editor { min-height: 100px; }
+.post-edit .ql-editor { min-height: 100px; max-height: 300px; overflow-y: auto; }
 .post-edit__fallback {
   width: 100%; padding: var(--s2) var(--s3);
   border: 1px solid var(--border); border-radius: var(--r-sm);
@@ -946,6 +946,19 @@ img { max-width: 100%; display: block; }
   min-width: 40px;
 }
 .search-form__btn:hover { background: var(--accent-hover, #6b3820); }
+
+/* Search relocated into the sidebar bottom (pins below the nav list; stays
+   visible while the nav scrolls). */
+.bb-mirror__searchbar--sidebar {
+  margin-top: auto;                /* push to the bottom of the flex-column sidebar */
+  position: sticky;
+  bottom: 0;
+  padding: var(--s3) 0 var(--s2);
+  background: var(--bg-card);
+  border-bottom: 0;
+  border-top: 1px solid var(--lg-line);
+}
+.search-form--sidebar { max-width: none; margin: 0; }
 
 .search-meta {
   font: 13px var(--font-mono);
@@ -1102,6 +1115,8 @@ body.nav-open .nav-overlay { display: block; }
 .bb-layout__nav {
   width: 240px;
   flex-shrink: 0;
+  display: flex;                   /* column so the relocated search can pin to the bottom */
+  flex-direction: column;
   position: sticky;
   top: 69px;                       /* clear the 61px sticky site header (lg-chrome) so it isn't obscured */
   height: calc(100vh - 85px);      /* fit below the header; scrolls internally if taller */
@@ -1161,21 +1176,37 @@ body.nav-open .nav-overlay { display: block; }
 /* Nav tree */
 .nav-tree { font-size: 13.5px; }
 
+/* "All activity" — the root view. Styled as an obvious, full-width button
+   (filled sage) so it reads as the primary nav action, not plain text. */
 .nav-tree__root {
-  display: block;
-  padding: 8px 10px;
-  margin-bottom: var(--s4);
-  font: 600 13px/1 var(--lg-font-sans);
-  color: var(--lg-ink);
-  border-radius: 6px;
-  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 13px;
+  margin: 0 0 var(--s4);
+  font: 700 13.5px/1 var(--lg-font-sans);
   letter-spacing: .01em;
-}
-.nav-tree__root:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); text-decoration: none; }
-.nav-tree__root.nav-tree__item--active {
-  background: var(--lg-sage-d);
   color: #fff;
+  background: var(--lg-sage-d);
+  border: 1px solid var(--lg-sage-d);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.10);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s, box-shadow .12s, transform .05s;
 }
+.nav-tree__root:hover {
+  background: var(--lg-sage);
+  border-color: var(--lg-sage);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,.14);
+}
+.nav-tree__root:active { transform: translateY(1px); }
+.nav-tree__root--active { background: var(--lg-sage-d); border-color: var(--lg-sage-d); color: #fff; }
+.nav-tree__root-icon { font-size: 14px; line-height: 1; opacity: .9; }
+.nav-tree__root-label { flex: 1; }
 
 .nav-tree__section {
   margin-bottom: var(--s4);
@@ -2255,8 +2286,10 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   background: var(--bg, #faf8f4);
   border-radius: 0 0 var(--r-sm) var(--r-sm);
   min-height: 160px;
-  max-height: 360px;
-  overflow-y: auto;
+  /* No overflow/max-height HERE: this div is Quill's .ql-container, and Quill's
+     link tooltip ("Save" popup) is an absolutely-positioned child of it. Clipping
+     the container crops the tooltip. Cap + scroll the inner .ql-editor instead so
+     the container stays overflow:visible and the tooltip can escape. */
 }
 /* Quill's toolbar + container borders → match our field styling */
 .ntm-form .ql-toolbar.ql-snow {
@@ -2272,12 +2305,16 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 }
 .ntm-form .ql-editor {
   min-height: 140px;
+  max-height: 300px;
+  overflow-y: auto;
   color: var(--fg);
 }
 .ntm-form .ql-editor.ql-blank::before {
   color: var(--fg-soft);
   font-style: normal;
 }
+/* Quill format/link tooltip must float above the editor (not be clipped by it). */
+.ql-snow .ql-tooltip { z-index: 6; }
 
 .ntm-paste-hint {
   margin: var(--s1) 0 0;
@@ -2490,9 +2527,11 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 
 /* Rich-text reply editor (Quill) on the single-topic page */
 .reply-form__editor { background: #fff; border-radius: var(--r-sm, 6px); }
-.reply-form__editor .ql-editor { min-height: 120px; font: 15px/1.6 var(--font-body); }
+.reply-form__editor .ql-editor { min-height: 120px; max-height: 320px; overflow-y: auto; font: 15px/1.6 var(--font-body); }
 .reply-form__editor .ql-toolbar.ql-snow,
 .reply-form__editor .ql-container.ql-snow { border-color: var(--border); }
+/* Reply modal (#frm-editor) — same inner-scroll treatment, container stays visible. */
+#frm-editor .ql-editor { min-height: 140px; max-height: 300px; overflow-y: auto; }
 
 /* ── Forum nav skin: category icon captions + lighter per-category leaf end-caps ── */
 /* Per-category accent (--nc) + lighter pill border tint (--leaf-cap), per brand family */
