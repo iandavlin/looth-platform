@@ -517,7 +517,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     <?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')):
         // Option A: the Hub control rail replaces the forum nav on the unified feed.
         $__r = $GLOBALS['__bb_hub_rail'];
-        hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new');
+        hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['tree'] ?? []);
     else: ?>
     <?php bb_mirror_left_nav(); ?>
 

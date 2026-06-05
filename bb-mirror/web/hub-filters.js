@@ -114,3 +114,28 @@
     }
   });
 })();
+
+/* Category accordion — single-open. Chevron toggles its leaves; opening one
+ * collapses any other open parent. The parent NAME stays a filter link. */
+(function () {
+  'use strict';
+  var acc = document.getElementById('hub-cat-accordion');
+  if (!acc) return;
+  acc.addEventListener('click', function (e) {
+    var chev = e.target.closest('.hub-acc__chev');
+    if (!chev || chev.classList.contains('hub-acc__chev--none')) return;
+    e.preventDefault();
+    var item = chev.closest('.hub-acc');
+    var willOpen = !item.classList.contains('is-open');
+    acc.querySelectorAll('.hub-acc.is-open').forEach(function (o) {
+      o.classList.remove('is-open');
+      var b = o.querySelector('.hub-acc__leaves'); if (b) b.hidden = true;
+      var c = o.querySelector('.hub-acc__chev'); if (c) c.setAttribute('aria-expanded', 'false');
+    });
+    if (willOpen) {
+      item.classList.add('is-open');
+      var box = item.querySelector('.hub-acc__leaves'); if (box) box.hidden = false;
+      chev.setAttribute('aria-expanded', 'true');
+    }
+  });
+})();

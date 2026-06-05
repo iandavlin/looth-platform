@@ -138,7 +138,8 @@ function hub_filters_parse(): array
     };
     return [
         'types'   => $csv('type'),                      // e.g. ['video','discussions']
-        'cats'    => $csv('cat'),                        // e.g. ['repair','builds']
+        'cats'    => $csv('cat'),                        // parent categories (cat_key)
+        'leaves'  => $csv('leaf'),                       // leaf subforums (subforum slug)
         'authors' => $csv('author'),                     // multi-select, by name (CSV)
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
     ];
@@ -244,6 +245,113 @@ function hub_content_cat_labels(PDO $db): array
 }
 
 /**
+ * Category tree for the accordion rail: ordered parents (top forums + content-
+ * only parents) each with leaf subforums, dual-source counts (topics + content),
+ * and the data the filter needs. Parent key = cat_key (?cat=); leaf key = the
+ * subforum SLUG (?leaf=, unique — leaf TITLES repeat across parents).
+ *
+ * Returns [ tree[], leaf_registry ] where:
+ *   tree[]  = [ key,label,count,forum_ids[],content_labels[], leaves[ {key,label,
+ *               count,forum_id,parent_key,sublabel} ] ]
+ *   leaf_registry = leaf_key => {forum_id, parent_key, sublabel, parent_labels[]}
+ */
+function hub_category_tree(PDO $db, array $content_tiers, array $forum_cat_map): array
+{
+    // -- forums (top + children) --
+    $rows = $db->query("
+        SELECT id, slug, title, parent_forum_id, menu_order
+          FROM forum
+         WHERE visibility='public' AND status IN ('open','closed') AND id NOT IN (67251,3876)
+         ORDER BY parent_forum_id NULLS FIRST, menu_order ASC
+    ")->fetchAll();
+    $tops = []; $kids = [];
+    foreach ($rows as $r) {
+        if ($r['parent_forum_id'] === null) $tops[] = $r;
+        else $kids[(int)$r['parent_forum_id']][] = $r;
+    }
+
+    // -- topic counts per forum_id --
+    $tcount = [];
+    foreach ($db->query("
+        SELECT t.forum_id, count(*) n FROM topic t JOIN forum f ON f.id=t.forum_id
+         WHERE t.status='publish' AND f.visibility='public' AND t.forum_id NOT IN (3876)
+         GROUP BY t.forum_id")->fetchAll() as $r) $tcount[(int)$r['forum_id']] = (int)$r['n'];
+
+    // -- content counts: by forum_label (parent) and by (forum_label,subforum_label) (leaf) --
+    $tin = [];
+    foreach ($content_tiers as $i => $t) $tin[] = ':ct' . $i;
+    $tinSql = $tin ? implode(',', $tin) : "''";
+    $bindTiers = function ($st) use ($content_tiers) {
+        foreach ($content_tiers as $i => $t) $st->bindValue(':ct' . $i, $t);
+    };
+    $cParent = [];
+    $sp = $db->prepare("SELECT forum_label, count(*) n FROM discovery.content_item
+                         WHERE tier IN ($tinSql) AND COALESCE(forum_label,'')<>'' GROUP BY forum_label");
+    $bindTiers($sp); $sp->execute();
+    foreach ($sp->fetchAll() as $r) $cParent[hub_reconcile_cat_key((string)$r['forum_label'])] = ($cParent[hub_reconcile_cat_key((string)$r['forum_label'])] ?? 0) + (int)$r['n'];
+
+    $cLeaf = []; // parent_key . "\0" . leaf_slug => count
+    $sl = $db->prepare("SELECT forum_label, subforum_label, count(*) n FROM discovery.content_item
+                         WHERE tier IN ($tinSql) AND COALESCE(subforum_label,'')<>'' GROUP BY forum_label, subforum_label");
+    $bindTiers($sl); $sl->execute();
+    foreach ($sl->fetchAll() as $r) {
+        $pk = hub_reconcile_cat_key((string)$r['forum_label']);
+        $ls = hub_slugify((string)$r['subforum_label']);
+        $ls = HUB_LABEL_ALIASES[$ls] ?? $ls;
+        $cLeaf[$pk . "\0" . $ls] = ($cLeaf[$pk . "\0" . $ls] ?? 0) + (int)$r['n'];
+    }
+
+    $clabels = hub_content_cat_labels($db); // cat_key => [raw forum_label]
+
+    // subtree topic count (forum + descendants)
+    $subtreeIds = function (int $id) use (&$kids, &$subtreeIds): array {
+        $ids = [$id];
+        foreach ($kids[$id] ?? [] as $c) $ids = array_merge($ids, $subtreeIds((int)$c['id']));
+        return $ids;
+    };
+
+    $tree = []; $registry = []; $seenKeys = [];
+    foreach ($tops as $t) {
+        $pid = (int)$t['id'];
+        $pkey = bb_mirror_cat_key((string)$t['slug']);
+        $sub  = $subtreeIds($pid);
+        $tc   = 0; foreach ($sub as $fid) $tc += $tcount[$fid] ?? 0;
+        $pcount = $tc + ($cParent[$pkey] ?? 0);
+
+        $leaves = [];
+        foreach ($kids[$pid] ?? [] as $c) {
+            $lid  = (int)$c['id'];
+            $lkey = (string)$lid;   // forum_id — subforum SLUGS collide (e.g. two 'acoustic')
+            $lsub = $subtreeIds($lid);
+            $lt   = 0; foreach ($lsub as $fid) $lt += $tcount[$fid] ?? 0;
+            $lslug = HUB_LABEL_ALIASES[hub_slugify((string)$c['title'])] ?? hub_slugify((string)$c['title']);
+            $lc   = $cLeaf[$pkey . "\0" . $lslug] ?? 0;
+            $leaves[] = [
+                'key' => $lkey, 'label' => (string)$c['title'], 'count' => $lt + $lc,
+                'forum_id' => $lid, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
+            ];
+            $registry[$lkey] = [
+                'forum_ids' => $lsub, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
+                'parent_labels' => $clabels[$pkey] ?? [],
+            ];
+        }
+        $tree[] = ['key' => $pkey, 'label' => hub_cat_label($pkey), 'count' => $pcount,
+                   'forum_ids' => $sub, 'content_labels' => $clabels[$pkey] ?? [], 'leaves' => $leaves];
+        $seenKeys[$pkey] = true;
+    }
+
+    // content-only parents (Perspective, Vintage…): a cat_key with content but no
+    // forum subtree.
+    foreach ($cParent as $pkey => $n) {
+        if (isset($seenKeys[$pkey])) continue;
+        $tree[] = ['key' => $pkey, 'label' => hub_cat_label($pkey), 'count' => $n,
+                   'forum_ids' => [], 'content_labels' => $clabels[$pkey] ?? [], 'leaves' => []];
+    }
+
+    return [$tree, $registry];
+}
+
+/**
  * Build the server-side AND filter for the union's outer WHERE.
  * Returns [clauses[], named_binds] — the caller assembles the WHERE. Operates on
  * the union's output columns: card_type, content_kind, forum_id, author_name,
@@ -256,7 +364,7 @@ function hub_content_cat_labels(PDO $db): array
  *
  * $content_cat_labels: cat_key => [raw forum_label, …] (parent reconciliation).
  */
-function hub_filter_where(array $filters, array $forum_cat_map, array $content_cat_labels = []): array
+function hub_filter_where(array $filters, array $forum_cat_map, array $content_cat_labels = [], array $leaf_registry = []): array
 {
     $and   = [];
     $binds = [];
@@ -301,6 +409,26 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
         }
     }
 
+    // -- Leaf subforums: topics by leaf forum subtree, content by (parent
+    //    forum_label AND that leaf's subforum_label). Multi = OR within. --
+    if (!empty($filters['leaves'])) {
+        $lids = []; $c_or = [];
+        foreach ($filters['leaves'] as $i => $lk) {
+            $reg = $leaf_registry[$lk] ?? null;
+            if (!$reg) continue;
+            foreach ($reg['forum_ids'] as $fid) $lids[] = (int)$fid;
+            $plph = [];
+            foreach ($reg['parent_labels'] as $j => $pl) { $k = ":lpl{$i}_{$j}"; $plph[] = $k; $binds[$k] = $pl; }
+            $slk = ":lsl$i"; $binds[$slk] = $reg['sublabel'];
+            $c_or[] = $plph
+                ? "(u.content_forum_label IN (" . implode(',', $plph) . ") AND u.content_subforum_label = $slk)"
+                : "(u.content_subforum_label = $slk)";
+        }
+        $lids = array_values(array_unique($lids));
+        $topic_conds[]   = $lids ? ('u.forum_id IN (' . implode(',', $lids) . ')') : 'FALSE';
+        $content_conds[] = $c_or ? ('(' . implode(' OR ', $c_or) . ')') : 'FALSE';
+    }
+
     if ($content_conds || $topic_conds) {
         $cp = $content_conds ? implode(' AND ', $content_conds) : 'TRUE';
         $tp = $topic_conds   ? implode(' AND ', $topic_conds)   : 'TRUE';
@@ -326,31 +454,34 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
 
 function hub_mute_parse(): array
 {
-    $types = []; $cats = [];
+    $types = []; $cats = []; $leaves = [];
     foreach (array_filter(explode(',', (string)($_COOKIE['hub_mute'] ?? ''))) as $tok) {
         $tok = trim($tok);
-        if (strpos($tok, 't:') === 0)      $types[] = substr($tok, 2);
-        elseif (strpos($tok, 'c:') === 0)  $cats[]  = substr($tok, 2);
+        if (strpos($tok, 't:') === 0)      $types[]  = substr($tok, 2);
+        elseif (strpos($tok, 'c:') === 0)  $cats[]   = substr($tok, 2);
+        elseif (strpos($tok, 'l:') === 0)  $leaves[] = substr($tok, 2);
     }
     return [
-        'types' => array_values(array_unique(array_filter($types))),
-        'cats'  => array_values(array_unique(array_filter($cats))),
+        'types'  => array_values(array_unique(array_filter($types))),
+        'cats'   => array_values(array_unique(array_filter($cats))),
+        'leaves' => array_values(array_unique(array_filter($leaves))),
     ];
 }
 
 function hub_mute_serialize(array $muted): string
 {
     $out = [];
-    foreach ($muted['types'] as $t) $out[] = 't:' . $t;
-    foreach ($muted['cats']  as $c) $out[] = 'c:' . $c;
+    foreach ($muted['types']  as $t) $out[] = 't:' . $t;
+    foreach ($muted['cats']   as $c) $out[] = 'c:' . $c;
+    foreach (($muted['leaves'] ?? []) as $l) $out[] = 'l:' . $l;
     return implode(',', $out);
 }
 
-/** Flip one key in the muted set. $facet is 't' (type) or 'c' (category). */
+/** Flip one key in the muted set. $facet is 't'(type) / 'c'(cat) / 'l'(leaf). */
 function hub_mute_apply_toggle(array $muted, string $facet, string $val): array
 {
-    $key = $facet === 't' ? 'types' : 'cats';
-    $set = $muted[$key];
+    $key = ['t' => 'types', 'c' => 'cats', 'l' => 'leaves'][$facet] ?? 'cats';
+    $set = $muted[$key] ?? [];
     $i   = array_search($val, $set, true);
     if ($i === false) $set[] = $val; else array_splice($set, $i, 1);
     $muted[$key] = array_values($set);
@@ -358,12 +489,12 @@ function hub_mute_apply_toggle(array $muted, string $facet, string $val): array
 }
 
 /**
- * Exclusion clauses for muted Types/Categories.
+ * Exclusion clauses for muted Types/Categories/Leaves (hide both worlds).
  * Returns [clauses[], binds] to AND into the union's outer WHERE.
  */
-function hub_mute_clause(array $muted, array $forum_cat_map): array
+function hub_mute_clause(array $muted, array $forum_cat_map, array $content_cat_labels = [], array $leaf_registry = []): array
 {
-    $and = []; $binds = [];
+    $and = []; $binds = []; $n = 0;
 
     $kinds = []; $disc = false;
     foreach ($muted['types'] as $t) {
@@ -373,18 +504,40 @@ function hub_mute_clause(array $muted, array $forum_cat_map): array
     if ($disc) $and[] = "NOT (u.card_type = 'topic')";
     if ($kinds) {
         $ph = [];
-        foreach ($kinds as $i => $k) { $ph[] = ":muk$i"; $binds[":muk$i"] = $k; }
+        foreach ($kinds as $k) { $b = ':muk' . $n++; $ph[] = $b; $binds[$b] = $k; }
         $and[] = "NOT (u.card_type = 'content' AND u.content_kind IN (" . implode(',', $ph) . "))";
     }
 
-    if ($muted['cats']) {
+    // Muted category -> hide its topics AND its content (forum_label).
+    if (!empty($muted['cats'])) {
         $cat_forums = hub_cat_forum_ids($forum_cat_map);
-        $ids = [];
+        $ids = []; $labels = [];
         foreach ($muted['cats'] as $c) {
             foreach ($cat_forums[$c] ?? [] as $fid) $ids[] = (int)$fid;
+            foreach ($content_cat_labels[$c] ?? [] as $l) $labels[] = $l;
         }
         $ids = array_values(array_unique($ids));
         if ($ids) $and[] = "NOT (u.card_type = 'topic' AND u.forum_id IN (" . implode(',', $ids) . "))";
+        if ($labels) {
+            $ph = [];
+            foreach (array_unique($labels) as $l) { $b = ':mul' . $n++; $ph[] = $b; $binds[$b] = $l; }
+            $and[] = "NOT (u.card_type = 'content' AND u.content_forum_label IN (" . implode(',', $ph) . "))";
+        }
+    }
+
+    // Muted leaf -> hide its topics AND its content (parent forum_label + subforum_label).
+    foreach (($muted['leaves'] ?? []) as $lk) {
+        $reg = $leaf_registry[$lk] ?? null;
+        if (!$reg) continue;
+        $ids = array_values(array_unique(array_map('intval', $reg['forum_ids'])));
+        if ($ids) $and[] = "NOT (u.card_type = 'topic' AND u.forum_id IN (" . implode(',', $ids) . "))";
+        $plph = [];
+        foreach ($reg['parent_labels'] as $pl) { $b = ':mlp' . $n++; $plph[] = $b; $binds[$b] = $pl; }
+        $sb = ':mls' . $n++; $binds[$sb] = $reg['sublabel'];
+        $cond = $plph
+            ? "u.content_forum_label IN (" . implode(',', $plph) . ") AND u.content_subforum_label = $sb"
+            : "u.content_subforum_label = $sb";
+        $and[] = "NOT (u.card_type = 'content' AND ($cond))";
     }
 
     return [$and, $binds];

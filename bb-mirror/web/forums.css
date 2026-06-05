@@ -3006,6 +3006,23 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-rail__view .feed-compact-toggle,
 .hub-rail__view .feed-text-toggle,
 .hub-rail__view .feed-theme-toggle { margin-left: 0; }
+
+/* Rail "Reset all filters" (top of sidebar) */
+.hub-rail__reset { display: inline-block; margin: 0 2px 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--lg-rust, #c8772f); text-decoration: none; }
+.hub-rail__reset:hover { text-decoration: underline; }
+
+/* Category accordion: parent chevron + indented leaf rows */
+.hub-acc__chev { flex: none; width: 16px; height: 16px; padding: 0; border: 0; background: none;
+  cursor: pointer; color: var(--lg-mute); font-size: 10px; line-height: 16px; text-align: center;
+  transition: transform .15s; }
+.hub-acc.is-open > .hub-rail__row .hub-acc__chev { transform: rotate(90deg); }
+.hub-acc__chev--none { cursor: default; }
+.hub-acc__leaf { padding-left: 30px; }
+.hub-acc__leaf .hub-rail__nm { font-size: 13px; }
+.hub-acc__leaf .hub-sw { width: 28px; height: 16px; }
+.hub-acc__leaf .hub-sw::after { width: 12px; height: 12px; }
+.hub-acc__leaf .hub-sw.is-on::after { left: 14px; }
 /* Rail follows the theme tokens (var(--bg-card)) so it always matches the
    panels — no hard-coded colors here. The dark-grey page background lives on
    the Panels theme (--bg), below. */

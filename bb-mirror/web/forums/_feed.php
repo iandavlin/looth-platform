@@ -305,8 +305,10 @@ if ($scoped_forum) {
 
     // Server-side AND filter (Type ∩ Category ∩ Author) + sticky mute exclusions,
     // merged into one outer WHERE on the union's output.
-    [$f_clauses, $hub_binds]  = hub_filter_where($hub_filters, $_forum_cat_map, hub_content_cat_labels($db));
-    [$m_clauses, $mute_binds] = hub_mute_clause($hub_muted, $_forum_cat_map);
+    [$hub_cat_tree, $hub_leaf_reg] = hub_category_tree($db, $content_tiers, $_forum_cat_map);
+    $hub_clabels = hub_content_cat_labels($db);
+    [$f_clauses, $hub_binds]  = hub_filter_where($hub_filters, $_forum_cat_map, $hub_clabels, $hub_leaf_reg);
+    [$m_clauses, $mute_binds] = hub_mute_clause($hub_muted, $_forum_cat_map, $hub_clabels, $hub_leaf_reg);
     $all_clauses = array_merge($f_clauses, $m_clauses);
     $hub_binds   = $hub_binds + $mute_binds;
     $hub_where   = $all_clauses ? 'WHERE ' . implode(' AND ', $all_clauses) : '';
@@ -314,7 +316,9 @@ if ($scoped_forum) {
     // Facet counts + stash so the chrome renders the control rail into the
     // left-nav slot (Option A: rail replaces forum nav on the site-wide feed).
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
-    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param];
+    $hub_leaf_labels = [];
+    foreach ($hub_cat_tree as $_p) foreach ($_p['leaves'] as $_lf) $hub_leaf_labels[$_lf['key']] = $_lf['label'];
+    $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'tree' => $hub_cat_tree, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param];
 
     // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
     // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_
@@ -691,7 +695,7 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </header>
 
-  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param); ?>
+  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? []); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity">

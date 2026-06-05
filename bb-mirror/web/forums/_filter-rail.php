@@ -23,6 +23,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if ($sort !== '' && $sort !== 'new')        $qs['sort']   = $sort;
     if (!empty($filters['types']))              $qs['type']   = implode(',', $filters['types']);
     if (!empty($filters['cats']))               $qs['cat']    = implode(',', $filters['cats']);
+    if (!empty($filters['leaves']))             $qs['leaf']   = implode(',', $filters['leaves']);
     if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
@@ -43,11 +44,11 @@ function hub_query_params(): array
     return $out;
 }
 
-/** Return $filters with $val toggled inside the 'types' or 'cats' list. */
+/** Return $filters with $val toggled inside the type/cat/leaf list. */
 function hub_toggle(array $filters, string $facet, string $val): array
 {
-    $key = $facet === 'type' ? 'types' : 'cats';
-    $set = $filters[$key];
+    $key = ['type' => 'types', 'cat' => 'cats', 'leaf' => 'leaves'][$facet] ?? 'cats';
+    $set = $filters[$key] ?? [];
     $i   = array_search($val, $set, true);
     if ($i === false) $set[] = $val; else array_splice($set, $i, 1);
     $filters[$key] = array_values($set);
@@ -103,21 +104,64 @@ function hub_render_view_toggles(): void
     <?php
 }
 
+/** One accordion parent (+ its leaves) for the Category section. */
+function hub_render_cat_parent(array $p, array $filters, array $muted, string $sort): void
+{
+    $has    = !empty($p['leaves']);
+    $on     = in_array($p['key'], $filters['cats'] ?? [], true);
+    $is_mut = in_array($p['key'], $muted['cats'] ?? [], true);
+    // Open the accordion if a leaf under it is selected or muted.
+    $open = false;
+    foreach ($p['leaves'] as $lf) {
+        if (in_array($lf['key'], $filters['leaves'] ?? [], true) || in_array($lf['key'], $muted['leaves'] ?? [], true)) { $open = true; break; }
+    }
+    ?>
+    <div class="hub-acc<?= $open ? ' is-open' : '' ?>">
+      <div class="hub-rail__row hub-acc__parent<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?>">
+        <?php if ($has): ?>
+          <button class="hub-acc__chev" type="button" aria-expanded="<?= $open ? 'true' : 'false' ?>" aria-label="Expand <?= htmlspecialchars($p['label']) ?>">&#9656;</button>
+        <?php else: ?>
+          <span class="hub-acc__chev hub-acc__chev--none" aria-hidden="true"></span>
+        <?php endif; ?>
+        <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
+        <span class="hub-rail__ct"><?= (int)$p['count'] ?></span>
+        <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'c', $p['key']) ?>"
+           title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($p['label']) ?>"></a>
+      </div>
+      <?php if ($has): ?>
+        <div class="hub-acc__leaves"<?= $open ? '' : ' hidden' ?>>
+          <?php foreach ($p['leaves'] as $lf):
+            $lon  = in_array($lf['key'], $filters['leaves'] ?? [], true);
+            $lmut = in_array($lf['key'], $muted['leaves'] ?? [], true); ?>
+            <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?>">
+              <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
+              <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
+              <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
+                 title="<?= $lmut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $lmut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($lf['label']) ?>"></a>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
+    <?php
+}
+
 /** Render the control rail into the left-nav slot. */
-function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new'): void
+function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new', array $tree = []): void
 {
     $types = $facets['types'] ?? [];
-    $cats  = $facets['cats']  ?? [];
 
-    // Order Type facet: known labels first (by definition order), then any extras
-    // by count desc. "Discussions" leads.
     $type_order = array_keys(HUB_TYPE_LABELS);
     foreach (array_keys($types) as $k) if (!in_array($k, $type_order, true)) $type_order[] = $k;
 
-    // Category facet order: by count desc.
-    arsort($cats);
+    $any_active = !empty($filters['types']) || !empty($filters['cats']) || !empty($filters['leaves'])
+               || !empty($filters['authors']) || !empty($filters['q']);
     ?>
     <div class="hub-rail">
+      <?php if ($any_active): ?>
+        <a class="hub-rail__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">&times; Reset all filters</a>
+      <?php endif; ?>
+
       <h4 class="hub-rail__h">Type <small>· toggle to mute</small></h4>
       <div class="hub-rail__group">
         <?php foreach ($type_order as $key):
@@ -126,11 +170,9 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         endforeach; ?>
       </div>
 
-      <h4 class="hub-rail__h">Categories <small>· toggle to mute</small></h4>
-      <div class="hub-rail__group">
-        <?php foreach ($cats as $key => $n):
-          hub_rail_row('cat', (string)$key, hub_cat_label((string)$key), (int)$n, $filters, $muted, $sort);
-        endforeach; ?>
+      <h4 class="hub-rail__h">Categories <small>· tap to filter, switch to mute</small></h4>
+      <div class="hub-rail__group" id="hub-cat-accordion">
+        <?php foreach ($tree as $p) hub_render_cat_parent($p, $filters, $muted, $sort); ?>
       </div>
 
       <h4 class="hub-rail__h">View</h4>
@@ -213,7 +255,7 @@ function hub_render_author_header(array $h, array $filters, string $sort = 'new'
 }
 
 /** Render the active-filter + muted chip bar at the top of the feed. */
-function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'): void
+function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', array $leaf_labels = []): void
 {
     // Active (transient) filter chips — removing returns to the unfiltered set.
     $chips = [];
@@ -223,6 +265,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
     }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort)];
+    foreach (($filters['leaves'] ?? []) as $v) $chips[] = ['In', $leaf_labels[$v] ?? $v, hub_url(hub_toggle($filters, 'leaf', $v), $sort)];
     foreach ($filters['authors'] as $a) {
         $f = $filters; $f['authors'] = array_values(array_diff($filters['authors'], [$a]));
         $chips[] = ['By', $a, hub_url($f, $sort)];
@@ -231,6 +274,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
     $mchips = [];
     foreach ($muted['types'] as $v) $mchips[] = ['Muted', hub_type_label($v), hub_mute_url($filters, $sort, 't', $v)];
     foreach ($muted['cats']  as $v) $mchips[] = ['Muted', hub_cat_label($v),  hub_mute_url($filters, $sort, 'c', $v)];
+    foreach (($muted['leaves'] ?? []) as $v) $mchips[] = ['Muted', $leaf_labels[$v] ?? $v, hub_mute_url($filters, $sort, 'l', $v)];
 
     if (!$chips && !$mchips) return;
     ?>
@@ -241,7 +285,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
         <?php foreach ($chips as [$k, $v, $rm]): ?>
           <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
         <?php endforeach; ?>
-        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'authors' => [], 'q' => ''], $sort) ?>">Reset all</a>
+        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">Reset all</a>
       <?php endif; ?>
       <?php foreach ($mchips as [$k, $v, $rm]): ?>
         <span class="hub-chip hub-chip--muted"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>
