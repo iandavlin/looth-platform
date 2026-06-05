@@ -128,9 +128,21 @@ function bb_mirror_tier_clause(string $column): array {
 
 
 // ---------- /whoami — viewer identity (cached per request) ----------
-// Same loopback pattern as archive-poc. Calls the WP shim with the caller's
-// cookies. Returns null on failure; callers fall back to anon state.
-// tier_unavailable:true (poller down) → tier='public' (fail open).
+// Option 3: try the fast JWT endpoint first, fall back to the WP shim.
+//
+//  1. Fast path — /profile-api/v0/whoami keys off the visitor's `looth_id`
+//     JWT (~5ms, no WP boot). If it returns authenticated:true, use it.
+//  2. Shim fallback — /wp-json/looth/v1/whoami bridges the WP login session
+//     (validates wordpress_logged_in_* + adds trusted headers) and catches
+//     members who have no JWT yet (the unbridged-member gap). Slow (boots WP,
+//     ~687ms), so it fires only when the fast path returned anon AND the
+//     visitor actually has a WP login cookie — a cookieless visitor can't be a
+//     logged-in member the shim could rescue, so we skip it and stay anon fast.
+//
+// Self-healing: the login lanes (bridge enabled 2026-06-04) hand every member a
+// JWT, so over time almost everyone hits the fast path and the shim rarely fires.
+// Both endpoints return the same shape; tier_unavailable:true (poller down) →
+// tier='public' (fail open). Returns null on failure; callers fall back to anon.
 if (!function_exists('lg_bb_mirror_whoami')) {
 function lg_bb_mirror_whoami(): ?array {
     static $fetched = false, $result = null;
@@ -138,19 +150,19 @@ function lg_bb_mirror_whoami(): ?array {
     $fetched = true;
     if (PHP_SAPI === 'cli') return null;
 
-    // --- INTERIM perf cache (2026-05-29) -------------------------------------
-    // The whoami round-trip boots all of WordPress (~1.5s on this box) and is
-    // hit on every forum render. Until the profile-whoami shim removes the
-    // WP-bootstrap tax structurally, cache the result per WP session in tmpfs.
-    // Deliberately simple: TTL-only, NOT wired to PurgeNotifier — a tier/name
-    // change becomes visible within WHOAMI_CACHE_TTL. Keyed by the WP session
-    // cookie so each viewer gets their own entry ("anon" for gate-only visitors).
+    // --- perf cache (2026-05-29) ---------------------------------------------
+    // Caches the *resolved* identity per viewer in tmpfs so even a shim
+    // fallback bites only on a miss. TTL-only, NOT wired to PurgeNotifier — a
+    // tier/name change becomes visible within WHOAMI_CACHE_TTL. Keyed by BOTH
+    // the WP session cookie and the looth_id JWT, so two distinct identities
+    // can never collide on a key ("anon" for visitors with neither).
     $WHOAMI_CACHE_TTL = 45;
     $sess = '';
     foreach ($_COOKIE as $k => $v) {
         if (strpos($k, 'wordpress_logged_in_') === 0) { $sess = (string)$v; break; }
     }
-    $cacheKey  = $sess !== '' ? hash('sha256', $sess) : 'anon';
+    $jwt = (string)($_COOKIE['looth_id'] ?? '');
+    $cacheKey  = ($sess !== '' || $jwt !== '') ? hash('sha256', $sess . '|' . $jwt) : 'anon';
     $cacheFile = '/dev/shm/bb-whoami-' . $cacheKey . '.json';
     if (is_readable($cacheFile) && (time() - filemtime($cacheFile)) < $WHOAMI_CACHE_TTL) {
         $hit = json_decode((string)file_get_contents($cacheFile), true);
@@ -161,27 +173,42 @@ function lg_bb_mirror_whoami(): ?array {
     }
     // -------------------------------------------------------------------------
 
-    $ch = curl_init();
-    curl_setopt_array($ch, [
-        CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/whoami',
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
-        CURLOPT_TIMEOUT        => 5,
-        CURLOPT_HTTPHEADER     => [
-            'Host: ' . LG_BB_MIRROR_HOST,
-            'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
-        ],
-    ]);
-    $body = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    curl_close($ch);
-    $data = ($code === 200 && $body) ? json_decode($body, true) : null;
-    if (is_array($data) && !empty($data['tier_unavailable'])) {
-        $data['tier'] = 'public';
+    // Loopback call forwarding the visitor's own cookies (so their looth_id JWT
+    // / WP session ride along). Returns [http_code, decoded_array|null].
+    $call = function (string $url): array {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_HTTPHEADER     => [
+                'Host: ' . LG_BB_MIRROR_HOST,
+                'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
+            ],
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        $data = ($code === 200 && $body) ? json_decode($body, true) : null;
+        if (is_array($data) && !empty($data['tier_unavailable'])) {
+            $data['tier'] = 'public';   // poller down → fail open
+        }
+        return [$code, is_array($data) ? $data : null];
+    };
+
+    // 1. Fast path.
+    [$code, $data] = $call('https://127.0.0.1/profile-api/v0/whoami');
+
+    // 2. Shim fallback — only if fast didn't recognize an authenticated viewer
+    //    AND there's a WP login cookie the shim could actually bridge.
+    if (($data['authenticated'] ?? false) !== true && $sess !== '') {
+        [$code, $data] = $call('https://127.0.0.1/wp-json/looth/v1/whoami');
     }
-    $result = is_array($data) ? $data : null;
+
+    $result = $data;
 
     // Cache only definitive results (clean 200). Transient failures (timeout,
     // 5xx) are NOT cached, so the next render retries instead of pinning null.
