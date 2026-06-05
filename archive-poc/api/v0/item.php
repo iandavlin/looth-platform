@@ -9,7 +9,7 @@ if ($id <= 0) {
 }
 if ($id <= 0) send_json(['error' => 'missing id'], 400);
 
-$stmt = $db->prepare("SELECT * FROM content_item WHERE id = ?");
+$stmt = $db->prepare("SELECT " . lg_card_select($db) . " FROM content_item ci WHERE ci.id = ?");
 $stmt->execute([$id]);
 $r = $stmt->fetch();
 if (!$r) send_json(['error' => 'not found'], 404);

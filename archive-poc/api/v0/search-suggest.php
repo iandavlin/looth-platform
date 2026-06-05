@@ -1,8 +1,8 @@
 <?php
 // Faceted search-suggest for the modal: returns authors, posts, discussions
 // separately from a single query. Used by the chrome search modal only.
-// At postgres cutover: swap $db init to lg_archive_poc_pdo() and replace
-// content_fts MATCH with tsv @@ websearch_to_tsquery('english', ?).
+// Driver-aware FTS: SQLite content_fts MATCH / PG tsv @@ websearch_to_tsquery,
+// built by archive_fts() in _bootstrap.php. $db from lg_archive_poc_pdo() (env DSN).
 require __DIR__ . '/_bootstrap.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
@@ -14,8 +14,9 @@ if (strlen(trim($q)) < 2) {
     send_json(['q'=>$q,'authors'=>[],'posts'=>[],'posts_total'=>0,'discussions'=>[],'discussions_total'=>0]);
 }
 
-$needle = fts_quote($q);
-$LIMIT  = 3;
+$fts      = archive_fts($db, $q);
+$nameLike = lg_archive_poc_is_pg($db) ? 'ILIKE' : 'LIKE';
+$LIMIT    = 3;
 
 // ---- Author name search ------------------------------------------------
 // Fuzzy match on person.display_name. Weighted by how many posts they have.
@@ -25,7 +26,7 @@ $as = $db->prepare("
            COUNT(ci.id) AS post_count
     FROM person p
     LEFT JOIN content_item ci ON ci.author_id = p.id
-    WHERE p.display_name LIKE ?
+    WHERE p.display_name $nameLike ?
     GROUP BY p.id
     ORDER BY post_count DESC
     LIMIT ?
@@ -44,18 +45,19 @@ foreach ($as->fetchAll() as $r) {
 // ---- Posts (everything except discussions) -----------------------------
 $posts       = [];
 $posts_total = 0;
-if ($needle !== '') {
+if ($fts) {
     $ps = $db->prepare("
         SELECT ci.id, ci.kind, ci.title, ci.url,
-               ci.thumb_url, ci.thumb_broken, ci.tier, ci.author_name
+               ci.thumb_url, " . lg_bool_sel($db, 'ci.thumb_broken', 'thumb_broken') . ", ci.tier, ci.author_name
+               {$fts['rank_select']}
         FROM content_item ci
-        JOIN content_fts f ON f.rowid = ci.id
-        WHERE content_fts MATCH ?
+        {$fts['join']}
+        WHERE {$fts['where']}
           AND ci.kind NOT IN ('discussion','event')
-        ORDER BY bm25(content_fts) ASC
+        ORDER BY {$fts['rank_order']}
         LIMIT ?
     ");
-    $ps->execute([$needle, $LIMIT]);
+    $ps->execute($fts['pg'] ? [$fts['param'], $fts['rank_param'], $LIMIT] : [$fts['param'], $LIMIT]);
     foreach ($ps->fetchAll() as $r) {
         $posts[] = [
             'id'          => (int)$r['id'],
@@ -70,27 +72,30 @@ if ($needle !== '') {
     }
     $pc = $db->prepare("
         SELECT COUNT(*) FROM content_item ci
-        JOIN content_fts f ON f.rowid = ci.id
-        WHERE content_fts MATCH ? AND ci.kind NOT IN ('discussion','event')
+        {$fts['join']}
+        WHERE {$fts['where']} AND ci.kind NOT IN ('discussion','event')
     ");
-    $pc->execute([$needle]);
+    $pc->execute([$fts['param']]);
     $posts_total = (int)$pc->fetchColumn();
 }
 
 // ---- Discussions --------------------------------------------------------
 $discussions       = [];
 $discussions_total = 0;
-if ($needle !== '') {
+// Discussions are NOT indexed in PG (the Hub owns forum search); this returns
+// empty on Postgres by construction. Kept driver-aware for the SQLite fallback.
+if ($fts) {
     $ds = $db->prepare("
-        SELECT ci.id, ci.title, ci.url, ci.reply_count, ci.last_activity
+        SELECT ci.id, ci.title, ci.url, ci.reply_count, " . lg_ts_sel($db, 'ci.last_activity', 'last_activity') . "
+               {$fts['rank_select']}
         FROM content_item ci
-        JOIN content_fts f ON f.rowid = ci.id
-        WHERE content_fts MATCH ?
+        {$fts['join']}
+        WHERE {$fts['where']}
           AND ci.kind = 'discussion'
-        ORDER BY bm25(content_fts) ASC
+        ORDER BY {$fts['rank_order']}
         LIMIT ?
     ");
-    $ds->execute([$needle, $LIMIT]);
+    $ds->execute($fts['pg'] ? [$fts['param'], $fts['rank_param'], $LIMIT] : [$fts['param'], $LIMIT]);
     foreach ($ds->fetchAll() as $r) {
         $discussions[] = [
             'id'            => (int)$r['id'],
@@ -102,10 +107,10 @@ if ($needle !== '') {
     }
     $dc = $db->prepare("
         SELECT COUNT(*) FROM content_item ci
-        JOIN content_fts f ON f.rowid = ci.id
-        WHERE content_fts MATCH ? AND ci.kind = 'discussion'
+        {$fts['join']}
+        WHERE {$fts['where']} AND ci.kind = 'discussion'
     ");
-    $dc->execute([$needle]);
+    $dc->execute([$fts['param']]);
     $discussions_total = (int)$dc->fetchColumn();
 }
 

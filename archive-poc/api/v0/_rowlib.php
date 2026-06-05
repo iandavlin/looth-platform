@@ -107,7 +107,7 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
     }
     if (!empty($q['max_age_days'])) {
         $cutoff = time() - 86400 * (int) $q['max_age_days'];
-        $where[] = 'ci.published_at >= ?';
+        $where[] = lg_ts_epoch($db, 'ci.published_at') . ' >= ?';
         $params[] = $cutoff;
     }
     if (!empty($q['min_likes'])) {
@@ -186,10 +186,10 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
 
     $sql = "
         SELECT ci.id, ci.kind, ci.cpt, ci.title, ci.url, ci.excerpt, ci.body_text,
-               ci.thumb_url, ci.thumb_broken, ci.tier,
+               ci.thumb_url, " . lg_bool_sel($db, 'ci.thumb_broken', 'thumb_broken') . ", ci.tier,
                ci.author_id, ci.author_name,
-               ci.published_at, ci.last_activity, ci.reply_count,
-               ci.like_count, ci.view_count, ci.duration_min, ci.has_download
+               " . lg_ts_sel($db, 'ci.published_at', 'published_at') . ", " . lg_ts_sel($db, 'ci.last_activity', 'last_activity') . ", ci.reply_count,
+               ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . "
         FROM content_item ci
         WHERE " . implode(' AND ', $where) . "
         ORDER BY $order
@@ -250,7 +250,7 @@ function archive_poc_run_hero(PDO $db, array $row): array {
         $caseParts = [];
         foreach ($pins as $i => $id) $caseParts[] = "WHEN " . (int)$id . " THEN $i";
         $caseSql = implode(' ', $caseParts);
-        $sql = "SELECT ci.* FROM content_item ci WHERE ci.id IN ($ph)
+        $sql = "SELECT " . lg_card_select($db) . " FROM content_item ci WHERE ci.id IN ($ph)
                 ORDER BY CASE ci.id $caseSql END LIMIT 1";
         $st = $db->prepare($sql);
         $st->execute($pins);
@@ -272,13 +272,15 @@ function archive_poc_run_hero(PDO $db, array $row): array {
 function archive_poc_run_events_upcoming(PDO $db, array $row): array {
     $limit = (int) ($row['query']['limit'] ?? 10);
     $sql = "
-        SELECT ci.* FROM content_item ci
+        SELECT " . lg_card_select($db) . " FROM content_item ci
         WHERE ci.kind = 'event'
           AND ci.event_start_at IS NOT NULL
-          AND ci.event_start_at > strftime('%s','now')
+          AND " . lg_ts_epoch($db, 'ci.event_start_at') . " > ?
         ORDER BY ci.event_start_at ASC
         LIMIT " . max(1, min(50, $limit));
-    $items = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    $st = $db->prepare($sql);
+    $st->execute([time()]);
+    $items = $st->fetchAll(PDO::FETCH_ASSOC);
     foreach ($items as &$r) $r['tags'] = [];
     unset($r);
     return ['title' => $row['title'] ?? 'Upcoming events', 'items' => $items, 'layout' => $row['layout'] ?? 'events', 'tag' => null];
@@ -288,13 +290,15 @@ function archive_poc_run_events_upcoming(PDO $db, array $row): array {
  * Any event currently between start and end. Returns 0 or 1 row.
  */
 function archive_poc_happening_now(PDO $db): ?array {
-    $r = $db->query("
-        SELECT * FROM content_item
-        WHERE kind='event'
-          AND event_start_at IS NOT NULL AND event_end_at IS NOT NULL
-          AND event_start_at <= strftime('%s','now')
-          AND event_end_at   >  strftime('%s','now')
-        ORDER BY event_start_at DESC LIMIT 1
-    ")->fetch(PDO::FETCH_ASSOC);
+    $st = $db->prepare("
+        SELECT " . lg_card_select($db) . " FROM content_item ci
+        WHERE ci.kind='event'
+          AND ci.event_start_at IS NOT NULL AND ci.event_end_at IS NOT NULL
+          AND " . lg_ts_epoch($db, 'ci.event_start_at') . " <= ?
+          AND " . lg_ts_epoch($db, 'ci.event_end_at')   . " >  ?
+        ORDER BY ci.event_start_at DESC LIMIT 1");
+    $now = time();
+    $st->execute([$now, $now]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
     return $r ?: null;
 }

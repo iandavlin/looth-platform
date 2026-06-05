@@ -6,19 +6,17 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Archive-Poc: v0');
 
-$SQLITE = realpath(__DIR__ . '/../../index.sqlite');
-if (!$SQLITE || !is_file($SQLITE)) {
-    http_response_code(500);
-    echo json_encode(['error' => 'index missing']);
-    exit;
-}
+// Backend (SQLite legacy / Postgres discovery) is env-driven via
+// LG_ARCHIVE_POC_DSN, resolved in lg_archive_poc_pdo(). Default = SQLite.
+require_once __DIR__ . '/../../config.php';
 
 try {
-    $db = new PDO('sqlite:' . $SQLITE, null, null, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-    $db->exec('PRAGMA query_only = ON');
+    $db = lg_archive_poc_pdo();
+    $db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    // Read-only guard only applies to the SQLite file; PG access is grant-scoped.
+    if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+        $db->exec('PRAGMA query_only = ON');
+    }
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['error' => 'db open failed', 'detail' => $e->getMessage()]);
@@ -55,4 +53,39 @@ function fts_quote(string $q): string {
         $out[] = '"' . $t . '"';
     }
     return implode(' ', $out);
+}
+
+
+/**
+ * Driver-aware full-text search builder. Returns the join/where/rank pieces +
+ * bound param(s), or null if the query reduces to no searchable tokens.
+ *   SQLite : content_fts MATCH + bm25() ranking (lower = better → rank ASC)
+ *   Postgres: tsv @@ websearch_to_tsquery + ts_rank (higher = better → rank DESC)
+ * On PG, relevance ranking re-binds the needle in ORDER BY (rank_param).
+ */
+function archive_fts(PDO $db, string $rawQ): ?array {
+    if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql') {
+        $needle = trim($rawQ);
+        if ($needle === '') return null;
+        return [
+            'pg'          => true,
+            'join'        => '',
+            'where'       => "ci.tsv @@ websearch_to_tsquery('english', ?)",
+            'param'       => $needle,
+            'rank_select' => '',
+            'rank_order'  => "ts_rank(ci.tsv, websearch_to_tsquery('english', ?)) DESC",
+            'rank_param'  => $needle,
+        ];
+    }
+    $needle = fts_quote($rawQ);
+    if ($needle === '') return null;
+    return [
+        'pg'          => false,
+        'join'        => 'JOIN content_fts f ON f.rowid = ci.id',
+        'where'       => 'content_fts MATCH ?',
+        'param'       => $needle,
+        'rank_select' => ', bm25(content_fts) AS rank',
+        'rank_order'  => 'rank ASC',
+        'rank_param'  => null,
+    ];
 }

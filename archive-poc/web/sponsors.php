@@ -14,8 +14,10 @@ require __DIR__ . '/_page-shell.php';
 $sponsors = [];
 try {
     $pdo  = lg_archive_poc_pdo();
+    // Case-insensitive title sort: SQLite COLLATE NOCASE has no PG equivalent.
+    $ci_order = lg_archive_poc_is_pg($pdo) ? 'lower(title)' : 'title COLLATE NOCASE';
     $stmt = $pdo->query(
-        "SELECT title, url, thumb_url FROM content_item WHERE cpt='sponsor-page' ORDER BY title COLLATE NOCASE"
+        "SELECT title, url, thumb_url FROM content_item WHERE cpt='sponsor-page' ORDER BY $ci_order"
     );
     $sponsors = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (Throwable $e) {

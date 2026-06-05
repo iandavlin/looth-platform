@@ -51,31 +51,25 @@ if ($tags) {
     foreach ($tags as $t) $params[] = $t;
 }
 
-$fts_join = '';
-$select_extra = '';
-if ($q !== '') {
-    $needle = fts_quote($q);
-    if ($needle === '') {
-        // user submitted only punctuation; treat as no-results to avoid FTS errors
-        send_json(['total' => 0, 'items' => [], 'facets' => ['kind'=>[], 'tier'=>[], 'tag'=>[], 'author'=>[]]]);
-    }
-    $fts_join = "JOIN content_fts f ON f.rowid = ci.id";
-    $where[]  = "content_fts MATCH ?";
-    array_unshift($params, $needle); // FTS param is bound to the JOIN/WHERE position
-    // Move FTS param to correct order: PDO binds in order — rebuild $params.
-    // simpler: keep array_unshift but recompute placements when building SQL.
-    $select_extra = ", bm25(content_fts) AS rank";
+// Full-text search (driver-aware). Prepend the FTS predicate so its bound
+// param leads the positional list; the filter params follow.
+$fts = ($q !== '') ? archive_fts($db, $q) : null;
+if ($q !== '' && $fts === null) {
+    // query reduced to no searchable tokens — return a well-formed empty result
+    send_json([
+        'total' => 0, 'limit' => $limit, 'offset' => $offset, 'sort' => $sort,
+        'items' => [], 'people' => [], 'people_total' => 0,
+        'facets' => ['kind'=>[], 'tier'=>[], 'tag'=>[], 'author'=>[]],
+        'meta' => ['elapsed_ms' => 0],
+    ]);
 }
-
-// rebuild params in correct ordinal order: FTS first (if present), then the WHERE filters
-if ($q !== '') {
-    // we used array_unshift; now $params[0] is the FTS param. The filter params follow.
-    // That matches the order: SELECT ... FROM ... JOIN content_fts ... WHERE 1=1 AND <filters> ...
-    // because MATCH is in WHERE *after* 1=1. We need MATCH placeholder before filter placeholders.
-    // Easier: put MATCH at the front of WHERE clauses too.
-    // Replace the WHERE clauses array to put the MATCH first.
-    $where = array_values(array_diff($where, ["content_fts MATCH ?"]));
-    array_unshift($where, "content_fts MATCH ?");
+$fts_join     = '';
+$select_extra = '';
+if ($fts) {
+    $fts_join     = $fts['join'];
+    $select_extra = $fts['rank_select'];
+    array_unshift($where,  $fts['where']);
+    array_unshift($params, $fts['param']);
 }
 
 $where_sql = implode(' AND ', $where);
@@ -85,21 +79,21 @@ switch ($sort) {
     case 'oldest':       $order_sql = 'ci.published_at ASC';  break;
     case 'liked':        $order_sql = 'ci.like_count DESC, ci.published_at DESC'; break;
     case 'active':       $order_sql = 'ci.last_activity DESC, ci.published_at DESC'; break;
-    case 'relevance':    $order_sql = $q !== '' ? 'rank ASC' : 'ci.published_at DESC'; break;
+    case 'relevance':    $order_sql = $fts ? $fts['rank_order'] : 'ci.published_at DESC'; break;
     case 'viewed':       $order_sql = 'ci.view_count DESC, ci.published_at DESC'; break;
     case 'least_viewed': $order_sql = 'ci.view_count ASC, ci.published_at DESC'; break;
     case 'discussed':    $order_sql = 'ci.reply_count DESC, ci.last_activity DESC'; break;
-    case 'random':       $order_sql = 'RANDOM()'; break;
+    case 'random':       $order_sql = lg_archive_poc_is_pg($db) ? 'random()' : 'RANDOM()'; break;
     case 'newest':
-    default:          $order_sql = 'ci.published_at DESC'; break;
+    default:             $order_sql = 'ci.published_at DESC'; break;
 }
 
 $sql = "
     SELECT ci.id, ci.kind, ci.subkind, ci.cpt, ci.title, ci.url, ci.excerpt, ci.forum_label, ci.subforum_label,
-           ci.thumb_url, ci.thumb_broken, ci.tier,
+           ci.thumb_url, " . lg_bool_sel($db, 'ci.thumb_broken', 'thumb_broken') . ", ci.tier,
            ci.author_id, ci.author_name,
-           ci.published_at, ci.last_activity, ci.reply_count,
-           ci.like_count, ci.view_count, ci.duration_min, ci.has_download
+           " . lg_ts_sel($db, 'ci.published_at', 'published_at') . ", " . lg_ts_sel($db, 'ci.last_activity', 'last_activity') . ", ci.reply_count,
+           ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . "
            $select_extra
     FROM content_item ci
     $fts_join
@@ -108,9 +102,14 @@ $sql = "
     LIMIT $limit OFFSET $offset
 ";
 
+// PG relevance re-binds the needle in ORDER BY (trailing positional param).
+$main_params = ($fts && $fts['pg'] && $sort === 'relevance')
+    ? array_merge($params, [$fts['rank_param']])
+    : $params;
+
 $t0 = microtime(true);
 $stmt = $db->prepare($sql);
-$stmt->execute($params);
+$stmt->execute($main_params);
 $rows = $stmt->fetchAll();
 
 // Total count (without limit/offset). Cheap re-run with COUNT(*).
@@ -205,7 +204,8 @@ if ($id_set) {
              FROM content_item ci
              LEFT JOIN person p ON p.id = ci.author_id
              WHERE ci.id IN ($ph) AND ci.author_id IS NOT NULL AND ci.author_id > 0
-             GROUP BY ci.author_id ORDER BY n DESC LIMIT 20";
+             GROUP BY ci.author_id, ci.author_name, p.avatar_url, p.slug
+             ORDER BY n DESC LIMIT 20";
     $as = $db->prepare($asql);
     $as->execute($id_set);
     foreach ($as->fetchAll() as $ar) {
@@ -236,7 +236,7 @@ if ($id_set) {
             WHERE ci.id IN ($ph_p) AND ci.author_id > 0
               AND ci.kind NOT IN ('benefit','event')
             GROUP BY ci.author_id
-        )
+        ) sub
     ");
     $ct->execute($id_set);
     $people_total = (int) $ct->fetchColumn();
@@ -248,7 +248,7 @@ if ($id_set) {
                  LEFT JOIN person p ON p.id = ci.author_id
                  WHERE ci.id IN ($ph_p) AND ci.author_id > 0
                    AND ci.kind NOT IN ('benefit','event')
-                 GROUP BY ci.author_id
+                 GROUP BY ci.author_id, ci.author_name, p.avatar_url, p.slug
                  ORDER BY n DESC
                  LIMIT $limit OFFSET $offset";
         $ps = $db->prepare($psql);

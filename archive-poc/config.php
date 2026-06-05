@@ -143,3 +143,46 @@ function lg_archive_poc_host_to_path_map(): array {
     ];
 }
 }
+
+// ---------- driver-aware read shims (PG TIMESTAMPTZ/BOOLEAN → legacy SQLite shape) ----------
+// The archive render layer + archive.js consume timestamps as unix-epoch ints
+// and thumb_broken/has_download as 0|1. The PG content_item deliberately KEEPS
+// proper TIMESTAMPTZ/BOOLEAN columns (right for the Hub's cross-schema UNION
+// sort); these read shims cast back to the legacy int/0-1 shape *in SQL* so the
+// renderers stay untouched. On SQLite they are no-ops (columns already int/0-1).
+// See docs/STRANGLER-COORDINATION.md §3i.
+if (!function_exists('lg_archive_poc_is_pg')) {
+function lg_archive_poc_is_pg(PDO $db): bool {
+    return $db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'pgsql';
+}
+}
+/** SELECT-list expr → epoch-bigint on PG, plain column on SQLite. Aliased to $alias. */
+if (!function_exists('lg_ts_sel')) {
+function lg_ts_sel(PDO $db, string $expr, string $alias): string {
+    return lg_archive_poc_is_pg($db) ? "EXTRACT(epoch FROM $expr)::bigint AS $alias" : "$expr AS $alias";
+}
+}
+/** SELECT-list expr → 0|1 int on PG, plain column on SQLite. Aliased to $alias. */
+if (!function_exists('lg_bool_sel')) {
+function lg_bool_sel(PDO $db, string $expr, string $alias): string {
+    return lg_archive_poc_is_pg($db) ? "($expr)::int AS $alias" : "$expr AS $alias";
+}
+}
+/** Bare scalar (WHERE/ORDER/CASE) → epoch-bigint of a ts col on PG, plain on SQLite. */
+if (!function_exists('lg_ts_epoch')) {
+function lg_ts_epoch(PDO $db, string $expr): string {
+    return lg_archive_poc_is_pg($db) ? "EXTRACT(epoch FROM $expr)::bigint" : $expr;
+}
+}
+/** Standard content_item card SELECT list (driver-aware casts), for `SELECT ci.*` sites. */
+if (!function_exists('lg_card_select')) {
+function lg_card_select(PDO $db, string $a = 'ci'): string {
+    return "$a.id, $a.source, $a.kind, $a.subkind, $a.cpt, $a.title, $a.slug, $a.url, "
+         . "$a.excerpt, $a.body_text, $a.thumb_url, " . lg_bool_sel($db, "$a.thumb_broken", 'thumb_broken') . ", "
+         . "$a.author_id, $a.author_name, $a.tier, "
+         . lg_ts_sel($db, "$a.published_at", 'published_at') . ", " . lg_ts_sel($db, "$a.last_activity", 'last_activity') . ", "
+         . "$a.reply_count, $a.like_count, $a.view_count, $a.duration_min, " . lg_bool_sel($db, "$a.has_download", 'has_download') . ", "
+         . lg_ts_sel($db, "$a.event_start_at", 'event_start_at') . ", " . lg_ts_sel($db, "$a.event_end_at", 'event_end_at') . ", "
+         . "$a.event_region, $a.event_join_url, $a.forum_label, $a.subforum_label";
+}
+}

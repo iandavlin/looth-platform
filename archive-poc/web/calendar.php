@@ -16,15 +16,24 @@ $now    = time();
 $events = [];
 try {
     $pdo  = lg_archive_poc_pdo();
+    // PG stores event_*_at as TIMESTAMPTZ; the renderer wants unix epochs and the
+    // ORDER/CASE compares against $now (epoch). Cast in SQL. The `> 0` guard is a
+    // SQLite-only epoch sentinel — on PG, IS NOT NULL suffices. Named param is not
+    // reused (PG native prepares don't allow it) → :now_a / :now_b.
+    $startE     = lg_ts_epoch($pdo, 'event_start_at');
+    $startGuard = lg_archive_poc_is_pg($pdo)
+        ? 'event_start_at IS NOT NULL'
+        : 'event_start_at IS NOT NULL AND event_start_at > 0';
     $stmt = $pdo->prepare(
-        "SELECT title, url, event_start_at, event_end_at, event_join_url
+        "SELECT title, url, " . lg_ts_sel($pdo, 'event_start_at', 'event_start_at') . ", "
+        . lg_ts_sel($pdo, 'event_end_at', 'event_end_at') . ", event_join_url
            FROM content_item
-          WHERE cpt='event' AND event_start_at IS NOT NULL AND event_start_at > 0
-          ORDER BY (event_start_at >= :now) DESC,
-                   CASE WHEN event_start_at >= :now THEN event_start_at END ASC,
+          WHERE cpt='event' AND $startGuard
+          ORDER BY ($startE >= :now_a) DESC,
+                   CASE WHEN $startE >= :now_b THEN $startE END ASC,
                    event_start_at DESC"
     );
-    $stmt->execute([':now' => $now]);
+    $stmt->execute([':now_a' => $now, ':now_b' => $now]);
     $events = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 } catch (Throwable $e) {
     error_log('calendar.php: ' . $e->getMessage());

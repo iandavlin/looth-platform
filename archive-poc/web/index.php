@@ -19,13 +19,14 @@ if (isset($_GET['demo'])) {
 }
 require_once __DIR__ . '/../api/v0/_rowlib.php';
 
-// ---- DB -----------------------------------------------------------------
-$db_path = realpath(__DIR__ . '/../index.sqlite');
-$db = new PDO('sqlite:' . $db_path, null, null, [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-]);
-$db->exec('PRAGMA query_only = ON');
+// ---- DB ------------------------------------------------------------------
+// Env-driven backend via lg_archive_poc_pdo(): SQLite legacy index by default,
+// Postgres `discovery` schema when LG_ARCHIVE_POC_DSN points at pg.
+$db = lg_archive_poc_pdo();
+$db->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+    $db->exec('PRAGMA query_only = ON');   // read-only guard for the SQLite file
+}
 
 
 /**
