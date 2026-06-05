@@ -443,6 +443,20 @@ $author_ids = [];
 foreach ($topics as $_r) if (!empty($_r['author_id'])) $author_ids[] = (int)$_r['author_id'];
 $author_profiles = hub_resolve_profiles($author_ids);
 
+// Content (CPT) tag chips — one grouped read of discovery.tag for content cards.
+$content_tags = [];
+$content_ids  = [];
+foreach ($topics as $_r) if (($_r['card_type'] ?? 'topic') === 'content' && !empty($_r['topic_id'])) $content_ids[] = (int)$_r['topic_id'];
+if ($content_ids) {
+    $idlist = implode(',', array_values(array_unique($content_ids)));
+    try {
+        $tgst = $db->query("SELECT ct.content_id, t.label FROM discovery.content_tag ct
+                              JOIN discovery.tag t ON t.id = ct.tag_id
+                             WHERE ct.content_id IN ($idlist) ORDER BY ct.content_id, t.label");
+        foreach ($tgst->fetchAll() as $row) $content_tags[(int)$row['content_id']][] = (string)$row['label'];
+    } catch (\Throwable $e) { $content_tags = []; } // missing grant -> no tags, never a 500
+}
+
 // Author headers: one per selected author (stacked when several are filtered).
 $hub_author_headers = [];
 if (!empty($GLOBALS['__bb_hub_rail']) && !empty($hub_filters['authors'])) {
@@ -740,6 +754,8 @@ $header_cat = $scoped_forum
         $c_excerpt = feed_op_excerpt($topic);
         $c_likes   = (int)$topic['like_count'];
         $c_dur     = (int)($topic['duration_min'] ?? 0);
+        $c_tier    = (string)($topic['content_tier'] ?? '');
+        $c_tags    = $content_tags[(int)$topic['topic_id']] ?? [];
         // Inline comments: WP-free modal keyed (post_type, item_id) — same shape as
         // likes. topic_id is the content_item id (= wp_posts.ID = comment item_id).
         $c_cpt        = (string)($topic['content_cpt'] ?? '');
@@ -757,6 +773,7 @@ $header_cat = $scoped_forum
       <div class="feed-card__meta-top">
         <span class="feed-card__forum-ctx">
           <span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span>
+          <?php if ($c_tier !== ''): ?><span class="feed-card__tier-chip feed-card__tier-chip--<?= htmlspecialchars($c_tier) ?>"><?= htmlspecialchars(ucfirst($c_tier)) ?></span><?php endif; ?>
           <?php if ($c_dur > 0): ?><span class="feed-card__kind-dur"><?= $c_dur ?> min</span><?php endif; ?>
         </span>
         <time class="feed-card__time"><?= $c_time ?></time>
@@ -767,6 +784,7 @@ $header_cat = $scoped_forum
           <?php if ($c_excerpt !== ''): ?>
             <div class="feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
           <?php endif; ?>
+          <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
           <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
             <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
             <span><span class="feed-card__op-lead">By </span><span class="feed-card__op-author"><?= $c_author ?></span></span>

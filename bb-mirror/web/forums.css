@@ -2691,6 +2691,13 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card__kind-badge--sponsor-post { color: #9a4a12; background: #f7e7d6; }
 .feed-card__kind-badge--loothprint   { color: #5a3a7a; background: #ece1f3; }
 .feed-card__kind-badge--discussion   { color: #4a4636; background: #e6e2d6; }
+
+/* Tier chip on content cards (access level) */
+.feed-card__tier-chip { display: inline-block; margin-left: 5px; font: 700 9px/1.4 var(--lg-font-sans);
+  text-transform: uppercase; letter-spacing: .05em; border-radius: 5px; padding: 1px 6px; vertical-align: middle; }
+.feed-card__tier-chip--public { color: #3a5f2e; background: #e7f0dd; }
+.feed-card__tier-chip--lite   { color: #8a5a14; background: #f4e7cd; }
+.feed-card__tier-chip--pro    { color: #8a2f17; background: #f4ddd6; }
 .feed-card__kind-dur { display: inline-block; margin-left: 4px; font: 600 10px/1.4 var(--font-body); color: var(--lg-mute); vertical-align: middle; }
 
 /* Inline provider embed in a feed card (lazily built by forums.js §2e) */
