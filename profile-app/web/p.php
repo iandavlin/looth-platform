@@ -216,6 +216,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-hours__t:focus{outline:none;border-color:var(--lg-sage);box-shadow:0 0 0 2px var(--lg-sage-tint)}
 .lg-hours__sep{color:var(--lg-mute);font-size:12.5px}
 .lg-hours__note{margin-top:8px}
+/* business links (website + socials) */
+.lg-links{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+ul.lg-links{list-style:none;margin:0;padding:0;gap:6px}
+.lg-links .lg-link{display:flex}
+ul.lg-links .lg-link a{font:600 14px/1.35 var(--lg-font-sans);color:var(--lg-sage-d);text-decoration:none;border-bottom:1px solid transparent;word-break:break-word}
+ul.lg-links .lg-link a:hover{border-bottom-color:var(--lg-sage)}
+.lg-link--edit{position:relative;flex-direction:column;gap:6px;background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:10px 34px 10px 12px}
+.lg-link--edit .lg-link__rm-abs{position:absolute;top:8px;right:8px}
 </style>
 </head>
 <body class="mode-view">
@@ -503,7 +511,8 @@ window.lgSortable = function (container, opts) {
     'practice-about':  { url: BASE + '/me/practice-about?practice='  + PID, m: 'PATCH', k: 'visibility' },
     'practice-dropoffs': { url: BASE + '/me/practice-block?practice=' + PID + '&block=dropoffs', m: 'PUT', k: 'visibility' },
     'practice-location': { url: BASE + '/me/practice-block?practice=' + PID + '&block=location', m: 'PUT', k: 'visibility' },
-    'practice-hours':    { url: BASE + '/me/practice-block?practice=' + PID + '&block=hours',    m: 'PUT', k: 'visibility' }
+    'practice-hours':    { url: BASE + '/me/practice-block?practice=' + PID + '&block=hours',    m: 'PUT', k: 'visibility' },
+    'practice-links':    { url: BASE + '/me/practice-block?practice=' + PID + '&block=links',    m: 'PUT', k: 'visibility' }
   };
   var TIERS = ['public', 'members', 'private'];
   var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private' };
@@ -708,6 +717,51 @@ window.lgSortable = function (container, opts) {
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
       .catch(function () { alert('Network error.'); });
+  });
+})();
+</script>
+<script>
+/* Links editor (owner/Me) — add/remove/edit {label,url} rows; PUT the whole list
+   to the generic practice-block endpoint (server sanitizes URLs). */
+(function () {
+  var wrap = document.getElementById('lg-plinks-edit');
+  if (!wrap) return;
+  var PID = <?= (int)$practiceId ?>;
+  var URL = '/profile-api/v0/me/practice-block?practice=' + PID + '&block=links';
+  var addBtn = document.getElementById('lg-plink-add');
+  function collect() {
+    return Array.prototype.map.call(wrap.querySelectorAll('.lg-link--edit'), function (row) {
+      function v(f) { var el = row.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
+      return { label: v('label'), url: v('url') };
+    });
+  }
+  function rowEl() {
+    var row = document.createElement('div'); row.className = 'lg-link lg-link--edit';
+    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm lg-link__rm-abs';
+    rm.setAttribute('aria-label', 'Remove link'); rm.title = 'Remove link'; rm.textContent = '\u00d7';
+    row.appendChild(rm);
+    function inp(f, ph) { var el = document.createElement('input'); el.type = 'text'; el.className = 'lg-dropoff__f'; el.setAttribute('data-f', f); el.placeholder = ph; return el; }
+    row.appendChild(inp('label', 'Label (e.g. Website, Instagram)'));
+    row.appendChild(inp('url', 'https://...'));
+    return row;
+  }
+  function put(items) {
+    fetch(URL, { method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
+      .catch(function () { alert('Network error.'); });
+  }
+  wrap.addEventListener('click', function (e) {
+    var rm = e.target.closest('.lg-link__rm');
+    if (rm) { var row = rm.closest('.lg-link--edit'); if (row) { row.remove(); put(collect()); } }
+  });
+  wrap.addEventListener('change', function (e) {
+    if (e.target.closest('.lg-link--edit')) put(collect());
+  });
+  addBtn && addBtn.addEventListener('click', function () {
+    var row = rowEl(); wrap.insertBefore(row, addBtn);
+    var f = row.querySelector('[data-f="label"]'); if (f) f.focus();
   });
 })();
 </script>

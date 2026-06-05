@@ -931,6 +931,45 @@ function looth_render_practice_hours_block(int $ownerId, int $practiceId, string
     echo '</section>';
 }
 
+/**
+ * Practice (business) Links block — website + socials as a {label, url} list. Owner
+ * edits inline (add/remove rows); visitors get safe external anchors. Block-level
+ * pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_links_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $lk      = Block::loadPracticeLinks($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$lk['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$lk['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--links" data-block="links">';
+    echo '<h3 class="lg-bh">Links';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-links', (string)$lk['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-links lg-links--edit" id="lg-plinks-edit">';
+        foreach ($lk['items'] as $it) {
+            echo '<div class="lg-link lg-link--edit">';
+            echo '<button type="button" class="lg-link__rm lg-link__rm-abs" aria-label="Remove link" title="Remove link">&times;</button>';
+            echo '<input type="text" class="lg-dropoff__f" data-f="label" placeholder="Label (e.g. Website, Instagram)" value="' . looth_h((string)$it['label']) . '">';
+            echo '<input type="text" class="lg-dropoff__f" data-f="url" placeholder="https://..." value="' . looth_h((string)$it['url']) . '">';
+            echo '</div>';
+        }
+        echo '<button type="button" class="lg-link__add" id="lg-plink-add">+ Add link</button>';
+        echo '</div>';
+    } else {
+        echo '<ul class="lg-links">';
+        foreach ($lk['items'] as $it) {
+            $label = ((string)$it['label'] !== '') ? (string)$it['label'] : (string)$it['url'];
+            echo '<li class="lg-link"><a href="' . looth_h((string)$it['url']) . '" target="_blank" rel="noopener noreferrer nofollow">' . looth_h($label) . '</a></li>';
+        }
+        echo '</ul>';
+    }
+    echo '</section>';
+}
+
 /** The profile-header (identity) block — the author-identity card. */
 function looth_render_header_block(array $header, string $role, string $headerVis, ?string $tierBadge, string $headerActions = '', int $userId = 0): void
 {
@@ -1130,6 +1169,8 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
                 );
             } elseif ($key === 'hours') {
                 looth_render_practice_hours_block($ownerId, $practiceId, $role, $headerVis);
+            } elseif ($key === 'links') {
+                looth_render_practice_links_block($ownerId, $practiceId, $role, $headerVis);
             }
         }
         // Staff roster is auto-derived (the practice_members list): pinned last,

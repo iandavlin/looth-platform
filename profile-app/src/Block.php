@@ -1150,6 +1150,82 @@ Accept: application/json
         return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) ? $t : '';
     }
 
+    public const LINKS_LABEL_MAX = 60;
+    public const LINKS_URL_MAX   = 400;
+    public const LINKS_MAX_ITEMS = 20;
+
+    /**
+     * Practice (business) Links block — a free list of {label, url} (website +
+     * socials), one JSONB blob in the OWNER's profile_sections under 'links:p<id>'.
+     * URLs are sanitized to http(s) on save; default visibility 'public'.
+     */
+    public static function loadPracticeLinks(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('links', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $items = [];
+        foreach ((array)($d['items'] ?? []) as $it) {
+            if (!is_array($it)) continue;
+            $url = (string)($it['url'] ?? '');
+            if ($url === '') continue;
+            $items[] = ['label' => (string)($it['label'] ?? ''), 'url' => $url];
+        }
+        return [
+            'block' => 'links', 'has' => !empty($items), 'items' => $items,
+            'vis'   => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /** Upsert the links list. Items: [{label, url}]; bad/empty URLs are dropped. */
+    public static function savePracticeLinks(int $ownerId, int $practiceId, array $items, ?string $visInput = null): array
+    {
+        $key   = self::practiceBlockKey('links', $practiceId);
+        $clean = [];
+        foreach ($items as $it) {
+            if (!is_array($it) || count($clean) >= self::LINKS_MAX_ITEMS) continue;
+            $url = self::sanitizeLinkUrl((string)($it['url'] ?? ''));
+            if ($url === '') continue;
+            $label = mb_substr(trim((string)($it['label'] ?? '')), 0, self::LINKS_LABEL_MAX);
+            if ($label === '') {
+                $host  = (string)parse_url($url, PHP_URL_HOST);
+                $label = mb_substr($host !== '' ? preg_replace('/^www\./', '', $host) : $url, 0, self::LINKS_LABEL_MAX);
+            }
+            $clean[] = ['label' => $label, 'url' => $url];
+        }
+        $data = json_encode(['items' => $clean], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = ($visInput !== null && self::visFromInput($visInput) !== null) ? self::visFromInput($visInput) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 60)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 60)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeLinks($ownerId, $practiceId);
+    }
+
+    /** Normalize a user-entered URL to a safe absolute http(s) URL, or '' if invalid. */
+    private static function sanitizeLinkUrl(string $u): string
+    {
+        $u = trim($u);
+        if ($u === '') return '';
+        if (!preg_match('#^https?://#i', $u)) $u = 'https://' . $u;
+        $u = filter_var($u, FILTER_SANITIZE_URL);
+        if ($u === false || !filter_var($u, FILTER_VALIDATE_URL)) return '';
+        $scheme = strtolower((string)parse_url($u, PHP_URL_SCHEME));
+        return in_array($scheme, ['http', 'https'], true) ? mb_substr($u, 0, self::LINKS_URL_MAX) : '';
+    }
+
     // ---------- block: resume (single PDF; profile-only) ----------
 
     /**
@@ -1445,6 +1521,7 @@ Accept: application/json
         'location' => ['label' => 'Location', 'removable' => true],
         'dropoffs' => ['label' => 'Drop-off Locations', 'removable' => true],
         'hours'    => ['label' => 'Hours', 'removable' => true],
+        'links'    => ['label' => 'Links', 'removable' => true],
     ];
 
     /**

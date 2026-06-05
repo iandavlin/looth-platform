@@ -21,7 +21,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 
-const PRACTICE_BLOCKS = ['dropoffs', 'location', 'hours'];   // WS3 widens this (links)
+const PRACTICE_BLOCKS = ['dropoffs', 'location', 'hours', 'links'];
 
 $user   = Auth::requireUser();
 $uid    = (int) $user['id'];
@@ -43,6 +43,7 @@ if ($method === 'GET') {
     if ($block === 'dropoffs') profile_app_json(200, Block::loadDropoffs($ownerId, $key) ?? ['error' => 'not_found']);
     if ($block === 'location') profile_app_json(200, Block::loadPracticeLocation($ownerId, $pid));
     if ($block === 'hours')    profile_app_json(200, Block::loadPracticeHours($ownerId, $pid));
+    if ($block === 'links')    profile_app_json(200, Block::loadPracticeLinks($ownerId, $pid));
     profile_app_json(400, ['error' => 'unknown_block']);
 }
 
@@ -68,6 +69,14 @@ if ($block === 'location') {
 
 if ($block === 'hours') {
     profile_app_json(200, ['ok' => true, 'hours' => Block::savePracticeHours($ownerId, $pid, $in)]);
+}
+
+if ($block === 'links') {
+    $items = (array_key_exists('items', $in) && is_array($in['items']))
+        ? $in['items']
+        : (Block::loadPracticeLinks($ownerId, $pid)['items'] ?? []);
+    $vis = array_key_exists('visibility', $in) ? $in['visibility'] : null;
+    profile_app_json(200, ['ok' => true, 'links' => Block::savePracticeLinks($ownerId, $pid, $items, $vis)]);
 }
 
 profile_app_json(400, ['error' => 'unknown_block']);
