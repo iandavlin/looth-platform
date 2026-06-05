@@ -33,6 +33,7 @@ $valid = in_array($postType, LG_COMMENTS_TYPES, true) && $itemId > 0;
 
 $rows  = [];
 $cards = [];
+$reactions = [];
 if ($valid) {
     try {
         $pdo  = lg_comments_pdo();
@@ -40,6 +41,11 @@ if ($valid) {
         $uuids = [];
         foreach ($rows as $r) if (!empty($r['user_uuid'])) $uuids[] = (string) $r['user_uuid'];
         if ($uuids) $cards = lg_comments_author_cards($uuids);
+        // Reaction counts per comment (WP-free aggregate). The viewer's own pick is
+        // NOT known here (no validated cookie on this pool) — the iframe JS fetches
+        // it from comment-post.php GET and highlights after load.
+        $cids = array_map(static fn($r) => (int) $r['id'], $rows);
+        $reactions = lg_reactions_for_comments($pdo, $cids);
     } catch (Throwable $e) {
         error_log('[lg-comments] ' . $e->getMessage());
         $rows = [];
@@ -59,8 +65,49 @@ function lg_c_when(int $ts, DateTimeZone $tz): string {
     return $d->format('M j, Y · g:ia');
 }
 
+/** Inner glyph (emoji char or static image) for one palette reaction. */
+function lg_c_rx_glyph(array $rx): string {
+    if (($rx['type'] ?? '') === 'image') {
+        return '<img class="lgc-rx-img" src="' . lg_c_h(LG_REACTIONS_ASSET_BASE . ($rx['file'] ?? ''))
+             . '" width="20" height="20" alt="" loading="lazy">';
+    }
+    return '<span class="lgc-rx-emoji">' . lg_c_h($rx['char'] ?? '') . '</span>';
+}
+
+/**
+ * Reaction bar for one comment: count chips for reactions that exist, plus an
+ * "add reaction" trigger revealing the full palette. Viewer-mine highlight is
+ * applied client-side after the cookie-validated my_reactions fetch. The whole
+ * bar is inert until JS wires it (counts still render for logged-out viewers).
+ */
+function lg_c_render_reactions(int $id, array $counts): string {
+    $palette = lg_reactions_palette();
+    $byslug  = [];
+    foreach ($palette as $rx) $byslug[$rx['slug']] = $rx;
+    // existing-count chips, in palette order
+    $chips = '';
+    foreach ($palette as $rx) {
+        $n = (int) ($counts[$rx['slug']] ?? 0);
+        if ($n <= 0) continue;
+        $chips .= '<button type="button" class="lgc-rx" data-slug="' . lg_c_h($rx['slug'])
+                . '" title="' . lg_c_h($rx['label']) . '">' . lg_c_rx_glyph($rx)
+                . '<span class="lgc-rx-n">' . $n . '</span></button>';
+    }
+    // full palette picker (hidden until the add-trigger opens it)
+    $opts = '';
+    foreach ($palette as $rx) {
+        $opts .= '<button type="button" class="lgc-rx-opt" data-slug="' . lg_c_h($rx['slug'])
+               . '" title="' . lg_c_h($rx['label']) . '">' . lg_c_rx_glyph($rx) . '</button>';
+    }
+    return '<div class="lgc-reactions" data-comment-id="' . $id . '">'
+         . '<span class="lgc-rx-chips">' . $chips . '</span>'
+         . '<button type="button" class="lgc-rx-add" aria-label="Add reaction">☺<span>+</span></button>'
+         . '<span class="lgc-rx-palette" hidden>' . $opts . '</span>'
+         . '</div>';
+}
+
 /** Recursively render a comment + its replies. */
-function lg_c_render_node(array $r, array $byParent, array $cards, DateTimeZone $tz, int $depth = 0): string {
+function lg_c_render_node(array $r, array $byParent, array $cards, array $reactions, DateTimeZone $tz, int $depth = 0): string {
     $uuid = !empty($r['user_uuid']) ? strtolower((string) $r['user_uuid']) : '';
     $card = $uuid !== '' ? ($cards[$uuid] ?? null) : null;
     $name = $card && $card['display_name'] !== '' ? $card['display_name']
@@ -82,14 +129,19 @@ function lg_c_render_node(array $r, array $byParent, array $cards, DateTimeZone 
 
     $kids = $byParent[$id] ?? [];
     $kidsHtml = '';
-    foreach ($kids as $k) $kidsHtml .= lg_c_render_node($k, $byParent, $cards, $tz, $depth + 1);
+    foreach ($kids as $k) $kidsHtml .= lg_c_render_node($k, $byParent, $cards, $reactions, $tz, $depth + 1);
+
+    $rxHtml = lg_c_render_reactions($id, $reactions[$id] ?? []);
 
     ob_start(); ?>
 <li class="lgc" id="lgc-<?= $id ?>">
   <div class="lgc-body">
     <div class="lgc-head"><?= $avatarHtml ?><span class="lgc-name"><?= $nameHtml ?></span><span class="lgc-time"><?= lg_c_h($when) ?></span></div>
     <div class="lgc-text"><?= $body ?></div>
-    <?php if ($depth < 4): ?><button type="button" class="lgc-reply" data-id="<?= $id ?>" data-name="<?= lg_c_h($name) ?>">Reply</button><?php endif; ?>
+    <div class="lgc-meta">
+      <?php if ($depth < 4): ?><button type="button" class="lgc-reply" data-id="<?= $id ?>" data-name="<?= lg_c_h($name) ?>">Reply</button><?php endif; ?>
+      <?= $rxHtml ?>
+    </div>
   </div>
   <?php if ($kidsHtml !== ''): ?><ul class="lgc-children"><?= $kidsHtml ?></ul><?php endif; ?>
 </li>
@@ -97,7 +149,7 @@ function lg_c_render_node(array $r, array $byParent, array $cards, DateTimeZone 
 }
 
 $threadHtml = '';
-foreach (($byParent[0] ?? []) as $top) $threadHtml .= lg_c_render_node($top, $byParent, $cards, $tz, 0);
+foreach (($byParent[0] ?? []) as $top) $threadHtml .= lg_c_render_node($top, $byParent, $cards, $reactions, $tz, 0);
 $count = count($rows);
 ?><!doctype html>
 <html lang="en">
@@ -143,6 +195,33 @@ $count = count($rows);
   .lgc-text{margin:8px 0 6px;font-size:15px;line-height:1.55;white-space:normal;}
   .lgc-reply{background:none;border:0;color:#6b7c52;cursor:pointer;font:inherit;font-weight:600;font-size:13px;padding:0;}
   .lgc-reply:hover{text-decoration:underline;}
+
+  /* reactions */
+  .lgc-meta{display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;}
+  .lgc-reactions{position:relative;display:inline-flex;align-items:center;gap:6px;}
+  .lgc-rx-chips{display:inline-flex;align-items:center;gap:6px;}
+  .lgc-rx{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font:inherit;font-size:13px;
+    line-height:1;padding:3px 9px 3px 7px;border:1px solid #e4ddcd;border-radius:999px;background:#fbfbf8;
+    color:#6b6258;transition:background .12s,border-color .12s;}
+  .lgc-rx:hover{background:#f4f1e8;}
+  .lgc-rx.is-mine{background:#eef2e6;border-color:#bcc8a6;color:#56653c;}
+  .lgc-rx-n{font-weight:600;font-variant-numeric:tabular-nums;}
+  .lgc-rx-emoji{font-size:15px;line-height:1;}
+  .lgc-rx-img{display:inline-block;width:20px;height:20px;object-fit:contain;vertical-align:middle;}
+  .lgc-rx-add{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font:inherit;
+    font-size:14px;line-height:1;width:26px;height:24px;border:1px solid #e4ddcd;border-radius:999px;
+    background:#fff;color:#9a948a;padding:0;}
+  .lgc-rx-add span{font-size:11px;font-weight:700;margin-left:-1px;}
+  .lgc-rx-add:hover{background:#f4f1e8;color:#6b7c52;}
+  .lgc-rx-palette{position:absolute;left:0;bottom:calc(100% + 6px);z-index:5;display:flex;gap:2px;
+    padding:6px;background:#fff;border:1px solid #e4ddcd;border-radius:14px;
+    box-shadow:0 6px 22px rgba(26,29,26,.14);}
+  .lgc-rx-opt{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;
+    background:none;padding:6px;border-radius:10px;font-size:20px;line-height:1;transition:background .1s;}
+  .lgc-rx-opt:hover{background:#f1eee4;}
+  /* logged-out: counts stay visible (read-only), interaction hidden */
+  body.lgc-anon .lgc-rx-add{display:none;}
+  body.lgc-anon .lgc-rx{pointer-events:none;}
   .lgc-empty{color:#9a948a;font-size:14px;margin:4px 0 18px;}
   img.emoji,img.wp-smiley{display:inline-block!important;width:1em!important;height:1em!important;
     margin:0 .07em!important;vertical-align:-0.1em!important;}
@@ -180,7 +259,10 @@ $count = count($rows);
       errEl   = document.getElementById('lgc-err'),
       replyto = document.getElementById('lgc-replyto'),
       list    = document.getElementById('lgc-list');
-  var nonce = '', parentId = 0;
+  var nonce = '', parentId = 0, authed = false, myReactions = {};
+  var REACT = '/archive-api/v0/comment-react';
+  var RX_PALETTE = <?= json_encode(lg_reactions_palette(), JSON_UNESCAPED_UNICODE) ?>,
+      RX_BASE    = <?= json_encode(LG_REACTIONS_ASSET_BASE) ?>;
 
   /* height handshake — parent modal sizes the iframe to the thread. */
   function postHeight(){
@@ -199,11 +281,86 @@ $count = count($rows);
         {credentials:'same-origin', headers:{'Accept':'application/json'}})
     .then(function(r){ return r.ok ? r.json() : Promise.reject(); })
     .then(function(d){
-      if (d && d.authenticated && d.nonce) { nonce = d.nonce; compose.hidden = false; }
-      else { login.hidden = false; }
+      if (d && d.authenticated && d.nonce) {
+        nonce = d.nonce; authed = true; compose.hidden = false;
+        myReactions = d.my_reactions || {};
+        applyMine();
+      } else {
+        login.hidden = false;
+        document.body.classList.add('lgc-anon');  // hide react triggers for logged-out
+      }
       postHeight();
     })
-    .catch(function(){ login.hidden = false; postHeight(); });
+    .catch(function(){ login.hidden = false; document.body.classList.add('lgc-anon'); postHeight(); });
+
+  /* ---- reactions ---- */
+  function rxGlyph(rx){
+    if (rx.type === 'image') return '<img class="lgc-rx-img" src="'+RX_BASE+esc(rx.file)+'" width="20" height="20" alt="">';
+    return '<span class="lgc-rx-emoji">'+esc(rx.char)+'</span>';
+  }
+  function renderChips(bar, counts, mine){
+    var chips = bar.querySelector('.lgc-rx-chips'); if (!chips) return;
+    var html = '';
+    for (var i=0;i<RX_PALETTE.length;i++){
+      var rx = RX_PALETTE[i], n = counts[rx.slug]||0; if (n<=0) continue;
+      html += '<button type="button" class="lgc-rx'+(mine===rx.slug?' is-mine':'')+'" data-slug="'+esc(rx.slug)+
+              '" title="'+esc(rx.label)+'">'+rxGlyph(rx)+'<span class="lgc-rx-n">'+n+'</span></button>';
+    }
+    chips.innerHTML = html;
+  }
+  function applyMine(){
+    Array.prototype.forEach.call(document.querySelectorAll('.lgc-reactions'), function(bar){
+      var cid = bar.getAttribute('data-comment-id'), slug = myReactions[cid];
+      Array.prototype.forEach.call(bar.querySelectorAll('.lgc-rx'), function(c){
+        c.classList.toggle('is-mine', !!slug && c.getAttribute('data-slug') === slug);
+      });
+    });
+  }
+  function closePalettes(except){
+    Array.prototype.forEach.call(document.querySelectorAll('.lgc-rx-palette'), function(p){
+      if (p !== except) p.hidden = true;
+    });
+  }
+  function doReact(bar, slug){
+    if (!authed){ login.hidden = false; postHeight(); return; }
+    var cid = bar.getAttribute('data-comment-id');
+    fetch(REACT, {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},
+      body: JSON.stringify({comment_id: parseInt(cid,10), slug: slug, _wpnonce: nonce})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (j && j.ok){
+          renderChips(bar, j.counts||{}, j.mine);
+          if (j.mine) myReactions[cid] = j.mine; else delete myReactions[cid];
+          postHeight();
+        }
+      })
+      .catch(function(){});
+  }
+  if (list) list.addEventListener('click', function(e){
+    var bar = e.target.closest('.lgc-reactions'); if (!bar) return;
+    if (e.target.closest('.lgc-rx-add')){
+      var pal = bar.querySelector('.lgc-rx-palette');
+      var willOpen = pal.hidden; closePalettes(); pal.hidden = !willOpen; postHeight(); return;
+    }
+    var opt = e.target.closest('.lgc-rx-opt');
+    if (opt){ doReact(bar, opt.getAttribute('data-slug')); closePalettes(); return; }
+    var chip = e.target.closest('.lgc-rx');
+    if (chip){ doReact(bar, chip.getAttribute('data-slug')); return; }
+  });
+  document.addEventListener('click', function(e){ if (!e.target.closest('.lgc-reactions')) closePalettes(); });
+
+  /* empty reaction bar markup for a freshly-posted comment */
+  function reactionBarHtml(id){
+    var opts = '';
+    for (var i=0;i<RX_PALETTE.length;i++){
+      var rx = RX_PALETTE[i];
+      opts += '<button type="button" class="lgc-rx-opt" data-slug="'+esc(rx.slug)+'" title="'+esc(rx.label)+'">'+rxGlyph(rx)+'</button>';
+    }
+    return '<div class="lgc-reactions" data-comment-id="'+id+'"><span class="lgc-rx-chips"></span>'+
+           '<button type="button" class="lgc-rx-add" aria-label="Add reaction">&#9786;<span>+</span></button>'+
+           '<span class="lgc-rx-palette" hidden>'+opts+'</span></div>';
+  }
 
   /* reply targeting */
   if (list) list.addEventListener('click', function(e){
@@ -254,7 +411,8 @@ $count = count($rows);
     li.innerHTML = '<div class="lgc-body"><div class="lgc-head">'+av+
       '<span class="lgc-name">'+nm+'</span><span class="lgc-time">'+esc(c.when)+'</span></div>'+
       '<div class="lgc-text">'+esc(c.body).replace(/\n/g,'<br>')+'</div>'+
-      '<button type="button" class="lgc-reply" data-id="'+c.id+'" data-name="'+esc(c.author_name)+'">Reply</button></div>';
+      '<div class="lgc-meta"><button type="button" class="lgc-reply" data-id="'+c.id+'" data-name="'+esc(c.author_name)+'">Reply</button>'+
+      reactionBarHtml(c.id)+'</div></div>';
     // nest under parent if present, else append to root
     var target = list;
     if (c.parent_id){

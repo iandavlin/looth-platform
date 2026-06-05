@@ -9,7 +9,8 @@
  * but /whoami reads them anon, so gating writes on /whoami (like likes do) would lock
  * real members out of commenting. Mirrors bb-mirror's auth.php pattern.
  *
- *   GET  ?post_type=&item_id=  → { authenticated, wp_user_id?, display_name?, nonce? }
+ *   GET  ?post_type=&item_id=  → { authenticated, wp_user_id?, display_name?, nonce?,
+ *                                  my_reactions?:{comment_id:slug} }
  *   POST { post_type, item_id, parent_id?, body, _wpnonce }
  *        → { ok, comment:{ id, parent_id, author_name, slug, avatar_url, body, when } }
  *
@@ -44,11 +45,28 @@ $uid    = (int) get_current_user_id();
 if ($method === 'GET') {
     if ($uid <= 0) lg_cp_json(['authenticated' => false]);
     $u = wp_get_current_user();
+    // The viewer's own reactions across this item's thread, so the modal can
+    // highlight "my" chips on load. Counts themselves come WP-free from comments.php.
+    $mine = [];
+    $gType = isset($_GET['post_type']) ? trim((string) $_GET['post_type']) : '';
+    $gItem = isset($_GET['item_id']) ? (int) $_GET['item_id'] : 0;
+    if (in_array($gType, LG_COMMENTS_TYPES, true) && $gItem > 0) {
+        try {
+            $pdo  = lg_comments_pdo();
+            $cids = $pdo->prepare('SELECT id FROM comments WHERE post_type=? AND item_id=?');
+            $cids->execute([$gType, $gItem]);
+            $ids  = array_map('intval', $cids->fetchAll(PDO::FETCH_COLUMN) ?: []);
+            $mine = lg_reactions_mine($pdo, $ids, $uid);
+        } catch (Throwable $e) {
+            error_log('[lg-comment-post] my_reactions: ' . $e->getMessage());
+        }
+    }
     lg_cp_json([
         'authenticated' => true,
         'wp_user_id'    => $uid,
         'display_name'  => (string) $u->display_name,
         'nonce'         => wp_create_nonce('lg_comment'),
+        'my_reactions'  => (object) $mine,
     ]);
 }
 
