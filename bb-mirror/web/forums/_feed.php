@@ -305,7 +305,7 @@ if ($scoped_forum) {
 
     // Server-side AND filter (Type ∩ Category ∩ Author) + sticky mute exclusions,
     // merged into one outer WHERE on the union's output.
-    [$f_clauses, $hub_binds]  = hub_filter_where($hub_filters, $_forum_cat_map);
+    [$f_clauses, $hub_binds]  = hub_filter_where($hub_filters, $_forum_cat_map, hub_content_cat_labels($db));
     [$m_clauses, $mute_binds] = hub_mute_clause($hub_muted, $_forum_cat_map);
     $all_clauses = array_merge($f_clauses, $m_clauses);
     $hub_binds   = $hub_binds + $mute_binds;
@@ -354,7 +354,9 @@ if ($scoped_forum) {
             NULL::text                                                 AS content_url,
             NULL::int                                                  AS duration_min,
             false                                                      AS has_download,
-            NULL::text                                                 AS content_cpt
+            NULL::text                                                 AS content_cpt,
+            NULL::text                                                 AS content_forum_label,
+            NULL::text                                                 AS content_subforum_label
           FROM topic t
           JOIN forum f  ON f.id = t.forum_id
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
@@ -409,7 +411,9 @@ if ($scoped_forum) {
             c.url                                                      AS content_url,
             c.duration_min,
             c.has_download,
-            c.cpt                                                      AS content_cpt
+            c.cpt                                                      AS content_cpt,
+            c.forum_label                                              AS content_forum_label,
+            c.subforum_label                                           AS content_subforum_label
           FROM discovery.content_item c
          WHERE c.tier IN ($tier_in)
            $q_content

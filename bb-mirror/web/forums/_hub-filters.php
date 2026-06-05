@@ -182,6 +182,17 @@ function hub_facet_counts(PDO $db, array $content_tiers, array $forum_cat_map): 
         $cats[$key] = ($cats[$key] ?? 0) + (int)$r['n'];
     }
 
+    // Fold CONTENT into the same category counts (reconciled by forum_label slug).
+    // Content-only labels (Perspective, Vintage) surface as their own categories.
+    $ccs = $db->prepare("SELECT forum_label, count(*) AS n FROM discovery.content_item
+                          WHERE tier IN ($tin) AND COALESCE(forum_label,'') <> '' GROUP BY forum_label");
+    foreach ($content_tiers as $i => $t) $ccs->bindValue(':ft' . $i, $t);
+    $ccs->execute();
+    foreach ($ccs->fetchAll() as $r) {
+        $key = hub_reconcile_cat_key((string)$r['forum_label']);
+        $cats[$key] = ($cats[$key] ?? 0) + (int)$r['n'];
+    }
+
     return ['types' => $types, 'cats' => $cats];
 }
 
@@ -193,67 +204,107 @@ function hub_cat_forum_ids(array $forum_cat_map): array
     return $out;
 }
 
+/** Lowercase hyphen slug (commas/punct dropped) — reconciles content labels
+ *  (raw shared_category term names) to the forum-slug taxonomy. */
+function hub_slugify(string $s): string
+{
+    $s = strtolower(trim($s));
+    $s = preg_replace('/[^a-z0-9]+/', '-', $s);
+    return trim((string)$s, '-');
+}
+
+// Known forum<->content drift where slugs DON'T already match (the comma-only
+// drift like "Tools, Spaces, Robots and Widgets" slugifies identically, so it's
+// not listed). content-label-slug => forum-slug.
+const HUB_LABEL_ALIASES = [
+    'shop-organization'      => 'shop-organisation',
+    'tools-jigs-and-fixtures' => 'tools-and-jigs',
+];
+
+/** Reconcile a raw content category label to a cat_key. Content-only parents
+ *  (no matching forum keyword — Perspective, Vintage) become their own key. */
+function hub_reconcile_cat_key(string $label): string
+{
+    $slug = hub_slugify($label);
+    if ($slug === '') return 'general';
+    $slug = HUB_LABEL_ALIASES[$slug] ?? $slug;
+    $key  = bb_mirror_cat_key($slug);
+    return ($key === 'general' && $slug !== 'general') ? $slug : $key;
+}
+
+/** cat_key => [raw forum_label, …] for matching content by category. */
+function hub_content_cat_labels(PDO $db): array
+{
+    $out = [];
+    foreach ($db->query("SELECT DISTINCT forum_label FROM discovery.content_item WHERE COALESCE(forum_label,'') <> ''")->fetchAll() as $r) {
+        $label = (string)$r['forum_label'];
+        $out[hub_reconcile_cat_key($label)][] = $label;
+    }
+    return $out;
+}
+
 /**
  * Build the server-side AND filter for the union's outer WHERE.
- * Returns [clauses[], named_binds] — the caller assembles the WHERE (so filter
- * and mute clauses merge into one). Operates on the union's output columns:
- * card_type, content_kind, forum_id, author_name.
+ * Returns [clauses[], named_binds] — the caller assembles the WHERE. Operates on
+ * the union's output columns: card_type, content_kind, forum_id, author_name,
+ * content_forum_label, content_subforum_label.
+ *
+ * Type ∩ Category is now a clean AND across BOTH worlds (content carries category
+ * labels — forum_label/subforum_label — reconciled to the forum taxonomy by slug,
+ * so Category narrows content too, not just discussions). Predicate per card_type,
+ * OR'd: (content AND contentPred) OR (topic AND topicPred).
+ *
+ * $content_cat_labels: cat_key => [raw forum_label, …] (parent reconciliation).
  */
-function hub_filter_where(array $filters, array $forum_cat_map): array
+function hub_filter_where(array $filters, array $forum_cat_map, array $content_cat_labels = []): array
 {
     $and   = [];
     $binds = [];
 
-    // -- Type ∩ Category as two composing "worlds" --------------------------
-    // Content has no category, so Category is a *discussions* facet: it narrows
-    // forum threads and must NOT nuke selected content types. We build a
-    // predicate per card_type and OR them, instead of AND-ing facets globally:
-    //   (content AND <contentPred>) OR (topic AND <topicPred>)
-    //
-    //   contentPred: type filter -> kind ∈ chosen content kinds (Category is N/A
-    //     to content); no type filter -> all content, EXCEPT a Category-only
-    //     selection hides content (Category alone = "discussions in this area").
-    //   topicPred:   type filter -> only if "Discussions" chosen; Category ->
-    //     forum ∈ chosen categories. Both AND together.
-    $kinds = [];
-    $want_disc = false;
-    foreach ($filters['types'] as $t) {
-        if ($t === 'discussions') { $want_disc = true; continue; }
-        $kinds[] = $t;
-    }
-    $has_type = !empty($filters['types']);
+    $content_conds = [];
+    $topic_conds   = [];
 
-    $cat_ids = [];
+    // -- Type: discussions => topics; kinds => content --
+    if (!empty($filters['types'])) {
+        $kinds = []; $want_disc = false;
+        foreach ($filters['types'] as $t) {
+            if ($t === 'discussions') { $want_disc = true; continue; }
+            $kinds[] = $t;
+        }
+        if ($kinds) {
+            $ph = [];
+            foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
+            $content_conds[] = 'u.content_kind IN (' . implode(',', $ph) . ')';
+        } else {
+            $content_conds[] = 'FALSE'; // only Discussions chosen
+        }
+        $topic_conds[] = $want_disc ? 'TRUE' : 'FALSE';
+    }
+
+    // -- Category: topics by forum subtree, content by reconciled forum_label --
     if (!empty($filters['cats'])) {
         $cat_forums = hub_cat_forum_ids($forum_cat_map);
-        foreach ($filters['cats'] as $c) {
-            foreach ($cat_forums[$c] ?? [] as $fid) $cat_ids[] = (int)$fid;
-        }
-        $cat_ids = array_values(array_unique($cat_ids));
-    }
-    $has_cat = !empty($filters['cats']);
+        $ids = [];
+        foreach ($filters['cats'] as $c) foreach ($cat_forums[$c] ?? [] as $fid) $ids[] = (int)$fid;
+        $ids = array_values(array_unique($ids));
+        $topic_conds[] = $ids ? ('u.forum_id IN (' . implode(',', $ids) . ')') : 'FALSE';
 
-    if ($has_type || $has_cat) {
-        // content predicate
-        if ($has_type) {
-            if ($kinds) {
-                $ph = [];
-                foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
-                $content_pred = 'u.content_kind IN (' . implode(',', $ph) . ')';
-            } else {
-                $content_pred = 'FALSE'; // only Discussions chosen -> no content
-            }
+        $labels = [];
+        foreach ($filters['cats'] as $c) foreach ($content_cat_labels[$c] ?? [] as $l) $labels[] = $l;
+        $labels = array_values(array_unique($labels));
+        if ($labels) {
+            $lph = [];
+            foreach ($labels as $i => $l) { $lph[] = ":ccl$i"; $binds[":ccl$i"] = $l; }
+            $content_conds[] = 'u.content_forum_label IN (' . implode(',', $lph) . ')';
         } else {
-            $content_pred = $has_cat ? 'FALSE' : 'TRUE'; // Category-only hides content
+            $content_conds[] = 'FALSE';
         }
+    }
 
-        // topic predicate
-        $topic_conds = [];
-        if ($has_type) $topic_conds[] = $want_disc ? 'TRUE' : 'FALSE';
-        if ($has_cat)  $topic_conds[] = $cat_ids ? ('u.forum_id IN (' . implode(',', $cat_ids) . ')') : 'FALSE';
-        $topic_pred = $topic_conds ? implode(' AND ', $topic_conds) : 'TRUE';
-
-        $and[] = "((u.card_type = 'content' AND ($content_pred)) OR (u.card_type = 'topic' AND ($topic_pred)))";
+    if ($content_conds || $topic_conds) {
+        $cp = $content_conds ? implode(' AND ', $content_conds) : 'TRUE';
+        $tp = $topic_conds   ? implode(' AND ', $topic_conds)   : 'TRUE';
+        $and[] = "((u.card_type = 'content' AND ($cp)) OR (u.card_type = 'topic' AND ($tp)))";
     }
 
     // -- Author: multi-select, by name (across both worlds); OR within --
