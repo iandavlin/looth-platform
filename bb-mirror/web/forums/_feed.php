@@ -323,6 +323,16 @@ if ($scoped_forum) {
     $hub_facets = hub_facet_counts($db, $content_tiers, $_forum_cat_map);
     $GLOBALS['__bb_hub_rail'] = ['facets' => $hub_facets, 'filters' => $hub_filters, 'muted' => $hub_muted, 'sort' => $sort_param];
 
+    // Unified full-text search (q) — an AND dimension across BOTH worlds, applied
+    // per-branch (FTS columns: topic.search_doc, content_item.tsv). websearch_to_
+    // tsquery is forgiving on bad input. Empty q -> no clause.
+    $hub_q = (string)($hub_filters['q'] ?? '');
+    $q_topic = $q_content = '';
+    if ($hub_q !== '') {
+        $q_topic   = "AND t.search_doc @@ websearch_to_tsquery('english', :hq_t)";
+        $q_content = "AND c.tsv @@ websearch_to_tsquery('english', :hq_c)";
+    }
+
     $topic_sql = "
       SELECT * FROM (
         SELECT
@@ -350,7 +360,8 @@ if ($scoped_forum) {
             NULL::text                                                 AS content_tier,
             NULL::text                                                 AS content_url,
             NULL::int                                                  AS duration_min,
-            false                                                      AS has_download
+            false                                                      AS has_download,
+            NULL::text                                                 AS content_cpt
           FROM topic t
           JOIN forum f  ON f.id = t.forum_id
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
@@ -375,6 +386,7 @@ if ($scoped_forum) {
           ) reply_img ON true
          WHERE t.status = 'publish' AND f.visibility = 'public'
            AND t.forum_id NOT IN (3876)
+           $q_topic
 
         UNION ALL
 
@@ -403,9 +415,11 @@ if ($scoped_forum) {
             c.tier                                                     AS content_tier,
             c.url                                                      AS content_url,
             c.duration_min,
-            c.has_download
+            c.has_download,
+            c.cpt                                                      AS content_cpt
           FROM discovery.content_item c
          WHERE c.tier IN ($tier_in)
+           $q_content
       ) u
       $hub_where
       $union_order_by
@@ -414,6 +428,7 @@ if ($scoped_forum) {
     $stmt = $db->prepare($topic_sql);
     foreach ($content_tiers as $i => $tv) $stmt->bindValue(':ctier' . $i, $tv);
     foreach ($hub_binds as $k => $v) $stmt->bindValue($k, $v);
+    if ($hub_q !== '') { $stmt->bindValue(':hq_t', $hub_q); $stmt->bindValue(':hq_c', $hub_q); }
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
     $stmt->execute();
@@ -458,6 +473,54 @@ if ($topic_ids) {
     $rstmt->execute();
     foreach ($rstmt->fetchAll() as $row) {
         $reply_teaser[(int)$row['topic_id']] = $row;
+    }
+}
+
+// -- Content comment counts (Hub content cards → WP-free comment modal). --
+// Content comments live in discovery.comments (pulled out of WP by the comments-db
+// lane), keyed (post_type, item_id) — same shape as discovery.likes. One grouped
+// read per page (mirrors the reply-teaser fetch above) badges each content card
+// with its comment count and powers the modal trigger. bb-mirror reads the store
+// read-only. Try/catch so a missing grant degrades to "no count", never a 500.
+//
+// Covered post types = the comments-db lane's LG_COMMENTS_TYPES. Cards outside this
+// set get no comment affordance (their threads still live in WP / aren't pulled).
+const LG_HUB_COMMENT_TYPES = [
+    'loothprint', 'post-type-videos', 'post-imgcap', 'post',
+    'shorty', 'coe-questions', 'ajde_events',
+];
+$content_comment_counts = []; // "post_type:item_id" => count
+$cc_keys = [];                // post_type => [item_id, …]
+foreach ($topics as $_r) {
+    if (($_r['card_type'] ?? 'topic') !== 'content') continue;
+    $cpt = (string)($_r['content_cpt'] ?? '');
+    if ($cpt !== '' && in_array($cpt, LG_HUB_COMMENT_TYPES, true)) {
+        $cc_keys[$cpt][] = (int)$_r['topic_id'];
+    }
+}
+if ($cc_keys) {
+    $cc_parts = []; $cc_binds = []; $cc_i = 0;
+    foreach ($cc_keys as $cpt => $ids) {
+        $ph = [];
+        foreach (array_values(array_unique($ids)) as $id) {
+            $k = ':cid' . $cc_i++; $ph[] = $k; $cc_binds[$k] = $id;
+        }
+        $tk = ':cct' . $cc_i++; $cc_binds[$tk] = $cpt;
+        $cc_parts[] = "(post_type = $tk AND item_id IN (" . implode(',', $ph) . "))";
+    }
+    try {
+        $cc_stmt = $db->prepare(
+            "SELECT post_type, item_id, COUNT(*) AS n
+               FROM discovery.comments
+              WHERE status = 'approved' AND (" . implode(' OR ', $cc_parts) . ")
+              GROUP BY post_type, item_id"
+        );
+        $cc_stmt->execute($cc_binds);
+        foreach ($cc_stmt->fetchAll() as $row) {
+            $content_comment_counts[$row['post_type'] . ':' . (int)$row['item_id']] = (int)$row['n'];
+        }
+    } catch (\Throwable $e) {
+        $content_comment_counts = []; // store unreadable → omit counts, keep the feed
     }
 }
 
@@ -609,22 +672,11 @@ $header_cat = $scoped_forum
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
     <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
        class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Hot</a>
-    <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_toolbar_search($hub_filters, $sort_param); ?>
-    <button class="feed-compact-toggle" type="button" aria-pressed="false"
-            title="Toggle compact view" aria-label="Toggle compact view">
-      <span class="feed-compact-toggle__icon" aria-hidden="true">&#9636;</span>
-      <span class="feed-compact-toggle__label">Compact</span>
-    </button>
-    <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
-            title="Cycle text size" aria-label="Cycle text size">
-      <span class="feed-text-toggle__icon" aria-hidden="true">A</span>
-      <span class="feed-text-toggle__label">Text size</span>
-    </button>
-    <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
-            title="Cycle color theme" aria-label="Cycle color theme">
-      <span class="feed-theme-toggle__icon" aria-hidden="true">&#9681;</span>
-      <span class="feed-theme-toggle__label">Theme</span>
-    </button>
+    <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
+      <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
+    <?php else: // scoped-forum views keep the view toggles in the sort bar ?>
+      <?php hub_render_view_toggles(); ?>
+    <?php endif; ?>
     <?php if ($can_post && $is_postable_forum): ?>
       <button class="feed-post-btn" type="button" data-ntm-open
               data-forum-id="<?= (int)$scoped_forum['id'] ?>"
@@ -632,6 +684,7 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </nav>
 
+  <div id="hub-feed-results">
   <?php if (!$topics): ?>
     <p class="bb-mirror__empty">No recent activity.</p>
 
@@ -652,6 +705,12 @@ $header_cat = $scoped_forum
         $c_excerpt = feed_op_excerpt($topic);
         $c_likes   = (int)$topic['like_count'];
         $c_dur     = (int)($topic['duration_min'] ?? 0);
+        // Inline comments: WP-free modal keyed (post_type, item_id) — same shape as
+        // likes. topic_id is the content_item id (= wp_posts.ID = comment item_id).
+        $c_cpt        = (string)($topic['content_cpt'] ?? '');
+        $c_id         = (int)$topic['topic_id'];
+        $c_can_comment = in_array($c_cpt, LG_HUB_COMMENT_TYPES, true) && $c_id > 0;
+        $c_comments   = $content_comment_counts[$c_cpt . ':' . $c_id] ?? 0;
         $kind_label = [
             'article' => 'Article', 'video' => 'Video', 'event' => 'Event',
             'sponsor-post' => 'Sponsor', 'loothprint' => 'Loothprint',
@@ -677,6 +736,16 @@ $header_cat = $scoped_forum
             <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
             <span><span class="feed-card__op-lead">By </span><span class="feed-card__op-author"><?= $c_author ?></span></span>
             <?php if ($c_likes > 0): ?><span class="feed-card__op-time"> &middot; <?= $c_likes ?> &#9829;</span><?php endif; ?>
+            <?php if ($c_can_comment): ?>
+              <button type="button" class="feed-card__comments-btn"
+                      data-comments
+                      data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>"
+                      data-item-id="<?= $c_id ?>"
+                      aria-haspopup="dialog" aria-controls="lgc-modal"
+                      title="<?= $c_comments > 0 ? 'View comments' : 'Be the first to comment' ?>">
+                &#128172; <?= $c_comments > 0 ? $c_comments . ' ' . ($c_comments === 1 ? 'comment' : 'comments') : 'Comment' ?>
+              </button>
+            <?php endif; ?>
           </div>
         </div>
         <?php if (!empty($c_img)): ?>
@@ -825,6 +894,7 @@ $header_cat = $scoped_forum
   <?php endif; ?>
 
   <?php endif; ?>
+  </div><!-- #hub-feed-results -->
 </div><!-- .page.feed-page -->
 
 <?php bb_mirror_chrome_footer(); ?>

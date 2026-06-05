@@ -1658,6 +1658,50 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
 }
 .feed-card__op-author:hover { color: var(--lg-sage-d); text-decoration: underline; }
 
+/* Inline comment trigger on Hub content cards — sits in the op-meta row beside
+   the like count. Opens the WP-free comment modal (#lgc-modal). */
+.feed-card__comments-btn {
+  -webkit-appearance: none; appearance: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0 0 0 4px; margin: 0;
+  font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--lg-mute); cursor: pointer; line-height: 1;
+}
+.feed-card__comments-btn:hover { color: var(--lg-sage-d); }
+
+/* Content comment modal (mirrors the standalone page's lg-cmodal). */
+.lgc-modal[hidden] { display: none; }
+.lgc-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; box-sizing: border-box;
+}
+.lgc-modal__backdrop {
+  position: absolute; inset: 0; background: rgba(26,29,26,.5);
+  -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+}
+.lgc-modal__panel {
+  position: relative; width: min(640px,96vw); max-height: min(86vh,920px);
+  background: #fff; border-radius: 16px; overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0,0,0,.28), 0 4px 12px rgba(0,0,0,.12);
+  display: flex; flex-direction: column;
+}
+.lgc-modal__head {
+  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid #eee7da; background: #f7f5f2;
+}
+.lgc-modal__title { font-weight: 700; font-size: 16px; color: #1a1d1a; }
+.lgc-modal__close {
+  margin-left: auto; background: none; border: 0; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; font-size: 22px; line-height: 1; cursor: pointer;
+  color: #6b6b66; transition: background .15s, color .15s;
+}
+.lgc-modal__close:hover { background: #ece7db; color: #1a1d1a; }
+.lgc-modal__frame {
+  width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease;
+}
+
 /* Reply list beneath OP */
 .feed-card__replies {
   border-top: 1px solid var(--border-soft);
@@ -2928,3 +2972,23 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
   letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3);
   border-radius: 5px; padding: 1px 6px; }
 .hub-suggest__n { margin-left: auto; flex: none; font-size: 12px; color: var(--lg-mute); }
+#hub-feed-results { transition: opacity .12s; }
+#hub-feed-results.is-loading { opacity: .5; }
+
+/* View toggles relocated into the rail (under Categories) */
+.hub-rail__view { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
+.hub-rail__view .feed-compact-toggle,
+.hub-rail__view .feed-text-toggle,
+.hub-rail__view .feed-theme-toggle { margin-left: 0; }
+
+/* Dark-grey rail backing (the control "palette"). Light text for contrast;
+   the Hub theme toggle still recolors the feed area to the right. */
+.bb-layout__nav:has(.hub-rail) { background: #2b2c2a; border-radius: 12px; padding: 12px 10px; }
+.hub-rail { color: #dcd8cc; }
+.hub-rail__h { color: #9c988c; }
+.hub-rail__h small { color: #7d7a70; }
+.hub-rail__row { color: #dcd8cc; }
+.hub-rail__row:hover { background: rgba(255,255,255,.08); }
+.hub-rail__ct { color: #908d83; }
+.hub-rail__row.is-on { background: var(--lg-sage, #87986a); color: #fff; }
+.hub-rail__row.is-on .hub-rail__ct { color: rgba(255,255,255,.85); }

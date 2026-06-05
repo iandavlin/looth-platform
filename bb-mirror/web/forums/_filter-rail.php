@@ -24,6 +24,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['types']))              $qs['type']   = implode(',', $filters['types']);
     if (!empty($filters['cats']))               $qs['cat']    = implode(',', $filters['cats']);
     if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
+    if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -65,6 +66,29 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     <?php
 }
 
+/** The view toggles (Compact / Text size / Theme). Shared so the Hub rail and
+ *  the scoped-forum sort bar render identical, JS-bindable markup. */
+function hub_render_view_toggles(): void
+{
+    ?>
+    <button class="feed-compact-toggle" type="button" aria-pressed="false"
+            title="Toggle compact view" aria-label="Toggle compact view">
+      <span class="feed-compact-toggle__icon" aria-hidden="true">&#9636;</span>
+      <span class="feed-compact-toggle__label">Compact</span>
+    </button>
+    <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
+            title="Cycle text size" aria-label="Cycle text size">
+      <span class="feed-text-toggle__icon" aria-hidden="true">A</span>
+      <span class="feed-text-toggle__label">Text size</span>
+    </button>
+    <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
+            title="Cycle color theme" aria-label="Cycle color theme">
+      <span class="feed-theme-toggle__icon" aria-hidden="true">&#9681;</span>
+      <span class="feed-theme-toggle__label">Theme</span>
+    </button>
+    <?php
+}
+
 /** Render the control rail into the left-nav slot. */
 function hub_render_rail(array $facets, array $filters, array $muted, string $sort = 'new'): void
 {
@@ -94,6 +118,9 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
           hub_rail_row('cat', (string)$key, hub_cat_label((string)$key), (int)$n, $filters, $muted, $sort);
         endforeach; ?>
       </div>
+
+      <h4 class="hub-rail__h">View</h4>
+      <div class="hub-rail__view"><?php hub_render_view_toggles(); ?></div>
     </div>
     <?php
 }
@@ -124,7 +151,6 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
         <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub…"
                value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off"
                aria-label="Search the Hub" data-hub-search>
-        <div class="hub-suggest" data-hub-suggest="hub" hidden></div>
       </form>
       <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
         <?= $keep(['author']) ?>
@@ -142,6 +168,10 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
 {
     // Active (transient) filter chips — removing returns to the unfiltered set.
     $chips = [];
+    if (!empty($filters['q'])) {
+        $f = $filters; $f['q'] = '';
+        $chips[] = ['Search', $filters['q'], hub_url($f, $sort)];
+    }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort)];
     foreach ($filters['authors'] as $a) {
@@ -162,7 +192,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
         <?php foreach ($chips as [$k, $v, $rm]): ?>
           <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
         <?php endforeach; ?>
-        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'authors' => []], $sort) ?>">Reset all</a>
+        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'authors' => [], 'q' => ''], $sort) ?>">Reset all</a>
       <?php endif; ?>
       <?php foreach ($mchips as [$k, $v, $rm]): ?>
         <span class="hub-chip hub-chip--muted"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>

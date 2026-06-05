@@ -50,18 +50,16 @@ $uri = '/' . ltrim($uri, '/');
 
 $segments = array_values(array_filter(explode('/', $uri), fn($s) => $s !== ''));
 
-// Type-ahead JSON (live search + author autocomplete) — must precede the ?q=
-// full-search rule (suggest=hub carries a q= too).
+// Type-ahead JSON (live search + author autocomplete).
 if (isset($_GET['suggest'])) {
     require __DIR__ . '/forums/_suggest.php';
     return;
 }
 
-// Search wins over any path shape.
-if (trim((string)($_GET['q'] ?? '')) !== '') {
-    require __DIR__ . '/forums/_search.php';
-    return;
-}
+// Hub search (?q=) is now a live in-page filter over the UNIFIED feed (an AND
+// dimension with the rail), not the old forum-only results page — it falls
+// through to _feed.php, which applies q across topics + content. The legacy
+// _search.php remains on disk but is no longer routed to.
 
 // Topic body fragment: no path segments + ?body=<id>
 $seg_count = count($segments);

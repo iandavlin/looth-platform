@@ -1481,3 +1481,50 @@
     btn.setAttribute('aria-label', verbose ? 'Collapse post' : 'Show full post');
   });
 })();
+
+/* ─── §4c. Content comment modal (Hub content cards) ───────────────────────
+   A Hub content card's comment button opens this modal; the iframe loads the
+   WP-free read endpoint (archive-poc comments.php, ~30ms), which renders the
+   thread + its own composer and posts its content height back. Same-origin,
+   so the [data-post-type]/[data-item-id] map straight onto the query string. */
+(function () {
+  var modal = document.getElementById('lgc-modal'),
+      frame = document.getElementById('lgc-modal-frame');
+  if (!modal || !frame) return;
+
+  function openModal(pt, id) {
+    frame.src = '/archive-api/v0/comments?post_type=' +
+      encodeURIComponent(pt) + '&item_id=' + encodeURIComponent(id);
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    modal.hidden = true;
+    document.body.style.overflow = '';
+    frame.src = '';            // unload the iframe so a re-open refetches fresh
+    frame.style.height = '';   // reset to the CSS default for the next thread
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-comments]');
+    if (btn) {
+      e.preventDefault();
+      e.stopPropagation();     // don't trigger card navigation
+      openModal(btn.getAttribute('data-post-type'), btn.getAttribute('data-item-id'));
+      return;
+    }
+    if (e.target.closest && e.target.closest('[data-lgc-close]')) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  /* Height handshake — size the iframe to the thread (same message the
+     standalone page's modal listens for). Clamp to 82vh; taller scrolls. */
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || !e.data ||
+        typeof e.data.lgCommentsHeight !== 'number') return;
+    var cap = Math.round(window.innerHeight * 0.82);
+    frame.style.height = Math.max(220, Math.min(e.data.lgCommentsHeight, cap)) + 'px';
+  });
+})();

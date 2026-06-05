@@ -1,7 +1,11 @@
-/* Hub control-sidebar type-ahead: live search + author autocomplete.
- * Progressive enhancement over the no-JS toolbar forms — if this never runs,
- * the q form still full-searches and the author form still sets one author.
- * Endpoint: <base>/?suggest=hub|author&q=<text>  (see forums/_suggest.php). */
+/* Hub control-sidebar interactivity:
+ *   - Hub search  = LIVE in-page filter over the unified feed (primary), an AND
+ *     dimension with the rail. Typing re-renders #hub-feed-results + the chip bar
+ *     and updates the URL. A title dropdown stays as a secondary "quick jump".
+ *   - Author box  = autocomplete; pick a name -> appended to the ?author= CSV.
+ * Progressive enhancement: without JS the q form full-searches and the author
+ * form sets one author (both server-rendered the same way).
+ * Endpoint: <base>/?suggest=hub|author&q=<text>  (forums/_suggest.php). */
 (function () {
   'use strict';
   var BASE = (window.LG_FORUM_BASE || '/hub').replace(/\/$/, '');
@@ -14,10 +18,10 @@
   }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (m) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]; }); }
-
   function hide(box) { box.hidden = true; box.innerHTML = ''; }
 
-  function wire(input, box, mode, onPick) {
+  /* ---- secondary: title quick-jump / author autocomplete dropdowns -------- */
+  function wireDropdown(input, box, mode, onPick) {
     var run = debounce(function () {
       var q = input.value.trim();
       if (q.length < 2) { hide(box); return; }
@@ -37,8 +41,7 @@
           box.hidden = false;
         })
         .catch(function () { hide(box); });
-    }, 180);
-
+    }, 160);
     input.addEventListener('input', run);
     input.addEventListener('focus', function () { if (input.value.trim().length >= 2) run(); });
     box.addEventListener('mousedown', function (e) {
@@ -48,7 +51,6 @@
     input.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(box); });
   }
 
-  // Append an author to the current URL's ?author= CSV (dedup) and navigate.
   function addAuthor(name) {
     var u = new URL(window.location.href);
     var cur = (u.searchParams.get('author') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -58,15 +60,54 @@
     window.location.href = u.toString();
   }
 
+  /* ---- primary: live in-page feed filter ---------------------------------- */
+  var inflight = null;
+  function liveSearch(q) {
+    var u = new URL(window.location.href);
+    if (q) u.searchParams.set('q', q); else u.searchParams.delete('q');
+    u.searchParams.delete('offset');
+    if (inflight) inflight.abort();
+    inflight = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var results = document.getElementById('hub-feed-results');
+    if (results) results.classList.add('is-loading');
+    fetch(u.toString(), { credentials: 'same-origin', signal: inflight && inflight.signal })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var nr = doc.getElementById('hub-feed-results');
+        var cr = document.getElementById('hub-feed-results');
+        if (nr && cr) cr.replaceWith(nr);
+        // chip bar may appear / change / disappear
+        var page = document.querySelector('.feed-page');
+        var nc = doc.querySelector('.hub-chipbar');
+        var cc = document.querySelector('.hub-chipbar');
+        if (cc && nc) cc.replaceWith(nc);
+        else if (cc && !nc) cc.remove();
+        else if (!cc && nc && page) page.insertBefore(nc, page.querySelector('.feed-sort-bar'));
+        history.replaceState({}, '', u.toString());
+        // let other scripts (comment modal, embeds) re-bind swapped-in cards
+        document.dispatchEvent(new CustomEvent('hub:feed-updated'));
+      })
+      .catch(function () {})
+      .finally(function () {
+        var el = document.getElementById('hub-feed-results');
+        if (el) el.classList.remove('is-loading');
+      });
+  }
+
+  // Hub search: LIVE in-page filter only — no quick-jump dropdown (the feed IS
+  // the result). Author box keeps its autocomplete below.
   var qIn = wrap.querySelector('[data-hub-search]');
-  var qBox = wrap.querySelector('[data-hub-suggest="hub"]');
-  if (qIn && qBox) wire(qIn, qBox, 'hub', function () {});
+  if (qIn) {
+    qIn.addEventListener('input', debounce(function () { liveSearch(qIn.value.trim()); }, 280));
+    // Enter: just live-filter (don't reload the whole page).
+    qIn.closest('form').addEventListener('submit', function (e) { e.preventDefault(); liveSearch(qIn.value.trim()); });
+  }
 
-  var aIn = wrap.querySelector('[data-hub-author]');
+  var aIn  = wrap.querySelector('[data-hub-author]');
   var aBox = wrap.querySelector('[data-hub-suggest="author"]');
-  if (aIn && aBox) wire(aIn, aBox, 'author', addAuthor);
+  if (aIn && aBox) wireDropdown(aIn, aBox, 'author', addAuthor);
 
-  // Dismiss any open dropdown on outside click.
   document.addEventListener('click', function (e) {
     if (!e.target.closest('.hub-tsearch')) {
       wrap.querySelectorAll('.hub-suggest').forEach(function (b) { hide(b); });

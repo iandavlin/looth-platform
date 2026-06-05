@@ -70,6 +70,7 @@ function hub_filters_parse(): array
         'types'   => $csv('type'),                      // e.g. ['video','discussions']
         'cats'    => $csv('cat'),                        // e.g. ['repair','builds']
         'authors' => $csv('author'),                     // multi-select, by name (CSV)
+        'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
     ];
 }
 

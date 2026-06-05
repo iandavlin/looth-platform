@@ -383,6 +383,21 @@ function bb_mirror_new_topic_modal(): void
     </form>
   </div>
 </div>
+
+<!-- Content comment modal — opened by a Hub content card's comment button.
+     The iframe loads the WP-free read endpoint (archive-poc/api/v0/comments.php,
+     ~30ms, no WP boot); that page handles its own composer + posts its content
+     height back via postMessage. See forums.js §4c. -->
+<div class="lgc-modal" id="lgc-modal" role="dialog" aria-modal="true" aria-label="Comments" hidden>
+  <div class="lgc-modal__backdrop" data-lgc-close></div>
+  <div class="lgc-modal__panel">
+    <div class="lgc-modal__head">
+      <span class="lgc-modal__title">Comments</span>
+      <button type="button" class="lgc-modal__close" data-lgc-close aria-label="Close">&times;</button>
+    </div>
+    <iframe class="lgc-modal__frame" id="lgc-modal-frame" title="Comments"></iframe>
+  </div>
+</div>
     <?php
 }
 
