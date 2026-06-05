@@ -35,6 +35,10 @@ if (!getenv('LG_ARCHIVE_POC_DSN')) {
     putenv('LG_ARCHIVE_POC_DSN=pgsql:host=/var/run/postgresql;dbname=looth');
 }
 require_once dirname($DIR) . '/config.php';
+// LG_COMMENTS_TYPES — which content types the postgres comment store covers, so
+// the modal can point at the WP-free read endpoint for those (and fall back to WP
+// for the rest). Definitions only; no side effects.
+require_once dirname($DIR) . '/api/v0/_comments.php';
 
 Manifest::configure($DIR . '/engine/blocks');
 
@@ -134,10 +138,17 @@ if (!$IS_CLI && $previewAs === '') {
    Count baked at materialize. The modal iframes the WP comments-only view
    (?lg_comments=1). Shown when there are comments OR the thread is open; logged-out
    users still see the count (teaser) and the read-only thread + a login prompt. */
-$commentsCount = (int) ($postContext['comments_count'] ?? 0);
-$commentsOpen  = !empty($postContext['comments_open']);
+$commentsCount  = (int) ($postContext['comments_count'] ?? 0);
+$commentsOpen   = !empty($postContext['comments_open']);
+$commentsItemId = (int) ($postContext['post_id'] ?? $postId);
+// Covered content types read from the postgres store via the WP-free endpoint
+// (~30ms, no WP boot); uncovered managed CPTs (sponsor-post, etc.) keep the old
+// WP comments-frame path until the store's scope widens.
+$commentsCovered = in_array($postType, LG_COMMENTS_TYPES, true) && $commentsItemId > 0;
 $commentsUrl   = (!$IS_CLI && ($commentsCount > 0 || $commentsOpen))
-    ? rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_comments=1'
+    ? ($commentsCovered
+        ? '/archive-api/v0/comments?post_type=' . rawurlencode($postType) . '&item_id=' . $commentsItemId
+        : rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_comments=1')
     : '';
 
 /* ── Render ──────────────────────────────────────────────────────────── */
