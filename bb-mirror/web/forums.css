@@ -2628,6 +2628,16 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card--search .feed-card__op-excerpt b { background: rgba(196,99,30,0.18); font-weight: 700; padding: 0 2px; border-radius: 2px; }
 .feed-card__kind-badge { display: inline-block; margin-left: 6px; font: 600 10px/1.4 var(--font-body); text-transform: uppercase; letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3); border-radius: 6px; padding: 1px 6px; vertical-align: middle; }
 
+/* Content cards folded into the unified Hub feed — per-kind badge accents +
+   a subtle left rail so folded content reads distinct from forum threads. */
+.feed-card--content { border-left: 3px solid var(--lg-sage, #87986a); }
+.feed-card__kind-badge--article      { color: #3a5f2e; background: #e7f0dd; }
+.feed-card__kind-badge--video        { color: #8a2f17; background: #f6e3dc; }
+.feed-card__kind-badge--event        { color: #2f4a7a; background: #dfe7f5; }
+.feed-card__kind-badge--sponsor-post { color: #9a4a12; background: #f7e7d6; }
+.feed-card__kind-badge--loothprint   { color: #5a3a7a; background: #ece1f3; }
+.feed-card__kind-dur { display: inline-block; margin-left: 4px; font: 600 10px/1.4 var(--font-body); color: var(--lg-mute); vertical-align: middle; }
+
 /* Inline provider embed in a feed card (lazily built by forums.js §2e) */
 .feed-card__embed { margin-top: var(--s3); max-width: 540px; }
 .feed-card__embed:empty { margin: 0; }   /* keep box so IntersectionObserver can fire */

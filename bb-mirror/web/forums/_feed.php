@@ -139,6 +139,36 @@ switch ($sort_param) {
         break;
 }
 
+// -- ORDER BY for the unified (site-wide) feed --
+// Same intent as $order_by but references the UNION's output aliases (the union
+// merges forum topics + content, so it can't reference t.* directly). "Hot" uses
+// reply_count + like_count as the engagement numerator so liked content (0 forum
+// replies) can still surface, not just busy threads.
+switch ($sort_param) {
+    case 'old':
+        $union_order_by = 'ORDER BY event_time ASC NULLS LAST';
+        break;
+    case 'hot':
+        $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
+        break;
+    default: // new
+        $union_order_by = 'ORDER BY event_time DESC NULLS FIRST';
+        break;
+}
+
+// -- Viewer tier -> allowed content tiers (server-side gating, absence model) --
+// Content is tier-gated; forum posts are membership-gated (handled elsewhere).
+// Mirrors archive-poc's ladder: public < lite < pro; you see your tier and below.
+// Gated content is filtered out of the SQL entirely (it never reaches the page),
+// so it can't leak via inspector. Fails open to 'public' if /whoami is down.
+$viewer_tier = 'public';
+$wa = lg_bb_mirror_whoami();
+if (is_array($wa) && in_array($wa['tier'] ?? '', ['public', 'lite', 'pro'], true)) {
+    $viewer_tier = (string)$wa['tier'];
+}
+$tier_rank     = ['public' => 0, 'lite' => 1, 'pro' => 2];
+$content_tiers = array_keys(array_filter($tier_rank, fn($r) => $r <= $tier_rank[$viewer_tier]));
+
 // -- Resolve scope into forum_ids array (for header image query) --
 $scope_ids = null; // null = site-wide
 
@@ -252,8 +282,18 @@ if ($scoped_forum) {
     $stmt->bindValue(':raw_offset', $raw_offset,              PDO::PARAM_INT);
     $stmt->execute();
 } else {
+    // Site-wide /hub/ = the UNIFIED feed: forum topics ∪ content (discovery).
+    // Two schemas, one DB, one query — no data duplication. Column lists must
+    // align 1:1 for UNION ALL; the content branch fills topic-only columns with
+    // typed NULLs and vice-versa. card_type drives the renderer branch.
+    $tier_ph = [];
+    foreach ($content_tiers as $i => $tv) $tier_ph[] = ':ctier' . $i;
+    $tier_in = $tier_ph ? implode(',', $tier_ph) : "''"; // never empty -> no rows
+
     $topic_sql = "
+      SELECT * FROM (
         SELECT
+            'topic'::text                                              AS card_type,
             t.id                                                       AS topic_id,
             t.slug                                                     AS topic_slug,
             t.title                                                    AS topic_title,
@@ -262,6 +302,7 @@ if ($scoped_forum) {
             COALESCE(t.featured_image_url, first_img.url, reply_img.url) AS card_image,
             t.tags                                                     AS tags,
             t.reply_count,
+            0                                                          AS like_count,
             t.last_active_at                                           AS event_time,
             COALESCE(t.author_name, 'Anonymous')                       AS author_name,
             t.author_id,
@@ -271,7 +312,12 @@ if ($scoped_forum) {
             f.slug                                                     AS forum_slug,
             f.title                                                    AS forum_title,
             pf.slug                                                    AS parent_forum_slug,
-            pf.title                                                   AS parent_forum_title
+            pf.title                                                   AS parent_forum_title,
+            NULL::text                                                 AS content_kind,
+            NULL::text                                                 AS content_tier,
+            NULL::text                                                 AS content_url,
+            NULL::int                                                  AS duration_min,
+            false                                                      AS has_download
           FROM topic t
           JOIN forum f  ON f.id = t.forum_id
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
@@ -296,10 +342,43 @@ if ($scoped_forum) {
           ) reply_img ON true
          WHERE t.status = 'publish' AND f.visibility = 'public'
            AND t.forum_id NOT IN (3876)
-         $order_by
-         LIMIT :fetch_size OFFSET :raw_offset
+
+        UNION ALL
+
+        SELECT
+            'content'::text                                            AS card_type,
+            c.id                                                       AS topic_id,
+            c.slug                                                     AS topic_slug,
+            c.title                                                    AS topic_title,
+            NULL::text                                                 AS content_html,
+            LEFT(c.excerpt, 240)                                       AS op_snippet,
+            c.thumb_url                                                AS card_image,
+            NULL::text[]                                               AS tags,
+            c.reply_count,
+            c.like_count,
+            COALESCE(c.last_activity, c.published_at)                  AS event_time,
+            COALESCE(c.author_name, 'Anonymous')                       AS author_name,
+            c.author_id,
+            NULL::text                                                 AS author_slug,
+            c.published_at                                             AS created_at,
+            NULL::bigint                                               AS forum_id,
+            NULL::text                                                 AS forum_slug,
+            NULL::text                                                 AS forum_title,
+            NULL::text                                                 AS parent_forum_slug,
+            NULL::text                                                 AS parent_forum_title,
+            c.kind                                                     AS content_kind,
+            c.tier                                                     AS content_tier,
+            c.url                                                      AS content_url,
+            c.duration_min,
+            c.has_download
+          FROM discovery.content_item c
+         WHERE c.tier IN ($tier_in)
+      ) u
+      $union_order_by
+      LIMIT :fetch_size OFFSET :raw_offset
     ";
     $stmt = $db->prepare($topic_sql);
+    foreach ($content_tiers as $i => $tv) $stmt->bindValue(':ctier' . $i, $tv);
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
     $stmt->execute();
@@ -312,9 +391,12 @@ $topics = $stmt->fetchAll();
 // one teaser stub per card and lazy-load the full thread on "View N replies"
 // (see ?replies=<id> → _topic-replies.php + forums.js).
 $reply_teaser = []; // topic_id → one reply row
-if ($topics) {
-    $topic_ids = array_column($topics, 'topic_id');
-    $id_list = '{' . implode(',', array_map('intval', $topic_ids)) . '}';
+$topic_ids = [];
+foreach ($topics as $_r) {
+    if (($_r['card_type'] ?? 'topic') === 'topic') $topic_ids[] = (int)$_r['topic_id'];
+}
+if ($topic_ids) {
+    $id_list = '{' . implode(',', $topic_ids) . '}';
 
     $reply_sql = "
         SELECT DISTINCT ON (r.topic_id)
@@ -519,6 +601,54 @@ $header_cat = $scoped_forum
   <div class="feed">
 
     <?php foreach ($topics as $topic):
+      // ---- Content card (article / video / event / sponsor-post) ----
+      // A folded discovery row; deep-links to its standalone archive page.
+      // No replies/threading — that's forum-topic-only below.
+      if (($topic['card_type'] ?? 'topic') === 'content'):
+        $c_url     = (string)($topic['content_url'] ?? '#');
+        $c_title   = htmlspecialchars((string)$topic['topic_title']);
+        $c_kind    = (string)($topic['content_kind'] ?? 'content');
+        $c_img     = $topic['card_image'] ?? null;
+        $c_time    = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
+        $c_author  = htmlspecialchars((string)$topic['author_name']);
+        $c_excerpt = feed_op_excerpt($topic);
+        $c_likes   = (int)$topic['like_count'];
+        $c_dur     = (int)($topic['duration_min'] ?? 0);
+        $kind_label = [
+            'article' => 'Article', 'video' => 'Video', 'event' => 'Event',
+            'sponsor-post' => 'Sponsor', 'loothprint' => 'Loothprint',
+        ][$c_kind] ?? ucfirst(str_replace('-', ' ', $c_kind));
+    ?>
+    <article class="feed-card feed-card--content" data-cat="content"
+             data-kind="<?= htmlspecialchars($c_kind) ?>"
+             data-href="<?= htmlspecialchars($c_url) ?>">
+      <div class="feed-card__meta-top">
+        <span class="feed-card__forum-ctx">
+          <span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span>
+          <?php if ($c_dur > 0): ?><span class="feed-card__kind-dur"><?= $c_dur ?> min</span><?php endif; ?>
+        </span>
+        <time class="feed-card__time"><?= $c_time ?></time>
+      </div>
+      <div class="feed-card__header">
+        <div class="feed-card__header-body">
+          <h2 class="feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h2>
+          <?php if ($c_excerpt !== ''): ?>
+            <div class="feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
+          <?php endif; ?>
+          <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
+            <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
+            <span><span class="feed-card__op-lead">By </span><span class="feed-card__op-author"><?= $c_author ?></span></span>
+            <?php if ($c_likes > 0): ?><span class="feed-card__op-time"> &middot; <?= $c_likes ?> &#9829;</span><?php endif; ?>
+          </div>
+        </div>
+        <?php if (!empty($c_img)): ?>
+          <a class="feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
+            <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
+          </a>
+        <?php endif; ?>
+      </div>
+    </article>
+    <?php continue; endif;
       $turl        = feed_topic_url($topic);
       $ctx         = feed_ctx($topic);
       $rtime       = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
