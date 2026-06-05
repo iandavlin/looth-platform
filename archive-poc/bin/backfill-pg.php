@@ -1,5 +1,6 @@
 <?php
 require __DIR__.'/../config.php';
+require_once __DIR__.'/indexer.php';   // archive_poc_resolve_category() — shared per-post normalization
 /**
  * archive-poc/bin/backfill-pg.php — postgres port of backfill.php.
  *
@@ -403,6 +404,13 @@ while (true) {
             if ($fslug !== '' && $tslug !== '') {
                 $url = '/hub/' . $fslug . '/' . $tslug . '/';
             }
+        } else {
+            // Content rows: forum/subforum from the hierarchical shared_category
+            // taxonomy (parents line up with the forums). Discussions are dropped
+            // from PG, so this is every row here.
+            $cat = archive_poc_resolve_category($pid);
+            $forum_label    = $cat['forum'];
+            $subforum_label = $cat['subforum'];
         }
 
         $has_download = false;
