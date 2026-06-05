@@ -614,6 +614,8 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
         $qs_parts[] = 'forum_slug=' . urlencode($forum_slug);
     }
     $qs_parts[] = 'sort=' . urlencode($sort_val);
+    // Preserve active Hub filters so changing sort doesn't reset Type/Cat/Author/Search.
+    foreach (hub_query_params() as $k => $v) $qs_parts[] = $k . '=' . urlencode($v);
     return htmlspecialchars($base . '?' . implode('&', $qs_parts));
 }
 
@@ -884,6 +886,8 @@ $header_cat = $scoped_forum
       if ($forum_slug !== '') $qs_parts[] = 'forum_slug=' . urlencode($forum_slug);
       $qs_parts[] = 'sort=' . urlencode($sort_param);
       $qs_parts[] = 'offset=' . $next_offset;
+      // Carry active Hub filters into the next page (Type/Cat/Author/Search).
+      foreach (hub_query_params() as $k => $v) $qs_parts[] = $k . '=' . urlencode($v);
   ?>
     <div class="feed-more">
       <a class="feed-more__btn"

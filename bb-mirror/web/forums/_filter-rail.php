@@ -29,6 +29,20 @@ function hub_url(array $filters, string $sort = 'new'): string
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
 
+/** Active Hub filters as a [param => value] map (for preserving them on sort
+ *  links + pagination). Reads the rail's stashed filters; empty off the Hub. */
+function hub_query_params(): array
+{
+    $f = $GLOBALS['__bb_hub_rail']['filters'] ?? null;
+    if (!is_array($f)) return [];
+    $out = [];
+    if (!empty($f['types']))   $out['type']   = implode(',', $f['types']);
+    if (!empty($f['cats']))    $out['cat']    = implode(',', $f['cats']);
+    if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
+    if (!empty($f['q']))       $out['q']      = $f['q'];
+    return $out;
+}
+
 /** Return $filters with $val toggled inside the 'types' or 'cats' list. */
 function hub_toggle(array $filters, string $facet, string $val): array
 {
