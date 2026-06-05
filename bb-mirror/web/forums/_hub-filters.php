@@ -358,6 +358,16 @@ function hub_category_tree(PDO $db, array $content_tiers, array $forum_cat_map):
                    'forum_ids' => [], 'content_labels' => $clabels[$pkey] ?? [], 'leaves' => []];
     }
 
+    // Rail display order: Sponsor Forums sits just below Market Place (Ian).
+    $si = null;
+    foreach ($tree as $i => $p) if ($p['key'] === 'sponsors') { $si = $i; break; }
+    if ($si !== null) {
+        $sp = array_splice($tree, $si, 1)[0];
+        $mi = count($tree);
+        foreach ($tree as $i => $p) if ($p['key'] === 'market') { $mi = $i + 1; break; }
+        array_splice($tree, $mi, 0, [$sp]);
+    }
+
     return [$tree, $registry];
 }
 
