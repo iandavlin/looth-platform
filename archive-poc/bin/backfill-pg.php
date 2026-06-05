@@ -49,7 +49,10 @@ $KIND_MAP = [
     'useful_links'    => 'useful_links',
     'shorty'          => 'shorty',
     'event'           => 'event',
-    'topic'           => 'discussion',
+    // 'topic' => 'discussion' intentionally DROPPED (Hub-fold lane, 2026-06-05):
+    // forum discussions are served from forums.* in PG; re-indexing them here
+    // duplicated 1,263 rows. content_item is now content-only (~708 rows). The
+    // discussion-handling branches below are unreachable as a result (kept inert).
 ];
 
 $TAG_TAXONOMIES = [
