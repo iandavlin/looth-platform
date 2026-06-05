@@ -145,6 +145,17 @@ $commentsItemId = (int) ($postContext['post_id'] ?? $postId);
 // (~30ms, no WP boot); uncovered managed CPTs (sponsor-post, etc.) keep the old
 // WP comments-frame path until the store's scope widens.
 $commentsCovered = in_array($postType, LG_COMMENTS_TYPES, true) && $commentsItemId > 0;
+// For covered types over HTTP, read the live badge count straight from
+// discovery.comments — the WP-baked comments_count only re-bakes when the post's
+// content changes, so it goes stale as members post. One cheap COUNT(*), no WP
+// boot (~same pool as the modal read). Fall back to the baked value on any error.
+if ($commentsCovered && !$IS_CLI) {
+    try {
+        $commentsCount = lg_comments_count(lg_comments_pdo(), $postType, $commentsItemId);
+    } catch (Throwable $e) {
+        error_log('[lg-comments] live count fallback: ' . $e->getMessage());
+    }
+}
 $commentsUrl   = (!$IS_CLI && ($commentsCount > 0 || $commentsOpen))
     ? ($commentsCovered
         ? '/archive-api/v0/comments?post_type=' . rawurlencode($postType) . '&item_id=' . $commentsItemId
