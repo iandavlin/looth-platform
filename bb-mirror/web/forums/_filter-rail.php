@@ -177,6 +177,41 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
     <?php
 }
 
+/**
+ * Author header — shown when the feed is narrowed to exactly ONE author.
+ * Sourced from profile-app (avatar + display_name + bio + slug→/u/). Post count
+ * is the author's total across the tier-gated unified set. Banner + social links
+ * are a later enrichment (need a profile-app public-profile endpoint).
+ */
+function hub_render_author_header(array $h, array $filters, string $sort = 'new'): void
+{
+    $p      = $h['profile'] ?? null;
+    $name   = $p['display_name'] ?? $h['name'];
+    $avatar = !empty($p['avatar_url'])
+        ? bb_mirror_avatar($name, 'a', 64, $p['avatar_url'])
+        : bb_mirror_avatar($name, (string)$h['name'], 64);
+    $bio    = trim((string)($p['bio'] ?? ''));
+    $slug   = $p['slug'] ?? null;
+    $count  = (int)$h['count'];
+    $f = $filters; $f['authors'] = array_values(array_diff($filters['authors'], [$h['name']]));
+    ?>
+    <div class="hub-author-hdr">
+      <div class="hub-author-hdr__av"><?= $avatar ?></div>
+      <div class="hub-author-hdr__body">
+        <h2 class="hub-author-hdr__name"><?= htmlspecialchars($name) ?></h2>
+        <?php if ($bio !== ''): ?><p class="hub-author-hdr__bio"><?= htmlspecialchars($bio) ?></p><?php endif; ?>
+        <div class="hub-author-hdr__meta">
+          <?= $count ?> post<?= $count === 1 ? '' : 's' ?> in the Hub<?php if ($slug): ?>
+          <span class="hub-author-hdr__sep">&middot;</span>
+          <a class="hub-author-hdr__profile" href="/u/<?= rawurlencode((string)$slug) ?>">View profile</a>
+          <?php endif; ?>
+        </div>
+      </div>
+      <a class="hub-author-hdr__clear" href="<?= hub_url($f, $sort) ?>">&times; Clear author</a>
+    </div>
+    <?php
+}
+
 /** Render the active-filter + muted chip bar at the top of the feed. */
 function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'): void
 {

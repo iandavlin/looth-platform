@@ -2985,6 +2985,22 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 #hub-feed-results { transition: opacity .12s; }
 #hub-feed-results.is-loading { opacity: .5; }
 
+/* Author header — shown when the feed is narrowed to one author */
+.hub-author-hdr { display: flex; align-items: center; gap: 16px; margin-bottom: var(--s4, 16px);
+  padding: 16px 18px; border-radius: 12px; color: #fff;
+  background: linear-gradient(110deg, var(--lg-sage-d, #5d6b40), var(--lg-sage, #76864e)); }
+.hub-author-hdr__av .avatar-init { width: 60px; height: 60px; font-size: 24px; border: 2px solid rgba(255,255,255,.5); }
+.hub-author-hdr__body { flex: 1; min-width: 0; }
+.hub-author-hdr__name { margin: 0; font: 700 22px/1.2 var(--lg-font-serif, Georgia, serif); color: #fff; }
+.hub-author-hdr__bio { margin: 3px 0 0; font-size: 13.5px; opacity: .9; }
+.hub-author-hdr__meta { margin-top: 5px; font-size: 13px; opacity: .85; }
+.hub-author-hdr__profile { color: #fff; text-decoration: underline; }
+.hub-author-hdr__sep { opacity: .6; }
+.hub-author-hdr__clear { flex: none; align-self: flex-start; color: #fff; text-decoration: none;
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+  border-radius: 18px; padding: 5px 12px; font-size: 13px; }
+.hub-author-hdr__clear:hover { background: rgba(255,255,255,.28); }
+
 /* View toggles relocated into the rail (under Categories) */
 .hub-rail__view { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
 .hub-rail__view .feed-compact-toggle,

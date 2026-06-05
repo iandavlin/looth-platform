@@ -435,6 +435,28 @@ $author_ids = [];
 foreach ($topics as $_r) if (!empty($_r['author_id'])) $author_ids[] = (int)$_r['author_id'];
 $author_profiles = hub_resolve_profiles($author_ids);
 
+// Author header: when narrowed to exactly ONE author, build their profile card.
+$hub_author_header = null;
+if (!empty($GLOBALS['__bb_hub_rail']) && count($hub_filters['authors'] ?? []) === 1) {
+    $an  = (string)$hub_filters['authors'][0];
+    $aid = 0;
+    foreach ($topics as $_r) {
+        if ((string)($_r['author_name'] ?? '') === $an && !empty($_r['author_id'])) { $aid = (int)$_r['author_id']; break; }
+    }
+    $atph = [];
+    foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
+    $atin = $atph ? implode(',', $atph) : "''";
+    $acs = $db->prepare(
+        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND author_name = :an1)
+              + (SELECT count(*) FROM discovery.content_item WHERE author_name = :an2 AND tier IN ($atin))"
+    );
+    $acs->bindValue(':an1', $an);
+    $acs->bindValue(':an2', $an);
+    foreach ($content_tiers as $i => $t) $acs->bindValue(':aht' . $i, $t);
+    $acs->execute();
+    $hub_author_header = ['name' => $an, 'profile' => $author_profiles[$aid] ?? null, 'count' => (int)$acs->fetchColumn()];
+}
+
 // -- Reply TEASER query: only the single newest reply per topic. --
 // Perf: rendering every reply for up to 50 cards was the load cost. We now ship
 // one teaser stub per card and lazy-load the full thread on "View N replies"
@@ -684,6 +706,8 @@ $header_cat = $scoped_forum
               data-forum-slug="<?= htmlspecialchars($forum_slug) ?>">+ Post here</button>
     <?php endif; ?>
   </nav>
+
+  <?php if ($hub_author_header) hub_render_author_header($hub_author_header, $hub_filters, $sort_param); ?>
 
   <div id="hub-feed-results">
   <?php if (!$topics): ?>
