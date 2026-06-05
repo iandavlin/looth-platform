@@ -905,9 +905,11 @@ function looth_render_practice_hours_block(int $ownerId, int $practiceId, string
             echo '<div class="lg-hours__row" data-d="' . $i . '">';
             echo '<span class="lg-hours__day">' . $lab . '</span>';
             echo '<label class="lg-hours__cl"><input type="checkbox" data-f="closed"' . ($d['x'] ? ' checked' : '') . '> Closed</label>';
+            echo '<span class="lg-hours__times">';
             echo '<input type="time" class="lg-hours__t" data-f="open" value="' . looth_h($d['o']) . '">';
             echo '<span class="lg-hours__sep">to</span>';
             echo '<input type="time" class="lg-hours__t" data-f="close" value="' . looth_h($d['c']) . '">';
+            echo '</span>';
             echo '</div>';
         }
         echo '<textarea class="lg-dropoff__f lg-dropoff__notes-in lg-hours__note" data-f="note" rows="2" placeholder="Note (holidays, by appointment, etc.)">' . looth_h((string)$h['note']) . '</textarea>';
@@ -1116,7 +1118,7 @@ function looth_render_header_block(array $header, string $role, string $headerVi
 function looth_render_members_gate(int $userId): void
 {
     echo '<div class="lg-gate">'
-       . '<div class="lg-gate__lock">🔒</div>'
+       . '<div class="lg-gate__lock"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>'
        . '<h2>This profile is members-only</h2>'
        . '<p>Profiles on Looth are a members community by default. Sign in to see more — or join to get your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
@@ -1237,7 +1239,7 @@ function looth_render_practice_header_block(array $header, string $role, string 
 function looth_render_practice_gate(): void
 {
     echo '<div class="lg-gate">'
-       . '<div class="lg-gate__lock">🔒</div>'
+       . '<div class="lg-gate__lock"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>'
        . '<h2>This practice is members-only</h2>'
        . '<p>Sign in to see this practice — or join Looth to list your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
