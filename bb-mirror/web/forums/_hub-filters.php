@@ -57,6 +57,26 @@ function hub_cat_label(string $key): string
     return HUB_CAT_LABELS[$key] ?? ucfirst($key);
 }
 
+/**
+ * Content tiers the current viewer may see (absence-model gating).
+ * Ladder public<lite<pro — you see your tier and below. ADMINS/EDITORS bypass
+ * gating (all tiers) so they can preview/manage everything; keyed off whoami
+ * capabilities (same caps the shared header reads) so a plain member can't
+ * self-elevate. caps may be a list of strings OR an assoc map (cap => true).
+ */
+function hub_content_tiers(): array
+{
+    $wa   = function_exists('lg_bb_mirror_whoami') ? lg_bb_mirror_whoami() : null;
+    $caps = is_array($wa) ? (array)($wa['capabilities'] ?? []) : [];
+    foreach (['manage_options', 'administrator', 'edit_others_posts', 'activate_plugins'] as $c) {
+        if (!empty($caps[$c]) || in_array($c, $caps, true)) return ['public', 'lite', 'pro'];
+    }
+    $tier = (is_array($wa) && in_array($wa['tier'] ?? '', ['public', 'lite', 'pro'], true))
+        ? (string)$wa['tier'] : 'public';
+    $rank = ['public' => 0, 'lite' => 1, 'pro' => 2];
+    return array_keys(array_filter($rank, fn($r) => $r <= $rank[$tier]));
+}
+
 /** Parse the active filter selection from the request. */
 function hub_filters_parse(): array
 {

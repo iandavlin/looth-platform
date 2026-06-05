@@ -2932,7 +2932,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-chipbar__and { background: var(--lg-rust, #c8772f); color: #fff; border-radius: 5px;
   padding: 1px 6px; font: 700 11px/1.4 var(--lg-font-sans, sans-serif); }
 .hub-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--lg-sage-tint, #eef1e6);
-  border: 1px solid #d3dcc0; color: #3f4a28; border-radius: 16px; padding: 3px 6px 3px 11px; font-size: 13px; }
+  border: 1px solid var(--lg-sage-d, #87986a); color: var(--lg-ink); border-radius: 16px; padding: 3px 6px 3px 11px; font-size: 13px; }
 .hub-chip b { font-weight: 700; }
 .hub-chip__x { color: inherit; text-decoration: none; font-weight: 700; opacity: .6; padding: 0 2px; }
 .hub-chip__x:hover { opacity: 1; }

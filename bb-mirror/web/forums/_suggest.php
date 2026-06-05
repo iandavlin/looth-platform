@@ -23,12 +23,8 @@ if (mb_strlen($q) < 2) { echo json_encode(['q' => $q, 'mode' => $mode, 'results'
 $db   = bb_mirror_db();
 $like = '%' . $q . '%';
 
-// Viewer tier -> allowed content tiers (mirrors _feed.php).
-$viewer_tier = 'public';
-$wa = lg_bb_mirror_whoami();
-if (is_array($wa) && in_array($wa['tier'] ?? '', ['public', 'lite', 'pro'], true)) $viewer_tier = (string)$wa['tier'];
-$rank  = ['public' => 0, 'lite' => 1, 'pro' => 2];
-$tiers = array_keys(array_filter($rank, fn($r) => $r <= $rank[$viewer_tier]));
+// Allowed content tiers (mirrors _feed.php; admins bypass -> all tiers).
+$tiers = hub_content_tiers();
 $tph = [];
 foreach ($tiers as $i => $t) $tph[] = ':t' . $i;
 $tin = $tph ? implode(',', $tph) : "''";

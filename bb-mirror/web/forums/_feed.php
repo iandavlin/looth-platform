@@ -156,23 +156,16 @@ switch ($sort_param) {
         break;
 }
 
-// -- Viewer tier -> allowed content tiers (server-side gating, absence model) --
-// Content is tier-gated; forum posts are membership-gated (handled elsewhere).
-// Mirrors archive-poc's ladder: public < lite < pro; you see your tier and below.
-// Gated content is filtered out of the SQL entirely (it never reaches the page),
-// so it can't leak via inspector. Fails open to 'public' if /whoami is down.
-$viewer_tier = 'public';
-$wa = lg_bb_mirror_whoami();
-if (is_array($wa) && in_array($wa['tier'] ?? '', ['public', 'lite', 'pro'], true)) {
-    $viewer_tier = (string)$wa['tier'];
-}
-$tier_rank     = ['public' => 0, 'lite' => 1, 'pro' => 2];
-$content_tiers = array_keys(array_filter($tier_rank, fn($r) => $r <= $tier_rank[$viewer_tier]));
-
 // -- Control sidebar: active filter selection (site-wide /hub/ only) --
 require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
 $hub_filters = hub_filters_parse();
 $hub_muted   = hub_mute_parse();
+
+// -- Allowed content tiers (server-side absence-model gating) --
+// Content is tier-gated; forum posts are membership-gated (handled elsewhere).
+// Gated content is filtered out of the SQL entirely (never reaches the page).
+// Ladder public<lite<pro; ADMINS bypass -> all tiers. Fails open to public.
+$content_tiers = hub_content_tiers();
 
 // Sticky-mute toggle: flip the cookie + 302 back to the feed (no JS, headers
 // not yet sent — chrome only outputs inside bb_mirror_chrome_header()).
