@@ -1433,22 +1433,24 @@ if (ssrPresent && !hasFilters) {
 })();
 
 // ===== Activity like buttons (BB-backed) =====
-// Bootstraps identity via /wp-json/looth/v1/whoami so we have a REST nonce,
-// then proxies heart clicks through /wp-json/looth/v1/activity/{id}/like.
+// Bootstraps identity via the profile-app /whoami endpoint, then proxies heart
+// clicks through /wp-json/looth/v1/activity/{id}/like.
 (function () {
-  let me = null;          // { logged_in, nonce } once resolved
+  let me = null;          // whoami payload once resolved
   let mePromise = null;
 
-  // Lazy identity bootstrap. This hits the WP shim (~1s+ on a cold worker), so
-  // it's kept OFF the initial load path — firing it on page load was the main
-  // thing making the front page feel slow. Prefetched on first hover over the
-  // activity strip or when the browser goes idle (whichever first), and awaited
-  // on click as a fallback so a fast first click still resolves correctly.
+  // Lazy identity bootstrap. Resolves identity from the looth_id JWT cookie via
+  // profile-app DIRECT (/profile-api/v0/whoami, ~11ms warm) instead of the WP
+  // shim (/wp-json/looth/v1/whoami) which boots the full WP+BuddyBoss stack on
+  // every call (~600ms floor — the main thing that made the front page feel
+  // slow). Still kept OFF the initial load path: prefetched on first hover over
+  // the activity strip or when the browser goes idle (whichever first), and
+  // awaited on click as a fallback so a fast first click still resolves.
   function ensureMe() {
     if (!mePromise) {
-      mePromise = fetch('/wp-json/looth/v1/whoami', { credentials: 'include' })
+      mePromise = fetch('/profile-api/v0/whoami', { credentials: 'include' })
         .then(r => r.json())
-        .catch(() => ({ logged_in: false }))
+        .catch(() => ({ authenticated: false }))
         .then(d => (me = d));
     }
     return mePromise;
@@ -1467,7 +1469,8 @@ if (ssrPresent && !hasFilters) {
     if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
 
     const who = me || await ensureMe();
-    if (!who || !who.logged_in) {
+    // profile-app returns `authenticated`; tolerate the legacy `logged_in`.
+    if (!who || !(who.authenticated || who.logged_in)) {
       // Drop visitor on the login page; ?redirect_to brings them back here.
       const back = encodeURIComponent(location.pathname + location.search);
       location.href = '/wp-login.php?redirect_to=' + back;
