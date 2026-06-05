@@ -123,11 +123,10 @@
       // 1) attachment-gallery image (wrapped in a.attachment--image → full-res href)
       var alink = e.target.closest('a.attachment--image');
       if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
-      // 2) feed cover image (wrapped in a.feed-card__cover) → lightbox, don't navigate
-      var cover = e.target.closest('.feed-card__cover');
-      if (cover && e.target.tagName === 'IMG') {
-        e.preventDefault(); openLb(e.target.currentSrc || e.target.src); return;
-      }
+      // 2) feed cover image: let it CLICK THROUGH to the post (the a.feed-card__cover
+      //    href) instead of opening the lightbox — covers are post links, not gallery
+      //    images. (Body/reply images below still lightbox.)
+      if (e.target.closest('.feed-card__cover')) return;
       // 3) bare content / reply images (deferred ones have no src yet → skip)
       var img = e.target.closest('.reply-stub__img, .post__body img, .feed-card__full-body img');
       if (img && img.tagName === 'IMG' && img.getAttribute('src')) {
