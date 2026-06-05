@@ -77,6 +77,56 @@ function hub_content_tiers(): array
     return array_keys(array_filter($rank, fn($r) => $r <= $rank[$tier]));
 }
 
+/**
+ * Batch-resolve author profiles from profile-app (live avatars/names/bio), keyed
+ * by WP user id. Mirrors archive-poc's pattern: loopback to /profile-api/v0/users
+ * forwarding the visitor's cookies (gate + session). Both topic.author_id and
+ * content_item.author_id are WP user ids (person is keyed on WP id), so one call
+ * covers every card on the page.
+ *
+ * @param int[] $wp_ids
+ * @return array<int,array{avatar_url:?string,slug:?string,display_name:?string,at_a_glance:?string}>
+ */
+function hub_resolve_profiles(array $wp_ids): array
+{
+    $wp_ids = array_values(array_unique(array_filter(array_map('intval', $wp_ids), fn($i) => $i > 0)));
+    if (!$wp_ids || PHP_SAPI === 'cli') return [];
+
+    $hdrs = ['Host: ' . LG_BB_MIRROR_HOST];
+    if (!empty($_SERVER['HTTP_COOKIE'])) $hdrs[] = 'Cookie: ' . $_SERVER['HTTP_COOKIE'];
+
+    $out = [];
+    foreach (array_chunk($wp_ids, 100) as $chunk) {
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => 'https://127.0.0.1/profile-api/v0/users?wp_ids=' . rawurlencode(implode(',', $chunk)),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT        => 4,
+            CURLOPT_HTTPHEADER     => $hdrs,
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($code === 200 && $body) {
+            $data = json_decode($body, true);
+            foreach ((array)($data['items'] ?? []) as $it) {
+                if (!empty($it['wp_user_id'])) {
+                    $out[(int)$it['wp_user_id']] = [
+                        'avatar_url'   => $it['avatar_url']   ?? null,
+                        'slug'         => $it['slug']         ?? null,
+                        'display_name' => $it['display_name'] ?? null,
+                        'bio'          => $it['bio'] ?? $it['at_a_glance'] ?? null,
+                    ];
+                }
+            }
+        }
+    }
+    return $out;
+}
+
 /** Parse the active filter selection from the request. */
 function hub_filters_parse(): array
 {

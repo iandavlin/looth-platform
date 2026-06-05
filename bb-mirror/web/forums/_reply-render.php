@@ -40,9 +40,17 @@ if (!function_exists('lg_bb_mirror_can_post')) {
 }
 
 if (!function_exists('bb_mirror_avatar')) {
-    /** CSS initials avatar circle. $slug picks a stable palette colour. */
-    function bb_mirror_avatar(string $display_name, string $slug, int $size = 32): string
+    /** Real profile-app avatar (when $avatar_url resolved) else a CSS initials
+     *  circle. $slug picks a stable palette colour for the fallback. */
+    function bb_mirror_avatar(string $display_name, string $slug, int $size = 32, ?string $avatar_url = null): string
     {
+        if ($avatar_url !== null && $avatar_url !== '') {
+            $u = function_exists('lg_bb_mirror_safe_avatar') ? lg_bb_mirror_safe_avatar($avatar_url) : $avatar_url;
+            return sprintf(
+                '<img class="avatar-init avatar-init--img" src="%s" width="%d" height="%d" alt="" loading="lazy" decoding="async">',
+                htmlspecialchars((string)$u), $size, $size
+            );
+        }
         $palette = ['#6b7c52','#c66845','#87986a','#4a5a36','#7a5a14','#2e3a23','#5a6a5a','#a0714f'];
         $idx = abs(crc32($slug)) % count($palette);
         $bg  = $palette[$idx];

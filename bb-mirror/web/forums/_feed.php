@@ -429,6 +429,12 @@ if ($scoped_forum) {
 
 $topics = $stmt->fetchAll();
 
+// Live author avatars from profile-app, keyed by WP user id, for card bylines
+// (both topic.author_id and content.author_id are WP user ids). One batch call.
+$author_ids = [];
+foreach ($topics as $_r) if (!empty($_r['author_id'])) $author_ids[] = (int)$_r['author_id'];
+$author_profiles = hub_resolve_profiles($author_ids);
+
 // -- Reply TEASER query: only the single newest reply per topic. --
 // Perf: rendering every reply for up to 50 cards was the load cost. We now ship
 // one teaser stub per card and lazy-load the full thread on "View N replies"
@@ -728,7 +734,7 @@ $header_cat = $scoped_forum
             <div class="feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
           <?php endif; ?>
           <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-            <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
+            <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
             <span><span class="feed-card__op-lead">By </span><span class="feed-card__op-author"><?= $c_author ?></span></span>
             <?php if ($c_likes > 0): ?><span class="feed-card__op-time"> &middot; <?= $c_likes ?> &#9829;</span><?php endif; ?>
             <?php if ($c_can_comment): ?>
@@ -821,14 +827,14 @@ $header_cat = $scoped_forum
                         data-state="collapsed">Read more &#9660;</button>
               <?php endif; ?>
               <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-                <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 36) ?>
+                <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
                 <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
                 <?= $reply_cta ?>
               </div>
             </div>
           <?php else: ?>
             <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-              <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
+              <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
               <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
               <?= $reply_cta ?>
             </div>

@@ -311,6 +311,8 @@ img { max-width: 100%; display: block; }
   line-height: 1;
   user-select: none;
 }
+/* Real photo avatar (profile-app) — same circle as the initials fallback. */
+.avatar-init--img { object-fit: cover; background: var(--bg-closed, #e9e6dc); }
 
 /* ══════════════════════════════════════════════════════════
    FORUM INDEX
