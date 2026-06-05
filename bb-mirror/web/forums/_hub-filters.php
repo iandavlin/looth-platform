@@ -67,9 +67,9 @@ function hub_filters_parse(): array
         ), fn($s) => $s !== ''));
     };
     return [
-        'types'  => $csv('type'),                       // e.g. ['video','discussions']
-        'cats'   => $csv('cat'),                         // e.g. ['repair','builds']
-        'author' => trim((string)($_GET['author'] ?? '')), // single, by name
+        'types'   => $csv('type'),                      // e.g. ['video','discussions']
+        'cats'    => $csv('cat'),                        // e.g. ['repair','builds']
+        'authors' => $csv('author'),                     // multi-select, by name (CSV)
     ];
 }
 
@@ -165,10 +165,11 @@ function hub_filter_where(array $filters, array $forum_cat_map): array
             : '1=0';
     }
 
-    // -- Author: single, by name (across both sources) --
-    if ($filters['author'] !== '') {
-        $and[] = 'u.author_name = :hauthor';
-        $binds[':hauthor'] = $filters['author'];
+    // -- Author: multi-select, by name (across both sources); OR within --
+    if (!empty($filters['authors'])) {
+        $ph = [];
+        foreach ($filters['authors'] as $i => $a) { $ph[] = ":ha$i"; $binds[":ha$i"] = $a; }
+        $and[] = 'u.author_name IN (' . implode(',', $ph) . ')';
     }
 
     return [$and, $binds];

@@ -541,6 +541,8 @@ function bb_mirror_chrome_footer(): void
 <!-- Single source of the forum base path for forums.js (self-links, lazy fetches). -->
 <script>window.LG_FORUM_BASE = <?= json_encode(LG_BB_MIRROR_PUBLIC_PATH) ?>;</script>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
+<!-- Hub toolbar type-ahead: live search + author autocomplete (forums/_suggest.php). -->
+<script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/hub-filters.js?v=<?= bb_mirror_asset_ver('hub-filters.js') ?>" defer></script>
 </body>
 </html>
 <?php

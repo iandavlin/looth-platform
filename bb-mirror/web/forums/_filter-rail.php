@@ -23,7 +23,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if ($sort !== '' && $sort !== 'new')        $qs['sort']   = $sort;
     if (!empty($filters['types']))              $qs['type']   = implode(',', $filters['types']);
     if (!empty($filters['cats']))               $qs['cat']    = implode(',', $filters['cats']);
-    if (!empty($filters['author']))             $qs['author'] = $filters['author'];
+    if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
     $base = LG_BB_MIRROR_PUBLIC_PATH . '/';
     return htmlspecialchars($qs ? $base . '?' . http_build_query($qs) : $base);
 }
@@ -107,26 +107,31 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
 {
     $keep = function (array $skip) use ($filters, $sort): string {
         $h = '';
-        if (!in_array('type', $skip, true)   && !empty($filters['types']))  $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
-        if (!in_array('cat', $skip, true)    && !empty($filters['cats']))   $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
-        if (!in_array('author', $skip, true) && !empty($filters['author'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars((string)$filters['author']) . '">';
-        if ($sort !== 'new')                                                $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
+        if (!in_array('type', $skip, true)   && !empty($filters['types']))   $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
+        if (!in_array('cat', $skip, true)    && !empty($filters['cats']))    $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
+        if (!in_array('author', $skip, true) && !empty($filters['authors'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars(implode(',', $filters['authors'])) . '">';
+        if ($sort !== 'new')                                                 $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
         return $h;
     };
     $action = htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH . '/');
+    // JS reads these to compose suggest fetches + append-author URLs (graceful
+    // no-JS fallback: the q form plain-searches; the author form sets one author).
     ?>
-    <div class="feed-toolbar-search">
-      <form class="hub-tsearch hub-tsearch--q" method="get" action="<?= $action ?>" role="search">
-        <?= $keep(['author']) // a Hub text search keeps facets but clears any author filter via its own field ?>
+    <div class="feed-toolbar-search" data-hub-suggest-base="<?= $action ?>">
+      <form class="hub-tsearch hub-tsearch--q" method="get" action="<?= $action ?>" role="search" autocomplete="off">
+        <?= $keep(['author']) ?>
         <span class="hub-tsearch__ico" aria-hidden="true">&#9906;</span>
         <input class="hub-tsearch__in" name="q" type="search" placeholder="Search the Hub…"
-               value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off" aria-label="Search the Hub">
+               value="<?= htmlspecialchars((string)($_GET['q'] ?? '')) ?>" autocomplete="off"
+               aria-label="Search the Hub" data-hub-search>
+        <div class="hub-suggest" data-hub-suggest="hub" hidden></div>
       </form>
-      <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search">
+      <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
         <?= $keep(['author']) ?>
         <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
-        <input class="hub-tsearch__in" name="author" type="search" placeholder="Filter by author…"
-               value="<?= htmlspecialchars((string)($filters['author'] ?? '')) ?>" autocomplete="off" aria-label="Filter by author">
+        <input class="hub-tsearch__in" name="author" type="search" placeholder="Add an author…"
+               value="" autocomplete="off" aria-label="Filter by author" data-hub-author>
+        <div class="hub-suggest" data-hub-suggest="author" hidden></div>
       </form>
     </div>
     <?php
@@ -139,9 +144,9 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
     $chips = [];
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
     foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort)];
-    if (!empty($filters['author'])) {
-        $f = $filters; $f['author'] = '';
-        $chips[] = ['By', $filters['author'], hub_url($f, $sort)];
+    foreach ($filters['authors'] as $a) {
+        $f = $filters; $f['authors'] = array_values(array_diff($filters['authors'], [$a]));
+        $chips[] = ['By', $a, hub_url($f, $sort)];
     }
     // Sticky "Muted" chips — removing un-mutes (distinct styling, always shown).
     $mchips = [];
@@ -157,7 +162,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new'):
         <?php foreach ($chips as [$k, $v, $rm]): ?>
           <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
         <?php endforeach; ?>
-        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'author' => ''], $sort) ?>">Reset all</a>
+        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'authors' => []], $sort) ?>">Reset all</a>
       <?php endif; ?>
       <?php foreach ($mchips as [$k, $v, $rm]): ?>
         <span class="hub-chip hub-chip--muted"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>

@@ -50,6 +50,13 @@ $uri = '/' . ltrim($uri, '/');
 
 $segments = array_values(array_filter(explode('/', $uri), fn($s) => $s !== ''));
 
+// Type-ahead JSON (live search + author autocomplete) — must precede the ?q=
+// full-search rule (suggest=hub carries a q= too).
+if (isset($_GET['suggest'])) {
+    require __DIR__ . '/forums/_suggest.php';
+    return;
+}
+
 // Search wins over any path shape.
 if (trim((string)($_GET['q'] ?? '')) !== '') {
     require __DIR__ . '/forums/_search.php';
