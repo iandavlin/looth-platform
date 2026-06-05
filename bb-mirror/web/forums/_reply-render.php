@@ -10,6 +10,35 @@
 
 declare(strict_types=1);
 
+// Whether the current viewer may post (create topics/replies). Posting is
+// authenticated-only and the BuddyBoss REST API rejects anonymous writes (401) —
+// that 401 is the real, inspector-proof backstop. This is the SERVER-rendered UI
+// gate matching it: a genuinely logged-out viewer receives no post/reply markup,
+// so there's nothing to un-hide in the inspector.
+//
+// We key on the presence of a WordPress login cookie — the SAME signal the
+// posting path uses: the bb-mirror reply form mints its BuddyBoss nonce from
+// /bb-mirror-api/v0/auth.php, which authorises via WP's own cookie
+// (get_current_user_id), NOT /whoami. Gating on /whoami here would wrongly hide
+// the post UI from logged-in members whose profile isn't bridged yet
+// (whoami→anon despite a valid WP session). Cookie presence avoids that; a
+// forged cookie at most reveals a button that still 401s on submit.
+if (!function_exists('lg_bb_mirror_can_post')) {
+    function lg_bb_mirror_can_post(): bool
+    {
+        static $cached = null;
+        if ($cached !== null) return $cached;
+        $cached = false;
+        foreach ($_COOKIE as $name => $val) {
+            if (strncmp($name, 'wordpress_logged_in_', 20) === 0 && trim((string)$val) !== '') {
+                $cached = true;
+                break;
+            }
+        }
+        return $cached;
+    }
+}
+
 if (!function_exists('bb_mirror_avatar')) {
     /** CSS initials avatar circle. $slug picks a stable palette colour. */
     function bb_mirror_avatar(string $display_name, string $slug, int $size = 32): string
@@ -210,12 +239,12 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         echo '<div class="reply-stub__head">';
         echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28);
         if ($rslug) {
-            echo '<a class="reply-stub__author" href="' . htmlspecialchars('/members/' . $rslug . '/') . '">' . $ra . '</a>';
+            echo '<a class="reply-stub__author" href="/u/' . rawurlencode((string)$rslug) . '">' . $ra . '</a>';
         } else {
             echo '<span class="reply-stub__author">' . $ra . '</span>';
         }
         echo '<time class="reply-stub__time">' . $rtime_r . '</time>';
-        if ($show_reply_btn && isset($r['reply_id'])) {
+        if ($show_reply_btn && isset($r['reply_id']) && lg_bb_mirror_can_post()) {
             echo '<button class="reply-stub__reply" type="button"'
                . ' data-reply-to="' . (int)$r['reply_id'] . '"'
                . ' data-reply-to-author="' . htmlspecialchars($r['author_name'] ?: 'Anonymous', ENT_QUOTES) . '">'

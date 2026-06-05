@@ -24,6 +24,10 @@
   --lg-font-serif: "Lora", Georgia, serif;
   --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
+  /* Reading text-size toggle (A-/A+ in the searchbar; set on <html> by forums.js,
+     persisted in localStorage). 1 = default; scales post/reply/card body copy only. */
+  --lg-read-scale: 1;
+
   /* ── Legacy bb-mirror tokens (kept for backward-compat) ── */
   --bg:          #f4f2ec;  /* cream-sage page (now drives body bg + theme swaps) */
   --bg-card:     #ffffff;  /* cream-sage: white cards/nav/searchbar */
@@ -2684,3 +2688,155 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card__cover-img, .reply-stub__img,
 .post__body img, .feed-card__full-body img,
 .attachment--image img { cursor: zoom-in; }
+
+/* ══════════════════════════════════════════════════════════
+   COMPACT FEED VIEW (user toggle, persisted via localStorage)
+   Card collapses to: avatar + author + title + small thumbnail.
+   Activated by .hub-compact on <html>; scoped to .feed-card so it
+   never leaks to single-topic / other pages.
+   ══════════════════════════════════════════════════════════ */
+
+/* Toggle button in the sort bar */
+.feed-compact-toggle {
+  margin-left: auto;            /* push to the right edge of the sort bar */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--lg-line);
+  background: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.feed-compact-toggle:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+}
+.feed-compact-toggle[aria-pressed="true"] {
+  background: var(--lg-charcoal);
+  color: #fff;
+  border-color: var(--lg-charcoal);
+}
+.feed-compact-toggle__icon { font-size: 14px; line-height: 1; }
+/* When a "+ Post here" button is also present, the toggle's margin-left:auto
+   already groups them at the right; drop the post button's own auto-margin. */
+.feed-sort-bar .feed-compact-toggle + .feed-post-btn { margin-left: 6px; }
+
+/* Tighter list rhythm */
+.hub-compact .feed { display: flex; flex-direction: column; gap: 8px; }
+
+/* A compact card the user expanded back to verbose (.is-verbose) renders like a
+   normal card — every collapse/reflow rule below is scoped to :not(.is-verbose)
+   so it simply stops applying to that one card. */
+.hub-compact .feed-card:not(.is-verbose) { padding: 10px 14px; }
+.hub-compact .feed-card:not(.is-verbose):hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+}
+
+/* Hide everything except the forum›leaf context, title, ONE-line excerpt,
+   avatar+author, and thumb. (meta-top stays visible for the forum context;
+   only its timestamp is dropped — see __time below.) */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__time,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__read-more,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__full-body,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__embed,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__tags,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__replies,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__reply-cta,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-lead,
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-time { display: none !important; }
+
+/* Reflow header: title + one-line snippet + byline left, small thumb right */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__header { margin-bottom: 0; align-items: center; gap: 12px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__title  { font-size: 15px; margin: 0 0 2px; line-height: 1.25; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op     { margin-top: 0; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-meta { margin: 2px 0 0; gap: 6px !important; }
+
+/* Forum › leaf context line above the title in compact (timestamp dropped) */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__meta-top { display: flex; align-items: center; margin: 0 0 2px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__forum-ctx { font-size: 11px; line-height: 1.2; }
+
+/* The added one-line excerpt under the title */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__op-excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  font-size: calc(12.5px * var(--lg-read-scale));
+  line-height: 1.4;
+}
+
+/* Small square thumbnail */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 52px; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover-img { aspect-ratio: 1 / 1; }
+
+/* Per-card expand/collapse caret — only present in compact mode */
+.feed-card__compact-expand { display: none; }
+.hub-compact .feed-card__compact-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  border: 1px solid var(--lg-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--lg-mute);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.hub-compact .feed-card__compact-expand:hover {
+  background: var(--lg-sage-tint);
+  border-color: var(--lg-sage);
+  color: var(--lg-sage-d);
+}
+.feed-card__compact-expand-icon { font-size: 12px; line-height: 1; transition: transform .15s ease; }
+/* Expanded → caret flips up; pin the button to the card's top-right */
+.hub-compact .feed-card.is-verbose .feed-card__compact-expand { align-self: flex-start; }
+.hub-compact .feed-card.is-verbose .feed-card__compact-expand-icon { transform: rotate(180deg); }
+
+@media (max-width: 640px) {
+  /* keep the thumb inline (don't stack) in compact */
+  .hub-compact .feed-card:not(.is-verbose) .feed-card__header { flex-direction: row; }
+  .hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 48px; }
+}
+
+/* ── Reading text-size scaling ────────────────────────────────────────────
+   Multiplies only the body copy by --lg-read-scale. At scale 1 these reproduce
+   the exact existing sizes (mobile 15/14/13; desktop ≥641px 16/16), so the
+   default render is unchanged; the A-/A+ control bumps the scale. Appended last
+   so it wins on source order over the base rules at equal specificity. */
+.post__body            { font-size: calc(15px   * var(--lg-read-scale)); }
+.feed-card__op-excerpt { font-size: calc(13.5px * var(--lg-read-scale)); }
+.feed-card__full-body  { font-size: calc(14px   * var(--lg-read-scale)); }
+.reply-stub__body      { font-size: calc(13px   * var(--lg-read-scale)); }
+@media (min-width: 641px) {
+  .post__body            { font-size: calc(16px * var(--lg-read-scale)); }
+  .feed-card__op-excerpt { font-size: calc(15px * var(--lg-read-scale)); }
+  .feed-card__full-body  { font-size: calc(16px * var(--lg-read-scale)); }
+}
+
+/* Larger-text toggle — sits beside the Compact pill, mirrors its styling.
+   On = --lg-read-scale bumped (set by forums.js); aria-pressed drives the look. */
+.feed-text-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--lg-line); background: #fff;
+  padding: 8px 14px; border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans); color: var(--lg-ink);
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.feed-text-toggle__icon { font-weight: 700; font-size: 14px; line-height: 1; transition: font-size .12s; }
+.feed-text-toggle[data-level="1"] .feed-text-toggle__icon { font-size: 16px; }
+.feed-text-toggle[data-level="2"] .feed-text-toggle__icon { font-size: 18px; }
+.feed-text-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
+.feed-text-toggle[aria-pressed="true"] { background: var(--lg-charcoal); color: #fff; border-color: var(--lg-charcoal); }

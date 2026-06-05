@@ -471,6 +471,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <link rel="stylesheet" href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.css?v=<?= bb_mirror_asset_ver('forums.css') ?>">
 </head>
 <body class="bb-mirror">
+<script>/* compact feed view: apply before paint to avoid flash */try{if(localStorage.getItem('hub-compact')==='1')document.documentElement.classList.add('hub-compact');}catch(e){}</script>
 
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"

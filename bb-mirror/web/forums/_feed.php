@@ -205,7 +205,7 @@ if ($scoped_forum) {
             t.title                                                    AS topic_title,
             t.content_html                                             AS content_html,
             LEFT(t.content_text, 240)                                  AS op_snippet,
-            COALESCE(t.featured_image_url, first_img.url)              AS card_image,
+            COALESCE(t.featured_image_url, first_img.url, reply_img.url) AS card_image,
             t.tags                                                     AS tags,
             t.reply_count,
             t.last_active_at                                           AS event_time,
@@ -227,6 +227,19 @@ if ($scoped_forum) {
              WHERE parent_kind = 'topic' AND parent_id = t.id
              ORDER BY id ASC LIMIT 1
           ) first_img ON true
+          -- Fallback: if the topic itself has no image, surface the first image
+          -- posted in any of its replies as the card's featured image.
+          LEFT JOIN LATERAL (
+            SELECT a.url
+              FROM forums.attachment a
+              JOIN forums.reply r ON r.id = a.parent_id
+             WHERE a.parent_kind = 'reply'
+               AND r.topic_id = t.id
+               AND r.status = 'publish'
+               AND a.url IS NOT NULL
+             ORDER BY r.created_at ASC, a.id ASC
+             LIMIT 1
+          ) reply_img ON true
          WHERE t.status = 'publish'
            AND t.forum_id IN (SELECT id FROM scope)
            AND t.forum_id NOT IN (3876)
@@ -246,7 +259,7 @@ if ($scoped_forum) {
             t.title                                                    AS topic_title,
             t.content_html                                             AS content_html,
             LEFT(t.content_text, 240)                                  AS op_snippet,
-            COALESCE(t.featured_image_url, first_img.url)              AS card_image,
+            COALESCE(t.featured_image_url, first_img.url, reply_img.url) AS card_image,
             t.tags                                                     AS tags,
             t.reply_count,
             t.last_active_at                                           AS event_time,
@@ -268,6 +281,19 @@ if ($scoped_forum) {
              WHERE parent_kind = 'topic' AND parent_id = t.id
              ORDER BY id ASC LIMIT 1
           ) first_img ON true
+          -- Fallback: if the topic itself has no image, surface the first image
+          -- posted in any of its replies as the card's featured image.
+          LEFT JOIN LATERAL (
+            SELECT a.url
+              FROM forums.attachment a
+              JOIN forums.reply r ON r.id = a.parent_id
+             WHERE a.parent_kind = 'reply'
+               AND r.topic_id = t.id
+               AND r.status = 'publish'
+               AND a.url IS NOT NULL
+             ORDER BY r.created_at ASC, a.id ASC
+             LIMIT 1
+          ) reply_img ON true
          WHERE t.status = 'publish' AND f.visibility = 'public'
            AND t.forum_id NOT IN (3876)
          $order_by
@@ -415,6 +441,11 @@ function feed_sort_url(string $sort_val, string $forum_slug): string
 $page_title = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 bb_mirror_chrome_header($page_title);
 
+// Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
+// every post/reply affordance on this server-side so anon viewers receive no
+// posting markup at all — can't be un-hidden via inspector.
+$can_post = lg_bb_mirror_can_post();
+
 $header_title     = $scoped_forum ? (string)$scoped_forum['title'] : 'The Hub';
 $has_header_image = ($header_image_url !== null && $header_image_url !== '');
 
@@ -446,7 +477,7 @@ $header_cat = $scoped_forum
               data-forum-id="<?= $scoped_forum ? (int)$scoped_forum['id'] : 0 ?>"
               title="Set header image" aria-label="Set header image">&#9998;</button>
     </div>
-    <?php if (!$is_postable_forum): // All + category views: post-anywhere CTA (leaf views use the "+ Post here" button in the sort bar) ?>
+    <?php if ($can_post && !$is_postable_forum): // All + category views: post-anywhere CTA (leaf views use the "+ Post here" button in the sort bar) ?>
       <button class="forum-header__new-post" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
     <?php endif; ?>
   </header>
@@ -459,12 +490,22 @@ $header_cat = $scoped_forum
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
     <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
        class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Hot</a>
+    <button class="feed-compact-toggle" type="button" aria-pressed="false"
+            title="Toggle compact view" aria-label="Toggle compact view">
+      <span class="feed-compact-toggle__icon" aria-hidden="true">&#9636;</span>
+      <span class="feed-compact-toggle__label">Compact</span>
+    </button>
+    <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
+            title="Cycle text size" aria-label="Cycle text size">
+      <span class="feed-text-toggle__icon" aria-hidden="true">A</span>
+      <span class="feed-text-toggle__label">Text size</span>
+    </button>
     <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
             title="Cycle color theme" aria-label="Cycle color theme">
       <span class="feed-theme-toggle__icon" aria-hidden="true">&#9681;</span>
       <span class="feed-theme-toggle__label">Theme</span>
     </button>
-    <?php if ($is_postable_forum): ?>
+    <?php if ($can_post && $is_postable_forum): ?>
       <button class="feed-post-btn" type="button" data-ntm-open
               data-forum-id="<?= (int)$scoped_forum['id'] ?>"
               data-forum-slug="<?= htmlspecialchars($forum_slug) ?>">+ Post here</button>
@@ -483,6 +524,11 @@ $header_cat = $scoped_forum
       $rtime       = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
       $start_time  = $topic['created_at'] ? feed_rel_time($topic['created_at']) : '—';
       $author      = htmlspecialchars($topic['author_name']);
+      // Author name links to the member's profile (/u/<slug>); plain span if no slug.
+      $author_slug = $topic['author_slug'] ?? null;
+      $author_link = $author_slug
+          ? '<a class="feed-card__op-author" href="/u/' . rawurlencode((string)$author_slug) . '">' . $author . '</a>'
+          : '<span class="feed-card__op-author">' . $author . '</span>';
       // OP excerpt: format from content_html so @mentions + URLs are clickable.
       // Falls back to the plain content_text teaser if there's no HTML.
       $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 220, $db);
@@ -511,10 +557,13 @@ $header_cat = $scoped_forum
       $embed_url     = feed_first_embed_url($full_html);
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
-      $reply_cta = '<button class="feed-card__reply-cta feed-card__reply-cta--inline" type="button" data-frm-open'
+      // Authenticated viewers only — anon gets no reply affordance (server 401s).
+      $reply_cta = $can_post
+        ? '<button class="feed-card__reply-cta feed-card__reply-cta--inline" type="button" data-frm-open'
                  . ' data-topic-id="' . $topic_id . '"'
                  . ' data-forum-id="' . (int)$topic['forum_id'] . '"'
-                 . ' data-topic-title="' . htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) . '">&#8617; Reply</button>';
+                 . ' data-topic-title="' . htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) . '">&#8617; Reply</button>'
+        : '';
     ?>
     <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>">
       <div class="feed-card__meta-top">
@@ -538,14 +587,14 @@ $header_cat = $scoped_forum
               <?php endif; ?>
               <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
                 <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 36) ?>
-                <span>Started by <a class="feed-card__op-author" href="<?= $turl ?>"><?= $author ?></a> &middot; <?= $start_time ?></span>
+                <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
                 <?= $reply_cta ?>
               </div>
             </div>
           <?php else: ?>
             <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
               <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36) ?>
-              <span>Started by <a class="feed-card__op-author" href="<?= $turl ?>"><?= $author ?></a> &middot; <?= $start_time ?></span>
+              <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
               <?= $reply_cta ?>
             </div>
           <?php endif; ?>
@@ -561,6 +610,10 @@ $header_cat = $scoped_forum
                  alt="" loading="lazy">
           </a>
         <?php endif; ?>
+        <button class="feed-card__compact-expand" type="button" aria-expanded="false"
+                title="Show full post" aria-label="Show full post">
+          <span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span>
+        </button>
       </div>
 
       <?php if ($teaser || $has_more): ?>

@@ -14,6 +14,34 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // ── Text-size toggle (pill beside Compact) ───────────────────────────────
+  // 3-state cycle: Normal → Large → Larger → Normal. Scales --lg-read-scale
+  // (post/reply/card body copy only). Persists per browser; aria-pressed +
+  // data-level + label drive the pill's look.
+  (function () {
+    var KEY = 'lg_hub_read_level';
+    var SCALES = [1, 1.25, 1.5];
+    var LABELS = ['Text size', 'Large text', 'Larger text'];
+    function level() { var n = parseInt(localStorage.getItem(KEY), 10); return (n === 1 || n === 2) ? n : 0; }
+    function apply(n) {
+      document.documentElement.style.setProperty('--lg-read-scale', String(SCALES[n]));
+      var btn = document.querySelector('.feed-text-toggle');
+      if (!btn) return;
+      btn.setAttribute('aria-pressed', n > 0 ? 'true' : 'false');
+      btn.setAttribute('data-level', String(n));
+      var label = btn.querySelector('.feed-text-toggle__label');
+      if (label) label.textContent = LABELS[n];
+    }
+    apply(level());
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('.feed-text-toggle');
+      if (!btn) return;
+      var n = (level() + 1) % 3;
+      try { localStorage.setItem(KEY, String(n)); } catch (_) {}
+      apply(n);
+    });
+  })();
+
   // ── Color theme toggle (pill beside Text size) ───────────────────────────
   // 4-state cycle: Default → Panels → Dark → Black. Toggles a class on <html>
   // (hub-theme-panel / hub-theme-dark / hub-theme-black) that re-points the
@@ -1415,4 +1443,41 @@
       });
   });
 
+})();
+
+/* ─── Compact feed view toggle ──────────────────────────────────────────
+   Persists to localStorage('hub-compact'). The no-flash class is applied
+   pre-paint by an inline script in _chrome.php; this only handles clicks
+   and keeps the button's aria-pressed in sync. */
+(function () {
+  var KEY = 'hub-compact';
+  function syncBtn(btn) {
+    btn.setAttribute('aria-pressed',
+      document.documentElement.classList.contains('hub-compact') ? 'true' : 'false');
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.feed-compact-toggle');
+    if (!btn) return;
+    var on = document.documentElement.classList.toggle('hub-compact');
+    try { on ? localStorage.setItem(KEY, '1') : localStorage.removeItem(KEY); } catch (_) {}
+    syncBtn(btn);
+  });
+  document.querySelectorAll('.feed-compact-toggle').forEach(syncBtn);
+})();
+
+/* ─── Per-card expand: compact → verbose for a single card ──────────────
+   The caret on a compact card toggles .is-verbose on that card only, which
+   un-scopes it from the compact collapse rules (see forums.css). Lazy bits
+   (Read more / View N replies) then work via their existing handlers. */
+(function () {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.feed-card__compact-expand');
+    if (!btn) return;
+    var card = btn.closest('.feed-card');
+    if (!card) return;
+    var verbose = card.classList.toggle('is-verbose');
+    btn.setAttribute('aria-expanded', verbose ? 'true' : 'false');
+    btn.setAttribute('title', verbose ? 'Collapse' : 'Show full post');
+    btn.setAttribute('aria-label', verbose ? 'Collapse post' : 'Show full post');
+  });
 })();
