@@ -97,6 +97,25 @@
 }
 .lg-chrome__menu a:hover { background: var(--lg-sage-tint); color: var(--lg-sage-d); }
 
+/* "You are here" — the current section is shown (not suppressed) and marked.
+   Subtle sage underline rather than a filled pill, so it stays calm across the
+   full six-item nav. Underline is a pseudo-element so it never shifts layout. */
+.lg-chrome__menu a.is-active {
+  color: var(--lg-sage-d);
+  position: relative;
+}
+.lg-chrome__menu a.is-active::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: 3px;
+  height: 2px; border-radius: 2px;
+  background: var(--lg-sage);
+}
+@media (max-width: 820px) {
+  /* Mobile nav stacks vertically; underline reads better flush under the label. */
+  .lg-chrome__menu a.is-active::after { left: 14px; right: auto; width: 1.6em; }
+}
+
 /* --- Aside cluster --- */
 .lg-chrome__aside {
   display: flex; align-items: center; gap: 8px;

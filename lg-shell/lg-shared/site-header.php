@@ -86,7 +86,7 @@ function lg_shared_render_site_header(array $ctx): void
     $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
-    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'hub'|'events'|'members'
+    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'archive'|'hub'|'events'|'members'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
 
@@ -191,10 +191,22 @@ function lg_shared_render_site_header(array $ctx): void
 
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
-        <?php if ($active_nav !== 'archive'):  ?><li><a href="/archive/">Archive</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'hub'):     ?><li><a href="/hub/">The Hub</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
+        <?php
+        // Always render the full nav on every surface; mark the current section
+        // with aria-current + .is-active (consumers pass $active_nav). Loothtool
+        // is external — it has no slug and is never marked active.
+        $nav_items = [
+            'stream'  => ['/stream/',            'Stream'],
+            'archive' => ['/archive/',           'Archive'],
+            'hub'     => ['/hub/',               'The Hub'],
+            'events'  => ['/events/',            'Events'],
+            'members' => ['/directory/members/', 'Members'],
+        ];
+        foreach ($nav_items as $slug => [$href, $label]):
+            $is_active = ($active_nav === $slug);
+            ?>
+        <li><a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a></li>
+        <?php endforeach; ?>
         <li><a href="https://loothtool.com/">Loothtool</a></li>
       </ul>
     </nav>
