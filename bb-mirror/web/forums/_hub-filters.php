@@ -133,39 +133,59 @@ function hub_filter_where(array $filters, array $forum_cat_map): array
     $and   = [];
     $binds = [];
 
-    // -- Type: OR within (discussions => topics; kinds => content) --
-    if ($filters['types']) {
-        $or = [];
-        $kinds = [];
-        $want_disc = false;
-        foreach ($filters['types'] as $t) {
-            if ($t === 'discussions') { $want_disc = true; continue; }
-            $kinds[] = $t;
-        }
-        if ($want_disc) $or[] = "u.card_type = 'topic'";
-        if ($kinds) {
-            $ph = [];
-            foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
-            $or[] = "(u.card_type = 'content' AND u.content_kind IN (" . implode(',', $ph) . "))";
-        }
-        $and[] = $or ? '(' . implode(' OR ', $or) . ')' : '1=0';
+    // -- Type ∩ Category as two composing "worlds" --------------------------
+    // Content has no category, so Category is a *discussions* facet: it narrows
+    // forum threads and must NOT nuke selected content types. We build a
+    // predicate per card_type and OR them, instead of AND-ing facets globally:
+    //   (content AND <contentPred>) OR (topic AND <topicPred>)
+    //
+    //   contentPred: type filter -> kind ∈ chosen content kinds (Category is N/A
+    //     to content); no type filter -> all content, EXCEPT a Category-only
+    //     selection hides content (Category alone = "discussions in this area").
+    //   topicPred:   type filter -> only if "Discussions" chosen; Category ->
+    //     forum ∈ chosen categories. Both AND together.
+    $kinds = [];
+    $want_disc = false;
+    foreach ($filters['types'] as $t) {
+        if ($t === 'discussions') { $want_disc = true; continue; }
+        $kinds[] = $t;
     }
+    $has_type = !empty($filters['types']);
 
-    // -- Category: forum threads only (content has no category) --
-    if ($filters['cats']) {
+    $cat_ids = [];
+    if (!empty($filters['cats'])) {
         $cat_forums = hub_cat_forum_ids($forum_cat_map);
-        $ids = [];
         foreach ($filters['cats'] as $c) {
-            foreach ($cat_forums[$c] ?? [] as $fid) $ids[] = (int)$fid;
+            foreach ($cat_forums[$c] ?? [] as $fid) $cat_ids[] = (int)$fid;
         }
-        $ids = array_values(array_unique($ids));
-        // forum ids are trusted ints from the cat-map -> safe to inline.
-        $and[] = $ids
-            ? "(u.card_type = 'topic' AND u.forum_id IN (" . implode(',', $ids) . "))"
-            : '1=0';
+        $cat_ids = array_values(array_unique($cat_ids));
+    }
+    $has_cat = !empty($filters['cats']);
+
+    if ($has_type || $has_cat) {
+        // content predicate
+        if ($has_type) {
+            if ($kinds) {
+                $ph = [];
+                foreach ($kinds as $i => $k) { $ph[] = ":hk$i"; $binds[":hk$i"] = $k; }
+                $content_pred = 'u.content_kind IN (' . implode(',', $ph) . ')';
+            } else {
+                $content_pred = 'FALSE'; // only Discussions chosen -> no content
+            }
+        } else {
+            $content_pred = $has_cat ? 'FALSE' : 'TRUE'; // Category-only hides content
+        }
+
+        // topic predicate
+        $topic_conds = [];
+        if ($has_type) $topic_conds[] = $want_disc ? 'TRUE' : 'FALSE';
+        if ($has_cat)  $topic_conds[] = $cat_ids ? ('u.forum_id IN (' . implode(',', $cat_ids) . ')') : 'FALSE';
+        $topic_pred = $topic_conds ? implode(' AND ', $topic_conds) : 'TRUE';
+
+        $and[] = "((u.card_type = 'content' AND ($content_pred)) OR (u.card_type = 'topic' AND ($topic_pred)))";
     }
 
-    // -- Author: multi-select, by name (across both sources); OR within --
+    // -- Author: multi-select, by name (across both worlds); OR within --
     if (!empty($filters['authors'])) {
         $ph = [];
         foreach ($filters['authors'] as $i => $a) { $ph[] = ":ha$i"; $binds[":ha$i"] = $a; }
