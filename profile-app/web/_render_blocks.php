@@ -92,6 +92,34 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions, $userId);
 
+    // Owner-only: the Business entry pill, pinned directly under the identity
+    // header (the "top box"). A member's LoothPro business page (the /p/ storefront)
+    // is opened or created from here. The Pro-gate + Patreon upsell for non-Pro
+    // members lands in WS1/WS2; for now any owner sees it (server-side create is
+    // still ungated until WS1).
+    if ($role === 'me') {
+        $lgBiz  = \Looth\ProfileApp\Practice::forUser($userId);
+        $lgMine = null;
+        foreach ($lgBiz as $lgB) {
+            if (($lgB['role'] ?? '') === 'owner') { $lgMine = $lgB; break; }
+        }
+        echo '<div class="lg-bizpill-wrap">';
+        if ($lgMine !== null) {
+            echo '<a class="lg-bizpill" href="/p/' . looth_h((string)$lgMine['slug']) . '">'
+               . '<span class="lg-bizpill__tag">Business</span>'
+               . '<span class="lg-bizpill__name">' . looth_h((string)$lgMine['name']) . '</span>'
+               . '<span class="lg-bizpill__go">Open</span>'
+               . '</a>';
+        } else {
+            echo '<button type="button" class="lg-bizpill lg-bizpill--add" id="lg-biz-add">'
+               . '<span class="lg-bizpill__plus">+</span>'
+               . '<span class="lg-bizpill__name">Business</span>'
+               . '<span class="lg-bizpill__pro">LoothPro</span>'
+               . '</button>';
+        }
+        echo '</div>';
+    }
+
     // Body blocks render in the owner's chosen order (Block::profileLayout); the header is
     // pinned above. Each key maps to its existing renderer — order is the only thing the
     // layout drives in Phase 1 (presence still per-renderer). data-block on each <section>
