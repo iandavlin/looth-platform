@@ -459,6 +459,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ?><!doctype html>
 <html lang="en">
 <head>
+<script>/* color theme (Default/Panels/Dark/Black): apply before paint to avoid flash */try{var t=localStorage.getItem('lg_hub_theme');if(t==='1')document.documentElement.classList.add('hub-theme-panel');else if(t==='2')document.documentElement.classList.add('hub-theme-dark');else if(t==='3')document.documentElement.classList.add('hub-theme-black');}catch(e){}</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>

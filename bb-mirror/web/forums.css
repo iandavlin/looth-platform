@@ -25,7 +25,7 @@
   --lg-font-sans:  -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* ── Legacy bb-mirror tokens (kept for backward-compat) ── */
-  --bg:          #faf8f4;
+  --bg:          #f4f2ec;  /* cream-sage page (now drives body bg + theme swaps) */
   --bg-card:     #ffffff;  /* cream-sage: white cards/nav/searchbar */
   --bg-sticky:   #fff7e6;
   --bg-closed:   #f4f1ea;
@@ -65,6 +65,110 @@
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
 }
 
+/* ══════════════════════════════════════════════════════════
+   COLOR THEME TOGGLE — 4-state cycle (Default → Panels → Dark → Black)
+   Set as .hub-theme-panel / -dark / -black on <html> by forums.js,
+   persisted in localStorage, applied before paint (_chrome.php head).
+   Each theme just re-points the design tokens defined on :root above,
+   so every component that reads --bg / --bg-card / --fg / --lg-* follows.
+   ══════════════════════════════════════════════════════════ */
+
+/* 2 — "Panels": literally SWAP the page and panel backgrounds. Default is
+   cream page (#f4f2ec) + white panels; this flips to a white page + cream
+   panels — softer cards, same brand palette (cream panels are easier on the
+   eyes than stark white). Text/borders unchanged. */
+html.hub-theme-panel {
+  --bg:          #ffffff;  /* page takes the old panel white   */
+  --bg-card:     #f4f2ec;  /* panels take the old page cream   */
+  --lg-card-bg:  #f4f2ec;
+  --lg-cream:    #ffffff;
+  --bg-sticky:   #efece3;
+  --bg-closed:   #e9e6dc;
+}
+
+/* 3 — "Dark": full dark-sage mode. */
+html.hub-theme-dark {
+  --bg:          #14170f;
+  --bg-card:     #1e2218;
+  --lg-card-bg:  #1e2218;
+  --lg-cream:    #14170f;
+  --bg-sticky:   #242a1b;
+  --bg-closed:   #1a1e14;
+  --fg:          #e9eae2;
+  --fg-muted:    #b6bcab;
+  --fg-soft:     #868c79;
+  --lg-ink:      #e9eae2;
+  --lg-mute:     #aab09c;
+  --lg-line:     #343b2a;
+  --border:      #343b2a;
+  --border-soft: #2a3022;
+  --lg-sage-tint:#2a3320;            /* hover wash */
+  --lg-sage-d:   #7c9a52;            /* lift brand sage so buttons/active pills read on dark */
+  --accent:      #7c9a52;
+  --shadow-card: 0 1px 0 rgba(0,0,0,.5);
+  --shadow-elev: 0 8px 24px rgba(0,0,0,.55);
+}
+
+/* 4 — "Black": true-black OLED / Reddit-style dark (pure black page, raised
+   near-black panels). */
+html.hub-theme-black {
+  --bg:          #060608;  /* reads black; a hair off pure #000 to avoid halation/eye-strain */
+  --bg-card:     #16181c;  /* raised panels separate from the near-black page */
+  --lg-card-bg:  #16181c;
+  --lg-cream:    #060608;
+  --bg-sticky:   #1e2024;
+  --bg-closed:   #0f1013;
+  --fg:          #d7dadc;  /* desaturated off-white (not #fff) — softer on dark */
+  --fg-muted:    #9a9d9f;
+  --fg-soft:     #6c6f71;
+  --lg-ink:      #d7dadc;
+  --lg-mute:     #9a9d9f;
+  --lg-line:     #2a2c30;
+  --border:      #2a2c30;
+  --border-soft: #1d1f22;
+  --lg-sage-tint:#1c2614;            /* hover wash */
+  --lg-sage-d:   #86a559;            /* lifted brand sage for buttons/active pills */
+  --accent:      #86a559;
+  --shadow-card: 0 1px 0 rgba(0,0,0,.7);
+  --shadow-elev: 0 8px 28px rgba(0,0,0,.75);
+}
+
+/* Dark/Black patches for a few surfaces that hardcode white. */
+html.hub-theme-dark .ntm-form .ql-toolbar.ql-snow,
+html.hub-theme-dark .post-edit .ql-toolbar.ql-snow,
+html.hub-theme-dark .post-edit__quill,
+html.hub-theme-dark .reply-form__editor,
+html.hub-theme-dark .search-form__input,
+html.hub-theme-dark .nav-tree__cat-pill,
+html.hub-theme-black .ntm-form .ql-toolbar.ql-snow,
+html.hub-theme-black .post-edit .ql-toolbar.ql-snow,
+html.hub-theme-black .post-edit__quill,
+html.hub-theme-black .reply-form__editor,
+html.hub-theme-black .search-form__input,
+html.hub-theme-black .nav-tree__cat-pill { background: var(--bg-card); }
+html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-stroke,
+html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-stroke { stroke: var(--fg-muted); }
+html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-fill,
+html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-muted); }
+
+/* The theme-cycle pill in the sort bar (matches .feed-compact-toggle / -text-). */
+.feed-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--lg-line);
+  background: var(--bg-card);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.feed-theme-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
+.feed-theme-toggle[aria-pressed="true"] { background: var(--lg-sage-d); border-color: var(--lg-sage-d); color: #fff; }
+.feed-theme-toggle__icon { font-size: 14px; line-height: 1; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body { margin: 0; padding: 0; }
@@ -72,7 +176,7 @@ html, body { margin: 0; padding: 0; }
 body {
   font: 16px/1.5 var(--font-body);
   color: var(--fg);
-  background: #f4f2ec; /* cream-sage page */
+  background: var(--bg); /* theme-aware page background (see COLOR THEME TOGGLE) */
 }
 
 a { color: var(--accent); text-decoration: none; }

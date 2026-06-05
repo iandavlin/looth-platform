@@ -459,6 +459,11 @@ $header_cat = $scoped_forum
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
     <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
        class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Hot</a>
+    <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
+            title="Cycle color theme" aria-label="Cycle color theme">
+      <span class="feed-theme-toggle__icon" aria-hidden="true">&#9681;</span>
+      <span class="feed-theme-toggle__label">Theme</span>
+    </button>
     <?php if ($is_postable_forum): ?>
       <button class="feed-post-btn" type="button" data-ntm-open
               data-forum-id="<?= (int)$scoped_forum['id'] ?>"

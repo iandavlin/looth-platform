@@ -14,6 +14,37 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // ── Color theme toggle (pill beside Text size) ───────────────────────────
+  // 4-state cycle: Default → Panels → Dark → Black. Toggles a class on <html>
+  // (hub-theme-panel / hub-theme-dark / hub-theme-black) that re-points the
+  // design tokens. Persists per browser; the before-paint script in _chrome.php
+  // applies it on load so there's no flash. Mirror of the text-size cycle above.
+  (function () {
+    var KEY = 'lg_hub_theme';
+    var CLASSES = ['', 'hub-theme-panel', 'hub-theme-dark', 'hub-theme-black'];
+    var LABELS  = ['Theme', 'Panels', 'Dark', 'Black'];
+    function level() { var n = parseInt(localStorage.getItem(KEY), 10); return (n >= 1 && n <= 3) ? n : 0; }
+    function apply(n) {
+      var de = document.documentElement;
+      de.classList.remove('hub-theme-panel', 'hub-theme-dark', 'hub-theme-black');
+      if (CLASSES[n]) de.classList.add(CLASSES[n]);
+      var btn = document.querySelector('.feed-theme-toggle');
+      if (!btn) return;
+      btn.setAttribute('aria-pressed', n > 0 ? 'true' : 'false');
+      btn.setAttribute('data-level', String(n));
+      var label = btn.querySelector('.feed-theme-toggle__label');
+      if (label) label.textContent = LABELS[n];
+    }
+    apply(level());
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('.feed-theme-toggle');
+      if (!btn) return;
+      var n = (level() + 1) % 4;
+      try { localStorage.setItem(KEY, String(n)); } catch (_) {}
+      apply(n);
+    });
+  })();
+
   // Clickable card: a click anywhere on a feed card navigates to its topic,
   // EXCEPT on real interactive elements (links/buttons/inputs) or while the
   // user is selecting text. data-href is the topic URL.
