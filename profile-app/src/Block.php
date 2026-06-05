@@ -1293,6 +1293,16 @@ Accept: application/json
     }
 
     /**
+     * The reorderable storefront blocks for a business (practice) page — the
+     * practice analogue of LAYOUT_BLOCKS. practice-header is pinned (rendered
+     * first) and the staff roster is auto/pinned (rendered last), so neither
+     * appears here. WS3 widens this set (services, gallery, links, drop-offs).
+     */
+    public const PRACTICE_LAYOUT_BLOCKS = [
+        'about' => ['label' => 'About', 'removable' => true],
+    ];
+
+    /**
      * Storage key for a practice storefront block, living in the OWNER's
      * profile_sections (same no-migration convention as practiceHeaderKey).
      * e.g. 'about:p42'. Won't collide with profile keys or the freeform: prefix.
@@ -1302,13 +1312,74 @@ Accept: application/json
         return $block . ':p' . $practiceId;
     }
 
+    /** Storage key for a practice's block ORDER, in the OWNER's profile_sections. */
+    private static function practiceLayoutKey(int $practiceId): string
+    {
+        return 'practice-layout:' . $practiceId;
+    }
+
     /**
-     * The storefront block order for a practice page. No per-practice persistence
-     * yet (would need schema); fixed order for now. Reorder lands with the builder.
+     * The storefront block order for a practice page (header + staff excluded —
+     * both pinned at render). Persisted WITHOUT new schema as {order:[...]} in
+     * the OWNER's profile_sections under 'practice-layout:<id>'. NULL / never-set
+     * → all registry blocks present (opt-in default = array_keys of the registry).
      */
     public static function practiceLayout(int $practiceId): array
     {
-        return ['about', 'staff'];
+        $owner = self::practiceOwnerId($practiceId);
+        if ($owner === null) return [];
+        $s = Db::pg()->prepare('SELECT data FROM profile_sections WHERE user_id = :u AND key = :k');
+        $s->execute([':u' => $owner, ':k' => self::practiceLayoutKey($practiceId)]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return array_keys(self::PRACTICE_LAYOUT_BLOCKS);   // never-set → default
+        $d = is_string($raw) ? json_decode($raw, true) : null;
+        $order = (is_array($d) && isset($d['order']) && is_array($d['order'])) ? $d['order'] : null;
+        if ($order === null) return array_keys(self::PRACTICE_LAYOUT_BLOCKS);
+        return self::normalizePracticeLayout($order);
+    }
+
+    /** Persist a practice's block order (validated subset of the registry, de-duped). */
+    public static function savePracticeLayout(int $practiceId, array $order): array
+    {
+        $owner = self::practiceOwnerId($practiceId);
+        if ($owner === null) return [];
+        $clean = self::normalizePracticeLayout($order);
+        Db::pg()->prepare("
+            INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+            VALUES (:u, :k, 'members', :d::jsonb, 0)
+            ON CONFLICT (user_id, key) DO UPDATE
+               SET data = EXCLUDED.data, updated_at = now()
+        ")->execute([
+            ':u' => $owner,
+            ':k' => self::practiceLayoutKey($practiceId),
+            ':d' => json_encode(['order' => $clean]),
+        ]);
+        return $clean;
+    }
+
+    /** Filter an arbitrary key list to known practice layout keys, in order, de-duped. */
+    private static function normalizePracticeLayout(array $order): array
+    {
+        $seen = [];
+        $out  = [];
+        foreach ($order as $k) {
+            if (is_string($k) && isset(self::PRACTICE_LAYOUT_BLOCKS[$k]) && !isset($seen[$k])) {
+                $seen[$k] = true;
+                $out[]    = $k;
+            }
+        }
+        return $out;
+    }
+
+    /** Practice blocks not currently placed — the caddy's "available to add" set [key=>label]. */
+    public static function practiceAvailableBlocks(int $practiceId): array
+    {
+        $present = array_flip(self::practiceLayout($practiceId));
+        $out = [];
+        foreach (self::PRACTICE_LAYOUT_BLOCKS as $k => $cfg) {
+            if (!isset($present[$k])) $out[$k] = (string) $cfg['label'];
+        }
+        return $out;
     }
 
     /** The practice owner's profile-app user id (practices.created_by). */

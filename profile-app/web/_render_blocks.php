@@ -247,7 +247,7 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
  * The about block — free text. Shared (profile + practice). Owner edits inline
  * (multiline); block-level pmp on profile_sections key='about'.
  */
-function looth_render_about_block(int $userId, string $role, string $headerVis, string $loadKey = 'about', bool $editable = true): void
+function looth_render_about_block(int $userId, string $role, string $headerVis, string $loadKey = 'about', bool $editable = true, string $editUrl = '/profile-api/v0/me/about', string $pmpBlock = 'about'): void
 {
     $ab      = Block::loadAbout($userId, $loadKey);
     $text    = (string)$ab['text'];
@@ -258,12 +258,12 @@ function looth_render_about_block(int $userId, string $role, string $headerVis, 
 
     echo '<section class="block lg-block lg-block--about" data-block="about">';
     echo '<h3 class="lg-bh">About';
-    if ($canEdit) echo ' ' . looth_pmp_control('about', (string)$ab['vis'], $headerVis);
+    if ($canEdit) echo ' ' . looth_pmp_control($pmpBlock, (string)$ab['vis'], $headerVis);
     echo '</h3>';
     if ($canEdit) {
         $has = $text !== '';
         echo '<div class="lg-about lg-edit' . ($has ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="text" data-edit-url="/profile-api/v0/me/about" data-edit-method="PATCH"'
+           . ' data-edit-field="text" data-edit-url="' . looth_h($editUrl) . '" data-edit-method="PATCH"'
            . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write a bit about your work…">'
            . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
     } else {
@@ -1012,20 +1012,27 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
     if ($h === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_practice_header_block($h, $role, $headerVis, $tierBadge);
 
-    // Storefront blocks render DISPLAY-ONLY for now: editable=false suppresses the
-    // owner-edit affordances (the practice save endpoints + builder land in WS0b),
-    // while visibility gating still honors the real viewer role. Each composable
-    // block loads from the OWNER's profile_sections under a practice-namespaced key.
+    // Owner edit mode: on the owner's own "Me" view the storefront blocks render
+    // EDITABLE (inline text + per-block visibility, plus drag/add/remove via the
+    // caddy that p.php wires) — identical in shape to the profile builder. Every
+    // other audience sees them display-only, ceiling-capped. Block data lives in
+    // the OWNER's profile_sections under practice-namespaced keys (no new schema).
     $ownerId = Block::practiceOwnerId($practiceId);
     if ($ownerId !== null) {
-        $renderers = [
-            'about' => static fn() => looth_render_about_block(
-                $ownerId, $role, $headerVis, Block::practiceBlockKey('about', $practiceId), false),
-            'staff' => static fn() => looth_render_practice_staff_block($practiceId, $role),
-        ];
+        $editing = ($role === 'me');
         foreach (Block::practiceLayout($practiceId) as $key) {
-            if (isset($renderers[$key])) ($renderers[$key])();
+            if ($key === 'about') {
+                looth_render_about_block(
+                    $ownerId, $role, $headerVis,
+                    Block::practiceBlockKey('about', $practiceId), $editing,
+                    '/profile-api/v0/me/practice-about?practice=' . $practiceId,
+                    'practice-about'
+                );
+            }
         }
+        // Staff roster is auto-derived (the practice_members list): pinned last,
+        // excluded from the reorderable layout and the caddy.
+        looth_render_practice_staff_block($practiceId, $role);
     }
 }
 
