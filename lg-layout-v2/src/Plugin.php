@@ -24,6 +24,7 @@ final class Plugin
     public const MANAGED_CPTS = [
         'post-imgcap', 'post-type-videos', 'sponsor-post', 'event',
         'loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit',
+        'shorty',
     ];
 
     public static function boot(): void

@@ -13,9 +13,10 @@ loothcuts + documents done, and a working article parser**. All deterministic pa
 | loothcuts | 7 / 7 | 0 | loothprint-parse (CPT-aware) | done |
 | document | 4 / 6 | **2** | loothprint-parse (`document` branch) | **46552, 46009** flagged (no PDF/file — inline-content docs) |
 | post-imgcap | **61 / 63** | **2** | `article-parse.php` (inline) + `article-acf-parse.php` (ACF) | **DONE.** 7 inline-HTML + 35 ACF-repeater + 5 ACF single-row essays + 7 post_content essays. Remaining 2 are deferred, not failures: **43773** = a PDF in an `<iframe>` (belongs in the *document* flow, not article) and **14204** = content imgs hotlinked from ukuleles.com (all 404). |
-| useful_links | 0 / 39 | 39 | — | not started |
-| sponsor-post | 0 / 18 | 18 | — | not started |
-| member-benefit | 0 / 6 | 6 | — | not started |
+| useful_links | **39 / 39** | 0 | `tools/addon-parse.php` | **DONE.** Each = post-header + `callout`(links variant: useful_url + description) + optional gallery. PUBLIC, ungated. Route `/useful_links/<slug>`. |
+| sponsor-post | **16 / 16** | 0 | `article-parse.php` (inline) | **DONE.** Inline-HTML, reused the article parser. Mostly public → **ungated** (promotional). Route `/sponsor/<slug>`. ⚠️ **image figure-numbers stripped** (ads aren't numbered tutorials) — see [[feedback_sponsor_post_no_image_numbers]]; stripped via `/tmp/strip-numbers.php`, future runs should guard `article-parse` on `post_type==='sponsor-post'`. |
+| member-benefit | **6 / 6** | 0 | `tools/addon-parse.php` | **DONE.** post-header(hero) + intro + **PAYWALL** + `callout`(Member Offer: link_title/code/url) + gallery. Offer/code gated behind the paywall (looth-lite). Route `/member-benefit/<slug>`. |
+| shorty | **29 / 29** | 0 | `tools/video-parse.php` | **DONE.** Video-shaped (youtu.be / `/shorts/` / `/embed/`). Needed: (1) video-parse `/shorts/` URL support, (2) **`shorty` added to `Plugin::MANAGED_CPTS`** (else import refuses meta + materialize returns not-managed), (3) **`shorty` added to the nginx route alternation** in `snippets/strangler-archive-poc.conf`. Mostly public. |
 
 ## Per-post loop (unchanged)
 `parse (dry-run → /tmp json) → review → wp lg-layout-v2 import --post-id=<id> → _materialize curl → verify`.

@@ -20,7 +20,7 @@ function vp_clean_content(string $html): string {
 }
 
 function vp_video_id(string $text): ?array {
-    if (preg_match('#(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|live/))([A-Za-z0-9_-]{6,})#i', $text, $m)) {
+    if (preg_match('#(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|live/|shorts/))([A-Za-z0-9_-]{6,})#i', $text, $m)) {
         return ['id' => $m[1], 'url' => 'https://youtu.be/' . $m[1]];
     }
     return null;
