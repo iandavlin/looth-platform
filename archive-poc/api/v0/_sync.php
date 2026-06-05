@@ -65,15 +65,23 @@ if (!function_exists('get_post')) {
 
 require_once __DIR__ . '/../../bin/indexer.php';
 
-$db_path = realpath(__DIR__ . '/../../index.sqlite');
-if (!$db_path) {
+// The sync WRITER targets Postgres (the live read-store) — symmetric with the
+// PG read cutover. Default to PG; LG_ARCHIVE_POC_DSN overrides (e.g. a sqlite:
+// DSN to also refresh the legacy index during the soak, or for tests). Runs on
+// the looth-dev FPM pool → peer-auths to the looth-dev pg role, which the
+// discovery schema grants INSERT/UPDATE/DELETE on (the WP-side sync writer).
+try {
+    $dsn = getenv('LG_ARCHIVE_POC_DSN') ?: 'pgsql:host=/var/run/postgresql;dbname=looth';
+    $db  = new PDO($dsn, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $drv = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+    if ($drv === 'pgsql')      $db->exec('SET search_path = discovery, public');
+    elseif ($drv === 'sqlite') $db->exec('PRAGMA journal_mode = WAL');
+} catch (Throwable $e) {
+    error_log('archive-poc-sync: db open failed: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => 'index missing']);
+    echo json_encode(['error' => 'db open failed']);
     exit;
 }
-$db = new PDO('sqlite:' . $db_path);
-$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$db->exec('PRAGMA journal_mode = WAL');
 
 try {
     if ($sync_action === 'delete') {

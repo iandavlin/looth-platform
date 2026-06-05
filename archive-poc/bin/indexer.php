@@ -209,19 +209,39 @@ function archive_poc_resolve_tier(int $post_id, string $kind): string {
     };
 }
 
+/** epoch → ISO-8601 UTC for PG TIMESTAMPTZ binds; null/<=0 passes through. */
+function archive_poc__ts_iso(?int $ts): ?string {
+    return ($ts === null || $ts <= 0) ? null : gmdate('c', $ts);
+}
+
 function archive_poc_upsert_person(PDO $db, int $user_id): void {
     $u = get_userdata($user_id);
     if (!$u) return;
     $avatar = get_avatar_url($user_id) ?: null;
-    $ins = $db->prepare('INSERT OR REPLACE INTO person(id, display_name, slug, avatar_url) VALUES(?,?,?,?)');
-    $ins->execute([$user_id, $u->display_name ?: $u->user_login, $u->user_login, $avatar]);
+    $name   = $u->display_name ?: $u->user_login;
+    if (lg_archive_poc_is_pg($db)) {
+        $db->prepare('INSERT INTO person (id, display_name, slug, avatar_url) VALUES (?,?,?,?)
+                      ON CONFLICT (id) DO UPDATE SET
+                        display_name = EXCLUDED.display_name,
+                        slug         = EXCLUDED.slug,
+                        avatar_url   = EXCLUDED.avatar_url')
+           ->execute([$user_id, $name, $u->user_login, $avatar]);
+    } else {
+        $db->prepare('INSERT OR REPLACE INTO person(id, display_name, slug, avatar_url) VALUES(?,?,?,?)')
+           ->execute([$user_id, $name, $u->user_login, $avatar]);
+    }
 }
 
 function archive_poc_delete_post(PDO $db, int $post_id): void {
     $db->beginTransaction();
-    $db->prepare('DELETE FROM content_tag WHERE content_id = ?')->execute([$post_id]);
-    $db->prepare('DELETE FROM content_fts  WHERE rowid       = ?')->execute([$post_id]);
-    $db->prepare('DELETE FROM content_item WHERE id          = ?')->execute([$post_id]);
+    if (lg_archive_poc_is_pg($db)) {
+        // content_tag is ON DELETE CASCADE; no FTS table (tsv is generated).
+        $db->prepare('DELETE FROM content_item WHERE id = ?')->execute([$post_id]);
+    } else {
+        $db->prepare('DELETE FROM content_tag WHERE content_id = ?')->execute([$post_id]);
+        $db->prepare('DELETE FROM content_fts  WHERE rowid       = ?')->execute([$post_id]);
+        $db->prepare('DELETE FROM content_item WHERE id          = ?')->execute([$post_id]);
+    }
     $db->commit();
 }
 
@@ -249,6 +269,13 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
     $cpt = $post->post_type;
     $kind = $KIND_MAP[$cpt] ?? null;
     if (!$kind) {
+        archive_poc_delete_post($db, $post_id);
+        return ['action' => 'delete', 'kind' => null];
+    }
+
+    // Postgres content_item is content-only — forum discussions live in forums.*
+    // (the Hub reads those). Never write a discussion to PG; drop any stale row.
+    if ($kind === 'discussion' && lg_archive_poc_is_pg($db)) {
         archive_poc_delete_post($db, $post_id);
         return ['action' => 'delete', 'kind' => null];
     }
@@ -344,40 +371,13 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
 
     $published_at = strtotime($post->post_date_gmt) ?: time();
 
-    $db->beginTransaction();
-    // Replace row
-    $db->prepare('DELETE FROM content_tag WHERE content_id = ?')->execute([$post_id]);
-    $db->prepare('DELETE FROM content_fts  WHERE rowid       = ?')->execute([$post_id]);
-    $db->prepare('DELETE FROM content_item WHERE id          = ?')->execute([$post_id]);
+    $event_fields = ($kind === 'event')
+        ? archive_poc_extract_event_fields($post_id)
+        : ['start'=>null,'end'=>null,'region'=>null,'join_url'=>null];
 
-    $event_fields = ($kind === 'event') ? archive_poc_extract_event_fields($post_id) : ['start'=>null,'end'=>null,'region'=>null,'join_url'=>null];
-
-    $db->prepare("
-        INSERT INTO content_item
-        (id, source, kind, subkind, cpt, title, slug, url, excerpt, body_text,
-         thumb_url, thumb_broken, author_id, author_name, tier, published_at,
-         last_activity, reply_count, like_count, view_count, duration_min, has_download,
-         event_start_at, event_end_at, event_region, event_join_url,
-         forum_label, subforum_label)
-        VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ")->execute([
-        $post_id, $kind, null, $cpt,
-        $post->post_title ?: '(untitled)',
-        $post->post_name ?: ('p-' . $post_id),
-        $url, $excerpt, $body_text,
-        $thumb, $author_id ?: null, $author_name,
-        $tier, $published_at,
-        $last_active, $reply_count,
-        $like_count, $view_count,
-        null, $has_download,
-        $event_fields['start'], $event_fields['end'], $event_fields['region'], $event_fields['join_url'],
-        $forum_label, $subforum_label,
-    ]);
-
-    // Tags — query wpdb directly. Same reason as tier: wp_get_object_terms
-    // returns WP_Error when --skip-plugins is active because the taxonomy
-    // isn't registered.
-    $tag_labels = [];
+    // Tags — query wpdb directly (wp_get_object_terms returns WP_Error under
+    // --skip-plugins). Gathered BEFORE the insert so tag_text is ready for the
+    // PG generated tsvector.
     $taxonomies = archive_poc_tag_taxonomies();
     $tax_ph = implode(',', array_fill(0, count($taxonomies), '%s'));
     $terms_rows = $wpdb->get_results($wpdb->prepare("
@@ -386,22 +386,89 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
         JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
         JOIN {$wpdb->terms} t           ON t.term_id          = tt.term_id
         WHERE tr.object_id = %d AND tt.taxonomy IN ($tax_ph)
-    ", array_merge([$post_id], $taxonomies)), ARRAY_A);
-    if ($terms_rows) {
-        $ins_tag  = $db->prepare('INSERT OR IGNORE INTO tag(id, slug, label) VALUES(?,?,?)');
-        $ins_ctag = $db->prepare('INSERT OR IGNORE INTO content_tag(content_id, tag_id) VALUES(?,?)');
-        foreach ($terms_rows as $tr) {
-            $tid = (int) $tr['term_id'];
-            $ins_tag->execute([$tid, $tr['slug'], $tr['name']]);
-            $ins_ctag->execute([$post_id, $tid]);
-            $tag_labels[] = $tr['name'];
-        }
-    }
+    ", array_merge([$post_id], $taxonomies)), ARRAY_A) ?: [];
+    $tag_labels = array_values(array_filter(array_map(fn($r) => $r['name'], $terms_rows)));
 
-    // FTS row
-    $db->prepare("INSERT INTO content_fts(rowid, title, body_text, author_name, tag_text)
-                  VALUES (?, ?, ?, ?, ?)")
-        ->execute([$post_id, $post->post_title, $body_text, $author_name ?: '', implode(' ', $tag_labels)]);
+    $db->beginTransaction();
+
+    if (lg_archive_poc_is_pg($db)) {
+        // --- Postgres path (mirrors bin/backfill-pg.php) ---------------------
+        // TIMESTAMPTZ + BOOLEAN columns, tag IDENTITY keyed by slug, tag_text
+        // feeds the generated tsvector. Replace by id (cascade clears tags).
+        $db->prepare('DELETE FROM content_item WHERE id = ?')->execute([$post_id]);
+        $db->prepare("
+            INSERT INTO content_item
+            (id, source, kind, subkind, cpt, title, slug, url, excerpt, body_text,
+             thumb_url, thumb_broken, author_id, author_name, tier, published_at,
+             last_activity, reply_count, like_count, view_count, duration_min, has_download,
+             event_start_at, event_end_at, event_region, event_join_url,
+             forum_label, subforum_label, tag_text)
+            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'false', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $post_id, $kind, null, $cpt,
+            $post->post_title ?: '(untitled)',
+            $post->post_name ?: ('p-' . $post_id),
+            $url, $excerpt, $body_text,
+            $thumb, $author_id ?: null, $author_name,
+            $tier, archive_poc__ts_iso($published_at),
+            archive_poc__ts_iso($last_active), $reply_count,
+            $like_count, $view_count,
+            null, $has_download ? 'true' : 'false',
+            archive_poc__ts_iso($event_fields['start']), archive_poc__ts_iso($event_fields['end']),
+            $event_fields['region'], $event_fields['join_url'],
+            $forum_label, $subforum_label, implode(' ', $tag_labels),
+        ]);
+        if ($terms_rows) {
+            $ins_tag  = $db->prepare('INSERT INTO tag (slug, label) VALUES (?, ?)
+                                      ON CONFLICT (slug) DO UPDATE SET label = EXCLUDED.label
+                                      RETURNING id');
+            $ins_ctag = $db->prepare('INSERT INTO content_tag (content_id, tag_id) VALUES (?, ?)
+                                      ON CONFLICT DO NOTHING');
+            foreach ($terms_rows as $tr) {
+                $ins_tag->execute([$tr['slug'], $tr['name']]);
+                $ins_ctag->execute([$post_id, (int) $ins_tag->fetchColumn()]);
+            }
+        }
+        // tsv is GENERATED STORED — nothing else to maintain.
+    } else {
+        // --- SQLite path (legacy index / instant-revert) ---------------------
+        $db->prepare('DELETE FROM content_tag WHERE content_id = ?')->execute([$post_id]);
+        $db->prepare('DELETE FROM content_fts  WHERE rowid       = ?')->execute([$post_id]);
+        $db->prepare('DELETE FROM content_item WHERE id          = ?')->execute([$post_id]);
+        $db->prepare("
+            INSERT INTO content_item
+            (id, source, kind, subkind, cpt, title, slug, url, excerpt, body_text,
+             thumb_url, thumb_broken, author_id, author_name, tier, published_at,
+             last_activity, reply_count, like_count, view_count, duration_min, has_download,
+             event_start_at, event_end_at, event_region, event_join_url,
+             forum_label, subforum_label)
+            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ")->execute([
+            $post_id, $kind, null, $cpt,
+            $post->post_title ?: '(untitled)',
+            $post->post_name ?: ('p-' . $post_id),
+            $url, $excerpt, $body_text,
+            $thumb, $author_id ?: null, $author_name,
+            $tier, $published_at,
+            $last_active, $reply_count,
+            $like_count, $view_count,
+            null, $has_download,
+            $event_fields['start'], $event_fields['end'], $event_fields['region'], $event_fields['join_url'],
+            $forum_label, $subforum_label,
+        ]);
+        if ($terms_rows) {
+            $ins_tag  = $db->prepare('INSERT OR IGNORE INTO tag(id, slug, label) VALUES(?,?,?)');
+            $ins_ctag = $db->prepare('INSERT OR IGNORE INTO content_tag(content_id, tag_id) VALUES(?,?)');
+            foreach ($terms_rows as $tr) {
+                $tid = (int) $tr['term_id'];
+                $ins_tag->execute([$tid, $tr['slug'], $tr['name']]);
+                $ins_ctag->execute([$post_id, $tid]);
+            }
+        }
+        $db->prepare("INSERT INTO content_fts(rowid, title, body_text, author_name, tag_text)
+                      VALUES (?, ?, ?, ?, ?)")
+            ->execute([$post_id, $post->post_title, $body_text, $author_name ?: '', implode(' ', $tag_labels)]);
+    }
 
     $db->commit();
 
