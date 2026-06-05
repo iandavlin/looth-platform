@@ -31,8 +31,18 @@ $ctx = lg_membership_header_ctx('');                 // public page: anon ctx re
 // At Stripe go-live: set $primary_mode = 'stripe', point the primary CTA at the
 // checkout entry, and the Patreon block drops to secondary. No structural change.
 $primary_mode    = 'patreon';                        // 'patreon' (launch) → 'stripe' (later)
-$patreon_connect = '/patreon-connect?return=/join/'; // poller authorize-entry (coord §3n)
-$become_patron   = 'https://patreon.com/loothgroup/membership';
+$patreon_connect = '/patreon-connect/?return=/join/'; // poller authorize-entry (coord §3n); trailing slash skips a 301 hop
+// Canonical membership link — single source of truth in wp_options
+// (lgpo_patreon_link), the SAME value manage-subscription's "Manage on Patreon"
+// CTA uses. Was hardcoded to a wrong slug (patreon.com/loothgroup/membership,
+// 404). Falls back to the campaign URL if the option is unreadable.
+$become_patron = 'https://www.patreon.com/cw/theloothgroup';
+try {
+    $st = lg_membership_db()->prepare("SELECT option_value FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "options WHERE option_name = 'lgpo_patreon_link' LIMIT 1");
+    $st->execute();
+    $opt = (string) ($st->fetchColumn() ?: '');
+    if ($opt !== '') $become_patron = $opt;
+} catch (Throwable $e) {}
 $manage_url      = '/manage-subscription/';
 $signin_url      = '/wp-login.php?redirect_to=' . rawurlencode($manage_url);
 

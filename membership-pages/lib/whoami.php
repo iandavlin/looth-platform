@@ -74,15 +74,17 @@ function lg_membership_whoami(): ?array {
  * same as a logged-out shortcode visitor). Cached per request.
  */
 if (!function_exists('lg_membership_rest_nonce')) {
-function lg_membership_rest_nonce(): string {
-    static $fetched = false, $nonce = '';
-    if ($fetched) return $nonce;
-    $fetched = true;
-    if (PHP_SAPI === 'cli') return '';
+function lg_membership_rest_nonce(string $action = ''): string {
+    static $cache = [];
+    $key = $action !== '' ? $action : 'wp_rest';
+    if (array_key_exists($key, $cache)) return $cache[$key];
+    if (PHP_SAPI === 'cli') return $cache[$key] = '';
 
+    $url = 'https://127.0.0.1/wp-json/looth/v1/rest-nonce'
+         . ($action !== '' ? '?action=' . rawurlencode($action) : '');
     $ch = curl_init();
     curl_setopt_array($ch, [
-        CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/rest-nonce',
+        CURLOPT_URL            => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false,
@@ -97,11 +99,12 @@ function lg_membership_rest_nonce(): string {
     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    $nonce = '';
     if ($code === 200 && is_string($body)) {
         $j = json_decode($body, true);
         if (is_array($j) && !empty($j['nonce'])) $nonce = (string) $j['nonce'];
     }
-    return $nonce;
+    return $cache[$key] = $nonce;
 }
 }
 
