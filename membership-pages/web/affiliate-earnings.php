@@ -18,7 +18,7 @@ require __DIR__ . '/_admin-gate.php';
 
 $h   = 'lg_membership_h';
 $ctx = lg_membership_header_ctx('');
-lg_membership_admin_gate_or_exit($ctx);
+lg_membership_prelaunch_gate_or_exit($ctx);
 
 /** Reproduces Shortcodes::affiliateEarningsEstimate() against the poller DB. */
 function lg_ms_affiliate_estimate(PDO $pdo, int $affId, float $commissionPct, float $retentionBonusPct): array {

@@ -23,7 +23,7 @@ require __DIR__ . '/_admin-gate.php';
 
 $h   = 'lg_membership_h';
 $ctx = lg_membership_header_ctx('');
-lg_membership_admin_gate_or_exit($ctx);   // pre-launch: admins only
+lg_membership_prelaunch_gate_or_exit($ctx);   // pre-launch: admins only
 
 $patreon_connect = '/patreon-connect?return=/connect-your-patreon/';   // poller authorize-entry (coord §3n)
 $become_patron   = 'https://patreon.com/loothgroup/membership';
