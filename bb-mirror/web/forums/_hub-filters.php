@@ -310,33 +310,43 @@ function hub_category_tree(PDO $db, array $content_tiers, array $forum_cat_map):
         return $ids;
     };
 
-    $tree = []; $registry = []; $seenKeys = [];
+    // Group top forums by cat_key so distinct forums that share a key (e.g. all
+    // the 'looths' regional chapters) aggregate into ONE category row instead of
+    // rendering as duplicate "Local Looths" rows.
+    $groups = []; $order = [];
     foreach ($tops as $t) {
-        $pid = (int)$t['id'];
         $pkey = bb_mirror_cat_key((string)$t['slug']);
-        $sub  = $subtreeIds($pid);
-        $tc   = 0; foreach ($sub as $fid) $tc += $tcount[$fid] ?? 0;
-        $pcount = $tc + ($cParent[$pkey] ?? 0);
+        if (!isset($groups[$pkey])) { $groups[$pkey] = []; $order[] = $pkey; }
+        $groups[$pkey][] = $t;
+    }
 
-        $leaves = [];
-        foreach ($kids[$pid] ?? [] as $c) {
-            $lid  = (int)$c['id'];
-            $lkey = (string)$lid;   // forum_id — subforum SLUGS collide (e.g. two 'acoustic')
-            $lsub = $subtreeIds($lid);
-            $lt   = 0; foreach ($lsub as $fid) $lt += $tcount[$fid] ?? 0;
-            $lslug = HUB_LABEL_ALIASES[hub_slugify((string)$c['title'])] ?? hub_slugify((string)$c['title']);
-            $lc   = $cLeaf[$pkey . "\0" . $lslug] ?? 0;
-            $leaves[] = [
-                'key' => $lkey, 'label' => (string)$c['title'], 'count' => $lt + $lc,
-                'forum_id' => $lid, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
-            ];
-            $registry[$lkey] = [
-                'forum_ids' => $lsub, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
-                'parent_labels' => $clabels[$pkey] ?? [],
-            ];
+    $tree = []; $registry = []; $seenKeys = [];
+    foreach ($order as $pkey) {
+        $all_sub = []; $leaves = [];
+        foreach ($groups[$pkey] as $t) {
+            $pid = (int)$t['id'];
+            foreach ($subtreeIds($pid) as $fid) $all_sub[] = $fid;
+            foreach ($kids[$pid] ?? [] as $c) {
+                $lid  = (int)$c['id'];
+                $lkey = (string)$lid;   // forum_id — subforum SLUGS collide (e.g. two 'acoustic')
+                $lsub = $subtreeIds($lid);
+                $lt   = 0; foreach ($lsub as $fid) $lt += $tcount[$fid] ?? 0;
+                $lslug = HUB_LABEL_ALIASES[hub_slugify((string)$c['title'])] ?? hub_slugify((string)$c['title']);
+                $lc   = $cLeaf[$pkey . "\0" . $lslug] ?? 0;
+                $leaves[] = [
+                    'key' => $lkey, 'label' => (string)$c['title'], 'count' => $lt + $lc,
+                    'forum_id' => $lid, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
+                ];
+                $registry[$lkey] = [
+                    'forum_ids' => $lsub, 'parent_key' => $pkey, 'sublabel' => (string)$c['title'],
+                    'parent_labels' => $clabels[$pkey] ?? [],
+                ];
+            }
         }
-        $tree[] = ['key' => $pkey, 'label' => hub_cat_label($pkey), 'count' => $pcount,
-                   'forum_ids' => $sub, 'content_labels' => $clabels[$pkey] ?? [], 'leaves' => $leaves];
+        $all_sub = array_values(array_unique($all_sub));
+        $tc = 0; foreach ($all_sub as $fid) $tc += $tcount[$fid] ?? 0;
+        $tree[] = ['key' => $pkey, 'label' => hub_cat_label($pkey), 'count' => $tc + ($cParent[$pkey] ?? 0),
+                   'forum_ids' => $all_sub, 'content_labels' => $clabels[$pkey] ?? [], 'leaves' => $leaves];
         $seenKeys[$pkey] = true;
     }
 
