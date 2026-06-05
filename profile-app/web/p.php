@@ -111,6 +111,12 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-pmp-menu button:hover{background:var(--lg-sage-tint)}
 .lg-pmp-menu button[aria-current="true"]{font-weight:800;color:var(--lg-sage-d)}
 .lg-pmp-menu button[aria-current="true"]::after{content:"✓";color:var(--lg-sage-d)}
+.lg-staff{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.lg-staff__lnk{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--lg-ink);padding:8px;border-radius:12px}
+.lg-staff__lnk:hover{background:var(--lg-sage-tint)}
+.lg-staff__avi{width:40px;height:40px;flex:none;border-radius:50%;background:var(--lg-sage);color:#fff;display:grid;place-items:center;font:700 15px/1 var(--lg-font-serif)}
+.lg-staff__name{font:600 15px/1.2 var(--lg-font-sans)}
+.lg-staff__role{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-sage-tint);color:var(--lg-sage-d);border-radius:5px;padding:3px 7px;margin-left:auto}
 @media(max-width:560px){.lg-idrow{flex-direction:column;text-align:center;align-items:center}}
 </style>
 </head>

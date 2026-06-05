@@ -219,19 +219,20 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
  * The about block — free text. Shared (profile + practice). Owner edits inline
  * (multiline); block-level pmp on profile_sections key='about'.
  */
-function looth_render_about_block(int $userId, string $role, string $headerVis): void
+function looth_render_about_block(int $userId, string $role, string $headerVis, string $loadKey = 'about', bool $editable = true): void
 {
-    $ab      = Block::loadAbout($userId);
+    $ab      = Block::loadAbout($userId, $loadKey);
     $text    = (string)$ab['text'];
     $isOwner = ($role === 'me');
+    $canEdit = $isOwner && $editable;
     if ($text === '' && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ab['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--about" data-block="about">';
     echo '<h3 class="lg-bh">About';
-    if ($isOwner) echo ' ' . looth_pmp_control('about', (string)$ab['vis'], $headerVis);
+    if ($canEdit) echo ' ' . looth_pmp_control('about', (string)$ab['vis'], $headerVis);
     echo '</h3>';
-    if ($isOwner) {
+    if ($canEdit) {
         $has = $text !== '';
         echo '<div class="lg-about lg-edit' . ($has ? '' : ' lg-edit--empty') . '"'
            . ' data-edit-field="text" data-edit-url="/profile-api/v0/me/about" data-edit-method="PATCH"'
@@ -982,7 +983,41 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
     $h = Block::loadPracticeHeader($practiceId);
     if ($h === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_practice_header_block($h, $role, $headerVis, $tierBadge);
-    // TODO(next): practice storefront blocks — same ceiling-capped shape.
+
+    // Storefront blocks render DISPLAY-ONLY for now: editable=false suppresses the
+    // owner-edit affordances (the practice save endpoints + builder land in WS0b),
+    // while visibility gating still honors the real viewer role. Each composable
+    // block loads from the OWNER's profile_sections under a practice-namespaced key.
+    $ownerId = Block::practiceOwnerId($practiceId);
+    if ($ownerId !== null) {
+        $renderers = [
+            'about' => static fn() => looth_render_about_block(
+                $ownerId, $role, $headerVis, Block::practiceBlockKey('about', $practiceId), false),
+            'staff' => static fn() => looth_render_practice_staff_block($practiceId, $role),
+        ];
+        foreach (Block::practiceLayout($practiceId) as $key) {
+            if (isset($renderers[$key])) ($renderers[$key])();
+        }
+    }
+}
+
+/** The practice staff roster — display-only list of attached members (owner first). */
+function looth_render_practice_staff_block(int $practiceId, string $role): void
+{
+    $members = \Looth\ProfileApp\Practice::members($practiceId);
+    if (!$members) return;
+    echo '<section class="block lg-block lg-block--staff" data-block="staff">';
+    echo '<h3 class="lg-bh">Staff</h3>';
+    echo '<ul class="lg-staff">';
+    foreach ($members as $m) {
+        $nm  = $m['display_name'] ?: 'Member';
+        echo '<li class="lg-staff__row"><a class="lg-staff__lnk" href="/u/' . looth_h((string)$m['slug']) . '">'
+           . '<span class="lg-staff__avi">' . looth_h(looth_initials($nm)) . '</span>'
+           . '<span class="lg-staff__name">' . looth_h($nm) . '</span>';
+        if (($m['role'] ?? '') === 'owner') echo '<span class="lg-staff__role">owner</span>';
+        echo '</a></li>';
+    }
+    echo '</ul></section>';
 }
 
 /** The practice-header (identity) block — name / type / tagline / location / website / owner avatar. */

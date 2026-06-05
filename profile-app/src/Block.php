@@ -729,10 +729,10 @@ final class Block
     public const ABOUT_KEY = 'about';
 
     /** Assemble the about block — free text + block vis (profile_sections key='about'). */
-    public static function loadAbout(int $userId): array
+    public static function loadAbout(int $userId, string $key = 'about'): array
     {
-        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'about'");
-        $s->execute([':u' => $userId]);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $text = '';
         if ($r) { $d = json_decode((string)$r['data'], true) ?: []; $text = (string)($d['text'] ?? ''); }
@@ -1290,6 +1290,25 @@ Accept: application/json
     private static function practiceHeaderKey(int $practiceId): string
     {
         return 'practice-header:' . $practiceId;
+    }
+
+    /**
+     * Storage key for a practice storefront block, living in the OWNER's
+     * profile_sections (same no-migration convention as practiceHeaderKey).
+     * e.g. 'about:p42'. Won't collide with profile keys or the freeform: prefix.
+     */
+    public static function practiceBlockKey(string $block, int $practiceId): string
+    {
+        return $block . ':p' . $practiceId;
+    }
+
+    /**
+     * The storefront block order for a practice page. No per-practice persistence
+     * yet (would need schema); fixed order for now. Reorder lands with the builder.
+     */
+    public static function practiceLayout(int $practiceId): array
+    {
+        return ['about', 'staff'];
     }
 
     /** The practice owner's profile-app user id (practices.created_by). */
