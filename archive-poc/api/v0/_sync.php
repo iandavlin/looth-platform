@@ -97,5 +97,32 @@ try {
     exit;
 }
 
+// --- Best-effort SQLite dual-write (SOAK WINDOW ONLY) -----------------------
+// Postgres above is the source of truth and is ALREADY committed. Mirror the
+// SAME decision into the legacy index.sqlite so an emergency read-revert stays
+// fresh. Driven off $result so both stores are content-only (a discussion makes
+// PG return action=delete, so SQLite deletes too — never indexes a discussion).
+// Wrapped in its own try/catch: ANY failure is logged and swallowed — it must
+// NEVER fail or block the _sync response (PG already succeeded).
+// RETIREMENT: delete this entire block — no other surgery, PG is unaffected.
+try {
+    $sqlite_action = $result['action'] ?? '';
+    if ($sqlite_action === 'upsert' || $sqlite_action === 'delete') {
+        $sqlite_path = realpath(__DIR__ . '/../../index.sqlite');
+        if ($sqlite_path) {
+            $sdb = new PDO('sqlite:' . $sqlite_path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            $sdb->exec('PRAGMA journal_mode = WAL');
+            $sdb->exec('PRAGMA busy_timeout = 3000');
+            if ($sqlite_action === 'delete') {
+                archive_poc_delete_post($sdb, $post_id);
+            } else {
+                archive_poc_index_post($sdb, $post_id);
+            }
+        }
+    }
+} catch (Throwable $e) {
+    error_log('archive-poc-sync: best-effort sqlite dual-write skipped (pg committed): ' . $e->getMessage());
+}
+
 http_response_code(200);
 echo json_encode(['ok' => true, 'post_id' => $post_id] + $result);
