@@ -169,6 +169,10 @@ if (is_array($wa) && in_array($wa['tier'] ?? '', ['public', 'lite', 'pro'], true
 $tier_rank     = ['public' => 0, 'lite' => 1, 'pro' => 2];
 $content_tiers = array_keys(array_filter($tier_rank, fn($r) => $r <= $tier_rank[$viewer_tier]));
 
+// -- Control sidebar: active filter selection (site-wide /hub/ only) --
+require_once __DIR__ . '/_hub-filters.php';
+$hub_filters = hub_filters_parse();
+
 // -- Resolve scope into forum_ids array (for header image query) --
 $scope_ids = null; // null = site-wide
 
@@ -290,6 +294,9 @@ if ($scoped_forum) {
     foreach ($content_tiers as $i => $tv) $tier_ph[] = ':ctier' . $i;
     $tier_in = $tier_ph ? implode(',', $tier_ph) : "''"; // never empty -> no rows
 
+    // Server-side AND filter (Type ∩ Category ∩ Author) on the union's output.
+    [$hub_where, $hub_binds] = hub_filter_where($hub_filters, $_forum_cat_map);
+
     $topic_sql = "
       SELECT * FROM (
         SELECT
@@ -374,11 +381,13 @@ if ($scoped_forum) {
           FROM discovery.content_item c
          WHERE c.tier IN ($tier_in)
       ) u
+      $hub_where
       $union_order_by
       LIMIT :fetch_size OFFSET :raw_offset
     ";
     $stmt = $db->prepare($topic_sql);
     foreach ($content_tiers as $i => $tv) $stmt->bindValue(':ctier' . $i, $tv);
+    foreach ($hub_binds as $k => $v) $stmt->bindValue($k, $v);
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
     $stmt->execute();
