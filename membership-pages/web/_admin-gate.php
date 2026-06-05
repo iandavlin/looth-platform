@@ -55,3 +55,24 @@ function lg_membership_admin_gate_or_exit(array $ctx): void
     exit;
 }
 }
+
+/**
+ * lg_membership_prelaunch_gate_or_exit — flag-aware gate for the Stripe purchase
+ * pages. Admin-only WHILE the `lgms_stripe_pages_live` toggle is off (Ian builds
+ * the Stripe op privately pre-launch); once he flips it on, this is a no-op and
+ * the page serves its real audience. Mirrors router.php's flag-aware decision so
+ * a page file smoke-tested in isolation behaves identically to a routed hit.
+ *
+ * Use this in the flippable purchase pages INSTEAD of the hard admin gate. Pages
+ * that must stay admin-only forever (e.g. test-checklist) keep the hard gate.
+ */
+if (!function_exists('lg_membership_prelaunch_gate_or_exit')) {
+function lg_membership_prelaunch_gate_or_exit(array $ctx): void
+{
+    if (function_exists('lg_membership_stripe_pages_live')
+        && lg_membership_stripe_pages_live()) {
+        return; // toggle on → pages are live to their real audience
+    }
+    lg_membership_admin_gate_or_exit($ctx); // pre-launch → admin-only stub
+}
+}

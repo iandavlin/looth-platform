@@ -143,6 +143,45 @@ function lg_membership_poller_db(): PDO {
 }
 }
 
+/* ---------- read-only WP-option reader (no WP boot) ---------- *
+ * Reads a single row from wp_options via the read-only WP-MySQL connection.
+ * Per-request static cache so repeated reads of the same option are free.
+ * Returns $default when the option is absent or the read fails (fail-safe:
+ * callers like the Stripe-pages live toggle default to the SAFE pre-launch
+ * state when the DB is unreachable).
+ */
+if (!function_exists('lg_membership_wp_option')) {
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    static $cache = [];
+    if (array_key_exists($name, $cache)) return $cache[$name];
+    try {
+        $stmt = lg_membership_db()->prepare(
+            'SELECT option_value FROM ' . LG_MEMBERSHIP_TABLE_PREFIX .
+            'options WHERE option_name = ? LIMIT 1'
+        );
+        $stmt->execute([$name]);
+        $val = $stmt->fetchColumn();
+        $cache[$name] = ($val === false) ? $default : (string) $val;
+    } catch (\Throwable $e) {
+        $cache[$name] = $default;
+    }
+    return $cache[$name];
+}
+}
+
+/* ---------- Stripe purchase-pages live toggle ---------- *
+ * Admin-flippable switch (wp_option `lgms_stripe_pages_live`, written from the
+ * poller's WP-admin settings page). OFF (default) = purchase pages stay
+ * admin-only while Ian builds the Stripe op pre-launch. ON = they serve their
+ * real public/member visibility. Fail-safe: any non-'1' value (incl. unset or
+ * DB error) keeps the pages locked down. See router.php.
+ */
+if (!function_exists('lg_membership_stripe_pages_live')) {
+function lg_membership_stripe_pages_live(): bool {
+    return lg_membership_wp_option('lgms_stripe_pages_live', '0') === '1';
+}
+}
+
 /* ---------- shared helpers ---------- */
 if (!function_exists('lg_membership_h')) {
 function lg_membership_h(string $s): string {
