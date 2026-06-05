@@ -214,6 +214,73 @@ function archive_poc__ts_iso(?int $ts): ?string {
     return ($ts === null || $ts <= 0) ? null : gmdate('c', $ts);
 }
 
+/**
+ * Derive forum_label/subforum_label for a CONTENT row from the hierarchical
+ * `shared_category` taxonomy (its top-level terms line up with the forums).
+ * Returns ['forum'=>?string, 'subforum'=>?string] of term DISPLAY NAMES:
+ *   top-level (parent=0) name → forum, leaf name → subforum (null if top-level
+ *   only). Picks the deepest/most-specific assigned term. Names are stored raw
+ *   (the hub reconciles forum<->content by slug+alias).
+ */
+function archive_poc_resolve_category(int $post_id): array {
+    global $wpdb;
+    // Whole shared_category tree (term_id => [name,parent]), cached per process
+    // so the bulk backfill loads it once. parent stores the parent term_id.
+    static $tree = null;
+    if ($tree === null) {
+        $tree = [];
+        $rows = $wpdb->get_results("
+            SELECT t.term_id, t.name, tt.parent
+            FROM {$wpdb->term_taxonomy} tt
+            JOIN {$wpdb->terms} t ON t.term_id = tt.term_id
+            WHERE tt.taxonomy = 'shared_category'
+        ", ARRAY_A);
+        foreach ($rows as $r) {
+            $tree[(int)$r['term_id']] = ['name' => $r['name'], 'parent' => (int)$r['parent']];
+        }
+    }
+
+    $assigned = $wpdb->get_col($wpdb->prepare("
+        SELECT t.term_id
+        FROM {$wpdb->term_relationships} tr
+        JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+        JOIN {$wpdb->terms} t           ON t.term_id          = tt.term_id
+        WHERE tr.object_id = %d AND tt.taxonomy = 'shared_category'
+    ", $post_id));
+    if (!$assigned) return ['forum' => null, 'subforum' => null];
+
+    $depth = function (int $tid) use ($tree): int {
+        $d = 0; $seen = [];
+        while (isset($tree[$tid]) && $tree[$tid]['parent'] > 0 && empty($seen[$tid])) {
+            $seen[$tid] = true; $tid = $tree[$tid]['parent']; $d++;
+        }
+        return $d;
+    };
+    // Deepest/most-specific assigned term.
+    $leaf = null; $best = -1;
+    foreach ($assigned as $tid) {
+        $tid = (int) $tid;
+        if (!isset($tree[$tid])) continue;
+        $d = $depth($tid);
+        if ($d > $best) { $best = $d; $leaf = $tid; }
+    }
+    if ($leaf === null) return ['forum' => null, 'subforum' => null];
+
+    // Walk leaf -> root.
+    $chain = []; $tid = $leaf; $seen = [];
+    while (isset($tree[$tid]) && empty($seen[$tid])) {
+        $seen[$tid] = true;
+        $chain[] = $tree[$tid]['name'];
+        $par = $tree[$tid]['parent'];
+        if ($par <= 0) break;
+        $tid = $par;
+    }
+    $dec = fn($n) => html_entity_decode((string) $n, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $forum    = $dec(end($chain));               // root name
+    $subforum = count($chain) > 1 ? $dec($chain[0]) : null;  // leaf name (if nested)
+    return ['forum' => $forum, 'subforum' => $subforum];
+}
+
 function archive_poc_upsert_person(PDO $db, int $user_id): void {
     $u = get_userdata($user_id);
     if (!$u) return;
@@ -352,6 +419,13 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
         if ($fslug !== '' && $tslug !== '') {
             $url = '/hub/' . $fslug . '/' . $tslug . '/';
         }
+    } else {
+        // Content rows: forum/subforum come from the hierarchical
+        // shared_category taxonomy (its parents line up with the forums). PG is
+        // content-only, so the discussion branch above never runs here.
+        $cat = archive_poc_resolve_category($post_id);
+        $forum_label    = $cat['forum'];
+        $subforum_label = $cat['subforum'];
     }
 
     $has_download = 0;
