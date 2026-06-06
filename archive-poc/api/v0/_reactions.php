@@ -70,7 +70,7 @@ function lg_card_reactions_for_items(PDO $pdo, array $items): array {
     foreach ($pairs as $p) { $ph[] = '(?::text, ?::bigint)'; $args[] = $p[0]; $args[] = $p[1]; }
     $st = $pdo->prepare(
         'SELECT post_type, item_id, slug, COUNT(*) AS c
-           FROM card_reactions
+           FROM discovery.card_reactions
           WHERE (post_type, item_id) IN (' . implode(',', $ph) . ')
           GROUP BY post_type, item_id, slug');
     $st->execute($args);
@@ -106,7 +106,7 @@ function lg_card_reactions_mine(PDO $pdo, array $items, ?int $wpId, ?string $uui
     foreach ($pairs as $p) { $ph[] = '(?::text, ?::bigint)'; $args[] = $p[0]; $args[] = $p[1]; }
     $args[] = $actor;
     $st = $pdo->prepare(
-        'SELECT post_type, item_id, slug FROM card_reactions
+        'SELECT post_type, item_id, slug FROM discovery.card_reactions
           WHERE (post_type, item_id) IN (' . implode(',', $ph) . ') AND actor_key = ?');
     $st->execute($args);
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -132,21 +132,21 @@ function lg_card_reactions_set(PDO $pdo, string $postType, int $itemId,
 
     $pdo->beginTransaction();
     try {
-        $cur = $pdo->prepare('SELECT slug FROM card_reactions
+        $cur = $pdo->prepare('SELECT slug FROM discovery.card_reactions
                               WHERE post_type=? AND item_id=? AND actor_key=?');
         $cur->execute([$postType, $itemId, $actor]);
         $existing = $cur->fetchColumn();
 
         if ($existing === $slug) {
             // same reaction → toggle off
-            $pdo->prepare('DELETE FROM card_reactions
+            $pdo->prepare('DELETE FROM discovery.card_reactions
                            WHERE post_type=? AND item_id=? AND actor_key=?')
                 ->execute([$postType, $itemId, $actor]);
             $mine = null;
         } else {
             // insert or switch — conflict target is the actor_key unique constraint
             $pdo->prepare(
-                'INSERT INTO card_reactions (post_type, item_id, user_wp_id, user_uuid, slug)
+                'INSERT INTO discovery.card_reactions (post_type, item_id, user_wp_id, user_uuid, slug)
                  VALUES (?,?,?,?::uuid,?)
                  ON CONFLICT (post_type, item_id, actor_key)
                  DO UPDATE SET slug = EXCLUDED.slug,
@@ -158,7 +158,7 @@ function lg_card_reactions_set(PDO $pdo, string $postType, int $itemId,
         }
 
         // Post-write counts for this card (one grouped read).
-        $cnt = $pdo->prepare('SELECT slug, COUNT(*) AS c FROM card_reactions
+        $cnt = $pdo->prepare('SELECT slug, COUNT(*) AS c FROM discovery.card_reactions
                               WHERE post_type=? AND item_id=? GROUP BY slug');
         $cnt->execute([$postType, $itemId]);
         $counts = [];
