@@ -216,6 +216,7 @@ $count = count($rows);
   .lgc-rx-palette{position:absolute;left:0;bottom:calc(100% + 6px);z-index:5;display:flex;gap:2px;
     padding:6px;background:#fff;border:1px solid #e4ddcd;border-radius:14px;
     box-shadow:0 6px 22px rgba(26,29,26,.14);}
+  .lgc-rx-palette[hidden]{display:none;}  /* hidden attr must win over display:flex (UA [hidden] loses to author rule) */
   .lgc-rx-opt{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;
     background:none;padding:6px;border-radius:10px;font-size:20px;line-height:1;transition:background .1s;}
   .lgc-rx-opt:hover{background:#f1eee4;}
