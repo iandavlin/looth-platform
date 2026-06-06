@@ -89,11 +89,12 @@ fprintf(STDERR, "[migrate-bb-reactions] %s: %d source 'activity' rows (joined to
 if (!$src) exit(0);
 
 // --- Resolve card targets authoritatively against OUR stores ------------------------
-$topicSids = []; $contentSids = [];
+$topicSids = []; $replySids = []; $contentSids = [];
 foreach ($src as $r) {
     $sid = (int) $r['sid'];
     if ($sid <= 0) continue;
     if ($r['atype'] === 'bbp_topic_create')      $topicSids[$sid]   = true;
+    elseif ($r['atype'] === 'bbp_reply_create')   $replySids[$sid]   = true;
     elseif (strpos((string) $r['atype'], 'new_blog_') === 0) $contentSids[$sid] = true;
 }
 $pgArr = static fn(array $ids) => '{' . implode(',', array_map('intval', array_keys($ids))) . '}';
@@ -104,6 +105,12 @@ if ($topicSids) {
     $st->execute([$pgArr($topicSids)]);
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) $validTopics[(int) $id] = true;
 }
+$validReplies = [];
+if ($replySids) {
+    $st = $pdo->prepare('SELECT id FROM forums.reply WHERE id = ANY(?::bigint[])');
+    $st->execute([$pgArr($replySids)]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) $validReplies[(int) $id] = true;
+}
 $contentCpt = [];   // content_item.id => cpt
 if ($contentSids) {
     $st = $pdo->prepare('SELECT id, cpt FROM discovery.content_item WHERE id = ANY(?::bigint[])');
@@ -112,6 +119,7 @@ if ($contentSids) {
 }
 fprintf(STDERR, "[migrate-bb-reactions] resolved targets: %d topics, %d content items\n",
         count($validTopics), count($contentCpt));
+fprintf(STDERR, "[migrate-bb-reactions] resolved targets: %d replies\n", count($validReplies));
 
 // --- User bridge (batch) ------------------------------------------------------------
 $wpIds = [];
@@ -136,6 +144,8 @@ foreach ($src as $r) {
     $sid = (int) $r['sid'];
     if ($r['atype'] === 'bbp_topic_create' && isset($validTopics[$sid])) {
         $pt = 'topic';
+    } elseif ($r['atype'] === 'bbp_reply_create' && isset($validReplies[$sid])) {
+        $pt = 'reply';
     } elseif (strpos((string) $r['atype'], 'new_blog_') === 0 && isset($contentCpt[$sid])) {
         $pt = $contentCpt[$sid];
     } else { $noCard++; continue; }

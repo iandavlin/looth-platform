@@ -46,7 +46,7 @@ function lg_kr_json($payload, int $code = 200): void {
 // Whitelist the surfaceable post types (managed CPTs + bbPress topics) — same set
 // as the standalone like.php door, since a like is now one of these reactions.
 const LG_CARD_REACT_TYPES = ['post-imgcap','post-type-videos','sponsor-post','loothprint',
-                             'loothcuts','useful_links','member-benefit','topic'];
+                             'loothcuts','useful_links','member-benefit','topic','reply'];
 
 /** Parse ?items=pt:id,pt:id into [['post_type'=>,'item_id'=>], …] (whitelisted). */
 function lg_kr_parse_items(string $csv): array {
