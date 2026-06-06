@@ -24,6 +24,7 @@ $rs = $db->prepare("
     SELECT r.id AS reply_id, r.parent_reply_id,
            COALESCE(r.author_name, 'Anonymous') AS author_name,
            p.slug AS author_slug,
+           p.avatar_url AS avatar_url,
            LEFT(r.content_text, 200) AS excerpt,
            r.content_html,
            r.created_at,

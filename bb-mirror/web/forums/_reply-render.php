@@ -257,7 +257,7 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $rid_attr    = isset($r['reply_id']) ? ' data-reply-id="' . (int)$r['reply_id'] . '"' : '';
         echo '<div class="' . $classes . '"' . $rid_attr . '>';
         echo '<div class="reply-stub__head">';
-        echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28);
+        echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28, $r['avatar_url'] ?? null);
         if ($rslug) {
             echo '<a class="reply-stub__author" href="/u/' . rawurlencode((string)$rslug) . '">' . $ra . '</a>';
         } else {
