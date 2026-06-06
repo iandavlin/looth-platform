@@ -129,12 +129,24 @@ final class Block
      * falls back to "Untitled section"). LAYOUT_BLOCKS keys come first in
      * canonical order, then freeform entries.
      */
+    /**
+     * Profile block keys deferred past launch (config-driven). Hidden from the
+     * builder palette AND skipped at render. Empty unless the launch flag is set.
+     */
+    public static function launchHiddenBlocks(): array
+    {
+        return defined('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS')
+            ? (array) LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS
+            : [];
+    }
+
     public static function availableBlocks(int $userId): array
     {
         $present = array_flip(self::profileLayout($userId));
+        $hidden  = array_flip(self::launchHiddenBlocks());
         $out = [];
         foreach (self::LAYOUT_BLOCKS as $k => $cfg) {
-            if (!isset($present[$k])) $out[$k] = (string)$cfg['label'];
+            if (!isset($present[$k]) && !isset($hidden[$k])) $out[$k] = (string)$cfg['label'];
         }
         foreach (self::listFreeformKeys($userId) as $k => $title) {
             if (!isset($present[$k])) {

@@ -532,7 +532,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
       </div>
       <p class="lg-caddy__hint">Drag a section into your profile — or tap to add. Sections marked <b>Filterable</b> tag you with site taxonomy so members can find you in search.</p>
       <div class="lg-caddy__list" id="lg-caddy-list">
-        <?php foreach ($paletteGroups as $grp => $keys): ?>
+        <?php foreach ($paletteGroups as $grp => $keys):
+              $keys = array_values(array_diff($keys, Block::launchHiddenBlocks()));
+              if (!$keys) continue;
+        ?>
           <h3 class="lg-caddy__grp"><?= looth_h($grp) ?></h3>
           <div class="lg-bubbles">
             <?php foreach ($keys as $key):
@@ -586,8 +589,8 @@ window.addEventListener('load', function () {
     if (isNaN(lat) || isNaN(lng)) return;
     var exact = el.getAttribute('data-kind') === 'exact';
     var zoom  = parseInt(el.getAttribute('data-zoom'), 10) || (exact ? 15 : 11);
-    var map = L.map(el, { zoomControl: false, scrollWheelZoom: false, dragging: false,
-      doubleClickZoom: false, boxZoom: false, keyboard: false }).setView([lat, lng], zoom);
+    var map = L.map(el, { zoomControl: true, scrollWheelZoom: true, dragging: true,
+      doubleClickZoom: true, boxZoom: true, keyboard: true, touchZoom: true }).setView([lat, lng], zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
     if (exact) { L.marker([lat, lng]).addTo(map); }
@@ -618,7 +621,7 @@ window.addEventListener('load', function () {
       return d.innerHTML;
     };
 
-    var map = L.map(el, { scrollWheelZoom: false }).setView([pins[0].lat, pins[0].lng], 11);
+    var map = L.map(el, { scrollWheelZoom: true }).setView([pins[0].lat, pins[0].lng], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
 

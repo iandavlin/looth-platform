@@ -97,7 +97,7 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     // is opened or created from here. The Pro-gate + Patreon upsell for non-Pro
     // members lands in WS1/WS2; for now any owner sees it (server-side create is
     // still ungated until WS1).
-    if ($role === 'me') {
+    if ($role === 'me' && (!defined('LG_PROFILE_APP_LAUNCH_SHOW_BUSINESS') || LG_PROFILE_APP_LAUNCH_SHOW_BUSINESS)) {
         $lgBiz  = \Looth\ProfileApp\Practice::forUser($userId);
         $lgMine = null;
         foreach ($lgBiz as $lgB) {
@@ -137,7 +137,9 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
         'connect'     => static fn() => looth_render_connect_block($userId, $role, $headerVis, $viewerUserId),
         'socials'     => static fn() => looth_render_socials_block($userId, $role, $headerVis),
     ];
+    $hiddenBlocks = array_flip(Block::launchHiddenBlocks());
     foreach (Block::profileLayout($userId) as $key) {
+        if (isset($hiddenBlocks[$key])) continue;                 // launch-deferred block
         if (isset($renderers[$key])) {
             ($renderers[$key])();
         } elseif (Block::isFreeformKey($key)) {
@@ -728,7 +730,8 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
     }
 
     // Owner-set extras render whenever this viewer can see the location at all.
-    if ($disp !== null) {
+    // Launch-deferred (Pro feature): hidden unless the launch flag is set.
+    if ($disp !== null && defined('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS') && LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS) {
         if ($exA !== '') echo '<div class="lg-loc__addr">' . looth_h($exA) . '</div>';
         if ($exH !== '') echo '<div class="lg-loc__hours">' . looth_h($exH) . '</div>';
         if ($exN !== '') echo '<div class="lg-loc__note">' . nl2br(looth_h($exN)) . '</div>';
@@ -749,12 +752,14 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
                . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Public sees</span> '
                . looth_prec_control('public', (string)$loc['public_precision']) . '</span>'
                . '</div>';
+            if (defined('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS') && LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS) {
             echo '<div class="lg-loc__details" id="lg-loc-details">'
                . '<input type="text" class="lg-loc__f" data-f="address" placeholder="Address / suite / details (optional)" value="' . looth_h($exA) . '">'
                . '<input type="text" class="lg-loc__f" data-f="hours" placeholder="Hours (e.g. Mon–Fri 9–5)" value="' . looth_h($exH) . '">'
                . '<textarea class="lg-loc__f lg-loc__note-in" data-f="note" rows="2" placeholder="Note (optional)">' . looth_h($exN) . '</textarea>'
                . '<button type="button" class="lg-link__add lg-loc__details-save">Save details</button>'
                . '</div>';
+            }
         }
     }
 

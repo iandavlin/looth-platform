@@ -63,6 +63,24 @@ if ($env === 'live') {
     define('LG_PROFILE_APP_MYSQL_BILLING_DB', 'lg_membership');
 }
 
+// ── Launch gating ──────────────────────────────────────────────────
+// Profile blocks deferred past the initial launch: hidden from the builder
+// palette AND skipped at render (existing placements won't show). Re-enable by
+// removing the key. Services moves to the business (practice) page post-launch.
+if (!defined('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS')) {
+    define('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS', ['services']);
+}
+// Owner "Business" entry pill (the /p/ storefront affordance) — deferred until
+// the business page ships. Flip to true to restore it under the profile header.
+if (!defined('LG_PROFILE_APP_LAUNCH_SHOW_BUSINESS')) {
+    define('LG_PROFILE_APP_LAUNCH_SHOW_BUSINESS', false);
+}
+// Location address/hours/note extras — deferred to a post-launch Pro feature.
+// Hidden in BOTH the visitor display and the owner editor. Flip true to restore.
+if (!defined('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS')) {
+    define('LG_PROFILE_APP_LAUNCH_SHOW_LOCATION_DETAILS', false);
+}
+
 // Canonical, env-correct site logo. Passed to the shared header/footer
 // (per the site-header.php contract) as an absolute URL so it resolves from
 // preview/sibling hosts too, not just the canonical origin.
