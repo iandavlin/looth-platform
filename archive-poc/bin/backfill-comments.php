@@ -64,6 +64,19 @@ if ($ALL) {
          ORDER BY COUNT(*) DESC, c.comment_post_ID ASC
          LIMIT %d", ...array_merge($types, [$FIXTURE_POSTS])));
     if (!$topPosts) { fwrite(STDERR, "no content comments found\n"); exit(0); }
+    // Guarantee every covered type is represented in the dev fixture: add the single
+    // most-discussed item of each type, so widened types (e.g. loothcuts/useful_links/
+    // member-benefit) are testable even when they don't crack the global top-N.
+    foreach ($types as $t) {
+        $rep = $wpdb->get_var($wpdb->prepare(
+            "SELECT c.comment_post_ID
+             FROM {$wpdb->comments} c JOIN {$wpdb->posts} p ON p.ID = c.comment_post_ID
+             WHERE c.comment_approved='1' AND p.post_type=%s
+             GROUP BY c.comment_post_ID
+             ORDER BY COUNT(*) DESC, c.comment_post_ID ASC LIMIT 1", $t));
+        if ($rep) $topPosts[] = (int) $rep;
+    }
+    $topPosts = array_values(array_unique(array_map('intval', $topPosts)));
     $postPh = implode(',', array_fill(0, count($topPosts), '%d'));
     $sql = $wpdb->prepare(
         "SELECT c.comment_ID, c.comment_post_ID, c.comment_parent, c.user_id,

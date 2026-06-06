@@ -38,6 +38,7 @@ if (!defined('LG_COMMENTS_TYPES')) {
     define('LG_COMMENTS_TYPES', [
         'loothprint', 'post-type-videos', 'post-imgcap', 'post',
         'shorty', 'coe-questions', 'ajde_events',
+        'loothcuts', 'useful_links', 'member-benefit',  // widened 2026-06-06 (Ian): types that also carry comments
     ]);
 }
 
