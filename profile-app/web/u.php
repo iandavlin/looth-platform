@@ -216,6 +216,14 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-caddy.is-open{transform:none}
 .lg-caddy__backdrop{position:fixed;inset:0;background:rgba(20,22,18,.34);z-index:1190;opacity:0;transition:opacity .22s}
 .lg-caddy__backdrop.is-open{opacity:1}
+.lg-lm-backdrop{position:fixed;inset:0;background:rgba(20,22,18,.42);z-index:1200;display:flex;align-items:center;justify-content:center;padding:18px;opacity:0;transition:opacity .2s}
+.lg-lm-backdrop.is-open{opacity:1}
+.lg-lm-backdrop[hidden]{display:none}
+.lg-lm{background:#fff;border:1px solid var(--lg-line);border-radius:16px;max-width:440px;width:100%;max-height:82vh;overflow:auto;box-shadow:0 14px 44px rgba(0,0,0,.2)}
+.lg-lm__head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 12px;border-bottom:1px solid var(--lg-line);font-family:var(--lg-font-serif);font-size:17px}
+.lg-lm__close{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--lg-mute)}
+.lg-lm__hint{margin:10px 16px 0;font-size:12px;color:var(--lg-mute)}
+.lg-lm .lg-links--edit{padding:12px 16px 16px}
 .lg-caddy__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .lg-caddy__head strong{font:800 16px/1 var(--lg-font-serif);color:var(--lg-charcoal)}
 .lg-caddy__close{border:0;background:none;font-size:24px;line-height:1;color:var(--lg-mute);cursor:pointer}
@@ -577,6 +585,21 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 
 <?php if ($isOwner): ?>
   <div class="lg-caddy__backdrop" id="lg-caddy-backdrop" hidden></div>
+  <?php
+    $socM     = Block::loadSocials($subjectId);
+    $orderedM = is_array($socM) ? ($socM['fields']['ordered'] ?? []) : [];
+  ?>
+  <div class="lg-lm-backdrop" id="lg-links-modal" hidden>
+    <div class="lg-lm" role="dialog" aria-modal="true" aria-label="Edit links">
+      <div class="lg-lm__head"><strong>Edit links</strong>
+        <button type="button" class="lg-lm__close" id="lg-links-modal-close" aria-label="Close">&times;</button></div>
+      <p class="lg-lm__hint">These appear as icons in your profile header. Drag to reorder.</p>
+      <div class="lg-links lg-links--edit" id="lg-links-edit">
+        <?php foreach ($orderedM as $l) { $u = (string)($l['url'] ?? ''); if ($u !== '') echo looth_link_row((string)($l['kind'] ?? ''), $u); } ?>
+        <button type="button" class="lg-link__add" id="lg-link-add">+ Add link</button>
+      </div>
+    </div>
+  </div>
 <?php endif; ?>
 
 <?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
@@ -1806,23 +1829,20 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
       .catch(function () { rmBtn.disabled = false; alert('Network error.'); });
   });
 })();
-/* Header links rail — owner pencil scrolls to the socials block (the canonical
-   inline editor). If the socials block isn't on the user's layout yet, the
-   handler does nothing visible; the owner can add it from the caddy. */
+/* Header links rail — owner pencil opens the Edit-links modal. Links live in the
+   header now (no standalone socials block); the editor markup is inside
+   #lg-links-modal and is wired by the links-editor IIFE above. */
 (function () {
-  var btn = document.querySelector('.lg-hlinks__edit[data-hlinks-edit]');
-  if (!btn) return;
-  btn.addEventListener('click', function () {
-    var target = document.querySelector('.lg-block--socials');
-    if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    // Briefly highlight the dest so the user sees where they landed.
-    target.classList.add('lg-flash');
-    setTimeout(function () { target.classList.remove('lg-flash'); }, 1400);
-    // Focus the add-link button if it's there (saves a click for the common case).
-    var add = target.querySelector('#lg-link-add');
-    if (add) setTimeout(function () { add.focus({ preventScroll: true }); }, 420);
-  });
+  var btn   = document.querySelector('.lg-hlinks__edit[data-hlinks-edit]');
+  var modal = document.getElementById('lg-links-modal');
+  if (!btn || !modal) return;
+  var closeBtn = document.getElementById('lg-links-modal-close');
+  function open()  { modal.hidden = false; requestAnimationFrame(function () { modal.classList.add('is-open'); }); }
+  function close() { modal.classList.remove('is-open'); setTimeout(function () { modal.hidden = true; }, 200); }
+  btn.addEventListener('click', open);
+  closeBtn && closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) close(); });
 })();
 /* Banner image (owner) — POST multipart on set / replace, DELETE on remove.
    Max 8 MB. Same jpeg/png/webp validation as avatar (server re-checks too). */

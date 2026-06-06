@@ -66,9 +66,10 @@ if ($env === 'live') {
 // ── Launch gating ──────────────────────────────────────────────────
 // Profile blocks deferred past the initial launch: hidden from the builder
 // palette AND skipped at render (existing placements won't show). Re-enable by
-// removing the key. Services moves to the business (practice) page post-launch.
+// removing the key. 'services' -> business (practice) page; 'socials' -> links now
+// live in the profile header + an Edit-links modal, so no standalone Links section.
 if (!defined('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS')) {
-    define('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS', ['services']);
+    define('LG_PROFILE_APP_LAUNCH_HIDDEN_BLOCKS', ['services', 'socials']);
 }
 // Owner "Business" entry pill (the /p/ storefront affordance) — deferred until
 // the business page ships. Flip to true to restore it under the profile header.
