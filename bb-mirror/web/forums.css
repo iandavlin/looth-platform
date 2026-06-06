@@ -1439,12 +1439,9 @@ body.nav-open .nav-overlay { display: block; }
 /* Base card — styled to match archive-poc .dcard aesthetic */
 .feed-card {
   min-width: 0;                /* allow the grid item to shrink; text wraps, no overflow */
-  background: var(--bg-card);  /* match the forum search-bar header */
-  border: 1px solid var(--lg-line);
-  border-radius: 8px;
-  padding: var(--s4);
-  border-left: 6px solid transparent;   /* category colour rail — thicker for contrast */
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  /* Visual chrome (bg/border/radius/padding/category rail) moved to the ≥641
+     desktop block (mobile/desktop split) so forums.css never styles mobile cards;
+     Buck's mobile-hub.css owns the mobile card chrome. */
 }
 /* Long titles / unbreakable tokens (@handles, URLs) wrap rather than force width */
 .feed-card__title,
@@ -2735,7 +2732,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 .feed-card[data-cat="tools"],
 .feed-card[data-cat="general"]  { --ca:#323532; --cb:#586b3f; }  /* charcoal */
 
-.feed-card--topic      { border-left: 5px solid var(--cb); }
+@media (min-width:641px){ .feed-card--topic { border-left: 5px solid var(--cb); } }
 .feed-card__ctx-parent { color: var(--ca); font-weight: 800; }
 .feed-card__ctx-sep,
 .feed-card__ctx-forum  { color: var(--lg-mute); }
@@ -2813,9 +2810,9 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
    a subtle left rail so folded content reads distinct from forum threads. */
 /* Content (CPT) cards: callout accent on the BOTTOM (not the left rail), and a
    media layout — featured image LEFT, large caption RIGHT. */
-.feed-card--content { border-bottom: 3px solid var(--lg-sage, #87986a); }
+@media (min-width:641px){ .feed-card--content { border-bottom: 3px solid var(--lg-sage, #87986a); } }
 .feed-card--content .feed-card__header { gap: var(--s4); align-items: flex-start; }
-.feed-card--content .feed-card__cover { order: -1; width: 300px; }
+@media (min-width:641px){ .feed-card--content .feed-card__cover { order: -1; width: 300px; } }
 .feed-card--content .feed-card__title { font-size: 21px; line-height: 1.25; }
 @media (max-width: 640px) {
   .feed-card--content .feed-card__cover { order: 0; width: 100%; }
@@ -2847,13 +2844,16 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-page .feed-card[data-cat="perspective"] { --sec: var(--cat-perspective); }
 .feed-page .feed-card[data-cat="vintage"]     { --sec: var(--cat-vintage); }
 
-.feed-page .feed-card--topic[data-cat]   { border-left: 5px solid var(--sec, var(--cb)); }
-.feed-page .feed-card--content[data-cat] {
-  border-left: 1px solid var(--lguser-line, #cdd6ba);   /* drop the side rail */
-  border-bottom: 3px solid var(--sec, var(--lg-sage));  /* section color on the bottom */
+/* Colored card rails are DESKTOP-only (≥641) — mobile card chrome is Buck's. */
+@media (min-width:641px){
+  .feed-page .feed-card--topic[data-cat]   { border-left: 5px solid var(--sec, var(--cb)); }
+  .feed-page .feed-card--content[data-cat] {
+    border-left: 1px solid var(--lguser-line, #cdd6ba);   /* drop the side rail */
+    border-bottom: 3px solid var(--sec, var(--lg-sage));  /* section color on the bottom */
+  }
+  /* CPT cover: always 16:9 cover (beats the .feed-page 3/2 default) */
+  .feed-page .feed-card--content .feed-card__cover-img { aspect-ratio: 16 / 9; max-height: none; }
 }
-/* CPT cover: always 16:9 cover (beats the .feed-page 3/2 default) */
-.feed-page .feed-card--content .feed-card__cover-img { aspect-ratio: 16 / 9; max-height: none; }
 
 /* Tier chip on content cards (access level) */
 .feed-card__tier-chip { display: inline-block; margin-left: 5px; font: 700 9px/1.4 var(--lg-font-sans);
@@ -3316,6 +3316,10 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
    ════════════════════════════════════════════════════════════════════════ */
 @media (min-width:641px){
   .feed-page .feed-card{
+    /* card chrome — desktop only (moved off the base rule for the split) */
+    background:var(--bg-card); border:1px solid var(--lg-line); border-radius:8px;
+    padding:var(--s4); border-left:6px solid transparent;
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     display:grid;
     grid-template-columns:44px minmax(0,1fr) auto;
     grid-template-areas:
