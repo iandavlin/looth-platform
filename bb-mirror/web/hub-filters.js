@@ -124,18 +124,20 @@
   acc.addEventListener('click', function (e) {
     var chev = e.target.closest('.hub-acc__chev');
     if (!chev || chev.classList.contains('hub-acc__chev--none')) return;
+    // The rail renders native <details class="hub-acc">; intercept the chevron
+    // so the parent NAME stays a filter link, and drive the native `open`
+    // attribute ourselves (CSS + browser key off [open], not a class).
     e.preventDefault();
     var item = chev.closest('.hub-acc');
-    var willOpen = !item.classList.contains('is-open');
-    acc.querySelectorAll('.hub-acc.is-open').forEach(function (o) {
-      o.classList.remove('is-open');
-      var b = o.querySelector('.hub-acc__leaves'); if (b) b.hidden = true;
+    if (!item) return;
+    var willOpen = !item.open;
+    // single-open: collapse any other open parent
+    acc.querySelectorAll('details.hub-acc[open]').forEach(function (o) {
+      if (o === item) return;
+      o.open = false;
       var c = o.querySelector('.hub-acc__chev'); if (c) c.setAttribute('aria-expanded', 'false');
     });
-    if (willOpen) {
-      item.classList.add('is-open');
-      var box = item.querySelector('.hub-acc__leaves'); if (box) box.hidden = false;
-      chev.setAttribute('aria-expanded', 'true');
-    }
+    item.open = willOpen;
+    chev.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
   });
 })();
