@@ -3347,19 +3347,36 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
   .feed-page .fc-replies { grid-area:replies; min-width:0; }
 }
 
-/* ── Themed hover affordances (Ian) — subtle. Reply buttons: soft DROP SHADOW on
-   light/panel, brand-sage GLOW on dark/black. Cards: subtle sage glow on dark/
-   black (desktop ≥641 — mobile card look is Buck's mobile-hub.css). All on hover. */
+/* ── Themed affordances (Ian) — subtle, present at REST (before hover) with a
+   gentle bump on hover. Reply buttons: soft DROP SHADOW on light/panel, brand-sage
+   GLOW on dark/black. Cards: subtle sage glow on dark/black hover (desktop ≥641 —
+   mobile card look is Buck's mobile-hub.css). Glow adapts via color-mix(--accent). */
+.feed-card__reply-cta, .reply-stub__reply {
+  transition: color .12s, background .12s, border-color .12s, box-shadow .15s ease;
+}
+/* Resting (before hover) */
+html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta,
+html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply {
+  box-shadow: 0 1px 4px rgba(26, 29, 26, .16);
+}
+html.hub-theme-dark  .feed-card__reply-cta,
+html.hub-theme-black .feed-card__reply-cta,
+html.hub-theme-dark  .reply-stub__reply,
+html.hub-theme-black .reply-stub__reply {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #7c9a52) 42%, transparent);
+}
+/* Hover bump */
 html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta:hover,
 html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply:hover {
-  box-shadow: 0 2px 7px rgba(26, 29, 26, .20);
+  box-shadow: 0 3px 9px rgba(26, 29, 26, .24);
 }
 html.hub-theme-dark  .feed-card__reply-cta:hover,
 html.hub-theme-black .feed-card__reply-cta:hover,
 html.hub-theme-dark  .reply-stub__reply:hover,
 html.hub-theme-black .reply-stub__reply:hover {
-  box-shadow: 0 0 11px color-mix(in srgb, var(--accent, #7c9a52) 60%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #7c9a52) 68%, transparent);
 }
+/* Cards — subtle sage glow on dark/black hover (desktop ≥641) */
 @media (min-width: 641px) {
   html.hub-theme-dark  .feed-page .feed-card:hover,
   html.hub-theme-black .feed-page .feed-card:hover {
