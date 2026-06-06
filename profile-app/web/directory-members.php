@@ -286,6 +286,15 @@ function renderResults(items, append) {
       if (!href) return '';
       return `<a class="dir-link" href="${escH(href)}" target="_blank" rel="noopener noreferrer" title="${escH(l.kind)}" aria-label="${escH(l.kind)}">${SOC_ICONS[l.kind] || SOC_ICONS._fb}</a>`;
     }).join('');
+    // Connect button (logged-in viewers only; API omits it.connect for anon).
+    const cx = it.connect || null;
+    let connectBtn = '';
+    if (cx && cx.state !== 'self' && cx.state !== 'blocked') {
+      const LBL = {none:'Connect', pending_out:'Requested', pending_in:'Accept', accepted:'Connected'};
+      const act = cx.state === 'none' ? 'request' : (cx.state === 'pending_in' ? 'accept' : '');
+      const dis = (cx.state === 'pending_out' || cx.state === 'accepted') ? ' disabled' : '';
+      connectBtn = `<button type="button" class="dir-connect dir-connect--${cx.state}" data-act="${act}" data-uuid="${escH(it.uuid||'')}" data-cid="${cx.id||''}"${dis}>${LBL[cx.state]||'Connect'}</button>`;
+    }
     return `
     <div class="dir-card">
       <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
@@ -298,11 +307,59 @@ function renderResults(items, append) {
         </div>
         ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(h.name)}</span>`).join('')}</div>`:''}
       </a>
-      ${links?`<div class="dir-links">${links}</div>`:''}
+      <div class="dir-card__foot">
+        ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
+        ${connectBtn}
+      </div>
     </div>`;
   }).join('');
   if (append) wrap.insertAdjacentHTML('beforeend', html);
   else wrap.innerHTML = html || '<div class="dir-empty">no members match. try widening filters.</div>';
+}
+
+// Connect button styling (brand tokens; injected once, scoped to .dir-connect).
+(function () {
+  if (document.getElementById('dir-connect-css')) return;
+  var s = document.createElement('style');
+  s.id = 'dir-connect-css';
+  s.textContent =
+    '.dir-card__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px 12px}' +
+    '.dir-connect{border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;' +
+    'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:8px 15px;cursor:pointer;flex:0 0 auto}' +
+    '.dir-connect--pending_out,.dir-connect--accepted{background:#fff;color:var(--lg-sage-d,#6b7c52)}' +
+    '.dir-connect--pending_in{background:var(--lg-amber,#ecb351);border-color:var(--lg-amber,#ecb351);color:#1a1d1a}' +
+    '.dir-connect[disabled]{opacity:.7;cursor:default}';
+  document.head.appendChild(s);
+})();
+
+// Fire the connect action against the existing connections endpoints, optimistic.
+async function dirHandleConnect(btn) {
+  const act = btn.dataset.act;
+  if (!act || btn.disabled) return;
+  btn.disabled = true;
+  try {
+    let res;
+    if (act === 'request') {
+      res = await fetch('/profile-api/v0/connections', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addressee_uuid: btn.dataset.uuid })
+      });
+    } else if (act === 'accept') {
+      res = await fetch('/profile-api/v0/connections/' + btn.dataset.cid, {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'accept' })
+      });
+    }
+    if (res && res.ok) {
+      if (act === 'request') { btn.textContent = 'Requested'; btn.className = 'dir-connect dir-connect--pending_out'; }
+      else { btn.textContent = 'Connected'; btn.className = 'dir-connect dir-connect--accepted'; }
+      btn.dataset.act = '';
+    } else {
+      btn.disabled = false;   // let the user retry on failure
+    }
+  } catch (_) { btn.disabled = false; }
 }
 
 // A member card: first left-click zooms the map to that member's pin; clicking the
@@ -328,6 +385,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const wrap = document.getElementById('dir-results');
   if (!wrap) return;
   wrap.addEventListener('click', (e) => {
+    const cbtn = e.target.closest('.dir-connect');
+    if (cbtn) { e.preventDefault(); e.stopPropagation(); dirHandleConnect(cbtn); return; }
     const main = e.target.closest('.dir-card__main');
     if (!main) return;   // social-link icons live outside .dir-card__main -> open normally
     // Let ctrl/cmd/shift/alt/middle-click open the profile in a new tab as usual.

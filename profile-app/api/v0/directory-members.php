@@ -343,6 +343,38 @@ if ($rows) {
     }
 }
 
+// Viewer-relative connection state per member, for the directory Connect buttons.
+// Logged-in only: anon viewers get NO connect field (so no button renders). One
+// batched query over the symmetric connections table; own card => 'self'.
+$viewerUuid = $viewer['uuid'] ?? null;
+if ($viewerUuid && $results) {
+    $otherUuids = array_values(array_filter(array_map(static fn($x) => $x['uuid'], $results)));
+    $stateByUuid = [];
+    if ($otherUuids) {
+        $ph = implode(',', array_fill(0, count($otherUuids), '?'));
+        $cq = $pg->prepare(
+            "SELECT id, requester_uuid, addressee_uuid, status
+               FROM connections
+              WHERE (requester_uuid = ? AND addressee_uuid IN ($ph))
+                 OR (addressee_uuid = ? AND requester_uuid IN ($ph))"
+        );
+        $cq->execute(array_merge([$viewerUuid], $otherUuids, [$viewerUuid], $otherUuids));
+        while ($e = $cq->fetch()) {
+            $other = $e['requester_uuid'] === $viewerUuid ? $e['addressee_uuid'] : $e['requester_uuid'];
+            if ($e['status'] === 'accepted')    $stt = 'accepted';
+            elseif ($e['status'] === 'blocked') $stt = 'blocked';
+            else $stt = $e['requester_uuid'] === $viewerUuid ? 'pending_out' : 'pending_in';
+            $stateByUuid[$other] = ['state' => $stt, 'id' => (int) $e['id']];
+        }
+    }
+    foreach ($results as &$it) {
+        $it['connect'] = ($it['uuid'] === $viewerUuid)
+            ? ['state' => 'self', 'id' => null]
+            : ($stateByUuid[$it['uuid']] ?? ['state' => 'none', 'id' => null]);
+    }
+    unset($it);
+}
+
 profile_app_json(200, [
     'total'     => $total,
     'page'      => $page,
