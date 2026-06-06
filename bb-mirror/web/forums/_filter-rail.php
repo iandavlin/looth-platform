@@ -55,6 +55,14 @@ function hub_toggle(array $filters, string $facet, string $val): array
     return $filters;
 }
 
+/** A /hub/ URL that clears ALL filters AND the sticky mute cookie. */
+function hub_reset_url(string $sort = 'new'): string
+{
+    $base = hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort);
+    $sep  = strpos($base, '?') !== false ? '&amp;' : '?';
+    return $base . $sep . 'mute_reset=1';
+}
+
 /** A /hub/ URL that flips a sticky mute, preserving current filters + sort. */
 function hub_mute_url(array $filters, string $sort, string $facet, string $key): string
 {
@@ -86,21 +94,20 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
 function hub_render_view_toggles(): void
 {
     ?>
-    <button class="feed-compact-toggle" type="button" aria-pressed="false"
-            title="Toggle compact view" aria-label="Toggle compact view">
-      <span class="feed-compact-toggle__icon" aria-hidden="true">&#9636;</span>
-      <span class="feed-compact-toggle__label">Compact</span>
-    </button>
-    <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
-            title="Cycle text size" aria-label="Cycle text size">
-      <span class="feed-text-toggle__icon" aria-hidden="true">A</span>
-      <span class="feed-text-toggle__label">Text size</span>
-    </button>
-    <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
-            title="Cycle color theme" aria-label="Cycle color theme">
-      <span class="feed-theme-toggle__icon" aria-hidden="true">&#9681;</span>
-      <span class="feed-theme-toggle__label">Theme</span>
-    </button>
+    <div class="feed-view-toggles">
+      <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
+              title="Cycle text size" aria-label="Cycle text size">
+        <span class="feed-text-toggle__icon" aria-hidden="true">T</span>
+      </button>
+      <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
+              title="Cycle color theme" aria-label="Cycle color theme">
+        <span class="feed-theme-toggle__icon" aria-hidden="true">C</span>
+      </button>
+      <button class="feed-compact-toggle" type="button" aria-pressed="false"
+              title="Toggle compact view" aria-label="Toggle compact view">
+        <span class="feed-compact-toggle__icon" aria-hidden="true">Cpt</span>
+      </button>
+    </div>
     <?php
 }
 
@@ -109,7 +116,12 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
 {
     $has    = !empty($p['leaves']);
     $on     = in_array($p['key'], $filters['cats'] ?? [], true);
-    $is_mut = in_array($p['key'], $muted['cats'] ?? [], true);
+    // A category reads as "muted" when ALL its leaves are muted (cascade model);
+    // a leafless content-only category falls back to its own cat-mute token.
+    $leaf_keys = array_column($p['leaves'], 'key');
+    $is_mut = $leaf_keys
+        ? !array_diff($leaf_keys, $muted['leaves'] ?? [])
+        : in_array($p['key'], $muted['cats'] ?? [], true);
     // Open the accordion if a leaf under it is selected or muted.
     $open = false;
     foreach ($p['leaves'] as $lf) {
@@ -161,7 +173,8 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
     foreach (array_keys($types) as $k) if (!in_array($k, $type_order, true)) $type_order[] = $k;
 
     $any_active = !empty($filters['types']) || !empty($filters['cats']) || !empty($filters['leaves'])
-               || !empty($filters['authors']) || !empty($filters['q']);
+               || !empty($filters['authors']) || !empty($filters['q'])
+               || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
     // Single-open top-level accordion: open the section that has an active
     // selection; default to Categories (the primary nav) when neither does.
@@ -170,7 +183,7 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
     ?>
     <div class="hub-rail">
       <?php if ($any_active): ?>
-        <a class="hub-rail__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">&times; Reset all filters</a>
+        <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
       <details class="hub-rail__sec" name="hub-rail-sec" data-sec="type"<?= $open_sec === 'type' ? ' open' : '' ?>>
@@ -194,8 +207,6 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         </div>
       </details>
 
-      <h4 class="hub-rail__h">View</h4>
-      <div class="hub-rail__view"><?php hub_render_view_toggles(); ?></div>
     </div>
     <?php
 }
@@ -274,7 +285,7 @@ function hub_render_author_header(array $h, array $filters, string $sort = 'new'
 }
 
 /** Render the active-filter + muted chip bar at the top of the feed. */
-function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', array $leaf_labels = []): void
+function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', array $leaf_labels = [], array $tree = []): void
 {
     // Active (transient) filter chips — removing returns to the unfiltered set.
     $chips = [];
@@ -290,10 +301,24 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         $chips[] = ['By', $a, hub_url($f, $sort)];
     }
     // Sticky "Muted" chips — removing un-mutes (distinct styling, always shown).
+    // A category whose every leaf is muted collapses into ONE "Muted: Category"
+    // chip (un-mute = cat toggle, clears them all); partial mutes stay per-leaf.
+    $muted_leaves = $muted['leaves'] ?? [];
+    $collapsed    = [];   // leaf keys folded into a full-category chip
     $mchips = [];
     foreach ($muted['types'] as $v) $mchips[] = ['Muted', hub_type_label($v), hub_mute_url($filters, $sort, 't', $v)];
+    foreach ($tree as $cp) {
+        $lk = array_column($cp['leaves'], 'key');
+        if ($lk && !array_diff($lk, $muted_leaves)) {
+            $mchips[] = ['Muted', $cp['label'], hub_mute_url($filters, $sort, 'c', $cp['key']), $cp['key']];
+            foreach ($lk as $k) $collapsed[$k] = true;
+        }
+    }
     foreach ($muted['cats']  as $v) $mchips[] = ['Muted', hub_cat_label($v),  hub_mute_url($filters, $sort, 'c', $v), $v];
-    foreach (($muted['leaves'] ?? []) as $v) $mchips[] = ['Muted', $leaf_labels[$v] ?? $v, hub_mute_url($filters, $sort, 'l', $v)];
+    foreach ($muted_leaves as $v) {
+        if (isset($collapsed[$v])) continue;
+        $mchips[] = ['Muted', $leaf_labels[$v] ?? $v, hub_mute_url($filters, $sort, 'l', $v)];
+    }
 
     if (!$chips && !$mchips) return;
     ?>
@@ -304,11 +329,11 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         <?php foreach ($chips as $chip): [$k, $v, $rm] = $chip; $ck = $chip[3] ?? ''; ?>
           <span class="hub-chip"<?= $ck ? ' data-cat="' . htmlspecialchars($ck) . '"' : '' ?>><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
         <?php endforeach; ?>
-        <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">Reset all</a>
       <?php endif; ?>
       <?php foreach ($mchips as $chip): [$k, $v, $rm] = $chip; $ck = $chip[3] ?? ''; ?>
         <span class="hub-chip hub-chip--muted"<?= $ck ? ' data-cat="' . htmlspecialchars($ck) . '"' : '' ?>><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>
       <?php endforeach; ?>
+      <a class="hub-chipbar__reset" href="<?= hub_reset_url($sort) ?>">Reset all</a>
     </div>
     <?php
 }

@@ -484,6 +484,10 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.css?v=<?= bb_mirror_asset_ver('forums.css') ?>">
+<?php /* Mobile presentation layer (Buck) — flat-card → FB app-card via grid-template-areas.
+         MUST be a media-gated <head> <link> so it paints on first load (deferring it via
+         pwa.js re-introduces the flash). Behaviors-only mobile-hub.js may defer. */ ?>
+<link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
 <body class="bb-mirror">
 <script>/* compact feed view: apply before paint to avoid flash */try{if(localStorage.getItem('hub-compact')==='1')document.documentElement.classList.add('hub-compact');}catch(e){}</script>

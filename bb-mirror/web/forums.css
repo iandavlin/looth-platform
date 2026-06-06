@@ -2827,6 +2827,34 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-card__kind-badge--loothprint   { color: #5a3a7a; background: #ece1f3; }
 .feed-card__kind-badge--discussion   { color: #4a4636; background: #e6e2d6; }
 
+/* ── Section (category) colors on card borders ──────────────────────────────
+   The .feed-page user-skin sets `border-color: --lguser-line` on every card
+   (same specificity as the per-category rules but later in source), which was
+   flattening the category accent. Re-assert it here, scoped under .feed-page
+   (specificity 0,0,3,0) so the exact section color wins:
+     • discussions  → colored LEFT rail
+     • content/CPT  → colored BOTTOM rule, no side rail   */
+.feed-page .feed-card[data-cat="sponsors"]    { --sec: var(--cat-sponsors); }
+.feed-page .feed-card[data-cat="market"]      { --sec: var(--cat-market); }
+.feed-page .feed-card[data-cat="repair"]      { --sec: var(--cat-repair); }
+.feed-page .feed-card[data-cat="builds"]      { --sec: var(--cat-builds); }
+.feed-page .feed-card[data-cat="acoustic"]    { --sec: var(--cat-acoustic); }
+.feed-page .feed-card[data-cat="general"]     { --sec: var(--cat-general); }
+.feed-page .feed-card[data-cat="looths"]      { --sec: var(--cat-looths); }
+.feed-page .feed-card[data-cat="tools"]       { --sec: var(--cat-tools); }
+.feed-page .feed-card[data-cat="business"]    { --sec: var(--cat-business); }
+.feed-page .feed-card[data-cat="suggestions"] { --sec: var(--cat-suggestions); }
+.feed-page .feed-card[data-cat="perspective"] { --sec: var(--cat-perspective); }
+.feed-page .feed-card[data-cat="vintage"]     { --sec: var(--cat-vintage); }
+
+.feed-page .feed-card--topic[data-cat]   { border-left: 5px solid var(--sec, var(--cb)); }
+.feed-page .feed-card--content[data-cat] {
+  border-left: 1px solid var(--lguser-line, #cdd6ba);   /* drop the side rail */
+  border-bottom: 3px solid var(--sec, var(--lg-sage));  /* section color on the bottom */
+}
+/* CPT cover: always 16:9 cover (beats the .feed-page 3/2 default) */
+.feed-page .feed-card--content .feed-card__cover-img { aspect-ratio: 16 / 9; max-height: none; }
+
 /* Tier chip on content cards (access level) */
 .feed-card__tier-chip { display: inline-block; margin-left: 5px; font: 700 9px/1.4 var(--lg-font-sans);
   text-transform: uppercase; letter-spacing: .05em; border-radius: 5px; padding: 1px 6px; vertical-align: middle; }
@@ -3048,6 +3076,31 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .feed-text-toggle:hover { background: var(--lg-sage-tint); border-color: var(--lg-sage); color: var(--lg-sage-d); }
 .feed-text-toggle[aria-pressed="true"] { background: var(--lg-charcoal); color: #fff; border-color: var(--lg-charcoal); }
 
+/* ── Compact letter view-toggles (live under the header in the sort bar) ──────
+   T  = text size  → state shown by the GLYPH SIZE
+   C  = color theme → state shown by the GLYPH COLOR
+   Cpt = compact   → state shown by FILL (on/off)
+   Grouped + right-aligned; square chips instead of worded pills. */
+.feed-view-toggles { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.feed-view-toggles > button {
+  margin: 0; min-width: 34px; height: 34px; padding: 0 9px;
+  gap: 0; justify-content: center; line-height: 1;
+}
+/* T — neutral chip; size encodes the level (no charcoal fill, so size reads) */
+.feed-text-toggle[aria-pressed="true"] { background: #fff; color: var(--lg-ink); border-color: var(--lg-sage); }
+.feed-text-toggle__icon { font-size: 12px; }
+.feed-text-toggle[data-level="1"] .feed-text-toggle__icon { font-size: 16px; }
+.feed-text-toggle[data-level="2"] .feed-text-toggle__icon { font-size: 21px; }
+/* C — glyph color encodes the theme; no fill so the color is the signal */
+.feed-theme-toggle[aria-pressed="true"] { background: #fff; color: var(--lg-ink); border-color: var(--lg-sage); }
+.feed-theme-toggle__icon { font-weight: 800; font-size: 15px; color: var(--lg-mute); transition: color .12s; }
+.feed-theme-toggle[data-level="1"] .feed-theme-toggle__icon { color: var(--lg-sage-d, #586b3f); }  /* Panels */
+.feed-theme-toggle[data-level="2"] .feed-theme-toggle__icon { color: var(--lg-amber, #ecb351); }   /* Dark   */
+.feed-theme-toggle[data-level="3"] .feed-theme-toggle__icon { color: #c66845; }                     /* Black  */
+/* Cpt — fill encodes on/off */
+.feed-compact-toggle { margin-left: 0; }
+.feed-compact-toggle__icon { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+
 /* ============================================================================
    Hub control sidebar (Option A — rail replaces the forum nav on the feed)
    Increment 1: search + Type/Category facets (counts, click-to-filter) +
@@ -3243,3 +3296,49 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
 @media (max-width:960px){body:has(.feed-page) #bb-ham{display:none}}
 /* Server-render guard: hide zero-count filter rows on mobile (was JS hideEmptyFilterRows) */
 @media (max-width:640px){.hub-rail__row--empty{display:none}}
+/* Canonicalize app-mobile-fixes.js v7 (Buck stopgap) — v54 mobile bar regressions:
+   (1) keep the sort/filter/new-post bar reachable (was static, scrolled away) —
+       pin it just under the 61px sticky header;
+   (2) the T/C/Cpt view toggles no longer belong in the bar (theme moved to the
+       profile-bubble Settings) — don't show them there on mobile.
+   Buck drops the v7 guard once this lands. */
+@media (max-width:640px){
+  .feed-sort-bar{position:sticky;top:61px;z-index:40;background:var(--lg-cream,#fbfbf8)}
+  .feed-view-toggles{display:none}
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DESKTOP card arrangement (≥641) — grid-arranges the FLAT fc-* contract
+   (docs/hub-mobile-desktop-split.md). Mobile (≤640) is Buck's mobile-hub.css;
+   this block is min-width-gated so it NEVER touches mobile. The old nested-
+   wrapper rules (.feed-card__header/__meta-top/etc.) went dead when the markup
+   flattened — this restores the desktop forum-row off the flat children.
+   ════════════════════════════════════════════════════════════════════════ */
+@media (min-width:641px){
+  .feed-page .feed-card{
+    display:grid;
+    grid-template-columns:44px minmax(0,1fr) auto;
+    grid-template-areas:
+      "avatar   author    time"
+      "avatar   category  time"
+      "title    title     title"
+      "excerpt  excerpt   excerpt"
+      "cover    cover     cover"
+      "actions  actions   actions"
+      "replies  replies   replies";
+    column-gap:12px; row-gap:4px; align-items:center;
+  }
+  .feed-page .fc-avatar  { grid-area:avatar; align-self:start; width:40px; height:40px; }
+  .feed-page .fc-avatar img,
+  .feed-page .fc-avatar .avatar-init{ width:40px; height:40px; border-radius:50%; object-fit:cover; }
+  .feed-page .fc-author  { grid-area:author;  align-self:end; display:flex; align-items:center; gap:8px; min-width:0; }
+  .feed-page .fc-author__name{ font-weight:600; color:var(--lg-ink,#323532); }
+  .feed-page .fc-category{ grid-area:category; align-self:start; font-size:12px; color:var(--lg-mute,#6b6f6b); text-decoration:none; }
+  .feed-page .fc-time    { grid-area:time; align-self:start; font-size:12px; color:var(--lg-mute,#6b6f6b); white-space:nowrap; }
+  .feed-page .fc-title   { grid-area:title;   margin:6px 0 0; }
+  .feed-page .fc-excerpt { grid-area:excerpt; min-width:0; }
+  .feed-page .fc-cover   { grid-area:cover; display:block; max-width:420px; border-radius:10px; overflow:hidden; }
+  .feed-page .fc-cover img{ width:100%; display:block; }
+  .feed-page .fc-actions { grid-area:actions; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+  .feed-page .fc-replies { grid-area:replies; min-width:0; }
+}

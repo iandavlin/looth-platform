@@ -169,17 +169,72 @@ $content_tiers = hub_content_tiers();
 
 // Sticky-mute toggle: flip the cookie + 302 back to the feed (no JS, headers
 // not yet sent — chrome only outputs inside bb_mirror_chrome_header()).
+$hub_mute_cookie = function (array $m): void {
+    setcookie('hub_mute', hub_mute_serialize($m), [
+        'expires'  => time() + 31536000, 'path' => '/',
+        'secure'   => true, 'httponly' => true, 'samesite' => 'Lax',
+    ]);
+};
 if (isset($_GET['mute_toggle'])) {
     $parts = explode(':', (string)$_GET['mute_toggle'], 2);
-    if (count($parts) === 2 && in_array($parts[0], ['t', 'c'], true) && $parts[1] !== '') {
-        $hub_muted = hub_mute_apply_toggle($hub_muted, $parts[0], $parts[1]);
-        setcookie('hub_mute', hub_mute_serialize($hub_muted), [
-            'expires'  => time() + 31536000, 'path' => '/',
-            'secure'   => true, 'httponly' => true, 'samesite' => 'Lax',
-        ]);
+    if (count($parts) === 2 && in_array($parts[0], ['t', 'c', 'l'], true) && $parts[1] !== '') {
+        [$mfacet, $mkey] = $parts;
+
+        if ($mfacet === 'c') {
+            // A category mute cascades to every leaf, so each subforum can still
+            // be toggled individually afterward. We assume "mute the whole thing":
+            // if all leaves are already muted, the click un-mutes them all.
+            [$mt_tree] = hub_category_tree($db, $content_tiers, $_forum_cat_map);
+            $leaf_keys = [];
+            foreach ($mt_tree as $cp) {
+                if ($cp['key'] === $mkey) { $leaf_keys = array_column($cp['leaves'], 'key'); break; }
+            }
+            if ($leaf_keys) {
+                $all_muted = !array_diff($leaf_keys, $hub_muted['leaves']);
+                $hub_muted['leaves'] = $all_muted
+                    ? array_values(array_diff($hub_muted['leaves'], $leaf_keys))
+                    : array_values(array_unique(array_merge($hub_muted['leaves'], $leaf_keys)));
+                if (!$all_muted) {  // just muted → drop any active selection of it
+                    $hub_filters['cats']   = array_values(array_diff($hub_filters['cats'], [$mkey]));
+                    $hub_filters['leaves'] = array_values(array_diff($hub_filters['leaves'], $leaf_keys));
+                }
+            } else {  // leafless (content-only) category — plain cat toggle
+                $hub_muted = hub_mute_apply_toggle($hub_muted, 'c', $mkey);
+                if (in_array($mkey, $hub_muted['cats'], true)) {
+                    $hub_filters['cats'] = array_values(array_diff($hub_filters['cats'], [$mkey]));
+                }
+            }
+        } else {  // type or single leaf — plain toggle
+            $hub_muted = hub_mute_apply_toggle($hub_muted, $mfacet, $mkey);
+            $fkey = ['t' => 'types', 'l' => 'leaves'][$mfacet];
+            if (in_array($mkey, $hub_muted[$fkey], true)) {  // just muted → drop selection
+                $hub_filters[$fkey] = array_values(array_diff($hub_filters[$fkey] ?? [], [$mkey]));
+            }
+        }
+
+        $hub_mute_cookie($hub_muted);
     }
     header('Location: ' . html_entity_decode(hub_url($hub_filters, $sort_param)));
     return;
+}
+
+// "Reset all" clears the sticky mute cookie too (not just the filter params).
+if (isset($_GET['mute_reset'])) {
+    $hub_muted = ['types' => [], 'cats' => [], 'leaves' => []];
+    $hub_mute_cookie($hub_muted);
+    header('Location: ' . html_entity_decode(hub_url($hub_filters, $sort_param)));
+    return;
+}
+
+// Mutual exclusion, the other direction: an active filter selection wins over a
+// mute. If something is both filtered-to AND muted, drop it from the muted set
+// (and persist) — so selecting a muted type/category/leaf un-mutes it.
+$__mute_before = hub_mute_serialize($hub_muted);
+$hub_muted['types']  = array_values(array_diff($hub_muted['types'],  $hub_filters['types']  ?? []));
+$hub_muted['cats']   = array_values(array_diff($hub_muted['cats'],   $hub_filters['cats']   ?? []));
+$hub_muted['leaves'] = array_values(array_diff($hub_muted['leaves'], $hub_filters['leaves'] ?? []));
+if (hub_mute_serialize($hub_muted) !== $__mute_before) {
+    $hub_mute_cookie($hub_muted);
 }
 
 // -- Resolve scope into forum_ids array (for header image query) --
@@ -807,22 +862,19 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </header>
 
-  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? []); ?>
+  <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? [], $hub_cat_tree ?? []); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
-    <a href="/hub/" class="lg-fresh-tab<?= (!isset($_GET['sort']) || $_GET['sort'] === '') ? ' active' : '' ?>">Fresh</a>
     <a href="<?= feed_sort_url('new', $forum_slug) ?>"
-       class="<?= $sort_param === 'new' ? 'active' : '' ?>">New</a>
+       class="<?= $sort_param !== 'old' ? 'active' : '' ?>">New</a>
     <a href="<?= feed_sort_url('old', $forum_slug) ?>"
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
-    <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
-       class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Hot</a>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
       <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
-    <?php else: // scoped-forum views keep the view toggles in the sort bar ?>
-      <?php hub_render_view_toggles(); ?>
     <?php endif; ?>
+    <?php // View toggles live under the header (in the sort bar) for all views. ?>
+    <?php hub_render_view_toggles(); ?>
     <button type="button" class="lg-filters-chip" aria-label="Open filters">
       <span class="corner-hamburger__icon" aria-hidden="true">&#9776;</span>
       <span class="lg-filters-chip__tx">Filters</span>
@@ -874,51 +926,49 @@ $header_cat = $scoped_forum
             'sponsor-post' => 'Sponsor', 'loothprint' => 'Loothprint',
         ][$c_kind] ?? ucfirst(str_replace('-', ' ', $c_kind));
     ?>
-    <article class="feed-card feed-card--content" data-cat="<?= htmlspecialchars($c_cat) ?>"
-             data-kind="<?= htmlspecialchars($c_kind) ?>"
-             data-href="<?= htmlspecialchars($c_url) ?>" data-lg-card="1">
-      <div class="feed-card__meta-top">
-        <?php
-          $av_c = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 30,
-                      $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null);
-          echo str_replace('class="avatar-init', 'class="avatar-init lg-card-avatar', $av_c);
-        ?>
-        <span class="lg-card-id"><span class="lg-card-author"><?= $c_author ?></span></span>
-        <time class="lg-card-time"><?= $c_time ?></time>
+    <?php /* FLAT card contract (docs/hub-mobile-desktop-split.md): every fc-* region is a
+             DIRECT child of .feed-card so desktop (forums.css ≥641) and mobile (Buck's
+             mobile-hub.css ≤640) can grid-arrange the SAME markup — no JS reshape. Legacy
+             feed-card__* / lg-card-* classes ride along as forums.js behavior hooks. */ ?>
+    <article class="feed-card feed-card--content" data-lg-card="1"
+             data-id="<?= $c_id ?>" data-type="<?= htmlspecialchars($c_kind) ?>"
+             data-href="<?= htmlspecialchars($c_url) ?>" data-gated="0"
+             data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>">
+      <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
+      <div class="fc-author">
+        <span class="fc-author__name lg-card-author"><?= $c_author ?></span>
+        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span></span>
       </div>
-      <div class="feed-card__header">
-        <div class="feed-card__header-body">
-          <h2 class="feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h2>
-          <?php if ($c_excerpt !== ''): ?>
-            <div class="feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
-          <?php endif; ?>
+      <?php if (!empty($topic['content_forum_label'])): ?>
+        <nav class="fc-category lg-card-cat"><?= htmlspecialchars((string)$topic['content_forum_label'], ENT_QUOTES, 'UTF-8') ?></nav>
+      <?php endif; ?>
+      <time class="fc-time lg-card-time"><?= $c_time ?></time>
+      <?php if (!empty($c_img)): ?>
+        <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
+        </a>
+      <?php endif; ?>
+      <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
+      <?php if ($c_excerpt !== '' || $c_tags): ?>
+        <div class="fc-excerpt feed-card__op">
+          <?php if ($c_excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p><?php endif; ?>
           <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
-          <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-            <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
-            <span><span class="feed-card__op-lead">By </span><span class="feed-card__op-author"><?= $c_author ?></span></span>
-            <?php if ($c_likes > 0): ?><span class="feed-card__op-time"> &middot; <?= $c_likes ?> &#9829;</span><?php endif; ?>
-            <?php if ($c_can_comment): ?>
-              <button type="button" class="feed-card__comments-btn"
-                      data-comments
-                      data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>"
-                      data-item-id="<?= $c_id ?>"
-                      aria-haspopup="dialog" aria-controls="lgc-modal"
-                      title="<?= $c_comments > 0 ? 'View comments' : 'Be the first to comment' ?>">
-                &#128172; <?= $c_comments > 0 ? $c_comments . ' ' . ($c_comments === 1 ? 'comment' : 'comments') : 'Comment' ?>
-              </button>
-            <?php endif; ?>
-          </div>
         </div>
-        <?php if (!empty($c_img)): ?>
-          <a class="feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
-            <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
-          </a>
+      <?php endif; ?>
+      <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot.
+               Server-rendered (counts + action row) — wired by forums.js / hub-polish.js. */ ?>
+      <div class="fc-actions">
+        <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
+        <?php feed_action_bar(0); ?>
+        <?php if ($c_can_comment): ?>
+          <button type="button" class="feed-card__comments-btn" data-comments
+                  data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>"
+                  aria-haspopup="dialog" aria-controls="lgc-modal"
+                  title="<?= $c_comments > 0 ? 'View comments' : 'Be the first to comment' ?>">
+            &#128172; <?= $c_comments > 0 ? $c_comments . ' ' . ($c_comments === 1 ? 'comment' : 'comments') : 'Comment' ?>
+          </button>
         <?php endif; ?>
       </div>
-      <?php /* Card reactions — server-rendered counts; picker wired by forums.js to card-react. */ ?>
-      <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
-      <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
-      <?php feed_action_bar(0); ?>
     </article>
     <?php continue; endif;
       $turl        = feed_topic_url($topic);
@@ -967,99 +1017,53 @@ $header_cat = $scoped_forum
                  . ' data-topic-title="' . htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) . '">&#8617; Reply</button>'
         : '';
     ?>
-    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>" data-lg-card="1">
-      <div class="feed-card__meta-top">
-        <?php
-          $av_t = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 30,
-                      $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null);
-          echo str_replace('class="avatar-init', 'class="avatar-init lg-card-avatar', $av_t);
-        ?>
-        <span class="lg-card-id"><span class="lg-card-author"><?= $author ?></span></span>
-        <time class="lg-card-time"><?= $rtime ?></time>
-        <?php if (!empty($topic['forum_title'])): ?>
-          <span class="feed-card__kind-badge lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></span>
+    <article class="feed-card feed-card--topic" data-lg-card="1"
+             data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-gated="0"
+             data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-reply-count="<?= $reply_count ?>">
+      <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
+            $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>
+      <?php if ($av_href): ?><a class="fc-avatar lg-card-avatar" href="<?= htmlspecialchars($av_href) ?>"><?= $av_t ?></a>
+      <?php else: ?><span class="fc-avatar lg-card-avatar"><?= $av_t ?></span><?php endif; ?>
+      <div class="fc-author">
+        <span class="fc-author__name lg-card-author"><?= $author_link ?></span>
+        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--discussion">Discussion</span></span>
+      </div>
+      <?php if (!empty($topic['forum_title'])): ?>
+        <nav class="fc-category lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></nav>
+      <?php endif; ?>
+      <time class="fc-time lg-card-time"><?= $rtime ?></time>
+      <?php if (!empty($card_image)): ?>
+        <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" loading="lazy">
+        </a>
+      <?php endif; ?>
+      <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
+      <div class="fc-excerpt feed-card__op">
+        <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $excerpt ?></p><?php endif; ?>
+        <?php if ($show_read_more): ?>
+          <div class="feed-card__full-body" hidden></div>
+          <button class="feed-card__read-more" type="button" data-topic-id="<?= $topic_id ?>" data-state="collapsed">Read more &#9660;</button>
         <?php endif; ?>
+        <?php if ($embed_url): ?><div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div><?php endif; ?>
+        <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
       </div>
-
-      <div class="feed-card__header">
-        <div class="feed-card__header-body">
-          <h2 class="feed-card__title">
-            <a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a>
-          </h2>
-          <?php if ($excerpt !== ''): ?>
-            <div class="feed-card__op">
-              <p class="feed-card__op-excerpt"><?= $excerpt ?></p>
-              <?php if ($show_read_more): ?>
-                <div class="feed-card__full-body"></div>
-                <button class="feed-card__read-more" type="button"
-                        data-topic-id="<?= $topic_id ?>"
-                        data-state="collapsed">Read more &#9660;</button>
-              <?php endif; ?>
-              <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-                <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
-                <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
-                <?= $reply_cta ?>
-              </div>
-            </div>
-          <?php else: ?>
-            <div class="feed-card__op-meta" style="display:flex;align-items:center;gap:6px;">
-              <?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 36, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?>
-              <span><span class="feed-card__op-lead">Started by </span><?= $author_link ?><span class="feed-card__op-time"> &middot; <?= $start_time ?></span></span>
-              <?= $reply_cta ?>
-            </div>
-          <?php endif; ?>
-          <?php if ($embed_url): ?>
-            <div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div>
-          <?php endif; ?>
-          <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
-        </div>
-        <?php if (!empty($card_image)): ?>
-          <a class="feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
-            <img class="feed-card__cover-img"
-                 src="<?= htmlspecialchars($card_image) ?>"
-                 alt="" loading="lazy">
-          </a>
-        <?php endif; ?>
-        <button class="feed-card__compact-expand" type="button" aria-expanded="false"
-                title="Show full post" aria-label="Show full post">
-          <span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span>
-        </button>
+      <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot. */ ?>
+      <div class="fc-actions">
+        <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
+        <?php feed_action_bar($reply_count); ?>
+        <?= $reply_cta ?>
+        <button class="feed-card__compact-expand" type="button" aria-expanded="false" title="Show full post" aria-label="Show full post"><span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span></button>
       </div>
-
-      <?php /* Engagement bar — one-page-Hub card tier. Comment count is real;
-               reactions/share/save are visual stubs until their backends land.
-               Hidden by default; shown only under .feed--proto (the ?proto=cards flag). */ ?>
-      <div class="feed-card__eng">
-        <?php /* Reaction stub uses OUR palette's unicode set (like/wow/lol/brain per
-                 tools/reaction-assets/palette.json); the 3 custom-image reactions
-                 (ouch/shop/take-my-money) + persistence are the comments+reactions lane's build. */ ?>
-        <span class="fce-react"><span class="fce-emo">&#128077;&#128558;&#128514;&#129504;</span></span>
-        <span class="fce-sp"></span>
-        <span class="fce-btn fce-comments">&#128172; <?= $reply_count ?></span>
-        <span class="fce-btn">&#8617; Share</span>
-        <span class="fce-btn">&#9734; Save</span>
-      </div>
-
-      <?php /* Card reactions — server-rendered counts; picker wired by forums.js to card-react. */ ?>
-      <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
-      <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
-      <?php feed_action_bar($reply_count); ?>
-
       <?php if ($teaser || $has_more): ?>
-        <div class="feed-card__replies">
+        <div class="fc-replies feed-card__replies">
           <?php if ($teaser) bb_mirror_render_reply_stub($teaser, false, true, true); ?>
-
           <!-- Full thread lazy-loads here on click (see forums.js + ?replies=<id>) -->
           <div class="feed-card__replies-full" hidden></div>
-
           <?php if ($has_more): ?>
-            <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">
-              View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;
-            </button>
+            <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
           <?php endif; ?>
         </div>
       <?php endif; ?>
-
     </article>
     <?php endforeach; ?>
 
