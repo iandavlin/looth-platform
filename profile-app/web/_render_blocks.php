@@ -92,6 +92,34 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     if ($header === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_header_block($header, $role, $headerVis, $tierBadge, $headerActions, $userId);
 
+    // Owner-only: the Business entry pill, pinned directly under the identity
+    // header (the "top box"). A member's LoothPro business page (the /p/ storefront)
+    // is opened or created from here. The Pro-gate + Patreon upsell for non-Pro
+    // members lands in WS1/WS2; for now any owner sees it (server-side create is
+    // still ungated until WS1).
+    if ($role === 'me') {
+        $lgBiz  = \Looth\ProfileApp\Practice::forUser($userId);
+        $lgMine = null;
+        foreach ($lgBiz as $lgB) {
+            if (($lgB['role'] ?? '') === 'owner') { $lgMine = $lgB; break; }
+        }
+        echo '<div class="lg-bizpill-wrap">';
+        if ($lgMine !== null) {
+            echo '<a class="lg-bizpill" href="/p/' . looth_h((string)$lgMine['slug']) . '">'
+               . '<span class="lg-bizpill__tag">Business</span>'
+               . '<span class="lg-bizpill__name">' . looth_h((string)$lgMine['name']) . '</span>'
+               . '<span class="lg-bizpill__go">Open</span>'
+               . '</a>';
+        } else {
+            echo '<button type="button" class="lg-bizpill lg-bizpill--add" id="lg-biz-add">'
+               . '<span class="lg-bizpill__plus">+</span>'
+               . '<span class="lg-bizpill__name">Business</span>'
+               . '<span class="lg-bizpill__pro">LoothPro</span>'
+               . '</button>';
+        }
+        echo '</div>';
+    }
+
     // Body blocks render in the owner's chosen order (Block::profileLayout); the header is
     // pinned above. Each key maps to its existing renderer — order is the only thing the
     // layout drives in Phase 1 (presence still per-renderer). data-block on each <section>
@@ -219,22 +247,23 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
  * The about block — free text. Shared (profile + practice). Owner edits inline
  * (multiline); block-level pmp on profile_sections key='about'.
  */
-function looth_render_about_block(int $userId, string $role, string $headerVis): void
+function looth_render_about_block(int $userId, string $role, string $headerVis, string $loadKey = 'about', bool $editable = true, string $editUrl = '/profile-api/v0/me/about', string $pmpBlock = 'about'): void
 {
-    $ab      = Block::loadAbout($userId);
+    $ab      = Block::loadAbout($userId, $loadKey);
     $text    = (string)$ab['text'];
     $isOwner = ($role === 'me');
+    $canEdit = $isOwner && $editable;
     if ($text === '' && !$isOwner) return;
     if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ab['vis'])) && !$isOwner) return;
 
     echo '<section class="block lg-block lg-block--about" data-block="about">';
     echo '<h3 class="lg-bh">About';
-    if ($isOwner) echo ' ' . looth_pmp_control('about', (string)$ab['vis'], $headerVis);
+    if ($canEdit) echo ' ' . looth_pmp_control($pmpBlock, (string)$ab['vis'], $headerVis);
     echo '</h3>';
-    if ($isOwner) {
+    if ($canEdit) {
         $has = $text !== '';
         echo '<div class="lg-about lg-edit' . ($has ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="text" data-edit-url="/profile-api/v0/me/about" data-edit-method="PATCH"'
+           . ' data-edit-field="text" data-edit-url="' . looth_h($editUrl) . '" data-edit-method="PATCH"'
            . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write a bit about your work…">'
            . ($has ? looth_h($text) : 'Write a bit about your work…') . '</div>';
     } else {
@@ -750,9 +779,9 @@ function looth_dropoff_card(string $name, string $addr, string $hours, string $n
  * place, persisted to me-dropoffs); a visitor sees the read-only list. Block-level
  * pmp, header-ceiling-capped like every other block.
  */
-function looth_render_dropoffs_block(int $userId, string $role, string $headerVis): void
+function looth_render_dropoffs_block(int $userId, string $role, string $headerVis, string $loadKey = 'dropoffs', string $pmpBlock = 'dropoffs'): void
 {
-    $do      = Block::loadDropoffs($userId);
+    $do      = Block::loadDropoffs($userId, $loadKey);
     if ($do === null) return;
     $items   = $do['items'] ?? [];
     $isOwner = ($role === 'me');
@@ -762,7 +791,7 @@ function looth_render_dropoffs_block(int $userId, string $role, string $headerVi
 
     echo '<section class="block lg-block lg-block--dropoffs" data-block="dropoffs">';
     echo '<h3 class="lg-bh">Drop-off Locations';
-    if ($isOwner) echo ' ' . looth_pmp_control('dropoffs', (string)$do['vis'], $headerVis);
+    if ($isOwner) echo ' ' . looth_pmp_control($pmpBlock, (string)$do['vis'], $headerVis);
     echo '</h3>';
 
     // Map of every drop-off that has resolved coordinates. Rendered for owner and
@@ -806,6 +835,139 @@ function looth_render_dropoffs_block(int $userId, string $role, string $headerVi
             echo '</div>';
         }
         echo '</div>';
+    }
+    echo '</section>';
+}
+
+/**
+ * Practice (business) Location block — one geocoded address + hours + note, with a
+ * single map pin. Reuses the drop-off card/map CSS. Owner edits inline; visitors see
+ * the read-only address. Block-level pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_location_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $loc     = Block::loadPracticeLocation($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$loc['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$loc['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--location" data-block="location">';
+    echo '<h3 class="lg-bh">Location';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-location', (string)$loc['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($loc['lat'] !== null && $loc['lng'] !== null) {
+        $pins = [['n' => '', 'a' => (string)$loc['address'], 'h' => (string)$loc['hours'],
+                  'no' => (string)$loc['note'], 'lat' => (float)$loc['lat'], 'lng' => (float)$loc['lng']]];
+        echo '<div class="lg-dropoffs__map" data-pins="'
+           . looth_h(json_encode($pins, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) . '"></div>';
+    }
+
+    if ($isOwner) {
+        echo '<div class="lg-dropoffs lg-dropoffs--edit" id="lg-ploc-edit">';
+        echo '<div class="lg-dropoff lg-dropoff--edit">';
+        echo '<input type="text" class="lg-dropoff__f lg-dropoff__name-in" data-f="address" placeholder="Shop address (street, city)" value="' . looth_h((string)$loc['address']) . '">';
+        echo '<input type="text" class="lg-dropoff__f" data-f="hours" placeholder="Hours (e.g. Mon–Fri 9–5)" value="' . looth_h((string)$loc['hours']) . '">';
+        echo '<textarea class="lg-dropoff__f lg-dropoff__notes-in" data-f="note" rows="2" placeholder="Notes (parking, entrance, appointment-only…)">' . looth_h((string)$loc['note']) . '</textarea>';
+        echo '</div></div>';
+    } else {
+        echo '<div class="lg-dropoffs"><div class="lg-dropoff">';
+        if ($loc['address'] !== '') echo '<div class="lg-dropoff__addr">' . looth_h((string)$loc['address']) . '</div>';
+        if ($loc['hours'] !== '')   echo '<div class="lg-dropoff__hours">' . looth_h((string)$loc['hours']) . '</div>';
+        if ($loc['note'] !== '')    echo '<div class="lg-dropoff__notes">' . nl2br(looth_h((string)$loc['note'])) . '</div>';
+        echo '</div></div>';
+    }
+    echo '</section>';
+}
+
+/**
+ * Practice (business) Hours block — a 7-row weekly schedule. Owner edits inline
+ * (per-day Closed toggle + open/close time inputs + a note); visitors see the
+ * read-only schedule. Block-level pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_hours_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $h       = Block::loadPracticeHours($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$h['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$h['vis'])) && !$isOwner) return;
+    $labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    echo '<section class="block lg-block lg-block--hours" data-block="hours">';
+    echo '<h3 class="lg-bh">Hours';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-hours', (string)$h['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-hours lg-hours--edit" id="lg-phours-edit">';
+        foreach ($labels as $i => $lab) {
+            $d = $h['days'][$i];
+            echo '<div class="lg-hours__row" data-d="' . $i . '">';
+            echo '<span class="lg-hours__day">' . $lab . '</span>';
+            echo '<label class="lg-hours__cl"><input type="checkbox" data-f="closed"' . ($d['x'] ? ' checked' : '') . '> Closed</label>';
+            echo '<span class="lg-hours__times">';
+            echo '<input type="time" class="lg-hours__t" data-f="open" value="' . looth_h($d['o']) . '">';
+            echo '<span class="lg-hours__sep">to</span>';
+            echo '<input type="time" class="lg-hours__t" data-f="close" value="' . looth_h($d['c']) . '">';
+            echo '</span>';
+            echo '</div>';
+        }
+        echo '<textarea class="lg-dropoff__f lg-dropoff__notes-in lg-hours__note" data-f="note" rows="2" placeholder="Note (holidays, by appointment, etc.)">' . looth_h((string)$h['note']) . '</textarea>';
+        echo '</div>';
+    } else {
+        echo '<div class="lg-hours">';
+        foreach ($labels as $i => $lab) {
+            $d = $h['days'][$i];
+            echo '<div class="lg-hours__row">';
+            echo '<span class="lg-hours__day">' . $lab . '</span>';
+            if ($d['x'] || $d['o'] === '' || $d['c'] === '') {
+                echo '<span class="lg-hours__val lg-hours__val--closed">Closed</span>';
+            } else {
+                echo '<span class="lg-hours__val">' . looth_h($d['o']) . ' – ' . looth_h($d['c']) . '</span>';
+            }
+            echo '</div>';
+        }
+        if ($h['note'] !== '') echo '<div class="lg-dropoff__notes lg-hours__note">' . nl2br(looth_h((string)$h['note'])) . '</div>';
+        echo '</div>';
+    }
+    echo '</section>';
+}
+
+/**
+ * Practice (business) Links block — website + socials as a {label, url} list. Owner
+ * edits inline (add/remove rows); visitors get safe external anchors. Block-level
+ * pmp, header-ceiling-capped like every block.
+ */
+function looth_render_practice_links_block(int $ownerId, int $practiceId, string $role, string $headerVis): void
+{
+    $lk      = Block::loadPracticeLinks($ownerId, $practiceId);
+    $isOwner = ($role === 'me');
+    if (!$lk['has'] && !$isOwner) return;
+    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$lk['vis'])) && !$isOwner) return;
+
+    echo '<section class="block lg-block lg-block--links" data-block="links">';
+    echo '<h3 class="lg-bh">Links';
+    if ($isOwner) echo ' ' . looth_pmp_control('practice-links', (string)$lk['vis'], $headerVis);
+    echo '</h3>';
+
+    if ($isOwner) {
+        echo '<div class="lg-links lg-links--edit" id="lg-plinks-edit">';
+        foreach ($lk['items'] as $it) {
+            echo '<div class="lg-link lg-link--edit">';
+            echo '<button type="button" class="lg-link__rm lg-link__rm-abs" aria-label="Remove link" title="Remove link">&times;</button>';
+            echo '<input type="text" class="lg-dropoff__f" data-f="label" placeholder="Label (e.g. Website, Instagram)" value="' . looth_h((string)$it['label']) . '">';
+            echo '<input type="text" class="lg-dropoff__f" data-f="url" placeholder="https://..." value="' . looth_h((string)$it['url']) . '">';
+            echo '</div>';
+        }
+        echo '<button type="button" class="lg-link__add" id="lg-plink-add">+ Add link</button>';
+        echo '</div>';
+    } else {
+        echo '<ul class="lg-links">';
+        foreach ($lk['items'] as $it) {
+            $label = ((string)$it['label'] !== '') ? (string)$it['label'] : (string)$it['url'];
+            echo '<li class="lg-link"><a href="' . looth_h((string)$it['url']) . '" target="_blank" rel="noopener noreferrer nofollow">' . looth_h($label) . '</a></li>';
+        }
+        echo '</ul>';
     }
     echo '</section>';
 }
@@ -956,7 +1118,7 @@ function looth_render_header_block(array $header, string $role, string $headerVi
 function looth_render_members_gate(int $userId): void
 {
     echo '<div class="lg-gate">'
-       . '<div class="lg-gate__lock">🔒</div>'
+       . '<div class="lg-gate__lock"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>'
        . '<h2>This profile is members-only</h2>'
        . '<p>Profiles on Looth are a members community by default. Sign in to see more — or join to get your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'
@@ -982,7 +1144,60 @@ function looth_render_practice_blocks(int $practiceId, string $role, ?string $ti
     $h = Block::loadPracticeHeader($practiceId);
     if ($h === null) { http_response_code(404); echo 'not found'; return; }
     looth_render_practice_header_block($h, $role, $headerVis, $tierBadge);
-    // TODO(next): practice storefront blocks — same ceiling-capped shape.
+
+    // Owner edit mode: on the owner's own "Me" view the storefront blocks render
+    // EDITABLE (inline text + per-block visibility, plus drag/add/remove via the
+    // caddy that p.php wires) — identical in shape to the profile builder. Every
+    // other audience sees them display-only, ceiling-capped. Block data lives in
+    // the OWNER's profile_sections under practice-namespaced keys (no new schema).
+    $ownerId = Block::practiceOwnerId($practiceId);
+    if ($ownerId !== null) {
+        $editing = ($role === 'me');
+        foreach (Block::practiceLayout($practiceId) as $key) {
+            if ($key === 'about') {
+                looth_render_about_block(
+                    $ownerId, $role, $headerVis,
+                    Block::practiceBlockKey('about', $practiceId), $editing,
+                    '/profile-api/v0/me/practice-about?practice=' . $practiceId,
+                    'practice-about'
+                );
+            } elseif ($key === 'location') {
+                looth_render_practice_location_block($ownerId, $practiceId, $role, $headerVis);
+            } elseif ($key === 'dropoffs') {
+                looth_render_dropoffs_block(
+                    $ownerId, $role, $headerVis,
+                    Block::practiceBlockKey('dropoffs', $practiceId),
+                    'practice-dropoffs'
+                );
+            } elseif ($key === 'hours') {
+                looth_render_practice_hours_block($ownerId, $practiceId, $role, $headerVis);
+            } elseif ($key === 'links') {
+                looth_render_practice_links_block($ownerId, $practiceId, $role, $headerVis);
+            }
+        }
+        // Staff roster is auto-derived (the practice_members list): pinned last,
+        // excluded from the reorderable layout and the caddy.
+        looth_render_practice_staff_block($practiceId, $role);
+    }
+}
+
+/** The practice staff roster — display-only list of attached members (owner first). */
+function looth_render_practice_staff_block(int $practiceId, string $role): void
+{
+    $members = \Looth\ProfileApp\Practice::members($practiceId);
+    if (!$members) return;
+    echo '<section class="block lg-block lg-block--staff" data-block="staff">';
+    echo '<h3 class="lg-bh">Staff</h3>';
+    echo '<ul class="lg-staff">';
+    foreach ($members as $m) {
+        $nm  = $m['display_name'] ?: 'Member';
+        echo '<li class="lg-staff__row"><a class="lg-staff__lnk" href="/u/' . looth_h((string)$m['slug']) . '">'
+           . '<span class="lg-staff__avi">' . looth_h(looth_initials($nm)) . '</span>'
+           . '<span class="lg-staff__name">' . looth_h($nm) . '</span>';
+        if (($m['role'] ?? '') === 'owner') echo '<span class="lg-staff__role">owner</span>';
+        echo '</a></li>';
+    }
+    echo '</ul></section>';
 }
 
 /** The practice-header (identity) block — name / type / tagline / location / website / owner avatar. */
@@ -1024,7 +1239,7 @@ function looth_render_practice_header_block(array $header, string $role, string 
 function looth_render_practice_gate(): void
 {
     echo '<div class="lg-gate">'
-       . '<div class="lg-gate__lock">🔒</div>'
+       . '<div class="lg-gate__lock"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>'
        . '<h2>This practice is members-only</h2>'
        . '<p>Sign in to see this practice — or join Looth to list your own.</p>'
        . '<div class="lg-gate__cta"><a class="lg-gate__join" href="/lgjoin/">Join Looth</a>'

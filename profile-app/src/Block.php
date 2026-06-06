@@ -729,10 +729,10 @@ final class Block
     public const ABOUT_KEY = 'about';
 
     /** Assemble the about block — free text + block vis (profile_sections key='about'). */
-    public static function loadAbout(int $userId): array
+    public static function loadAbout(int $userId, string $key = 'about'): array
     {
-        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'about'");
-        $s->execute([':u' => $userId]);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $text = '';
         if ($r) { $d = json_decode((string)$r['data'], true) ?: []; $text = (string)($d['text'] ?? ''); }
@@ -881,15 +881,15 @@ final class Block
      * a single profile_sections row (key='dropoffs', data JSONB {items:[...]}); no
      * dedicated table / migration. Returns null only for an unknown user.
      */
-    public static function loadDropoffs(int $userId): ?array
+    public static function loadDropoffs(int $userId, string $key = self::DROPOFFS_KEY): ?array
     {
         $pg = Db::pg();
         $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
         $e->execute([':i' => $userId]);
         if (!$e->fetchColumn()) return null;
 
-        $s = $pg->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = 'dropoffs'");
-        $s->execute([':u' => $userId]);
+        $s = $pg->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $userId, ':k' => $key]);
         $r = $s->fetch();
         $items = [];
         if ($r) {
@@ -946,7 +946,7 @@ Accept: application/json
         return ['lat' => (float)$data[0]['lat'], 'lng' => (float)$data[0]['lon']];
     }
 
-    public static function saveDropoffs(int $userId, array $items, ?string $visInput = null): ?array
+    public static function saveDropoffs(int $userId, array $items, ?string $visInput = null, string $key = self::DROPOFFS_KEY): ?array
     {
         $pg = Db::pg();
         $e = $pg->prepare('SELECT 1 FROM users WHERE id = :i');
@@ -956,7 +956,7 @@ Accept: application/json
         // Preserve already-resolved pin coordinates: match incoming rows to the
         // stored ones by address, so editing name/hours/notes never re-geocodes.
         $prevCoords = [];
-        $prevShape  = self::loadDropoffs($userId);
+        $prevShape  = self::loadDropoffs($userId, $key);
         foreach (($prevShape['items'] ?? []) as $p) {
             $pa = mb_strtolower(trim((string)($p['address'] ?? '')));
             if ($pa !== '' && $p['lat'] !== null && $p['lng'] !== null) {
@@ -995,17 +995,235 @@ Accept: application/json
         if ($visInput !== null && self::visFromInput($visInput) !== null) {
             $pg->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'dropoffs', :v, :d::jsonb, 50)
+                VALUES (:u, :k, :v, :d::jsonb, 50)
                 ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':v' => self::visFromInput($visInput), ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':v' => self::visFromInput($visInput), ':d' => $data]);
         } else {
             $pg->prepare("
                 INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
-                VALUES (:u, 'dropoffs', 'members', :d::jsonb, 50)
+                VALUES (:u, :k, 'members', :d::jsonb, 50)
                 ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
-            ")->execute([':u' => $userId, ':d' => $data]);
+            ")->execute([':u' => $userId, ':k' => $key, ':d' => $data]);
         }
-        return self::loadDropoffs($userId);
+        return self::loadDropoffs($userId, $key);
+    }
+
+    /**
+     * Practice (business) Location block — a SELF-CONTAINED JSONB record in the
+     * OWNER's profile_sections under 'location:p<id>' (NOT the users-table profile
+     * model, which belongs to a person). One address, geocoded to a single pin;
+     * owner-set hours + note; one block-level visibility. Default 'public' — a shop
+     * wants to be found — still capped by the practice-header ceiling at render.
+     */
+    public static function loadPracticeLocation(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('location', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $addr  = (string)($d['address'] ?? '');
+        $hours = (string)($d['hours']   ?? '');
+        $note  = (string)($d['note']    ?? '');
+        $lat   = (isset($d['lat']) && is_numeric($d['lat'])) ? (float)$d['lat'] : null;
+        $lng   = (isset($d['lng']) && is_numeric($d['lng'])) ? (float)$d['lng'] : null;
+        return [
+            'block'   => 'location',
+            'has'     => ($addr !== '' || $hours !== '' || $note !== ''),
+            'address' => $addr, 'hours' => $hours, 'note' => $note,
+            'lat'     => $lat, 'lng' => $lng,
+            'vis'     => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /**
+     * Upsert the practice location. Geocodes the address (Nominatim, via the shared
+     * drop-off helper) only when it actually changed, so editing hours/note never
+     * re-geocodes. A missing key leaves that field unchanged; visibility optional.
+     */
+    public static function savePracticeLocation(int $ownerId, int $practiceId, array $in): array
+    {
+        $key = self::practiceBlockKey('location', $practiceId);
+        $cur = self::loadPracticeLocation($ownerId, $practiceId);
+        $addr  = array_key_exists('address', $in) ? mb_substr(trim((string)$in['address']), 0, self::DROPOFFS_ADDR_MAX)  : $cur['address'];
+        $hours = array_key_exists('hours',   $in) ? mb_substr(trim((string)$in['hours']),   0, self::DROPOFFS_HOURS_MAX) : $cur['hours'];
+        $note  = array_key_exists('note',    $in) ? mb_substr(trim((string)$in['note']),    0, self::DROPOFFS_NOTES_MAX) : $cur['note'];
+
+        $lat = $cur['lat']; $lng = $cur['lng'];
+        if ($addr !== $cur['address']) {
+            $lat = null; $lng = null;
+            if ($addr !== '') { $geo = self::geocodeDropoff($addr); if ($geo !== null) { $lat = $geo['lat']; $lng = $geo['lng']; } }
+        }
+        $data = json_encode(['address' => $addr, 'hours' => $hours, 'note' => $note, 'lat' => $lat, 'lng' => $lng],
+                            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = (array_key_exists('visibility', $in) && self::visFromInput($in['visibility']) !== null)
+             ? self::visFromInput($in['visibility']) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 10)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 10)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeLocation($ownerId, $practiceId);
+    }
+
+    public const HOURS_NOTE_MAX = 500;
+
+    /**
+     * Practice (business) Hours block — a structured 7-day schedule (Mon..Sun),
+     * each day {o:open, c:close, x:closed}, plus a free note. JSONB in the OWNER's
+     * profile_sections under 'hours:p<id>'. Default visibility 'public' (a shop wants
+     * its hours found), still capped by the practice-header ceiling at render.
+     */
+    public static function loadPracticeHours(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('hours', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $rawDays = (isset($d['days']) && is_array($d['days'])) ? $d['days'] : [];
+        $days = []; $has = false;
+        for ($i = 0; $i < 7; $i++) {
+            $row = is_array($rawDays[$i] ?? null) ? $rawDays[$i] : [];
+            $o = self::clampTime((string)($row['o'] ?? ''));
+            $c = self::clampTime((string)($row['c'] ?? ''));
+            $x = !empty($row['x']);
+            $days[] = ['o' => $o, 'c' => $c, 'x' => $x];
+            if ($x || $o !== '' || $c !== '') $has = true;
+        }
+        $note = (string)($d['note'] ?? '');
+        if ($note !== '') $has = true;
+        return [
+            'block' => 'hours', 'has' => $has, 'days' => $days, 'note' => $note,
+            'vis'   => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /** Upsert the weekly hours. Accepts days[7] {o|open, c|close, x|closed} + note + visibility. */
+    public static function savePracticeHours(int $ownerId, int $practiceId, array $in): array
+    {
+        $key = self::practiceBlockKey('hours', $practiceId);
+        $inDays = (isset($in['days']) && is_array($in['days'])) ? $in['days'] : [];
+        $days = [];
+        for ($i = 0; $i < 7; $i++) {
+            $row = is_array($inDays[$i] ?? null) ? $inDays[$i] : [];
+            $days[] = [
+                'o' => self::clampTime((string)($row['o'] ?? $row['open']  ?? '')),
+                'c' => self::clampTime((string)($row['c'] ?? $row['close'] ?? '')),
+                'x' => !empty($row['x']) || !empty($row['closed']),
+            ];
+        }
+        $note = mb_substr(trim((string)($in['note'] ?? '')), 0, self::HOURS_NOTE_MAX);
+        $data = json_encode(['days' => $days, 'note' => $note], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = (array_key_exists('visibility', $in) && self::visFromInput($in['visibility']) !== null)
+             ? self::visFromInput($in['visibility']) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 12)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 12)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeHours($ownerId, $practiceId);
+    }
+
+    /** HH:MM (24h) or empty. Anything malformed collapses to '' (treated as closed). */
+    private static function clampTime(string $t): string
+    {
+        $t = trim($t);
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) ? $t : '';
+    }
+
+    public const LINKS_LABEL_MAX = 60;
+    public const LINKS_URL_MAX   = 400;
+    public const LINKS_MAX_ITEMS = 20;
+
+    /**
+     * Practice (business) Links block — a free list of {label, url} (website +
+     * socials), one JSONB blob in the OWNER's profile_sections under 'links:p<id>'.
+     * URLs are sanitized to http(s) on save; default visibility 'public'.
+     */
+    public static function loadPracticeLinks(int $ownerId, int $practiceId): array
+    {
+        $key = self::practiceBlockKey('links', $practiceId);
+        $s = Db::pg()->prepare("SELECT visibility, data FROM profile_sections WHERE user_id = :u AND key = :k");
+        $s->execute([':u' => $ownerId, ':k' => $key]);
+        $r = $s->fetch();
+        $d = ($r && is_string($r['data'])) ? (json_decode($r['data'], true) ?: []) : [];
+        $items = [];
+        foreach ((array)($d['items'] ?? []) as $it) {
+            if (!is_array($it)) continue;
+            $url = (string)($it['url'] ?? '');
+            if ($url === '') continue;
+            $items[] = ['label' => (string)($it['label'] ?? ''), 'url' => $url];
+        }
+        return [
+            'block' => 'links', 'has' => !empty($items), 'items' => $items,
+            'vis'   => self::normalizeVis(($r && in_array($r['visibility'], self::VIS_VALUES, true)) ? $r['visibility'] : 'public'),
+        ];
+    }
+
+    /** Upsert the links list. Items: [{label, url}]; bad/empty URLs are dropped. */
+    public static function savePracticeLinks(int $ownerId, int $practiceId, array $items, ?string $visInput = null): array
+    {
+        $key   = self::practiceBlockKey('links', $practiceId);
+        $clean = [];
+        foreach ($items as $it) {
+            if (!is_array($it) || count($clean) >= self::LINKS_MAX_ITEMS) continue;
+            $url = self::sanitizeLinkUrl((string)($it['url'] ?? ''));
+            if ($url === '') continue;
+            $label = mb_substr(trim((string)($it['label'] ?? '')), 0, self::LINKS_LABEL_MAX);
+            if ($label === '') {
+                $host  = (string)parse_url($url, PHP_URL_HOST);
+                $label = mb_substr($host !== '' ? preg_replace('/^www\./', '', $host) : $url, 0, self::LINKS_LABEL_MAX);
+            }
+            $clean[] = ['label' => $label, 'url' => $url];
+        }
+        $data = json_encode(['items' => $clean], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        $vis = ($visInput !== null && self::visFromInput($visInput) !== null) ? self::visFromInput($visInput) : null;
+        if ($vis !== null) {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, :v, :d::jsonb, 60)
+                ON CONFLICT (user_id, key) DO UPDATE SET visibility = EXCLUDED.visibility, data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':v' => $vis, ':d' => $data]);
+        } else {
+            Db::pg()->prepare("
+                INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+                VALUES (:u, :k, 'public', :d::jsonb, 60)
+                ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+            ")->execute([':u' => $ownerId, ':k' => $key, ':d' => $data]);
+        }
+        return self::loadPracticeLinks($ownerId, $practiceId);
+    }
+
+    /** Normalize a user-entered URL to a safe absolute http(s) URL, or '' if invalid. */
+    private static function sanitizeLinkUrl(string $u): string
+    {
+        $u = trim($u);
+        if ($u === '') return '';
+        if (!preg_match('#^https?://#i', $u)) $u = 'https://' . $u;
+        $u = filter_var($u, FILTER_SANITIZE_URL);
+        if ($u === false || !filter_var($u, FILTER_VALIDATE_URL)) return '';
+        $scheme = strtolower((string)parse_url($u, PHP_URL_SCHEME));
+        return in_array($scheme, ['http', 'https'], true) ? mb_substr($u, 0, self::LINKS_URL_MAX) : '';
     }
 
     // ---------- block: resume (single PDF; profile-only) ----------
@@ -1290,6 +1508,100 @@ Accept: application/json
     private static function practiceHeaderKey(int $practiceId): string
     {
         return 'practice-header:' . $practiceId;
+    }
+
+    /**
+     * The reorderable storefront blocks for a business (practice) page — the
+     * practice analogue of LAYOUT_BLOCKS. practice-header is pinned (rendered
+     * first) and the staff roster is auto/pinned (rendered last), so neither
+     * appears here. WS3 widens this set (services, gallery, links, drop-offs).
+     */
+    public const PRACTICE_LAYOUT_BLOCKS = [
+        'about'    => ['label' => 'About', 'removable' => true],
+        'location' => ['label' => 'Location', 'removable' => true],
+        'dropoffs' => ['label' => 'Drop-off Locations', 'removable' => true],
+        'hours'    => ['label' => 'Hours', 'removable' => true],
+        'links'    => ['label' => 'Links', 'removable' => true],
+    ];
+
+    /**
+     * Storage key for a practice storefront block, living in the OWNER's
+     * profile_sections (same no-migration convention as practiceHeaderKey).
+     * e.g. 'about:p42'. Won't collide with profile keys or the freeform: prefix.
+     */
+    public static function practiceBlockKey(string $block, int $practiceId): string
+    {
+        return $block . ':p' . $practiceId;
+    }
+
+    /** Storage key for a practice's block ORDER, in the OWNER's profile_sections. */
+    private static function practiceLayoutKey(int $practiceId): string
+    {
+        return 'practice-layout:' . $practiceId;
+    }
+
+    /**
+     * The storefront block order for a practice page (header + staff excluded —
+     * both pinned at render). Persisted WITHOUT new schema as {order:[...]} in
+     * the OWNER's profile_sections under 'practice-layout:<id>'. NULL / never-set
+     * → all registry blocks present (opt-in default = array_keys of the registry).
+     */
+    public static function practiceLayout(int $practiceId): array
+    {
+        $owner = self::practiceOwnerId($practiceId);
+        if ($owner === null) return [];
+        $s = Db::pg()->prepare('SELECT data FROM profile_sections WHERE user_id = :u AND key = :k');
+        $s->execute([':u' => $owner, ':k' => self::practiceLayoutKey($practiceId)]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return array_keys(self::PRACTICE_LAYOUT_BLOCKS);   // never-set → default
+        $d = is_string($raw) ? json_decode($raw, true) : null;
+        $order = (is_array($d) && isset($d['order']) && is_array($d['order'])) ? $d['order'] : null;
+        if ($order === null) return array_keys(self::PRACTICE_LAYOUT_BLOCKS);
+        return self::normalizePracticeLayout($order);
+    }
+
+    /** Persist a practice's block order (validated subset of the registry, de-duped). */
+    public static function savePracticeLayout(int $practiceId, array $order): array
+    {
+        $owner = self::practiceOwnerId($practiceId);
+        if ($owner === null) return [];
+        $clean = self::normalizePracticeLayout($order);
+        Db::pg()->prepare("
+            INSERT INTO profile_sections (user_id, key, visibility, data, sort_order)
+            VALUES (:u, :k, 'members', :d::jsonb, 0)
+            ON CONFLICT (user_id, key) DO UPDATE
+               SET data = EXCLUDED.data, updated_at = now()
+        ")->execute([
+            ':u' => $owner,
+            ':k' => self::practiceLayoutKey($practiceId),
+            ':d' => json_encode(['order' => $clean]),
+        ]);
+        return $clean;
+    }
+
+    /** Filter an arbitrary key list to known practice layout keys, in order, de-duped. */
+    private static function normalizePracticeLayout(array $order): array
+    {
+        $seen = [];
+        $out  = [];
+        foreach ($order as $k) {
+            if (is_string($k) && isset(self::PRACTICE_LAYOUT_BLOCKS[$k]) && !isset($seen[$k])) {
+                $seen[$k] = true;
+                $out[]    = $k;
+            }
+        }
+        return $out;
+    }
+
+    /** Practice blocks not currently placed — the caddy's "available to add" set [key=>label]. */
+    public static function practiceAvailableBlocks(int $practiceId): array
+    {
+        $present = array_flip(self::practiceLayout($practiceId));
+        $out = [];
+        foreach (self::PRACTICE_LAYOUT_BLOCKS as $k => $cfg) {
+            if (!isset($present[$k])) $out[$k] = (string) $cfg['label'];
+        }
+        return $out;
     }
 
     /** The practice owner's profile-app user id (practices.created_by). */

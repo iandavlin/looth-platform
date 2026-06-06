@@ -125,6 +125,16 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   border:1px solid var(--lg-line);cursor:pointer;font-size:14px;line-height:1}
 .lg-idrow__name{margin:0;font:800 28px/1.1 var(--lg-font-serif);color:var(--lg-charcoal);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .lg-tierpill{font:800 10px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-amber);color:#4a3c10;border-radius:6px;padding:4px 9px}
+.lg-bizpill-wrap{margin:0 0 14px}
+.lg-bizpill{display:inline-flex;align-items:center;gap:10px;text-decoration:none;cursor:pointer;border:1px solid var(--lg-line);background:#fff;border-radius:999px;padding:8px 14px;font:600 14px/1 var(--lg-font-sans);color:var(--lg-ink)}
+.lg-bizpill:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-bizpill__tag{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-sage-tint);color:var(--lg-sage-d);border-radius:5px;padding:4px 7px}
+.lg-bizpill__name{font:700 14px/1 var(--lg-font-serif)}
+.lg-bizpill__go{font:600 12px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-bizpill--add{border-style:dashed}
+.lg-bizpill--add:hover{border-color:var(--lg-sage);background:var(--lg-sage-tint)}
+.lg-bizpill__plus{font:800 16px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
+.lg-bizpill__pro{font:800 9px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-amber);color:#4a3c10;border-radius:5px;padding:4px 7px}
 .lg-idrow__glance{font-size:16px;margin:12px 0 0;color:var(--lg-ink)}
 /* the owner's tagline is also .lg-edit (margin:0 -4px), which would zero the gap above — keep it */
 .lg-idrow__body .lg-idrow__glance{margin-top:12px}
@@ -409,7 +419,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 
 /* members-only gate */
 .lg-gate{text-align:center;background:#fff;border:1px solid var(--lg-line);border-radius:18px;padding:48px 30px;margin:0 0 16px}
-.lg-gate__lock{width:64px;height:64px;border-radius:50%;background:var(--lg-sage-tint);display:grid;place-items:center;margin:0 auto 16px;font-size:28px}
+.lg-gate__lock{width:64px;height:64px;border-radius:50%;background:var(--lg-sage-tint);display:grid;place-items:center;margin:0 auto 16px;color:var(--lg-sage-d)}
 .lg-gate h2{margin:0 0 8px;font:800 22px/1.2 var(--lg-font-serif);color:var(--lg-charcoal)}
 .lg-gate p{margin:0 auto 20px;max-width:420px;color:var(--lg-mute);font-size:14.5px}
 .lg-gate__cta{display:inline-flex;gap:10px}
@@ -1656,6 +1666,33 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
       if (r.ok) location.reload();
       else { btn.disabled = false; alert('Could not change mode'); }
     }).catch(function () { btn.disabled = false; alert('Network error'); });
+  });
+})();
+/* Business entry pill (owner) — create the member's LoothPro business page, then
+   open it. Interim create: prompt for a name, POST /me/practices, redirect to the
+   new /p/ page. The richer create UX + Pro-gate land in WS1/WS2. */
+(function () {
+  var bizBtn = document.getElementById('lg-biz-add');
+  if (!bizBtn) return;
+  bizBtn.addEventListener('click', function () {
+    var name = (prompt('Name your business page (e.g. your shop name):') || '').trim();
+    if (!name) return;
+    bizBtn.disabled = true;
+    fetch('/profile-api/v0/me/practices', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j && (res.j.public_url || res.j.slug)) {
+          location.href = res.j.public_url || ('/p/' + res.j.slug);
+        } else {
+          bizBtn.disabled = false;
+          alert('Could not create business: ' + (res.j && res.j.error || '?'));
+        }
+      })
+      .catch(function () { bizBtn.disabled = false; alert('Network error.'); });
   });
 })();
 /* Freeform titled block (owner) — create + delete. Title and body inline-edit
