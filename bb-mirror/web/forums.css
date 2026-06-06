@@ -3080,3 +3080,5 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 @media (min-width:641px){.feed-page .feed-sort-bar > .lg-filters-chip{display:none}}
 /* Hide the corner #bb-ham on hub feed at ≤960px — proxy chip in sort bar takes its place */
 @media (max-width:960px){body:has(.feed-page) #bb-ham{display:none}}
+/* Server-render guard: hide zero-count filter rows on mobile (was JS hideEmptyFilterRows) */
+@media (max-width:640px){.hub-rail__row--empty{display:none}}

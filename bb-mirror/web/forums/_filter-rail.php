@@ -72,7 +72,7 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     $f_url  = hub_url(hub_toggle($filters, $facet, $key), $sort);
     $m_url  = hub_mute_url($filters, $sort, $facet === 'type' ? 't' : 'c', $key);
     ?>
-    <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?>">
+    <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= $n === 0 ? ' hub-rail__row--empty' : '' ?>">
       <a class="hub-rail__nm" href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
       <span class="hub-rail__ct"><?= $n ?></span>
       <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= $m_url ?>"
@@ -117,7 +117,7 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
     }
     ?>
     <div class="hub-acc<?= $open ? ' is-open' : '' ?>" data-cat="<?= htmlspecialchars($p['key']) ?>">
-      <div class="hub-rail__row hub-acc__parent<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?>">
+      <div class="hub-rail__row hub-acc__parent<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= (int)$p['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
         <?php if ($has): ?>
           <button class="hub-acc__chev" type="button" aria-expanded="<?= $open ? 'true' : 'false' ?>" aria-label="Expand <?= htmlspecialchars($p['label']) ?>">&#9656;</button>
         <?php else: ?>
@@ -133,7 +133,7 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
           <?php foreach ($p['leaves'] as $lf):
             $lon  = in_array($lf['key'], $filters['leaves'] ?? [], true);
             $lmut = in_array($lf['key'], $muted['leaves'] ?? [], true); ?>
-            <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?>">
+            <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
               <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
               <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
               <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
