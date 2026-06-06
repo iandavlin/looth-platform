@@ -257,3 +257,55 @@ body.interstitial{display:flex;align-items:center;justify-content:center;min-hei
 .my-practices .pr-item .pr-actions{display:flex;gap:6px}
 .my-practices .pr-item .pr-actions button{font-size:12px;padding:3px 8px}
 .my-practices .empty{color:var(--ink-mute);font-size:13px;padding:6px 0}
+
+/* ============================================================
+   mobile builder layout (phone-first responsive pass)
+   Layout-only: keep editor palette/fonts. No visibility logic.
+   ============================================================ */
+@media (max-width: 780px){
+  /* never let the editor surfaces exceed the viewport */
+  .main, main{min-width:0;max-width:100%;overflow-x:hidden}
+  .canvas{max-width:100%;min-width:0;padding:18px 14px}
+
+  /* topbar: let it wrap instead of forcing a 456px min-content width */
+  .topbar{flex-wrap:wrap;gap:8px 10px;padding:10px 14px}
+  .crumbs{flex:1 1 auto;min-width:0;font-size:12.5px}
+  .viewer{flex:1 1 100%;justify-content:flex-start;flex-wrap:wrap;gap:8px;min-width:0}
+  .viewer .seg{flex:0 0 auto}
+  .viewer .seg button{padding:8px 12px;font-size:13px}  /* >=40px tap target */
+  .saveind{flex:1 1 auto;min-width:0;text-align:right}
+
+  /* identity header: avoid avatar/text crowding */
+  .idhead{padding:16px 2px}
+  .id-name h1{font-size:21px}
+  .socials{gap:5px}
+  .socials a{padding:6px 10px}  /* taller tap target */
+
+  /* sections: tighter side padding, keep readable */
+  .section{padding:16px 14px}
+
+  /* touch: keep edit affordances reachable */
+  .pencil{width:30px;height:30px}        /* larger tap target on touch */
+  .id-meta .live{font-size:12px}
+}
+
+/* narrow phones: modals must fit the viewport, not overflow it */
+@media (max-width: 560px){
+  .backdrop{padding:48px 10px;align-items:flex-start}
+  .modal, .modal.modal-wide{max-width:100%;width:100%}
+  .modal-body{padding:14px;max-height:calc(100vh - 180px);overflow:auto}
+  .modal-head{padding:12px 14px}
+  .modal-foot{padding:12px 14px}
+  .modal-head .close{font-size:22px;padding:4px 10px}  /* tap target */
+
+  /* form rows that used fixed columns would overflow a narrow modal */
+  .row{flex-wrap:wrap}
+  .row .k{flex:1 1 100%}
+  .row .v{flex:1 1 100%}
+  .precision{grid-template-columns:1fr;gap:6px}
+  .skill-row{grid-template-columns:1fr;gap:6px}
+  .picker-grid{grid-template-columns:1fr}
+
+  /* primary action buttons: comfortable tap height */
+  .btn{padding:10px 16px}
+}
