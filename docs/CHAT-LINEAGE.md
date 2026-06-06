@@ -182,3 +182,20 @@ Not a chat replacement (no prior chat existed), but a scope expansion + rename w
   successor briefing at `docs/briefing-coordinator-successor.md` (rewritten 2026-06-04; prior
   05-28 copy archived to `strangler-handoffs/2026-06-04-coordinator-successor-prior.md`)
 - **Lost:** in-conversation reasoning from the retired session; all destinations are in the docs
+
+## 2026-06-05 — coordinator: clean handoff + decommission
+
+- **Previous:** this session (retired, context full)
+- **New:** *(Ian to spawn fresh + capture ID)*
+- **Reason:** big session — archive-poc PG read-cutover landed, Hub-unification project kicked off; clean handoff
+- **Carried over:** fresh `briefing-coordinator-successor.md` (rewritten 2026-06-05, project-focused), `DB-STATE-AUDIT-2026-06-05.md`, `hub-filter-nav-spec.md`, §4 cutover model rewritten to in-place promotion, all lane briefings in docs/. Prior successor briefing archived to `strangler-handoffs/2026-06-05-coordinator-successor-prior.md`
+- **Live state at handoff:** archive-poc reads on Postgres (proven, faster, SQLite intact); poc lane on the `_sync.php`→PG port (gate for SQLite retirement); hub lane parked on poc; ~9 commits committed-not-pushed awaiting Ian's push sign-off; bridge enabled on dev
+- **Lost:** in-session reasoning; all destinations are in the docs
+
+## 2026-06-05 PM — comments-db + reactions/stream → consolidated comments+reactions lane
+
+- **Retired:** `3df42b5c-7f6c-4969-a5a0-e355a8a91ca7` (comments-db) + `b2bb9043-2839-473c-be0f-ddc665a2e79c` (reactions/stream)
+- **New:** `1c86c753-6716-44cb-b047-e888f09d3bf6` (comments-reactions) — briefing `docs/briefing-comments-reactions.md`
+- **Reason:** both backends dev-proven; folded into one lane to own comments + reactions/likes going forward (Ian asked for a fresh chat)
+- **Carried over:** `SESSION-HANDOFF-comments-db.md` open items → the fresh briefing's queue; new lane handoff `SESSION-HANDOFF-comments-reactions.md`
+- **Landed first session:** dd248c5 (bb-mirror comments grant committed), 3dfda18 (badge count reads live store, not WP bake) — committed, not pushed

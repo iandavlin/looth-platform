@@ -44,4 +44,13 @@ Legend: 🟢 green/done · 🟡 in-flight · ⚪ dispatched, not started · 🔵
 - **user-lifecycle LOGIN** ⚪ dispatched. poller → `briefing-login-poller.md` (G1 onboard auto-login+JWT, G2 cache purge, G3 dash-role capture, Phase-3 canonical provision). shim+profile-app → `briefing-login-identity.md` (G4 uuid-stable mint/email-change, G7 reliable bridge-create). Full audit+plan: `docs/USER-LIFECYCLE-AUDIT.md`.
 - **git tsar** 🆕 role created (`briefing-git-tsar.md`) — sole merge/push gateway + per-lane worktrees; running the off-main migration now. Worktree transfer mechanism coordinator-tested.
 - **Buck sub-coordinator** 🆕 role created (`briefing-buck-subcoord.md`) — owns all Buck branches per the standing merge policy; frees main coord.
-- **Coordinator follow-ups owed:** provision poller a scoped `discovery` DSN (`LG_DISCOVERY_DSN`); one-time sweep of orphaned `wp_user_bridge` rows (G5 backlog).
+- **Coordinator follow-ups (2026-06-04 resolved):**
+  - **Orphan sweep DONE.** `wp_user_bridge` already clean (0 dead-WP-id rows, 0 email mismatches). `lg_role_sources` had **35 ghost rows across 30 recycled test-user IDs** → deleted; `lg_patreon_members` 1 orphan → deleted. 0 remaining. `provision()` prevents new ones.
+  - **Discovery DSN — REVERSED, do NOT provision.** Poller's `handleDiscovery` queries PG `discovery.person`/`content_item`, but on dev those live in **archive-poc's SQLite** (`index.sqlite`); PG `looth.discovery` only has `likes`+`article_blobs`. A PG DSN would make teardown *error*. Real fix = poller code change (target SQLite, drop `discovery.` prefix) tied to [[project_discovery_pg_migration]]. Relayed to poller; honest "skipped" marker stays correct.
+  - **Dev bridge ENABLED** (`profile_hook_secret`) — new users auto-bridge; unblocked both login lanes. Reversible.
+
+## 2026-06-05 — Hub unification + archive-poc→Postgres (coordinator)
+- **archive-poc → Postgres READ-CUTOVER** 🟢 done + browser-proven (front-page/archive/search/sponsors/calendar on PG, faster; content_item=708, discussions dropped by design). SQLite intact as one-line revert. Repoint edits UNCOMMITTED (working-tree since 23be507) — stage/review/push pending. NEXT: `_sync.php`→PG port (gate for SQLite retirement); HOLDING retirement.
+- **Hub unification** ⏸️ hub lane parked on poc. Plan: UNION discovery.content_item + forums.* into the Hub feed (one query), content cards, then the filter/nav layer (`hub-filter-nav-spec.md`: AND filters, search-first authors, profile-sourced author header, type/category mute only — NO person mute, per-user persistence). Naming: stays "The Hub" at /hub/. `/stream/` retired → 301 /hub/ (live).
+- **Cutover model CHANGED** → in-place promotion (dev BECOMES live), §4 rewritten; cutover lane to rewrite CUTOVER-PLAN.md. DSN-quote = cut-day gotcha (took FPM down ~1min).
+- **Coordinator open:** the push (~9 commits, Ian sign-off); repo nginx-snippet reconcile; mobile read-API layer (future).

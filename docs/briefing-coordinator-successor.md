@@ -1,92 +1,75 @@
-# Briefing — successor coordinator (2026-06-04)
+# Briefing — successor coordinator (2026-06-05)
 
-You're taking over coordination of the Looth Group strangler rollout. The prior coordinator
-session (`34c73878-3c14-41f6-b56f-8d5195ea47e4`) is being retired clean (context fullness,
-not failure). The system is stable; work is in flight; every material decision lives in a doc.
+You're taking over coordination. The prior session is retired (context full). **The active project right
+now is the Hub unification on the archive-poc/Postgres stack** — get moving on that first; the rest is
+context. System is stable, work is in flight, every decision is in a doc.
 
-## Spin up in 5 minutes
+## Spin up fast — read in order
+1. This file.
+2. **`docs/DB-STATE-AUDIT-2026-06-05.md`** — physical DB state (the project's ground truth).
+3. **`docs/STRANGLER-COORDINATION.md` §4** — the cutover model (REWRITTEN 2026-06-05 to **in-place
+   promotion: dev BECOMES live**, not blue-green). Plus §0/§2 for the contract.
+4. **`docs/LANE-LEDGER.md`** — live board.
+5. **`docs/hub-filter-nav-spec.md`** + the mockup at `https://dev.loothgroup.com/mockups/hub-filters.html`
+   — the filter/nav design (decided, not yet built).
 
-Read in this order:
+Memory auto-loads via `MEMORY.md`. Relevant: `feedback_relay_link_format`, `feedback_chat_report_back_format`,
+`project_activity_stream_launch`, `project_managed_cpt_render_routing`, `project_discovery_pg_migration`,
+`feedback_gate_posting_on_wp_cookie_not_whoami`.
 
-1. **This file** (already done)
-2. **`docs/LANE-LEDGER.md`** — the live board. Status of every dispatched lane, cross-lane items,
-   what's pushed this session. This is the single most current view; start here.
-3. **`docs/handoff-coordinator-2026-06-03-pm.md`** — the last full handoff. Critical-state section
-   first (the items below are pulled from it). Lane detail + infra changes follow.
-4. **`docs/STRANGLER-COORDINATION.md`** — the durable contract (~30KB, §1-§4). Skim, then dive into
-   whatever the current open question touches. Written so you don't re-derive anything.
-5. **`docs/CHATS-MENU.md`** — live roster: chat names, outliner titles, session IDs, current status.
-   Row #1 (coordinator) is YOU — update its ID/title once Ian gives them to you.
-6. **`docs/CHAT-LINEAGE.md`** — chat-replacement history (your handoff entry is logged at the bottom).
-7. **`docs/STRANGLER-SESSION-HANDOFF.md`** — older narrative snapshot (LATEST = 2026-06-01), largely
-   superseded by the 06-03-pm handoff + LANE-LEDGER. Read for "how we got here" context only.
+## THE PROJECT — Hub unification (do this first)
+Goal: **The Hub** (`/hub/`, bb-mirror) becomes the one unified surface — forum threads + content
+(articles/videos/loothprints) in one feed, with rich filtering. `/stream/` is retired (301→/hub/, live).
+Archive may fold into the Hub later. No data duplication — `forums` + `discovery` are two schemas in the
+same `looth` PG DB, so the feed is one cross-schema query.
 
-Memory entries auto-load via `MEMORY.md`. Key ones for the coordinator role:
-`feedback_relay_link_format` (outbound), `feedback_chat_report_back_format` (inbound),
-`project_strangler_coordination` (your charter), `feedback_buck_merge_policy`,
-`project_lg_shell_header_keeper`, `project_activity_stream_launch`.
+**Where it stands:**
+- ✅ **archive-poc reads cut over to Postgres** — browser-proven, *faster* (search 31ms). `content_item`
+  = 708 content rows (discussions DROPPED on purpose — they stay in `forums.*`; "kind=discussion → 0" is
+  the proof). SQLite intact as one-line-revert. **Repoint edits NOT yet committed** (working-tree, since
+  `23be507`) — they need to be staged by pathspec + reviewed + pushed.
+- 🔜 **poc lane's next task: port `_sync.php` (incremental WP→index writer) to write Postgres.** This is
+  the GATE for retiring SQLite — reads are on PG but the writer still hits SQLite, so edits don't reach
+  the front page without a full re-backfill. **Do NOT greenlight SQLite retirement until `_sync.php`
+  targets PG and it's soaked.**
+- ⏸️ **hub lane PARKED** (Ian: wait for poc to fully settle). When unblocked: UNION `discovery.content_item`
+  + `forums.*` in `bb-mirror/web/forums/_feed.php` (one query, New/Old/Hot across both), content-card
+  variant in the renderer, verify gating. THEN the filter/nav layer per `hub-filter-nav-spec.md`.
+  Briefing: `briefing-hub-fold-cpts.md`. Naming decided: stays **"The Hub" at /hub/**.
 
-## Your job in one paragraph
+**Filter/nav design (decided, spec'd, mockup'd — not built):** AND across Type∩Category∩Author;
+Type+Category have sticky mute toggles (**mute is type/category only — NO person/author mute**);
+**Authors are search-first** (byline-clickable, author header pulled from profile-app, filter-only);
+per-user prefs persist in profile-app. All in `hub-filter-nav-spec.md`.
 
-You hold the cross-cutting contract. Project chats build in their lanes; you keep the contract honest,
-ratify cross-cutting decisions, route briefings + replies via Ian (the human bus), and update the docs
-as decisions land. You don't talk to project chats directly. You don't make live changes via the
-product — BUT you are also box sysadmin `ubuntu`, so you DO wire dev nginx / FPM / sudo-queue items
-that the contract assigns to coordinator. You don't expand scope beyond cutover-eligibility.
+## Coordinator-owned open items
+- **The push** — ~9 commits committed-not-pushed (user-lifecycle delete, login fixes, comments DB,
+  bb-mirror whoami+hub-UI, lg-shell nav, conversions) PLUS the uncommitted archive-poc repoint. Ian
+  reviews + signs off → git-tsar pushes. **No silent pushes.** This is the gating item for landing it all.
+- **nginx repo reconcile** — deployed `strangler-archive-poc.conf` is ahead of the repo copy (I did
+  `/stream/`→`/hub/` + dropped dead `stream-more` routing). Sync the repo copy for cutover-prep.
+- **DSN-quote cut-day gotcha** — an unquoted `;` in a DSN took all 8 FPM pools down ~1 min during the
+  PG flip. Log it into the cutover runbook's secret-swap checklist (the in-place cut does a dev→live
+  DSN/secret swap — quoting matters).
+- **Bridge is ENABLED on dev** (`profile_hook_secret`) — new users auto-bridge. (Was off pre-launch.)
 
-## ⚠️ Critical state — confirm these first (from the 06-03-pm handoff)
-
-1. **VERIFY: did Buck's `dropoff-clusters` merge (7afb514) break `/directory`?** Post-merge smoke of
-   `/profile-api/v0/directory-members` returned 404 — *probably wrong test path, UNCONFIRMED.* The
-   merge added a `banner_url` SELECT; confirm the `/directory` page + API render on dev and the column
-   exists / query doesn't 500. If broken → follow-up commit, not an unpush.
-2. **Two 🔴 secrets STILL unrotated:** CF creds (pasted in an earlier chat) + a plaintext AWS key
-   (`AKIA…`) in `/var/www/dev/wp-config.php`. Coordinator-owned. Rotate.
-3. **Uncommitted lane work on main** (review-before-push applies): whoami lane's `archive.js` repoint +
-   `stream-more`/`rows-more` gating fix + pilot_pro PG bridge; perf-czar's ingest image fix; lightbox
-   `engine/assets/lg-front.js`; comments-lean's dequeue; the CPT standalone-header identity fix.
-4. **devmsg panel patch needs persisting:** live-refresh fix is in the *installed* extension copy only.
-   Rebuild the vsix (`/opt/devmsg-extension`) + reinstall to survive reinstall + reach other team users.
-5. **pro-gate held for Ian** (`buck/profile-public-pro-gate` 53b2a0a): policy approved + fail-closed,
-   but TESTING-not-canonical (changes the "Ian FINAL" header-ceiling model). Awaiting Buck's
-   pilot_pro clamp+403 test → then merge. Buck merge policy is standing (see memory).
-
-## Coordinator-owned pending (sysadmin hat)
-
-- Apply the **stripe-pages single-router nginx location** when that lane delivers (via sudo-queue).
-- **nginx args-under-alias fix** — rows-more clean-URL + stream-more `?cursor` both drop args under
-  the alias+rewrite; same fix; before cutover (deferred, dev-gated, not urgent).
-- **Rotate the two secrets** (item 2 above).
-- **SHORTINIT comments-endpoint nginx location** when comments-lean delivers (don't ship unreviewed).
+## Lanes / roles (briefings in docs/)
+- **archive-poc** (`briefing-archive-poc-pg.md`) — read-cutover DONE, on `_sync.php` port next.
+- **hub** (`briefing-hub-fold-cpts.md`) — parked on poc.
+- **git-tsar** (`briefing-git-tsar.md`) — sole merge/push gateway. Worktree isolation is SHELVED (it
+  broke live dev twice — dev serves from the working tree, so reverting main 404s live pages). Lanes
+  work in `main`; tsar merges by pathspec.
+- **Buck sub-coordinator** (`briefing-buck-subcoord.md`) — owns all Buck branches.
+- **login** (`briefing-login-poller.md` + `briefing-login-identity.md`) — running. G1 (Patreon auto-login)
+  PROVEN by a real connect; G4/G7 identity-stability shipped.
+- **stripe-pages toggle** (`briefing-stripe-pages-toggle.md`) — admin on/off for the purchase pages; ready.
 
 ## How Ian works
-
-- Fast feedback, doesn't over-spec; trusts you to pick reasonable defaults and surface tradeoffs.
-- Wants terse status in plain English, lead with the answer, concrete evidence (DB rows, file:line,
-  exact errors). Skip tables/jargon unless asked.
-- Will push back hard if a recommendation is wrong — accept, revise loudly, don't over-defend.
-- Runs code-server (browser VS Code); native session picker handles chat-switching; URI links don't
-  work for him. Copy-paste is broken → use the canonical relay format religiously (see memory).
-- Outliner titles in `CHATS-MENU.md` are how he finds chats — keep them current.
-- Token-conscious: prefers fewer supervised chats over autonomous spawns; keep spawned chats small.
-
-## Behaviors the prior coordinators settled into
-
-- **In-lane work doesn't need a round-trip.** "Should I do X in my lane?" is usually "yes, burn the
-  queue." Only ratify decisions that touch the cross-cutting contract.
-- **Files do the substance.** Every decision lands in a doc; messages are pointers.
-- **Revise loudly, not silently.** New info / Ian pushback → "I was wrong, here's the revised picture."
-- **Be honest about uncertainty.** Delegate (e.g. claude-code-guide) rather than guess.
-- **Don't pre-build coordination for non-existent work.**
-- **Header/footer = lg-shell's** (one canonical `/srv/lg-shared/site-header.php`); consumers populate
-  `$ctx` from `/whoami` only. Cross-cutting (header/whoami/nginx/secrets) routes to coordinator.
-
-## Reporting at spawn
-
-Capture + report: your session ID (Ian provides if you can't see it) and your outliner title.
-Update `CHATS-MENU.md` row #1 with the new ID/title, and append a `CHAT-LINEAGE.md` entry.
+Terse, plain-English, lead-with-the-answer; pushes back hard, revise loudly; runs code-server, copy-paste
+broken → use the canonical relay format; cautious about anything irreversible ("are we deleting anything?")
+— keep reversibility explicit; token-conscious (fewer/leaner chats). You're also box sysadmin `ubuntu` —
+you wire dev nginx/FPM/secrets yourself.
 
 ## When in doubt
-
-Read `STRANGLER-COORDINATION.md` end-to-end. It captures every architectural decision with reasoning.
-The system is stable; the work is in flight; Ian knows where everything is. You're the next pair of hands.
+Read `STRANGLER-COORDINATION.md` end to end. Then push the project: get the push signed off, get
+`_sync.php` ported, unblock the hub lane, build the unified feed + filter layer. That's the line.
