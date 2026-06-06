@@ -633,6 +633,24 @@ function feed_render_tags(array $tags): void
     echo '</div>';
 }
 
+// Server-render the mobile action bar (Like / N replies / Share) that hub-polish.js
+// used to inject client-side (the post-paint flash). Markup MUST stay in lockstep
+// with hub-polish.js buildActions() — JS now only WIRES the present row, never builds
+// it (mobile-only via .lg-card-actions CSS; display:none at desktop). $reply_count is
+// 0 for content cards → "Reply".
+function feed_action_bar(int $reply_count): void
+{
+    static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+    static $ICO_REPLIES = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>';
+    static $ICO_SHARE   = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
+    $label = $reply_count === 0 ? 'Reply' : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
+    echo '<div class="feed-card__actions lg-card-actions">'
+       . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
+       . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
+       . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>'
+       . '</div>';
+}
+
 // Forum feed URL, appending ?fid=<id> when the slug is shared by >1 forum.
 function feed_forum_url(array $f, array $slug_freq): string
 {
@@ -820,6 +838,8 @@ $header_cat = $scoped_forum
           </a>
         <?php endif; ?>
       </div>
+      <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
+      <?php feed_action_bar(0); ?>
     </article>
     <?php continue; endif;
       $turl        = feed_topic_url($topic);
@@ -940,6 +960,9 @@ $header_cat = $scoped_forum
         <span class="fce-btn">&#8617; Share</span>
         <span class="fce-btn">&#9734; Save</span>
       </div>
+
+      <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
+      <?php feed_action_bar($reply_count); ?>
 
       <?php if ($teaser || $has_more): ?>
         <div class="feed-card__replies">
