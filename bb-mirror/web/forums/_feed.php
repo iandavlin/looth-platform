@@ -569,6 +569,39 @@ if ($cc_keys) {
     }
 }
 
+// -- Card reaction counts (Hub engagement bar → discovery.card_reactions). --
+// Mirrors the comment-count read above: ONE grouped read keyed (post_type, item_id)
+// via the comments+reactions engine's count contract (lg_card_reactions_for_items in
+// archive-poc/api/v0/_reactions.php). Topics use post_type 'topic'; content uses its
+// CPT. bb-mirror has SELECT on discovery.card_reactions. The viewer's own pick + the
+// write nonce come client-side from the card-react GET (the WP-cookie door). Try/catch
+// so a missing grant degrades to "no reactions", never a 500.
+//
+// Reactable types = card-react.php's LG_CARD_REACT_TYPES (kept in lockstep here).
+const LG_HUB_REACT_TYPES = ['post-imgcap','post-type-videos','sponsor-post','loothprint',
+                            'loothcuts','useful_links','member-benefit','topic'];
+$card_reaction_counts = []; // "post_type:item_id" => [slug => count]
+$rx_items = [];
+foreach ($topics as $_r) {
+    if (($_r['card_type'] ?? 'topic') === 'content') {
+        $rx_pt = (string)($_r['content_cpt'] ?? '');
+    } else {
+        $rx_pt = 'topic';
+    }
+    $rx_id = (int)($_r['topic_id'] ?? 0);
+    if ($rx_pt !== '' && $rx_id > 0 && in_array($rx_pt, LG_HUB_REACT_TYPES, true)) {
+        $rx_items[] = ['post_type' => $rx_pt, 'item_id' => $rx_id];
+    }
+}
+if ($rx_items) {
+    try {
+        require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php'; // count contract + palette
+        $card_reaction_counts = lg_card_reactions_for_items($db, $rx_items);
+    } catch (\Throwable $e) {
+        $card_reaction_counts = []; // store/grant unreadable → omit reactions, keep the feed
+    }
+}
+
 // -- Helpers --
 // bb_mirror_avatar(), feed_rel_time(), bb_mirror_render_reply_stub() live in
 // the shared partial so the lazy ?replies endpoint emits identical markup.
@@ -648,6 +681,50 @@ function feed_action_bar(int $reply_count): void
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
        . '<span class="lg-act lg-act-share" role="button" tabindex="0">' . $ICO_SHARE . 'Share</span>'
+       . '</div>';
+}
+
+// One palette reaction's inner glyph (emoji char or static image), shared by the
+// count chips + the picker options. Mirrors comments.php's lg_c_rx_glyph so the feed
+// reaction UI matches the modal's. Requires _reactions.php loaded (palette + base).
+function feed_rx_glyph(array $rx): string
+{
+    if (($rx['type'] ?? '') === 'image') {
+        return '<img class="fcr-img" src="'
+             . htmlspecialchars(LG_REACTIONS_ASSET_BASE . ($rx['file'] ?? ''), ENT_QUOTES)
+             . '" width="18" height="18" alt="" loading="lazy">';
+    }
+    return '<span class="fcr-emoji">' . htmlspecialchars($rx['char'] ?? '') . '</span>';
+}
+
+// Server-render the card reaction control: count chips for reactions that exist
+// (palette order, non-zero only) + an "add reaction" trigger revealing the full
+// BuddyBoss palette. Inert until forums.js wires it; counts still render for
+// logged-out viewers (read-only). The viewer's own pick + the write nonce are
+// fetched client-side from the card-react GET door. $counts = [slug=>int].
+// No-op when the reactions engine isn't loaded (count read failed → degrade clean).
+function feed_reactions_bar(string $postType, int $itemId, array $counts): void
+{
+    if (!function_exists('lg_reactions_palette')) return; // engine read failed → skip
+    $palette = lg_reactions_palette();
+    $chips = '';
+    foreach ($palette as $rx) {
+        $n = (int) ($counts[$rx['slug']] ?? 0);
+        if ($n <= 0) continue;
+        $chips .= '<button type="button" class="fcr-chip" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
+                . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx)
+                . '<span class="fcr-n">' . $n . '</span></button>';
+    }
+    $opts = '';
+    foreach ($palette as $rx) {
+        $opts .= '<button type="button" class="fcr-opt" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
+               . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx) . '</button>';
+    }
+    echo '<div class="fcr" data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
+       . '" data-item-id="' . $itemId . '">'
+       . '<span class="fcr-chips">' . $chips . '</span>'
+       . '<button type="button" class="fcr-add" aria-label="Add reaction">&#9786;<span>+</span></button>'
+       . '<span class="fcr-palette" hidden>' . $opts . '</span>'
        . '</div>';
 }
 
@@ -838,6 +915,8 @@ $header_cat = $scoped_forum
           </a>
         <?php endif; ?>
       </div>
+      <?php /* Card reactions — server-rendered counts; picker wired by forums.js to card-react. */ ?>
+      <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
       <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
       <?php feed_action_bar(0); ?>
     </article>
@@ -961,6 +1040,8 @@ $header_cat = $scoped_forum
         <span class="fce-btn">&#9734; Save</span>
       </div>
 
+      <?php /* Card reactions — server-rendered counts; picker wired by forums.js to card-react. */ ?>
+      <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
       <?php /* Mobile action bar — server-rendered (no client-side pop-in); wired by hub-polish.js. */ ?>
       <?php feed_action_bar($reply_count); ?>
 

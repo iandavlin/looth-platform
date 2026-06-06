@@ -1465,6 +1465,45 @@ body.nav-open .nav-overlay { display: block; }
 .feed-card__eng .fce-sp { flex: 1; }
 .feed-card__eng .fce-btn { padding: 5px 9px; border-radius: 8px; white-space: nowrap; }
 .feed--proto .feed-card__eng .fce-btn:hover { background: var(--lg-sage-tint); }
+
+/* Card reactions (engagement) — picker + count chips, server-rendered in _feed.php
+   (feed_reactions_bar) and wired by forums.js §4d to /archive-api/v0/card-react.
+   Mirrors the comments-modal reaction bar (.lgc-rx*). Shown on all viewports. */
+.feed-page .fcr { position: relative; display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; padding: 9px 13px 2px; }
+.feed-page .fcr-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.feed-page .fcr-chip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font: inherit; font-size: 13px; line-height: 1; padding: 3px 9px 3px 7px;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 999px;
+  background: var(--bg-card, #fff); color: var(--lguser-mute, #6b6f6b); }
+.feed-page .fcr-chip:hover { background: var(--lguser-pill, #dde6c7); }
+.feed-page .fcr-chip.is-mine { background: var(--lg-sage-tint, #eef2e3);
+  border-color: var(--lg-sage, #87986a); color: var(--lguser-accent-d, #52613d); }
+.feed-page .fcr-n { font-weight: 600; font-variant-numeric: tabular-nums; }
+.feed-page .fcr-emoji { font-size: 15px; line-height: 1; }
+.feed-page .fcr-img { display: inline-block; width: 18px; height: 18px;
+  object-fit: contain; vertical-align: middle; }
+.feed-page .fcr-add { display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; font: inherit; font-size: 14px; line-height: 1; width: 28px; height: 24px;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 999px;
+  background: var(--bg-card, #fff); color: var(--lguser-mute, #6b6f6b); padding: 0; }
+.feed-page .fcr-add span { font-size: 11px; font-weight: 700; margin-left: -1px; }
+.feed-page .fcr-add:hover { background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); }
+.feed-page .fcr-palette { position: absolute; left: 13px; bottom: calc(100% - 2px); z-index: 20;
+  display: flex; gap: 2px; padding: 6px; background: #fff;
+  border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 14px;
+  box-shadow: 0 6px 22px rgba(26, 29, 26, .16); }
+.feed-page .fcr-palette[hidden] { display: none; }  /* [hidden] must beat display:flex */
+.feed-page .fcr-opt { display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; border: 0; background: none; padding: 6px; border-radius: 10px;
+  font-size: 20px; line-height: 1; }
+.feed-page .fcr-opt:hover { background: var(--lg-sage-tint, #eef2e3); }
+.feed-page .fcr-opt .fcr-img { width: 22px; height: 22px; }
+.feed-page .fcr-opt .fcr-emoji { font-size: 20px; }
+/* logged-out: counts stay visible (read-only), interaction hidden */
+body.fcr-anon .feed-page .fcr-add { display: none; }
+body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
+
 /* Max tier: lift the title + show the breadcrumb path prominently */
 .feed--proto .feed-card--max .feed-card__title { font-size: 22px; }
 /* Inline reply composer (shown only when a discussion is expanded) */

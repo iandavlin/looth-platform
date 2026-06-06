@@ -1747,3 +1747,113 @@
     frame.style.height = Math.max(220, Math.min(e.data.lgCommentsHeight, cap)) + 'px';
   });
 })();
+
+/* ─── §4d. Card reactions (Hub feed topics + content) ──────────────────────
+   Engagement-bar reaction picker, wired to the comments+reactions engine's card
+   door (/archive-api/v0/card-react). Counts are server-rendered in _feed.php
+   (feed_reactions_bar → lg_card_reactions_for_items); this only adds the viewer's
+   own-pick highlight + the write. Gate = WP login cookie (the GET resolves it):
+   anon viewers keep read-only counts, no add/react. 'like' is just one palette
+   slug (the discovery.likes fold) — one reaction per card, re-pick toggles off. */
+(function () {
+  var REACT = '/archive-api/v0/card-react';
+  var nonce = '', authed = false;
+
+  function esc(s) {
+    return (s + '').replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  // Palette slug order + per-slug glyph HTML are read from the server-rendered
+  // picker options, so the JS never hard-codes the palette (engine owns it).
+  function paletteOpts(bar) {
+    return [].slice.call(bar.querySelectorAll('.fcr-palette .fcr-opt'));
+  }
+  function glyphFor(bar, slug) {
+    var opt = bar.querySelector('.fcr-palette .fcr-opt[data-slug="' + slug + '"]');
+    return opt ? opt.innerHTML : '';
+  }
+  function renderChips(bar, counts, mine) {
+    var chips = bar.querySelector('.fcr-chips'); if (!chips) return;
+    var html = '';
+    paletteOpts(bar).forEach(function (opt) {
+      var slug = opt.getAttribute('data-slug'), n = counts[slug] || 0;
+      if (n <= 0) return;
+      html += '<button type="button" class="fcr-chip' + (mine === slug ? ' is-mine' : '') +
+              '" data-slug="' + esc(slug) + '">' + glyphFor(bar, slug) +
+              '<span class="fcr-n">' + n + '</span></button>';
+    });
+    chips.innerHTML = html;
+  }
+  function closePalettes(except) {
+    [].forEach.call(document.querySelectorAll('.fcr-palette'), function (p) {
+      if (p !== except) p.hidden = true;
+    });
+  }
+  function doReact(bar, slug) {
+    if (!authed) return;  // anon — add trigger hidden, chips read-only
+    var pt = bar.getAttribute('data-post-type'), id = parseInt(bar.getAttribute('data-item-id'), 10);
+    fetch(REACT, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: nonce })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok) renderChips(bar, j.counts || {}, j.mine); })
+      .catch(function () {});
+  }
+
+  // Batch viewer-state fetch for any bars not yet synced (initial load, filter
+  // swap, infinite-scroll appends). GET resolves auth + nonce + my-picks + counts.
+  function sync() {
+    var bars = [].slice.call(document.querySelectorAll('.fcr:not([data-fcr-synced])'));
+    if (!bars.length) return;
+    bars.forEach(function (b) { b.setAttribute('data-fcr-synced', '1'); });
+    var items = bars.map(function (b) {
+      return b.getAttribute('data-post-type') + ':' + b.getAttribute('data-item-id');
+    }).join(',');
+    fetch(REACT + '?items=' + encodeURIComponent(items),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) {
+        if (d && d.authenticated && d.nonce) {
+          nonce = d.nonce; authed = true; document.body.classList.remove('fcr-anon');
+        } else {
+          document.body.classList.add('fcr-anon');
+        }
+        var counts = (d && d.counts) || {}, mine = (d && d.my_reactions) || {};
+        bars.forEach(function (b) {
+          var k = b.getAttribute('data-post-type') + ':' + b.getAttribute('data-item-id');
+          // Re-render from the authoritative GET so a "mine" highlight lands even
+          // when SSR counts were already present (SSR can't know the viewer).
+          if (counts[k] || mine[k]) renderChips(b, counts[k] || {}, mine[k] || null);
+        });
+      })
+      .catch(function () { document.body.classList.add('fcr-anon'); });
+  }
+
+  document.addEventListener('click', function (e) {
+    var bar = e.target.closest && e.target.closest('.fcr'); if (!bar) return;
+    e.stopPropagation();  // don't bubble to the card's open-thread handler
+    if (e.target.closest('.fcr-add')) {
+      var pal = bar.querySelector('.fcr-palette'); var willOpen = pal.hidden;
+      closePalettes(); pal.hidden = !willOpen; return;
+    }
+    var opt = e.target.closest('.fcr-opt');
+    if (opt) { doReact(bar, opt.getAttribute('data-slug')); closePalettes(); return; }
+    var chip = e.target.closest('.fcr-chip');
+    if (chip) { doReact(bar, chip.getAttribute('data-slug')); return; }
+  });
+  document.addEventListener('click', function (e) {
+    if (!(e.target.closest && e.target.closest('.fcr'))) closePalettes();
+  });
+
+  if (document.readyState !== 'loading') sync();
+  else document.addEventListener('DOMContentLoaded', sync);
+  var feed = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+  if (feed && window.MutationObserver) {
+    var t = null;
+    new MutationObserver(function () { clearTimeout(t); t = setTimeout(sync, 120); })
+      .observe(feed, { childList: true, subtree: true });
+  }
+})();
