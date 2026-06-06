@@ -760,9 +760,12 @@ function feed_action_bar(int $reply_count): void
 function feed_rx_glyph(array $rx): string
 {
     if (($rx['type'] ?? '') === 'image') {
+        // NOT lazy: these 18px reaction glyphs render inside the hidden, off-screen
+        // .fcr-palette popup — lazy-loading never fires there (no viewport intersection),
+        // so a custom image with no visible count-chip renders blank when the picker opens.
         return '<img class="fcr-img" src="'
              . htmlspecialchars(LG_REACTIONS_ASSET_BASE . ($rx['file'] ?? ''), ENT_QUOTES)
-             . '" width="18" height="18" alt="" loading="lazy">';
+             . '" width="18" height="18" alt="">';
     }
     return '<span class="fcr-emoji">' . htmlspecialchars($rx['char'] ?? '') . '</span>';
 }
