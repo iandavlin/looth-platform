@@ -1688,17 +1688,39 @@
       frame = document.getElementById('lgc-modal-frame');
   if (!modal || !frame) return;
 
+  var openerBtn = null;   // the card's comment button that opened the modal
+
   function openModal(pt, id) {
     frame.src = '/archive-api/v0/comments?post_type=' +
       encodeURIComponent(pt) + '&item_id=' + encodeURIComponent(id);
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
   }
+
+  // The engine iframe (comments.php) owns the thread + composer; it only posts its
+  // height back, not a count. Rather than touch the engine, read the live thread
+  // count same-origin off the iframe and reflect it on the card's comment button
+  // so a freshly-posted comment shows up without a reload. Surface-only.
+  function syncOpenerCount() {
+    if (!openerBtn) return;
+    var n = null;
+    try {
+      var doc = frame.contentDocument;
+      if (doc) n = doc.querySelectorAll('.lgc-list .lgc').length;
+    } catch (e) { /* cross-origin (shouldn't happen, same host) — skip */ }
+    if (n === null) return;
+    openerBtn.textContent = '💬 ' +
+      (n > 0 ? n + ' ' + (n === 1 ? 'comment' : 'comments') : 'Comment');
+    openerBtn.setAttribute('title', n > 0 ? 'View comments' : 'Be the first to comment');
+  }
+
   function closeModal() {
+    syncOpenerCount();         // pull the latest count before unloading the iframe
     modal.hidden = true;
     document.body.style.overflow = '';
     frame.src = '';            // unload the iframe so a re-open refetches fresh
     frame.style.height = '';   // reset to the CSS default for the next thread
+    openerBtn = null;
   }
 
   document.addEventListener('click', function (e) {
@@ -1706,6 +1728,7 @@
     if (btn) {
       e.preventDefault();
       e.stopPropagation();     // don't trigger card navigation
+      openerBtn = btn;
       openModal(btn.getAttribute('data-post-type'), btn.getAttribute('data-item-id'));
       return;
     }
