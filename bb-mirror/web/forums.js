@@ -73,16 +73,29 @@
     });
   })();
 
-  // Clickable card: a click anywhere on a feed card navigates to its topic,
-  // EXCEPT on real interactive elements (links/buttons/inputs) or while the
-  // user is selecting text. data-href is the topic URL.
+  // Discussion (topic) cards do NOT click through to a topic page (Ian) — the card is
+  // the unit. A click on the card (incl. its title) expands the body + thread IN PLACE
+  // via the card's own affordances instead of navigating. Under ?proto=cards, §1b4's
+  // richer expand-in-place (with inline composer/moderation) owns this, so we defer to
+  // it there. CONTENT (CPT) cards keep their click-through (handled in §1b4).
   document.addEventListener('click', function (e) {
-    var card = e.target.closest('.feed-card--topic[data-href]');
+    var card = e.target.closest('.feed-card--topic');
     if (!card) return;
-    // Skip interactive elements AND images (images open the lightbox below).
-    if (e.target.closest('a, button, input, textarea, select, label, [role=\"button\"], img')) return;
-    if (window.getSelection && String(window.getSelection()).length) return;
-    window.location.href = card.dataset.href;
+    var feed = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+    if (feed && feed.classList.contains('feed--proto')) return;   // proto handler owns it
+    // Let real controls + author/in-thread links keep working; only the title link and
+    // bare card area are hijacked away from navigation.
+    if (e.target.closest('button, input, textarea, select, label, [role="button"], img, ' +
+          '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply, ' +
+          '[data-comments], .fcr, .lg-card-actions')) return;
+    var titleA = e.target.closest('.feed-card__title a');
+    if (e.target.closest('a') && !titleA) return;                 // author / thread links navigate
+    if (titleA) e.preventDefault();                               // title no longer navigates
+    if (window.getSelection && String(window.getSelection()).length) return;  // mid-selection
+    var rm = card.querySelector('.feed-card__read-more');         // expand full body
+    if (rm && rm.dataset.state !== 'expanded') rm.click();
+    var ex = card.querySelector('.feed-card__expand');            // expand full thread (?replies=)
+    if (ex && !card.classList.contains('replies-expanded')) ex.click();
   });
 
   // ── Image lightbox: click any forum image to view it full-size ──────────────
