@@ -4,6 +4,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Profile;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
 
@@ -11,6 +12,9 @@ $user = Auth::requireUser();
 $in = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in) || !isset($in['items']) || !is_array($in['items'])) {
     profile_app_json(400, ['error' => 'items_required']);
+}
+if (count($in['items']) > Profile::SKILLS_MAX) {
+    profile_app_json(400, ['error' => 'too_many', 'max' => Profile::SKILLS_MAX]);
 }
 
 $pg = Db::pg();
@@ -23,7 +27,7 @@ foreach ($in['items'] as $i => $item) {
     $note = isset($item['note']) ? (string)$item['note'] : null;
     if ($note !== null) {
         $note = trim($note);
-        if (strlen($note) > 200) profile_app_json(400, ['error' => "note_too_long_at_$i"]);
+        if (strlen($note) > Profile::SKILL_NOTE_MAX) profile_app_json(400, ['error' => "note_too_long_at_$i"]);
         if ($note === '') $note = null;
     }
     $clean[] = ['id' => $id, 'note' => $note, 'sort_order' => (int)($item['sort_order'] ?? $i)];

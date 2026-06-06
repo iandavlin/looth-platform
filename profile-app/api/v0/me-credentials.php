@@ -36,6 +36,11 @@ function clean_cred(array $in, ?int $catalogIdLookupHint = null): array {
 if ($method === 'POST') {
     $in = parse_body();
     $c  = clean_cred($in);
+    $cnt = $pg->prepare("SELECT count(*) FROM profile_credentials WHERE owner_type='profile' AND owner_id=:u");
+    $cnt->execute([':u' => (int)$user['id']]);
+    if ((int)$cnt->fetchColumn() >= Profile::CREDENTIALS_MAX) {
+        profile_app_json(400, ['error' => 'too_many', 'max' => Profile::CREDENTIALS_MAX]);
+    }
     $stmt = $pg->prepare("INSERT INTO profile_credentials
         (owner_type, owner_id, catalog_id, raw_issuer, raw_program, identifier,
          issued_at, expires_at, evidence_url, visibility, sort_order)

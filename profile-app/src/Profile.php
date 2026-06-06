@@ -73,6 +73,19 @@ final class Profile
     public const HIGHLIGHT_KINDS = ['instrument', 'skill'];
     public const HIGHLIGHTS_MAX  = 3;
 
+    // ── Launch guardrails: per-section item caps + field-length caps ──────────
+    // Generous ceilings so real profiles are never blocked, but unbounded/abusive
+    // payloads (which would bloat the JSONB and the page) are rejected with 400.
+    public const INSTRUMENTS_MAX   = 40;
+    public const SKILLS_MAX        = 40;
+    public const SCENES_MAX        = 30;
+    public const SOCIALS_MAX       = 20;
+    public const CREDENTIALS_MAX   = 30;
+    public const DROPOFFS_MAX      = 20;
+    public const ABOUT_TEXT_MAX    = 8000;   // about/bio body
+    public const SKILL_NOTE_MAX    = 200;    // per-skill note
+    public const DROPOFF_FIELD_MAX = 500;    // each drop-off name/address/hours/notes
+
     /** Return the editor-shaped profile (everything, no role filtering). */
     public static function loadFull(int $userId): array
     {

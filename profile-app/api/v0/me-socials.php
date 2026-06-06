@@ -37,6 +37,10 @@ $hasItems = isset($in['items']) && is_array($in['items']);
 $hasVis   = array_key_exists('visibility', $in);
 if (!$hasItems && !$hasVis) profile_app_json(400, ['error' => 'items_or_visibility_required']);
 
+if ($hasItems && count($in['items']) > Profile::SOCIALS_MAX) {
+    profile_app_json(400, ['error' => 'too_many', 'max' => Profile::SOCIALS_MAX]);
+}
+
 // Validate the block visibility early so we never half-write.
 if ($hasVis && Block::visFromInput($in['visibility']) === null) {
     profile_app_json(400, ['error' => 'invalid_visibility', 'allowed' => ['public', 'member', 'private']]);

@@ -21,6 +21,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // not in config.php'
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
+use Looth\ProfileApp\Profile;
 
 $user   = Auth::requireUser();
 $uid    = (int) $user['id'];
@@ -48,14 +49,26 @@ if ($hasVis && Block::visFromInput($in['visibility']) === null) {
 
 // Omitting items keeps the stored list (visibility-only update).
 if ($hasItems) {
+    if (count($in['items']) > Profile::DROPOFFS_MAX) {
+        profile_app_json(400, ['error' => 'too_many', 'max' => Profile::DROPOFFS_MAX]);
+    }
     $items = [];
     foreach ($in['items'] as $i => $item) {
         if (!is_array($item)) profile_app_json(400, ['error' => "item_{$i}_not_object"]);
+        $name    = (string)($item['name'] ?? '');
+        $address = (string)($item['address'] ?? '');
+        $hours   = (string)($item['hours'] ?? '');
+        $notes   = (string)($item['notes'] ?? '');
+        foreach (['name' => $name, 'address' => $address, 'hours' => $hours, 'notes' => $notes] as $f => $v) {
+            if (strlen($v) > Profile::DROPOFF_FIELD_MAX) {
+                profile_app_json(400, ['error' => "field_too_long_at_$i", 'field' => $f, 'max' => Profile::DROPOFF_FIELD_MAX]);
+            }
+        }
         $items[] = [
-            'name'    => (string)($item['name'] ?? ''),
-            'address' => (string)($item['address'] ?? ''),
-            'hours'   => (string)($item['hours'] ?? ''),
-            'notes'   => (string)($item['notes'] ?? ''),
+            'name'    => $name,
+            'address' => $address,
+            'hours'   => $hours,
+            'notes'   => $notes,
             'lat'     => $item['lat'] ?? null,   // optional: seed exact pin coords; else server geocodes
             'lng'     => $item['lng'] ?? null,
         ];

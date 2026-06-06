@@ -4,6 +4,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Profile;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'PUT') profile_app_json(405, ['error' => 'method_not_allowed']);
 
@@ -11,6 +12,9 @@ $user = Auth::requireUser();
 $in   = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($in) || !isset($in['items']) || !is_array($in['items'])) {
     profile_app_json(400, ['error' => 'items_required']);
+}
+if (count($in['items']) > Profile::INSTRUMENTS_MAX) {
+    profile_app_json(400, ['error' => 'too_many', 'max' => Profile::INSTRUMENTS_MAX]);
 }
 
 $pg = Db::pg();
