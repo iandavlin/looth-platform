@@ -3346,3 +3346,23 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
   .feed-page .fc-actions { grid-area:actions; display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
   .feed-page .fc-replies { grid-area:replies; min-width:0; }
 }
+
+/* ── Themed hover affordances (Ian) — subtle. Reply buttons: soft DROP SHADOW on
+   light/panel, brand-sage GLOW on dark/black. Cards: subtle sage glow on dark/
+   black (desktop ≥641 — mobile card look is Buck's mobile-hub.css). All on hover. */
+html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta:hover,
+html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply:hover {
+  box-shadow: 0 2px 7px rgba(26, 29, 26, .20);
+}
+html.hub-theme-dark  .feed-card__reply-cta:hover,
+html.hub-theme-black .feed-card__reply-cta:hover,
+html.hub-theme-dark  .reply-stub__reply:hover,
+html.hub-theme-black .reply-stub__reply:hover {
+  box-shadow: 0 0 11px color-mix(in srgb, var(--accent, #7c9a52) 60%, transparent);
+}
+@media (min-width: 641px) {
+  html.hub-theme-dark  .feed-page .feed-card:hover,
+  html.hub-theme-black .feed-page .feed-card:hover {
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent, #7c9a52) 17%, transparent);
+  }
+}
