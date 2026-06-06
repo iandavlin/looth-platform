@@ -58,10 +58,11 @@ if ($method === 'PATCH') {
         'decline' => Connections::decline($id, $uuid),
         'cancel'  => Connections::cancel($id, $uuid),
         'block'   => Connections::block($id, $uuid),
+        'disconnect' => Connections::disconnect($id, $uuid),
         default   => null,
     };
     if ($res === null) {
-        profile_app_json(400, ['error' => 'bad_action', 'allowed' => ['accept', 'decline', 'cancel', 'block']]);
+        profile_app_json(400, ['error' => 'bad_action', 'allowed' => ['accept', 'decline', 'cancel', 'block', 'disconnect']]);
     }
     profile_app_json($res['ok'] ? 200 : 409, $res);
 }

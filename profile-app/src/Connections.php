@@ -131,6 +131,21 @@ final class Connections
     }
 
     /**
+     * Either party removes an ACCEPTED connection (un-connect). Deletes the edge so a
+     * fresh request can be made later. Distinct from block() (which keeps a blocked row).
+     */
+    public static function disconnect(int $connectionId, string $userUuid): array
+    {
+        $st = Db::pg()->prepare(
+            "DELETE FROM connections
+              WHERE id = :id AND status = 'accepted'
+                AND (addressee_uuid = :u OR requester_uuid = :u)"
+        );
+        $st->execute([':id' => $connectionId, ':u' => $userUuid]);
+        return ['ok' => $st->rowCount() > 0, 'state' => 'none'];
+    }
+
+    /**
      * $userUuid blocks the other party in connection $connectionId. Normalizes the
      * row so requester = blocker, addressee = blocked, status = 'blocked'.
      */
