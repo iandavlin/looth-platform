@@ -927,6 +927,20 @@ $header_cat = $scoped_forum
         </button>
       </div>
 
+      <?php /* Engagement bar — one-page-Hub card tier. Comment count is real;
+               reactions/share/save are visual stubs until their backends land.
+               Hidden by default; shown only under .feed--proto (the ?proto=cards flag). */ ?>
+      <div class="feed-card__eng">
+        <?php /* Reaction stub uses OUR palette's unicode set (like/wow/lol/brain per
+                 tools/reaction-assets/palette.json); the 3 custom-image reactions
+                 (ouch/shop/take-my-money) + persistence are the comments+reactions lane's build. */ ?>
+        <span class="fce-react"><span class="fce-emo">&#128077;&#128558;&#128514;&#129504;</span></span>
+        <span class="fce-sp"></span>
+        <span class="fce-btn fce-comments">&#128172; <?= $reply_count ?></span>
+        <span class="fce-btn">&#8617; Share</span>
+        <span class="fce-btn">&#9734; Save</span>
+      </div>
+
       <?php if ($teaser || $has_more): ?>
         <div class="feed-card__replies">
           <?php if ($teaser) bb_mirror_render_reply_stub($teaser, false, true, true); ?>

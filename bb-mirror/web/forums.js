@@ -185,6 +185,203 @@
     });
   });
 
+  // ── 1b2. Rail accordion is native <details>. ────────────────────────────────
+  // Type/Categories sections + category parents open/close with zero JS. The
+  // ONLY enhancement: guarantee single-open on the named top-level sections for
+  // browsers without native <details name> exclusive-accordion (pre-2024
+  // Safari/Firefox), where two could otherwise be open at once.
+  document.querySelectorAll('details.hub-rail__sec[name]').forEach(function (d) {
+    d.addEventListener('toggle', function () {
+      if (!d.open) return;
+      document.querySelectorAll('details.hub-rail__sec[name="' + d.getAttribute('name') + '"]').forEach(function (o) {
+        if (o !== d) o.open = false;
+      });
+    });
+  });
+
+  // ── 1b4. Card prototype: expand-in-place to "max" (flag-gated) ──────────────
+  // Flag: ?proto=cards (sticky via localStorage; ?proto=off clears). When on,
+  // clicking a feed card opens it to the max tier IN PLACE (single-open) and
+  // lazy-loads the full body + full reply thread through the existing WP-free
+  // endpoints — the "no click-through" Hub direction. Without the flag the feed
+  // is untouched. One slice to validate the interaction on real data.
+  (function () {
+    try {
+      if (/[?&]proto=cards/.test(location.search)) localStorage.setItem('lg_card_proto', '1');
+      else if (/[?&]proto=off/.test(location.search)) localStorage.removeItem('lg_card_proto');
+    } catch (e) {}
+    var protoOn; try { protoOn = localStorage.getItem('lg_card_proto') === '1'; } catch (e) { protoOn = false; }
+    var feed = document.querySelector('.feed');
+    if (!protoOn || !feed) return;
+    feed.classList.add('feed--proto');
+
+    // Shared auth/nonce (fetched once) for inline reply compose.
+    var protoAuth = null, protoAuthPending = null;
+    function protoGetAuth(cb) {
+      if (protoAuth) { cb(protoAuth); return; }
+      if (protoAuthPending) { protoAuthPending.push(cb); return; }
+      protoAuthPending = [cb];
+      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { protoAuth = d || { authenticated: false }; protoAuthPending.forEach(function (f) { f(protoAuth); }); protoAuthPending = null; })
+        .catch(function () { protoAuth = { authenticated: false }; protoAuthPending.forEach(function (f) { f(protoAuth); }); protoAuthPending = null; });
+    }
+    var protoReplyBase = (document.getElementById('frm-form') || { dataset: {} }).dataset.restBase || '/wp-json/buddyboss/v1';
+
+    // Moderator Trash on thread reply stubs (BB-style admin action, in-feed).
+    // Reveal the trash controls when the viewer can moderate; the DELETE endpoint
+    // re-checks caps server-side, so the UI gate is convenience, not security.
+    protoGetAuth(function (auth) { if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate'); });
+
+    // Moderator Edit — inline editor on a thread reply stub (PUT /reply/{id};
+    // topic/forum read from the card). Text-only for now; server re-checks caps.
+    feed.addEventListener('click', function (ev) {
+      var e = ev.target.closest('.reply-stub__edit');
+      if (!e || !feed.contains(e)) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var stub = e.closest('.reply-stub');
+      if (!stub || stub.querySelector('.reply-stub__editbox')) return;
+      var bodyDiv = stub.querySelector('.reply-stub__body');
+      var excerpt = stub.querySelector('.reply-stub__excerpt');
+      var card = e.closest('.feed-card');
+      var cta = card && card.querySelector('.feed-card__reply-cta[data-frm-open]');
+      var id = parseInt(e.getAttribute('data-reply-id'), 10);
+      var topicId = card ? parseInt(card.getAttribute('data-topic-id'), 10) : 0;
+      var forumId = cta ? parseInt(cta.dataset.forumId, 10) : 0;
+      var cur = excerpt ? (excerpt.innerText || excerpt.textContent || '').trim() : '';
+      var box = document.createElement('div');
+      box.className = 'reply-stub__editbox';
+      box.innerHTML = '<textarea class="rse-input"></textarea>' +
+        '<div class="rse-row"><button type="button" class="rse-save">Save</button>' +
+        '<button type="button" class="rse-cancel">Cancel</button><span class="rse-status"></span></div>';
+      box.querySelector('.rse-input').value = cur;
+      if (bodyDiv) { bodyDiv.style.display = 'none'; bodyDiv.parentNode.insertBefore(box, bodyDiv.nextSibling); }
+      else { stub.appendChild(box); }
+      var ta = box.querySelector('.rse-input'); ta.focus();
+      ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+      box.querySelector('.rse-cancel').addEventListener('click', function () { box.remove(); if (bodyDiv) bodyDiv.style.display = ''; });
+      box.querySelector('.rse-save').addEventListener('click', function () {
+        var text = ta.value.trim(); var status = box.querySelector('.rse-status');
+        if (!text) { status.textContent = "Can't be empty."; return; }
+        if (!id || !topicId) { status.textContent = 'Missing reply/topic.'; return; }
+        status.textContent = 'Saving…';
+        protoGetAuth(function (auth) {
+          if (!auth || !auth.nonce) { status.textContent = 'Not signed in.'; return; }
+          var html = '<p>' + text.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>';
+          fetch(protoReplyBase + '/reply/' + id, {
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
+            body: JSON.stringify({ id: id, topic_id: topicId, forum_id: forumId || undefined, content: html }),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+            .then(function (res) {
+              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not save.'; return; }
+              if (excerpt) excerpt.innerHTML = html;
+              box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+            })
+            .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
+        });
+      });
+    });
+
+    feed.addEventListener('click', function (ev) {
+      var t = ev.target.closest('.reply-stub__trash');
+      if (!t || !feed.contains(t)) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var id = parseInt(t.getAttribute('data-reply-id'), 10);
+      if (!id || !window.confirm('Trash this reply? This can’t be undone.')) return;
+      protoGetAuth(function (auth) {
+        if (!auth || !auth.nonce) { alert('Not signed in.'); return; }
+        t.disabled = true;
+        fetch(protoReplyBase + '/reply/' + id, {
+          method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': auth.nonce },
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) { t.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.code)) || 'failed')); return; }
+            var stub = t.closest('.reply-stub'); if (stub) stub.remove();
+          })
+          .catch(function (err) { t.disabled = false; alert('Network error: ' + err.message); });
+      });
+    });
+
+    // Inline reply composer in the expanded discussion card — post in-feed, no modal.
+    function protoMountComposer(card) {
+      if (card.querySelector('.feed-card__inline-compose')) return;
+      var cta = card.querySelector('.feed-card__reply-cta[data-frm-open]');
+      var topicId = card.getAttribute('data-topic-id') || (cta && cta.dataset.topicId) || '';
+      var forumId = (cta && cta.dataset.forumId) || '';
+      if (!topicId) return;
+      var box = document.createElement('div');
+      box.className = 'feed-card__inline-compose';
+      box.innerHTML =
+        '<textarea class="fic-input" rows="1" placeholder="Reply to this thread…"></textarea>' +
+        '<button type="button" class="fic-send" disabled>Reply</button>' +
+        '<div class="fic-status" role="status"></div>';
+      (card.querySelector('.feed-card__replies') || card).appendChild(box);
+      var ta = box.querySelector('.fic-input'), send = box.querySelector('.fic-send'), status = box.querySelector('.fic-status');
+      ta.addEventListener('input', function () { send.disabled = !ta.value.trim(); ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+      send.addEventListener('click', function () {
+        var text = ta.value.trim(); if (!text) return;
+        send.disabled = true; status.textContent = 'Posting…';
+        protoGetAuth(function (auth) {
+          if (!auth || !auth.authenticated) { status.textContent = 'Sign in to reply.'; return; }
+          var html = '<p>' + text.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>';
+          var payload = { topic_id: parseInt(topicId, 10), content: html };
+          if (parseInt(forumId, 10)) payload.forum_id = parseInt(forumId, 10);
+          fetch(protoReplyBase + '/reply', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; send.disabled = false; return; }
+              ta.value = ''; ta.style.height = 'auto'; status.textContent = 'Posted ✓ — refreshing thread…';
+              var ex = card.querySelector('.feed-card__expand');   // reload the thread to show the new reply
+              if (ex) { card.classList.remove('replies-expanded'); var full = card.querySelector('.feed-card__replies-full'); if (full) { full.dataset.loaded = ''; } ex.click(); }
+            })
+            .catch(function (err) { status.textContent = 'Network error: ' + err.message; send.disabled = false; });
+        });
+      });
+    }
+
+    feed.addEventListener('click', function (ev) {
+      var card = ev.target.closest('.feed-card');
+      if (!card || !feed.contains(card)) return;
+
+      // CPT / content cards CLICK THROUGH to the full post (Ian 6/6). Real links +
+      // controls work; a bare-area click navigates to the post.
+      if (card.classList.contains('feed-card--content')) {
+        if (ev.target.closest('a, button, input, textarea, label, select, [data-comments], .feed-card__compact-expand')) return;
+        var href = card.getAttribute('data-href');
+        if (href) window.location.href = href;
+        return;
+      }
+
+      // Discussion (topic) cards: expand IN PLACE — no click-through. The title +
+      // body + bare area expand; real controls (read-more, reply, view-replies,
+      // author/profile links, thread links) keep working.
+      if (ev.target.closest('button, input, textarea, label, select, .feed-card__compact-expand, ' +
+            '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply')) return;
+      // author + in-thread links still navigate; only the title link is hijacked to expand
+      if (ev.target.closest('a') && !ev.target.closest('.feed-card__title a')) return;
+      var titleA = ev.target.closest('.feed-card__title a');
+      if (titleA) ev.preventDefault();
+
+      var willOpen = !card.classList.contains('feed-card--max');
+      feed.querySelectorAll('.feed-card--max').forEach(function (c) { if (c !== card) c.classList.remove('feed-card--max'); });
+      card.classList.toggle('feed-card--max', willOpen);
+      if (!willOpen) return;
+      var rm = card.querySelector('.feed-card__read-more');          // lazy full body
+      if (rm && rm.dataset.state !== 'expanded') rm.click();
+      var ex = card.querySelector('.feed-card__expand');             // lazy full thread (?replies=)
+      if (ex && !card.classList.contains('replies-expanded')) ex.click();
+      protoMountComposer(card);                                       // inline reply box (no modal)
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  })();
+
   // ── 1c. Admin: set forum header image (pencil) ──────────────────────────────
   var hdrEdit = document.querySelector('.forum-header__edit-img');
   if (hdrEdit) {

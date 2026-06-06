@@ -160,7 +160,7 @@ if (!function_exists('bb_mirror_format_snippet')) {
      * <a> anchors (mentions + links), truncated to ~$limit visible chars. All
      * other tags are dropped (their text flows inline). Output is safe HTML.
      */
-    function bb_mirror_format_snippet(string $html, int $limit, PDO $db): string
+    function bb_mirror_format_snippet(string $html, int $limit, PDO $db, bool $preserve_breaks = false): string
     {
         $html = bb_mirror_resolve_mentions($html, $db);
         if (trim($html) === '') return '';
@@ -187,7 +187,7 @@ if (!function_exists('bb_mirror_format_snippet')) {
             return $t;
         };
 
-        $walk = function ($node) use (&$walk, &$out, &$budget, $take) {
+        $walk = function ($node) use (&$walk, &$out, &$budget, $take, $preserve_breaks) {
             foreach ($node->childNodes as $c) {
                 if ($budget <= 0) return;
                 if ($c->nodeType === XML_TEXT_NODE) {
@@ -208,10 +208,16 @@ if (!function_exists('bb_mirror_format_snippet')) {
                             $out .= htmlspecialchars($txt, ENT_QUOTES, 'UTF-8');
                         }
                     } else {
+                        $is_block = in_array($tag, ['p', 'br', 'li', 'blockquote', 'div'], true);
+                        // Break ENTERING a block (so "text<div>more</div>" → "text<br>more",
+                        // not "textmore"). Only when content already precedes it.
+                        if ($preserve_breaks && $is_block && $out !== '') {
+                            $out .= '<br>';
+                        }
                         $walk($c);
-                        // Keep words from running together across block boundaries.
-                        if ($budget > 0 && in_array($tag, ['p', 'br', 'li', 'blockquote', 'div'], true)) {
-                            $out .= ' ';
+                        // ...and leaving it. Old callers just get a space (no structure).
+                        if ($budget > 0 && $is_block) {
+                            $out .= $preserve_breaks ? '<br>' : ' ';
                         }
                     }
                 }
@@ -219,6 +225,11 @@ if (!function_exists('bb_mirror_format_snippet')) {
         };
         $walk($root);
 
+        if ($preserve_breaks) {
+            $out = preg_replace('/(?:<br>\s*){3,}/', '<br><br>', $out);   // cap runs of breaks
+            $out = preg_replace('/^(?:<br>\s*)+/', '', $out);             // no leading break
+            $out = preg_replace('/(?:<br>\s*)+$/', '', $out);             // no trailing break
+        }
         return trim($out);
     }
 }
@@ -243,7 +254,8 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $rtime_r     = $r['created_at'] ? feed_rel_time((string)$r['created_at']) : '—';
         $av_slug     = $rslug ?: ($r['author_name'] ?: 'anonymous');
         $classes     = 'reply-stub' . ($is_child ? ' reply-stub--child' : '');
-        echo '<div class="' . $classes . '">';
+        $rid_attr    = isset($r['reply_id']) ? ' data-reply-id="' . (int)$r['reply_id'] . '"' : '';
+        echo '<div class="' . $classes . '"' . $rid_attr . '>';
         echo '<div class="reply-stub__head">';
         echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28);
         if ($rslug) {
@@ -257,6 +269,15 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
                . ' data-reply-to="' . (int)$r['reply_id'] . '"'
                . ' data-reply-to-author="' . htmlspecialchars($r['author_name'] ?: 'Anonymous', ENT_QUOTES) . '">'
                . '&#8617; Reply</button>';
+        }
+        // Moderator Edit + Trash — emitted for every reply, revealed only under
+        // .feed--can-moderate (set client-side when auth says can_edit_others).
+        // The PUT/DELETE endpoints re-check caps server-side regardless of the UI.
+        if (isset($r['reply_id'])) {
+            echo '<button class="reply-stub__edit" type="button" data-reply-id="' . (int)$r['reply_id'] . '"'
+               . ' title="Edit reply" aria-label="Edit reply">&#9998;</button>';
+            echo '<button class="reply-stub__trash" type="button" data-reply-id="' . (int)$r['reply_id'] . '"'
+               . ' title="Trash reply" aria-label="Trash reply">&#128465;</button>';
         }
         echo '</div>';
         echo '<div class="reply-stub__body">';

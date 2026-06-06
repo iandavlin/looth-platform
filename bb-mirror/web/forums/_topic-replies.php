@@ -100,8 +100,10 @@ if ($offset === 0 && $total > 1) {
 
 foreach ($page as $row) {
     $node = $by_id[$row['rid']];
-    // Resolve @mentions + clickable URLs for this reply's teaser text.
-    $node['excerpt_html'] = bb_mirror_format_snippet((string)($node['content_html'] ?? ''), 200, $db);
+    // Full reply text in the expanded thread (this fragment IS the full-thread
+    // view, so don't truncate — the card teaser elsewhere stays short). @mentions +
+    // clickable URLs still resolved; high cap = effectively no truncation.
+    $node['excerpt_html'] = bb_mirror_format_snippet((string)($node['content_html'] ?? ''), 100000, $db, true);
     bb_mirror_render_reply_stub(
         $node,
         $row['depth'] >= 1,                              // is_child (one indent tier)

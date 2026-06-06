@@ -115,35 +115,41 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
     foreach ($p['leaves'] as $lf) {
         if (in_array($lf['key'], $filters['leaves'] ?? [], true) || in_array($lf['key'], $muted['leaves'] ?? [], true)) { $open = true; break; }
     }
-    ?>
-    <div class="hub-acc<?= $open ? ' is-open' : '' ?>" data-cat="<?= htmlspecialchars($p['key']) ?>">
-      <div class="hub-rail__row hub-acc__parent<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= (int)$p['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
-        <?php if ($has): ?>
-          <button class="hub-acc__chev" type="button" aria-expanded="<?= $open ? 'true' : 'false' ?>" aria-label="Expand <?= htmlspecialchars($p['label']) ?>">&#9656;</button>
-        <?php else: ?>
-          <span class="hub-acc__chev hub-acc__chev--none" aria-hidden="true"></span>
-        <?php endif; ?>
+    // Parent ROW markup (shared by both branches): chevron + name (filters) +
+    // count + mute switch. Links inside navigate; the bare summary toggles.
+    $row_cls = 'hub-rail__row hub-acc__parent'
+        . ($on ? ' is-on' : '') . ($is_mut ? ' is-muted' : '')
+        . ((int)$p['count'] === 0 ? ' hub-rail__row--empty' : '');
+    $row = function (string $chev) use ($p, $filters, $muted, $sort, $is_mut): void {
+        ?>
+        <?= $chev ?>
         <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
         <span class="hub-rail__ct"><?= (int)$p['count'] ?></span>
         <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'c', $p['key']) ?>"
            title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($p['label']) ?>"></a>
+        <?php
+    };
+    if ($has): ?>
+    <details class="hub-acc" data-cat="<?= htmlspecialchars($p['key']) ?>"<?= $open ? ' open' : '' ?>>
+      <summary class="<?= $row_cls ?>"><?php $row('<span class="hub-acc__chev" aria-hidden="true">&#9656;</span>'); ?></summary>
+      <div class="hub-acc__leaves">
+        <?php foreach ($p['leaves'] as $lf):
+          $lon  = in_array($lf['key'], $filters['leaves'] ?? [], true);
+          $lmut = in_array($lf['key'], $muted['leaves'] ?? [], true); ?>
+          <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
+            <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
+            <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
+            <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
+               title="<?= $lmut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $lmut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($lf['label']) ?>"></a>
+          </div>
+        <?php endforeach; ?>
       </div>
-      <?php if ($has): ?>
-        <div class="hub-acc__leaves"<?= $open ? '' : ' hidden' ?>>
-          <?php foreach ($p['leaves'] as $lf):
-            $lon  = in_array($lf['key'], $filters['leaves'] ?? [], true);
-            $lmut = in_array($lf['key'], $muted['leaves'] ?? [], true); ?>
-            <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
-              <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
-              <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
-              <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
-                 title="<?= $lmut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $lmut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($lf['label']) ?>"></a>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
+    </details>
+    <?php else: ?>
+    <div class="hub-acc" data-cat="<?= htmlspecialchars($p['key']) ?>">
+      <div class="<?= $row_cls ?>"><?php $row('<span class="hub-acc__chev hub-acc__chev--none" aria-hidden="true"></span>'); ?></div>
     </div>
-    <?php
+    <?php endif;
 }
 
 /** Render the control rail into the left-nav slot. */
@@ -156,24 +162,37 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
 
     $any_active = !empty($filters['types']) || !empty($filters['cats']) || !empty($filters['leaves'])
                || !empty($filters['authors']) || !empty($filters['q']);
+
+    // Single-open top-level accordion: open the section that has an active
+    // selection; default to Categories (the primary nav) when neither does.
+    $type_active = !empty($filters['types']) || !empty($muted['types']);
+    $open_sec    = $type_active ? 'type' : 'cat';
     ?>
     <div class="hub-rail">
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
-      <h4 class="hub-rail__h">Type <small>· toggle to mute</small></h4>
-      <div class="hub-rail__group">
-        <?php foreach ($type_order as $key):
-          if (!isset($types[$key])) continue;
-          hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-        endforeach; ?>
-      </div>
+      <details class="hub-rail__sec" name="hub-rail-sec" data-sec="type"<?= $open_sec === 'type' ? ' open' : '' ?>>
+        <summary class="hub-rail__h hub-rail__sec-toggle">
+          <span class="hub-rail__sec-chev" aria-hidden="true">&#9656;</span>Type <small>· toggle to mute</small>
+        </summary>
+        <div class="hub-rail__group">
+          <?php foreach ($type_order as $key):
+            if (!isset($types[$key])) continue;
+            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+          endforeach; ?>
+        </div>
+      </details>
 
-      <h4 class="hub-rail__h">Categories <small>· tap to filter, switch to mute</small></h4>
-      <div class="hub-rail__group" id="hub-cat-accordion">
-        <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
-      </div>
+      <details class="hub-rail__sec" name="hub-rail-sec" data-sec="cat"<?= $open_sec === 'cat' ? ' open' : '' ?>>
+        <summary class="hub-rail__h hub-rail__sec-toggle">
+          <span class="hub-rail__sec-chev" aria-hidden="true">&#9656;</span>Categories <small>· tap to filter, switch to mute</small>
+        </summary>
+        <div class="hub-rail__group" id="hub-cat-accordion">
+          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+        </div>
+      </details>
 
       <h4 class="hub-rail__h">View</h4>
       <div class="hub-rail__view"><?php hub_render_view_toggles(); ?></div>
