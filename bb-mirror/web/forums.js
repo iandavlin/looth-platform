@@ -1784,6 +1784,16 @@
               '<span class="fcr-n">' + n + '</span></button>';
     });
     chips.innerHTML = html;
+    syncLikeBtn(bar, mine);
+  }
+  // Reconcile the quick-Like button (.lg-act-like, in the same .fc-actions) to the
+  // store: 'like' is just a palette slug, so the button reflects whether the viewer's
+  // current reaction IS 'like'. hub-polish.js gives the instant optimistic flip on
+  // tap; this is the server-truth reconcile (count contract — one store, no 2nd tally).
+  function syncLikeBtn(bar, mine) {
+    var slot = bar.closest && bar.closest('.fc-actions'); if (!slot) return;
+    var like = slot.querySelector('.lg-act-like');
+    if (like) like.classList.toggle('is-on', mine === 'like');
   }
   function closePalettes(except) {
     [].forEach.call(document.querySelectorAll('.fcr-palette'), function (p) {
@@ -1846,6 +1856,21 @@
   });
   document.addEventListener('click', function (e) {
     if (!(e.target.closest && e.target.closest('.fcr'))) closePalettes();
+  });
+
+  // Quick-Like (the action-bar's .lg-act-like) is just slug='like' against the same
+  // store as the picker — one tally, no separate like system. hub-polish.js already
+  // flips .is-on instantly (optimistic) and stops the tap from navigating; here we
+  // POST + reconcile to the server count (renderChips → syncLikeBtn corrects .is-on +
+  // the 'like' chip from the response).
+  document.addEventListener('click', function (e) {
+    var likeBtn = e.target.closest && e.target.closest('.lg-act-like');
+    if (!likeBtn) return;
+    var slot = likeBtn.closest('.fc-actions');
+    var bar = slot && slot.querySelector('.fcr');
+    if (!bar) return;          // non-reactable card → leave hub-polish's visual toggle
+    if (!authed) return;       // anon → no write (optimistic flip resets on reload)
+    doReact(bar, 'like');
   });
 
   if (document.readyState !== 'loading') sync();
