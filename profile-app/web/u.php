@@ -448,6 +448,10 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-pmp-menu button[aria-current="true"]{font-weight:800;color:var(--lg-sage-d)}
 .lg-pmp-menu button[aria-current="true"]::after{content:"✓";color:var(--lg-sage-d)}
 .lg-pmp-menu .cap{font:600 10px/1.2 var(--lg-font-sans);color:var(--lg-rust)}
+.lg-pmp-menu__opt{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left}
+.lg-pmp-menu__lab{font-weight:600}
+.lg-pmp-menu__desc{font:400 11px/1.3 var(--lg-font-sans);color:var(--lg-mute)}
+.lg-pmp-menu__def{font:700 9px/1 var(--lg-font-sans);text-transform:uppercase;letter-spacing:.05em;color:var(--lg-sage-d);background:var(--lg-sage-tint);padding:2px 5px;border-radius:6px;margin-left:6px;vertical-align:middle}
 
 @media(max-width:560px){.lg-idrow{flex-direction:column;text-align:center;align-items:center}}
 /* header banner — optional hero strip above the identity row (full-bleed against .lg-block padding 22/24) */
@@ -998,6 +1002,10 @@ window.lgSortable = function (container, opts) {
     '_default':       ['public', 'members', 'private']
   };
   var LABEL = { 'public': 'Public', 'members': 'Member', 'private': 'Private', 'on_request': 'On request' };
+  // Plain-language descriptions shown under each option (Buck launch ask).
+  var DESC = { 'public': 'Anyone, even logged-out visitors', 'members': 'Signed-in Looth members only',
+               'private': 'Only you', 'on_request': 'Hidden until you approve a request' };
+  var DEFAULT_TIER = 'members';   // platform default (Ian: keep members-default)
   // restrictiveness rank; on_request is treated as restrictive as private for capping.
   var RANK = { 'public': 0, 'members': 1, 'private': 2, 'on_request': 2 };
 
@@ -1024,7 +1032,11 @@ window.lgSortable = function (container, opts) {
       b.type = 'button';
       b.setAttribute('role', 'menuitemradio');
       if (tier === current) b.setAttribute('aria-current', 'true');
-      b.innerHTML = '<span>' + LABEL[tier] + '</span>' +
+      b.innerHTML = '<span class="lg-pmp-menu__opt">' +
+          '<span class="lg-pmp-menu__lab">' + LABEL[tier] +
+            (tier === DEFAULT_TIER ? ' <span class="lg-pmp-menu__def">default</span>' : '') + '</span>' +
+          '<span class="lg-pmp-menu__desc">' + DESC[tier] + '</span>' +
+        '</span>' +
         (capped ? '<span class="cap">limited by header</span>' : '');
       b.addEventListener('click', function () {
         if (tier === current) { closeMenu(); return; }

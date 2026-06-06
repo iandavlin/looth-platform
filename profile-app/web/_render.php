@@ -285,9 +285,11 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
   <div class="modal-body">
     <div class="field"><label>About</label><textarea id="f-about"><?= looth_h($aboutText) ?></textarea></div>
     <div class="field"><label>Visible to</label>
-      <select id="f-about-vis"><?php foreach (Profile::VIS_VALUES as $v): ?>
-        <option value="<?= $v ?>" <?= $aboutVis===$v?'selected':'' ?>><?= $v ?></option>
-      <?php endforeach; ?></select></div></div>
+      <select id="f-about-vis"><?php foreach ($visLabels as $v => $label): ?>
+        <option value="<?= $v ?>" <?= $aboutVis===$v?'selected':'' ?>><?= looth_h($label) ?></option>
+      <?php endforeach; ?></select>
+      <p class="ink-mute" style="margin:6px 0 0;font-size:12px">Members-only by default. “Everyone (public)” also shows this to logged-out visitors; “Nobody” keeps it private to you.</p>
+      </div></div>
   <div class="modal-foot"><button class="btn" data-close>Cancel</button>
     <button class="btn btn-pri" data-save="about">Save</button></div></div></div>
 
@@ -335,7 +337,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
         <div class="field" style="flex:1"><label>Expires</label>
         <input type="date" id="cred-expires"></div>
         <div class="field" style="flex:0 0 110px"><label>Visible to</label>
-        <select id="cred-vis"><?php foreach (Profile::VIS_VALUES as $v): ?><option value="<?= $v ?>" <?= $v==='members'?'selected':'' ?>><?= $v ?></option><?php endforeach; ?></select></div></div>
+        <select id="cred-vis"><?php foreach ($visLabels as $v => $label): ?><option value="<?= $v ?>" <?= $v==='members'?'selected':'' ?>><?= looth_h($label) ?></option><?php endforeach; ?></select></div></div>
       <input type="hidden" id="cred-catalog-id">
     </div>
   </div>
