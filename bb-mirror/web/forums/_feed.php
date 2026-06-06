@@ -498,6 +498,20 @@ $author_ids = [];
 foreach ($topics as $_r) if (!empty($_r['author_id'])) $author_ids[] = (int)$_r['author_id'];
 $author_profiles = hub_resolve_profiles($author_ids);
 
+// P6 — hide authors the viewer has muted (profile_app.user_mutes via Buck's
+// me-mutes GET). We map each card's author_id → uuid (from the profile batch
+// above) and drop muted authors. Fails open: anon / endpoint error → no filter.
+// NOTE (stub): filters the already-collapsed page, so a heavily-muting viewer
+// may see < card_limit cards — a SQL-side prefilter is the production follow-up.
+$muted_uuids = hub_viewer_muted_uuids();
+if ($muted_uuids) {
+    $topics = array_values(array_filter($topics, function ($r) use ($author_profiles, $muted_uuids) {
+        $aid  = (int)($r['author_id'] ?? 0);
+        $uuid = $aid ? strtolower((string)($author_profiles[$aid]['uuid'] ?? '')) : '';
+        return $uuid === '' || !isset($muted_uuids[$uuid]);
+    }));
+}
+
 // Content (CPT) tag chips — one grouped read of discovery.tag for content cards.
 $content_tags = [];
 $content_ids  = [];

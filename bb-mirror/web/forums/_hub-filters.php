@@ -87,6 +87,41 @@ function hub_content_tiers(): array
  * @param int[] $wp_ids
  * @return array<int,array{avatar_url:?string,slug:?string,display_name:?string,at_a_glance:?string}>
  */
+/**
+ * P6 — the logged-in viewer's muted author UUIDs, via Buck's me-mutes GET
+ * (`/profile-api/v0/me/mutes` → {muted:[uuid,…]}). Identity is the viewer's own
+ * session: we forward their Cookie, so the endpoint's Auth::requireUser() resolves
+ * THIS viewer. Cross-DB is fine — we fetch the list (mutes live in profile_app),
+ * we don't join across to looth PG. Returns a SET [uuid_lower => true].
+ * Fails OPEN (empty set → no filtering) for anon / endpoint error so the feed
+ * never breaks while Buck confirms the contract.
+ */
+function hub_viewer_muted_uuids(): array
+{
+    if (PHP_SAPI === 'cli' || empty($_SERVER['HTTP_COOKIE'])) return [];
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/profile-api/v0/me/mutes',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 3,
+        CURLOPT_HTTPHEADER     => ['Host: ' . LG_BB_MIRROR_HOST, 'Cookie: ' . $_SERVER['HTTP_COOKIE']],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($code !== 200 || !$body) return [];          // anon (401) / error → fail open
+    $data = json_decode($body, true);
+    $set  = [];
+    foreach ((array)($data['muted'] ?? []) as $u) {
+        $u = strtolower(trim((string)$u));
+        if ($u !== '') $set[$u] = true;
+    }
+    return $set;
+}
+
 function hub_resolve_profiles(array $wp_ids): array
 {
     $wp_ids = array_values(array_unique(array_filter(array_map('intval', $wp_ids), fn($i) => $i > 0)));
@@ -119,6 +154,7 @@ function hub_resolve_profiles(array $wp_ids): array
                         'slug'         => $it['slug']         ?? null,
                         'display_name' => $it['display_name'] ?? null,
                         'bio'          => $it['bio'] ?? $it['at_a_glance'] ?? null,
+                        'uuid'         => $it['uuid']         ?? null, // for viewer-mute author filter
                     ];
                 }
             }
