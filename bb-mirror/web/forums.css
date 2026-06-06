@@ -1972,7 +1972,9 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
   --cat-general:  #99b27e;  /* mid sage (brand)      */  --on-general:  #1a1d1a;
   --cat-tools:    #1a1d1a;  /* charcoal (brand)      */  --on-tools:    #ffffff;
   --cat-looths:   #c2d5aa;  /* light sage (brand)    */  --on-looths:   #1a1d1a;
-  --cat-suggestions: #323532; /* ink (brand) — meta/feedback */ --on-suggestions: #ffffff;
+  --cat-suggestions:  #323532; /* ink (brand) — meta/feedback  */ --on-suggestions:  #ffffff;
+  --cat-perspective:  #8a6f5b; /* warm sienna — editorial/think  */ --on-perspective:  #ffffff;
+  --cat-vintage:      #a67c52; /* warm camel — historical        */ --on-vintage:      #ffffff;
 }
 
 
@@ -2932,6 +2934,23 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-rail__ct { font-size: 12px; color: var(--lg-mute); }
 .hub-rail__row.is-on { background: var(--lg-sage, #87986a); color: #fff; font-weight: 600; }
 .hub-rail__row.is-on .hub-rail__ct { color: rgba(255,255,255,.82); }
+/* Category colour-coding for the accordion sidebar */
+.hub-acc[data-cat="sponsors"]   { --nc: var(--cat-sponsors);   --on-nc: var(--on-sponsors); }
+.hub-acc[data-cat="market"]     { --nc: var(--cat-market);     --on-nc: var(--on-market); }
+.hub-acc[data-cat="repair"]     { --nc: var(--cat-repair);     --on-nc: var(--on-repair); }
+.hub-acc[data-cat="builds"]     { --nc: var(--cat-builds);     --on-nc: var(--on-builds); }
+.hub-acc[data-cat="acoustic"]   { --nc: var(--cat-acoustic);   --on-nc: var(--on-acoustic); }
+.hub-acc[data-cat="general"]    { --nc: var(--cat-general);    --on-nc: var(--on-general); }
+.hub-acc[data-cat="looths"]     { --nc: var(--cat-looths);     --on-nc: var(--on-looths); }
+.hub-acc[data-cat="tools"]      { --nc: var(--cat-tools);      --on-nc: var(--on-tools); }
+.hub-acc[data-cat="business"]   { --nc: var(--cat-business);   --on-nc: var(--on-business); }
+.hub-acc[data-cat="suggestions"]{ --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
+.hub-acc[data-cat="perspective"]{ --nc: var(--cat-perspective); --on-nc: var(--on-perspective); }
+.hub-acc[data-cat="vintage"]    { --nc: var(--cat-vintage);    --on-nc: var(--on-vintage); }
+/* Coloured left border ties sidebar row to feed-card accent; active fill uses the category colour */
+.hub-acc[data-cat] > .hub-rail__row { border-left: 3px solid var(--nc, transparent); border-radius: 0 7px 7px 0; }
+.hub-acc[data-cat] > .hub-rail__row.is-on { background: var(--nc, var(--lg-sage)); color: var(--on-nc, #fff); }
+.hub-acc[data-cat] > .hub-rail__row.is-on .hub-rail__ct { color: color-mix(in srgb, var(--on-nc, #fff) 75%, transparent); }
 
 /* Active-filter chip bar above the feed */
 .hub-chipbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -2962,6 +2981,21 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 .hub-rail__row.is-muted.is-on { background: transparent; }
 .hub-rail__row.is-muted.is-on .hub-rail__nm { color: var(--lg-ink); font-weight: 400; }
 .hub-chip--muted { background: #f3e6dd; border-color: #e6cab2; color: #8a4f23; }
+/* Category chips inherit their category colour */
+.hub-chip[data-cat="sponsors"]   { --nc: var(--cat-sponsors);   --on-nc: var(--on-sponsors); }
+.hub-chip[data-cat="market"]     { --nc: var(--cat-market);     --on-nc: var(--on-market); }
+.hub-chip[data-cat="repair"]     { --nc: var(--cat-repair);     --on-nc: var(--on-repair); }
+.hub-chip[data-cat="builds"]     { --nc: var(--cat-builds);     --on-nc: var(--on-builds); }
+.hub-chip[data-cat="acoustic"]   { --nc: var(--cat-acoustic);   --on-nc: var(--on-acoustic); }
+.hub-chip[data-cat="general"]    { --nc: var(--cat-general);    --on-nc: var(--on-general); }
+.hub-chip[data-cat="looths"]     { --nc: var(--cat-looths);     --on-nc: var(--on-looths); }
+.hub-chip[data-cat="tools"]      { --nc: var(--cat-tools);      --on-nc: var(--on-tools); }
+.hub-chip[data-cat="business"]   { --nc: var(--cat-business);   --on-nc: var(--on-business); }
+.hub-chip[data-cat="suggestions"]{ --nc: var(--cat-suggestions); --on-nc: var(--on-suggestions); }
+.hub-chip[data-cat="perspective"]{ --nc: var(--cat-perspective); --on-nc: var(--on-perspective); }
+.hub-chip[data-cat="vintage"]    { --nc: var(--cat-vintage);    --on-nc: var(--on-vintage); }
+.hub-chip[data-cat] { background: color-mix(in srgb, var(--nc) 14%, #fff); border-color: color-mix(in srgb, var(--nc) 38%, #ddd); color: color-mix(in srgb, var(--nc) 85%, #000); }
+.hub-chip--muted[data-cat] { background: color-mix(in srgb, var(--nc) 10%, #f3e6dd); border-color: color-mix(in srgb, var(--nc) 30%, #e6cab2); }
 
 /* Search + author filter moved into the feed toolbar (the sort-bar gap).
    Own margin-left:auto so it shares the free space with the toggles' auto-margin

@@ -116,7 +116,7 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
         if (in_array($lf['key'], $filters['leaves'] ?? [], true) || in_array($lf['key'], $muted['leaves'] ?? [], true)) { $open = true; break; }
     }
     ?>
-    <div class="hub-acc<?= $open ? ' is-open' : '' ?>">
+    <div class="hub-acc<?= $open ? ' is-open' : '' ?>" data-cat="<?= htmlspecialchars($p['key']) ?>">
       <div class="hub-rail__row hub-acc__parent<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?>">
         <?php if ($has): ?>
           <button class="hub-acc__chev" type="button" aria-expanded="<?= $open ? 'true' : 'false' ?>" aria-label="Expand <?= htmlspecialchars($p['label']) ?>">&#9656;</button>
@@ -264,7 +264,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
         $chips[] = ['Search', $filters['q'], hub_url($f, $sort)];
     }
     foreach ($filters['types'] as $v) $chips[] = ['Type', hub_type_label($v), hub_url(hub_toggle($filters, 'type', $v), $sort)];
-    foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort)];
+    foreach ($filters['cats']  as $v) $chips[] = ['In',   hub_cat_label($v),  hub_url(hub_toggle($filters, 'cat',  $v), $sort), $v];
     foreach (($filters['leaves'] ?? []) as $v) $chips[] = ['In', $leaf_labels[$v] ?? $v, hub_url(hub_toggle($filters, 'leaf', $v), $sort)];
     foreach ($filters['authors'] as $a) {
         $f = $filters; $f['authors'] = array_values(array_diff($filters['authors'], [$a]));
@@ -273,7 +273,7 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
     // Sticky "Muted" chips — removing un-mutes (distinct styling, always shown).
     $mchips = [];
     foreach ($muted['types'] as $v) $mchips[] = ['Muted', hub_type_label($v), hub_mute_url($filters, $sort, 't', $v)];
-    foreach ($muted['cats']  as $v) $mchips[] = ['Muted', hub_cat_label($v),  hub_mute_url($filters, $sort, 'c', $v)];
+    foreach ($muted['cats']  as $v) $mchips[] = ['Muted', hub_cat_label($v),  hub_mute_url($filters, $sort, 'c', $v), $v];
     foreach (($muted['leaves'] ?? []) as $v) $mchips[] = ['Muted', $leaf_labels[$v] ?? $v, hub_mute_url($filters, $sort, 'l', $v)];
 
     if (!$chips && !$mchips) return;
@@ -282,13 +282,13 @@ function hub_render_chipbar(array $filters, array $muted, string $sort = 'new', 
       <?php if ($chips): ?>
         <span class="hub-chipbar__lab">Filters</span>
         <span class="hub-chipbar__and">AND</span>
-        <?php foreach ($chips as [$k, $v, $rm]): ?>
-          <span class="hub-chip"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
+        <?php foreach ($chips as $chip): [$k, $v, $rm] = $chip; $ck = $chip[3] ?? ''; ?>
+          <span class="hub-chip"<?= $ck ? ' data-cat="' . htmlspecialchars($ck) . '"' : '' ?>><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Remove filter">&times;</a></span>
         <?php endforeach; ?>
         <a class="hub-chipbar__reset" href="<?= hub_url(['types' => [], 'cats' => [], 'leaves' => [], 'authors' => [], 'q' => ''], $sort) ?>">Reset all</a>
       <?php endif; ?>
-      <?php foreach ($mchips as [$k, $v, $rm]): ?>
-        <span class="hub-chip hub-chip--muted"><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>
+      <?php foreach ($mchips as $chip): [$k, $v, $rm] = $chip; $ck = $chip[3] ?? ''; ?>
+        <span class="hub-chip hub-chip--muted"<?= $ck ? ' data-cat="' . htmlspecialchars($ck) . '"' : '' ?>><b><?= htmlspecialchars($k) ?></b> <?= htmlspecialchars($v) ?><a class="hub-chip__x" href="<?= $rm ?>" aria-label="Unmute">&times;</a></span>
       <?php endforeach; ?>
     </div>
     <?php
