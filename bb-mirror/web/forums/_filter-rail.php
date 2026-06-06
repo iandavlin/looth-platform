@@ -172,7 +172,7 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
 
       <h4 class="hub-rail__h">Categories <small>· tap to filter, switch to mute</small></h4>
       <div class="hub-rail__group" id="hub-cat-accordion">
-        <?php foreach ($tree as $p) hub_render_cat_parent($p, $filters, $muted, $sort); ?>
+        <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
       </div>
 
       <h4 class="hub-rail__h">View</h4>

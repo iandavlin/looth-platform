@@ -699,6 +699,9 @@ $header_cat = $scoped_forum
       <div class="forum-header__title-row">
         <h1 class="forum-header__title"><?= htmlspecialchars($header_title, ENT_QUOTES, 'UTF-8') ?></h1>
       </div>
+      <?php if (!$scoped_forum): ?>
+        <span class="lg-hub-tagline">The latest builds, repairs, and conversations from across Looth.</span>
+      <?php endif; ?>
       <span class="forum-header__label">Activity</span>
       <button class="forum-header__edit-img" type="button" hidden
               data-forum-id="<?= $scoped_forum ? (int)$scoped_forum['id'] : 0 ?>"
@@ -712,7 +715,8 @@ $header_cat = $scoped_forum
   <?php if (!empty($GLOBALS['__bb_hub_rail'])) hub_render_chipbar($hub_filters, $hub_muted, $sort_param, $hub_leaf_labels ?? []); ?>
 
   <!-- Sort bar (+ post button, right-aligned) -->
-  <nav class="feed-sort-bar" aria-label="Sort activity">
+  <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
+    <a href="/hub/" class="lg-fresh-tab<?= (!isset($_GET['sort']) || $_GET['sort'] === '') ? ' active' : '' ?>">Fresh</a>
     <a href="<?= feed_sort_url('new', $forum_slug) ?>"
        class="<?= $sort_param === 'new' ? 'active' : '' ?>">New</a>
     <a href="<?= feed_sort_url('old', $forum_slug) ?>"
@@ -724,10 +728,17 @@ $header_cat = $scoped_forum
     <?php else: // scoped-forum views keep the view toggles in the sort bar ?>
       <?php hub_render_view_toggles(); ?>
     <?php endif; ?>
+    <button type="button" class="lg-filters-chip" aria-label="Open filters">
+      <span class="corner-hamburger__icon" aria-hidden="true">&#9776;</span>
+      <span class="lg-filters-chip__tx">Filters</span>
+    </button>
     <?php if ($can_post && $is_postable_forum): ?>
       <button class="feed-post-btn" type="button" data-ntm-open
               data-forum-id="<?= (int)$scoped_forum['id'] ?>"
               data-forum-slug="<?= htmlspecialchars($forum_slug) ?>">+ Post here</button>
+    <?php endif; ?>
+    <?php if ($can_post && !$is_postable_forum): ?>
+      <button class="forum-header__new-post lg-newpost" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
     <?php endif; ?>
   </nav>
 
@@ -756,6 +767,7 @@ $header_cat = $scoped_forum
         $c_dur     = (int)($topic['duration_min'] ?? 0);
         $c_tier    = (string)($topic['content_tier'] ?? '');
         $c_tags    = $content_tags[(int)$topic['topic_id']] ?? [];
+        $c_cat     = hub_reconcile_cat_key((string)($topic['content_forum_label'] ?? ''));
         // Inline comments: WP-free modal keyed (post_type, item_id) — same shape as
         // likes. topic_id is the content_item id (= wp_posts.ID = comment item_id).
         $c_cpt        = (string)($topic['content_cpt'] ?? '');
@@ -767,16 +779,17 @@ $header_cat = $scoped_forum
             'sponsor-post' => 'Sponsor', 'loothprint' => 'Loothprint',
         ][$c_kind] ?? ucfirst(str_replace('-', ' ', $c_kind));
     ?>
-    <article class="feed-card feed-card--content" data-cat="content"
+    <article class="feed-card feed-card--content" data-cat="<?= htmlspecialchars($c_cat) ?>"
              data-kind="<?= htmlspecialchars($c_kind) ?>"
-             data-href="<?= htmlspecialchars($c_url) ?>">
+             data-href="<?= htmlspecialchars($c_url) ?>" data-lg-card="1">
       <div class="feed-card__meta-top">
-        <span class="feed-card__forum-ctx">
-          <span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span>
-          <?php if ($c_tier !== ''): ?><span class="feed-card__tier-chip feed-card__tier-chip--<?= htmlspecialchars($c_tier) ?>"><?= htmlspecialchars(ucfirst($c_tier)) ?></span><?php endif; ?>
-          <?php if ($c_dur > 0): ?><span class="feed-card__kind-dur"><?= $c_dur ?> min</span><?php endif; ?>
-        </span>
-        <time class="feed-card__time"><?= $c_time ?></time>
+        <?php
+          $av_c = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 30,
+                      $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null);
+          echo str_replace('class="avatar-init', 'class="avatar-init lg-card-avatar', $av_c);
+        ?>
+        <span class="lg-card-id"><span class="lg-card-author"><?= $c_author ?></span></span>
+        <time class="lg-card-time"><?= $c_time ?></time>
       </div>
       <div class="feed-card__header">
         <div class="feed-card__header-body">
@@ -855,13 +868,18 @@ $header_cat = $scoped_forum
                  . ' data-topic-title="' . htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) . '">&#8617; Reply</button>'
         : '';
     ?>
-    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>">
+    <article class="feed-card feed-card--topic" data-topic-id="<?= $topic_id ?>" data-cat="<?= htmlspecialchars($cat_key) ?>" data-href="<?= $turl ?>" data-reply-count="<?= $reply_count ?>" data-lg-card="1">
       <div class="feed-card__meta-top">
-        <span class="feed-card__forum-ctx">
-          <span class="feed-card__kind-badge feed-card__kind-badge--discussion">Discussion</span>
-          <?= $ctx ?>
-        </span>
-        <time class="feed-card__time" title="<?= htmlspecialchars((string)$topic['event_time']) ?>"><?= $rtime ?></time>
+        <?php
+          $av_t = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 30,
+                      $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null);
+          echo str_replace('class="avatar-init', 'class="avatar-init lg-card-avatar', $av_t);
+        ?>
+        <span class="lg-card-id"><span class="lg-card-author"><?= $author ?></span></span>
+        <time class="lg-card-time"><?= $rtime ?></time>
+        <?php if (!empty($topic['forum_title'])): ?>
+          <span class="feed-card__kind-badge lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></span>
+        <?php endif; ?>
       </div>
 
       <div class="feed-card__header">
