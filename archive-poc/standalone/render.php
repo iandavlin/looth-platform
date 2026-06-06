@@ -108,7 +108,14 @@ if ($IS_CLI && in_array('--proof', $argv ?? [], true)) {
 $previewAs = '';
 if (!$IS_CLI) {
     $pa = $_GET['as'] ?? '';
-    if (in_array($pa, ['public', 'lite', 'pro'], true)) $previewAs = $pa;
+    if (in_array($pa, ['public', 'lite', 'pro'], true)) {
+        // Preview override is an ADMIN/EDITOR tool ONLY. Honoring it for any
+        // visitor lets a logged-out user append ?as=pro to a gated post and
+        // recover the embed URL/ID from the DOM (data-yt-id / i.ytimg). Gate it
+        // behind the same edit_archive_poc cap that surfaces the Edit pill.
+        $whoPrev = lg_archive_poc_whoami();   // static-cached this request
+        if (($whoPrev['capabilities']['edit_archive_poc'] ?? false) === true) $previewAs = $pa;
+    }
 }
 
 if ($previewAs !== '') {
