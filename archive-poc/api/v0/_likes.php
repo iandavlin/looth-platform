@@ -1,34 +1,36 @@
 <?php
 /**
- * archive-poc/api/v0/_likes.php — the one net-new system: Likes.
+ * archive-poc/api/v0/_likes.php — the standalone /stream + like.php "like" door.
  *
- * Shared by the /stream/ SSR (count + liked-state lookup), the like toggle
- * endpoint (like.php), and any future "most-liked" surface. Storage is the
- * Postgres `discovery` schema (alongside article_blobs) — NOT the SQLite index,
- * which is read-only derived state. Likes are authoritative, net-new, writable.
+ * AS OF 2026-06-06 likes are FOLDED INTO card_reactions (slug='like'). A like is
+ * just one slug of the BuddyBoss palette, so there is ONE reaction store for cards,
+ * not two parallel like systems. This file keeps its historical {count,liked}
+ * contract (used by the /stream/ SSR + like.php) but now DELEGATES to the card
+ * store in _reactions.php. discovery.likes is retained read-only (un-dropped) for
+ * revert safety until the coordinator retires it.
  *
- * Design notes:
- *  - Identity = `user_uuid` from /whoami VERBATIM (the shared identity contract).
- *    No WP user id, no cookie — whoami is the only source. Anon has no uuid and
- *    therefore can never write a like (enforced in like.php).
- *  - One like per (post_type, item_id, user_uuid): the table PK makes like/unlike
- *    idempotent and the per-item COUNT cheap (idx_likes_item prefix). "Most-liked"
- *    is a GROUP BY away — we don't paint into a corner with a bare counter.
- *  - CSRF: a stateless HMAC of the viewer's uuid under the server secret. The
- *    token is rendered into the stream page for authenticated viewers only and
- *    must come back in the X-LG-CSRF header. An attacker page can't compute it
- *    (no secret) and anon has no uuid to bind, so cross-site writes can't forge.
+ * Identity here is still `user_uuid` from /whoami VERBATIM (the standalone door's
+ * gate, unchanged). The Hub door (card-react.php) adds the WP-cookie/wp_id path for
+ * unbridged members; a bridged member dedups to one row across both via actor_key.
+ *
+ * FOLD SEMANTICS (consequence of one-reaction-per-card): liking a card and picking
+ * a non-like reaction are the SAME slot. If a member already reacted '🤯' and then
+ * "likes", the like REPLACES the prior reaction (and vice-versa). 'liked' = the
+ * member's current reaction is exactly 'like'.
+ *
+ * CSRF: a stateless HMAC of the viewer's uuid (rendered into the stream page for
+ * authenticated viewers only). Unchanged.
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/../../config.php';   // PDO + whoami + LG_ARCHIVE_POC_CONFIG_SECRET
+require_once __DIR__ . '/_reactions.php';     // card_reactions store — likes fold in as slug='like'
 
 if (!function_exists('lg_likes_pdo')) {
 /**
- * Postgres handle for the likes store. The read API normally talks to SQLite;
- * likes are the one writable surface, so we open Postgres explicitly (peer auth
- * as the archive-poc role) rather than going through lg_archive_poc_pdo()'s
- * SQLite default. search_path is pinned to discovery.
+ * Postgres handle for the likes/reactions store (the `discovery` schema). Opened as
+ * the archive-poc role (peer auth) — the schema owner, so it can write card_reactions
+ * directly for the standalone like door. search_path pinned to discovery.
  */
 function lg_likes_pdo(): PDO {
     static $pdo = null;
@@ -74,55 +76,33 @@ function lg_likes_csrf_ok(?string $userUuid, ?string $presented): bool {
 
 if (!function_exists('lg_likes_counts')) {
 /**
- * Batch like-counts + viewer-liked-state for a page of items.
+ * Batch like-counts + viewer-liked-state for a page of items. Now derived from
+ * card_reactions (slug='like') so the standalone read agrees with the Hub door.
+ *
  * @param array $items list of ['post_type'=>string,'item_id'=>int]
  * @param ?string $viewerUuid liked-state computed only when a valid uuid is given
  * @return array keyed "post_type:item_id" => ['count'=>int,'liked'=>bool]
  */
 function lg_likes_counts(PDO $pdo, array $items, ?string $viewerUuid): array {
     $out = [];
-    if (!$items) return $out;
-    // Distinct (type,id) pairs; build a VALUES list to join against.
     $pairs = [];
     foreach ($items as $it) {
         $pt = (string) ($it['post_type'] ?? '');
         $id = (int) ($it['item_id'] ?? 0);
         if ($pt === '' || $id <= 0) continue;
-        $pairs["$pt:$id"] = [$pt, $id];
+        $pairs["$pt:$id"] = ['post_type' => $pt, 'item_id' => $id];
     }
     if (!$pairs) return $out;
 
-    // Counts: one grouped query over the wanted pairs.
-    $ph = [];
-    $args = [];
-    $i = 0;
-    foreach ($pairs as $p) {
-        $ph[] = "(?::text, ?::bigint)";
-        $args[] = $p[0];
-        $args[] = $p[1];
-    }
-    $sql = 'SELECT post_type, item_id, COUNT(*) AS c FROM likes
-            WHERE (post_type, item_id) IN (' . implode(',', $ph) . ')
-            GROUP BY post_type, item_id';
-    $st = $pdo->prepare($sql);
-    $st->execute($args);
-    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $out[$r['post_type'] . ':' . $r['item_id']] = ['count' => (int) $r['c'], 'liked' => false];
-    }
-    foreach ($pairs as $k => $p) {
-        if (!isset($out[$k])) $out[$k] = ['count' => 0, 'liked' => false];
-    }
-
-    // Viewer liked-state: only if authenticated with a real uuid.
-    if (lg_likes_is_uuid($viewerUuid)) {
-        $st = $pdo->prepare('SELECT post_type, item_id FROM likes
-                             WHERE user_uuid = ?::uuid
-                               AND (post_type, item_id) IN (' . implode(',', $ph) . ')');
-        $st->execute(array_merge([strtolower((string) $viewerUuid)], $args));
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $k = $r['post_type'] . ':' . $r['item_id'];
-            if (isset($out[$k])) $out[$k]['liked'] = true;
-        }
+    $counts = lg_card_reactions_for_items($pdo, array_values($pairs));
+    $mine   = lg_likes_is_uuid($viewerUuid)
+            ? lg_card_reactions_mine($pdo, array_values($pairs), null, $viewerUuid)
+            : [];
+    foreach ($pairs as $k => $_) {
+        $out[$k] = [
+            'count' => (int) ($counts[$k]['like'] ?? 0),
+            'liked' => (($mine[$k] ?? null) === 'like'),
+        ];
     }
     return $out;
 }
@@ -130,31 +110,16 @@ function lg_likes_counts(PDO $pdo, array $items, ?string $viewerUuid): array {
 
 if (!function_exists('lg_likes_toggle')) {
 /**
- * Idempotent toggle. Returns ['count'=>int,'liked'=>bool] after the write.
- * Insert-or-noop / delete keyed on the PK — no read-modify-write race.
+ * Idempotent like toggle, now backed by card_reactions (slug='like'). Returns
+ * ['count'=>int,'liked'=>bool] after the write. Toggling 'like' when the member's
+ * current reaction is already 'like' removes it; otherwise it sets 'like' (replacing
+ * any prior non-like reaction — see FOLD SEMANTICS in the file header).
  */
 function lg_likes_toggle(PDO $pdo, string $postType, int $itemId, string $userUuid): array {
-    $uuid = strtolower($userUuid);
-    $pdo->beginTransaction();
-    try {
-        $del = $pdo->prepare('DELETE FROM likes WHERE post_type=? AND item_id=? AND user_uuid=?::uuid');
-        $del->execute([$postType, $itemId, $uuid]);
-        if ($del->rowCount() > 0) {
-            $liked = false;
-        } else {
-            $ins = $pdo->prepare('INSERT INTO likes (post_type, item_id, user_uuid) VALUES (?,?,?::uuid)
-                                  ON CONFLICT DO NOTHING');
-            $ins->execute([$postType, $itemId, $uuid]);
-            $liked = true;
-        }
-        $cnt = $pdo->prepare('SELECT COUNT(*) FROM likes WHERE post_type=? AND item_id=?');
-        $cnt->execute([$postType, $itemId]);
-        $count = (int) $cnt->fetchColumn();
-        $pdo->commit();
-        return ['count' => $count, 'liked' => $liked];
-    } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        throw $e;
-    }
+    $res = lg_card_reactions_set($pdo, $postType, $itemId, null, $userUuid, 'like');
+    return [
+        'count' => (int) ($res['counts']['like'] ?? 0),
+        'liked' => ($res['mine'] === 'like'),
+    ];
 }
 }
