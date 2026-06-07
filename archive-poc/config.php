@@ -183,6 +183,6 @@ function lg_card_select(PDO $db, string $a = 'ci'): string {
          . lg_ts_sel($db, "$a.published_at", 'published_at') . ", " . lg_ts_sel($db, "$a.last_activity", 'last_activity') . ", "
          . "$a.reply_count, $a.like_count, $a.view_count, $a.duration_min, " . lg_bool_sel($db, "$a.has_download", 'has_download') . ", "
          . lg_ts_sel($db, "$a.event_start_at", 'event_start_at') . ", " . lg_ts_sel($db, "$a.event_end_at", 'event_end_at') . ", "
-         . "$a.event_region, $a.event_join_url, $a.forum_label, $a.subforum_label";
+         . "$a.event_region, $a.event_join_url, $a.forum_label, $a.subforum_label, $a.yt_id";
 }
 }

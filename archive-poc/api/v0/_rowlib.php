@@ -189,7 +189,7 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
                ci.thumb_url, " . lg_bool_sel($db, 'ci.thumb_broken', 'thumb_broken') . ", ci.tier,
                ci.author_id, ci.author_name,
                " . lg_ts_sel($db, 'ci.published_at', 'published_at') . ", " . lg_ts_sel($db, 'ci.last_activity', 'last_activity') . ", ci.reply_count,
-               ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . "
+               ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . ", ci.yt_id
         FROM content_item ci
         WHERE " . implode(' AND ', $where) . "
         ORDER BY $order
@@ -220,10 +220,10 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
     }
     foreach ($rows as &$r) {
         $r['tags'] = $tags_by_id[(int)$r['id']] ?? [];
-        // Video facade: pull a YouTube id from the body so rail cards can play
-        // inline (same pattern as the activity strip). Cheap regex, videos only.
-        $r['yt_id'] = null;
-        if (($r['kind'] ?? '') === 'video' && !empty($r['body_text'])
+        // Video facade: prefer the real yt_id resolved at index time (covers the
+        // newest videos whose id lives only in the v2 embed block). Fall back to
+        // the legacy body_text regex for any row not yet reindexed. Videos only.
+        if (empty($r['yt_id']) && ($r['kind'] ?? '') === 'video' && !empty($r['body_text'])
             && preg_match('~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i', (string)$r['body_text'], $ytm)) {
             $r['yt_id'] = $ytm[1];
         }

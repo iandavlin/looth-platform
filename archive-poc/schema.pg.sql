@@ -35,6 +35,8 @@ CREATE TABLE content_item (
   event_join_url  TEXT,
   forum_label     TEXT,
   subforum_label  TEXT,
+  -- Resolved YouTube id (videos only) for the inline play-button facade.
+  yt_id           TEXT,
   -- Denormalized tag text (concat of tag labels) for FTS coverage.
   -- Maintained by backfill.php after content_tag rows land.
   tag_text        TEXT NOT NULL DEFAULT '',

@@ -322,8 +322,8 @@ $ins_item = $db->prepare('
      thumb_url, thumb_broken, author_id, author_name, tier, published_at,
      last_activity, reply_count, like_count, view_count, duration_min, has_download,
      event_start_at, event_end_at, event_region, event_join_url,
-     forum_label, subforum_label, tag_text)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     forum_label, subforum_label, tag_text, yt_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ');
 $ins_ctag = $db->prepare('
     INSERT INTO content_tag (content_id, tag_id) VALUES (?, ?)
@@ -384,6 +384,11 @@ while (true) {
         $thumb = resolve_thumb($pid, $p['post_content']);
         $tier  = resolve_tier($pid, $kind);
         $url   = get_permalink($pid) ?: '';
+
+        // Video play-button facade (see archive_poc_extract_yt_id in indexer.php).
+        $yt_id = ($kind === 'video')
+            ? archive_poc_extract_yt_id($pid, $v2, (string) $p['post_content'])
+            : null;
 
         $last_active = $kind === 'discussion' ? ($topic_active[$pid] ?? null) : null;
         $reply_count = $kind === 'discussion' ? ($topic_replies[$pid] ?? 0) : 0;
@@ -460,6 +465,7 @@ while (true) {
             $forum_label,
             $subforum_label,
             $tag_text,
+            $yt_id,
         ]);
         $count_by_kind[$kind] = ($count_by_kind[$kind] ?? 0) + 1;
         $total++;

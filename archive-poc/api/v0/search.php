@@ -93,7 +93,7 @@ $sql = "
            ci.thumb_url, " . lg_bool_sel($db, 'ci.thumb_broken', 'thumb_broken') . ", ci.tier,
            ci.author_id, ci.author_name,
            " . lg_ts_sel($db, 'ci.published_at', 'published_at') . ", " . lg_ts_sel($db, 'ci.last_activity', 'last_activity') . ", ci.reply_count,
-           ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . "
+           ci.like_count, ci.view_count, ci.duration_min, " . lg_bool_sel($db, 'ci.has_download', 'has_download') . ", ci.yt_id
            $select_extra
     FROM content_item ci
     $fts_join

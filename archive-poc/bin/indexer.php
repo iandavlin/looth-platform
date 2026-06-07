@@ -129,6 +129,30 @@ function archive_poc_resolve_thumb(int $post_id, string $body_html): ?string {
 }
 
 /**
+ * Resolve the canonical YouTube id for a video at INDEX time so every video card
+ * gets a play button — the read-time body_text regex only catches the ~131 older
+ * videos whose id survives into body_text. The newest (page-1) videos keep the URL
+ * in their v2 layout `embed` block, which extract_v2_text() drops. We scan, in
+ * priority order: the `youtube_link` ACF field, the v2 layout JSON (embed block
+ * url), then the raw post_content. All references in one video point at the same
+ * id, so the first match wins. Same id pattern the rail/search facades already use.
+ */
+function archive_poc_extract_yt_id(int $post_id, $v2, string $post_content): ?string {
+    $re = '~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i';
+    $sources = [];
+    $yl = (string) get_post_meta($post_id, 'youtube_link', true);
+    if ($yl !== '') $sources[] = $yl;
+    // JSON_UNESCAPED_SLASHES: default json_encode emits "youtu.be\/ID", whose
+    // backslash breaks the "youtu.be/" match — the embed-block URL would be missed.
+    if (is_array($v2)) $sources[] = (string) json_encode($v2, JSON_UNESCAPED_SLASHES);
+    if ($post_content !== '') $sources[] = $post_content;
+    foreach ($sources as $src) {
+        if ($src !== '' && preg_match($re, $src, $m)) return $m[1];
+    }
+    return null;
+}
+
+/**
  * Extract event-specific fields from postmeta. Returns ['start','end','region','join_url'],
  * any of which may be null. Handles two CPT shapes:
  *   - ajde_events: evcal_srow / evcal_erow (already unix timestamps)
@@ -389,6 +413,13 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
     $tier  = archive_poc_resolve_tier($post_id, $kind);
     $url   = get_permalink($post_id) ?: '';
 
+    // Video play-button facade: resolve a real YouTube id from the layout/meta/body
+    // (videos only) so the column is the single source — readers prefer it over the
+    // body_text regex fallback. Ranking/feed order unaffected (nullable, no index).
+    $yt_id = ($kind === 'video')
+        ? archive_poc_extract_yt_id($post_id, $v2, (string) $post->post_content)
+        : null;
+
     $last_active = null; $reply_count = 0;
     $forum_label = null; $subforum_label = null;
     if ($kind === 'discussion') {
@@ -476,8 +507,8 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
              thumb_url, thumb_broken, author_id, author_name, tier, published_at,
              last_activity, reply_count, like_count, view_count, duration_min, has_download,
              event_start_at, event_end_at, event_region, event_join_url,
-             forum_label, subforum_label, tag_text)
-            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'false', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             forum_label, subforum_label, tag_text, yt_id)
+            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'false', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ")->execute([
             $post_id, $kind, null, $cpt,
             $post->post_title ?: '(untitled)',
@@ -490,7 +521,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
             null, $has_download ? 'true' : 'false',
             archive_poc__ts_iso($event_fields['start']), archive_poc__ts_iso($event_fields['end']),
             $event_fields['region'], $event_fields['join_url'],
-            $forum_label, $subforum_label, implode(' ', $tag_labels),
+            $forum_label, $subforum_label, implode(' ', $tag_labels), $yt_id,
         ]);
         if ($terms_rows) {
             $ins_tag  = $db->prepare('INSERT INTO tag (slug, label) VALUES (?, ?)
@@ -515,8 +546,8 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
              thumb_url, thumb_broken, author_id, author_name, tier, published_at,
              last_activity, reply_count, like_count, view_count, duration_min, has_download,
              event_start_at, event_end_at, event_region, event_join_url,
-             forum_label, subforum_label)
-            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             forum_label, subforum_label, yt_id)
+            VALUES (?, 'wp', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ")->execute([
             $post_id, $kind, null, $cpt,
             $post->post_title ?: '(untitled)',
@@ -528,7 +559,7 @@ function archive_poc_index_post(PDO $db, int $post_id): array {
             $like_count, $view_count,
             null, $has_download,
             $event_fields['start'], $event_fields['end'], $event_fields['region'], $event_fields['join_url'],
-            $forum_label, $subforum_label,
+            $forum_label, $subforum_label, $yt_id,
         ]);
         if ($terms_rows) {
             $ins_tag  = $db->prepare('INSERT OR IGNORE INTO tag(id, slug, label) VALUES(?,?,?)');

@@ -33,7 +33,8 @@ CREATE TABLE content_item (
   event_region    TEXT,                       -- e.g. "North America"
   event_join_url  TEXT,                       -- Zoom URL etc.
   forum_label     TEXT,                       -- top-level bbPress forum, NULL for non-discussions
-  subforum_label  TEXT                        -- immediate sub-forum if nested, else NULL
+  subforum_label  TEXT,                       -- immediate sub-forum if nested, else NULL
+  yt_id           TEXT                        -- resolved YouTube id (videos) for the inline play facade
 );
 
 CREATE INDEX idx_content_kind          ON content_item(kind, published_at DESC);
