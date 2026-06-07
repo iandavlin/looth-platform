@@ -36,10 +36,23 @@ if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
     $fid = (int)$m[1];
 }
 
-// Sort: new (default) | old | hot
-$sort_param = strtolower(trim((string)($_GET['sort'] ?? 'new')));
-if (!in_array($sort_param, ['new', 'old', 'hot'], true)) {
-    $sort_param = 'new';
+// Sort: random (front-door default) | new | old | hot
+// The site-wide /hub/ front door defaults to "Random" — a popularity-weighted shuffle
+// that surfaces old/popular content (Ian/Buck 2026-06-07). A scoped single-forum view
+// keeps newest-first so a specific forum reads chronologically.
+$sort_param   = strtolower(trim((string)($_GET['sort'] ?? '')));
+$default_sort = ($forum_slug !== '' || $fid > 0) ? 'new' : 'random';
+if (!in_array($sort_param, ['new', 'old', 'hot', 'random'], true)) {
+    $sort_param = $default_sort;
+}
+// Random uses a per-visit seed so the weighted shuffle is STABLE across infinite-scroll
+// pages (same seed -> identical order -> coherent offset paging) and re-rolls on a fresh
+// visit. The seed is carried forward in the "load older" URL below.
+$rand_seed = 0;
+if ($sort_param === 'random') {
+    $rand_seed = (isset($_GET['seed']) && ctype_digit((string)$_GET['seed']))
+        ? (int)$_GET['seed']
+        : random_int(1, 2000000000);
 }
 
 $scoped_forum = null;
@@ -134,6 +147,16 @@ switch ($sort_param) {
     case 'hot':
         $order_by = "ORDER BY (t.reply_count::float / POW(EXTRACT(EPOCH FROM (NOW() - t.last_active_at))/3600 + 2, 1.5)) DESC NULLS LAST";
         break;
+    case 'random':
+        // Seeded popularity-weighted shuffle (Efraimidis–Spirakis key u^(1/w)):
+        // u = deterministic uniform from hashtextextended(topic id, :rand_seed);
+        // weight = (reply_count+1)^2. Recency-independent (old threads surface),
+        // stable for a given seed. Scoped topics carry no tier gating.
+        $order_by = "ORDER BY power(
+            (hashtextextended('topic:' || t.id::text, :rand_seed) & 9223372036854775807)::double precision / 9223372036854775807.0,
+            1.0 / power(t.reply_count + 1, 2)
+        ) DESC";
+        break;
     default: // new
         $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST';
         break;
@@ -150,6 +173,20 @@ switch ($sort_param) {
         break;
     case 'hot':
         $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
+        break;
+    case 'random':
+        // Front-door Random: seeded popularity-weighted shuffle over the unified feed.
+        // u = uniform from hashtextextended(card_type||':'||id, :rand_seed); key =
+        // u^(1/weight), weight = (reply_count+like_count+1)^2 so popular topics AND liked
+        // content float up, recency-independent (old posts surface), stable per seed for
+        // coherent infinite-scroll paging. Locked teasers (content tier above the viewer's
+        // :viewer_rank) take a 0.25 multiplicative key penalty so they sink without vanishing.
+        $union_order_by = "ORDER BY power(
+            (hashtextextended(card_type || ':' || topic_id::text, :rand_seed) & 9223372036854775807)::double precision / 9223372036854775807.0,
+            1.0 / power(reply_count + like_count + 1, 2)
+        ) * CASE WHEN content_tier IS NOT NULL
+                 AND (CASE content_tier WHEN 'lite' THEN 1 WHEN 'pro' THEN 2 ELSE 0 END) > :viewer_rank
+               THEN 0.25 ELSE 1.0 END DESC";
         break;
     default: // new
         $union_order_by = 'ORDER BY event_time DESC NULLS FIRST';
@@ -359,6 +396,7 @@ if ($scoped_forum) {
     $stmt->bindValue(':seed_id',    (int)$scoped_forum['id'], PDO::PARAM_INT);
     $stmt->bindValue(':fetch_size', $card_limit,              PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset,              PDO::PARAM_INT);
+    if ($sort_param === 'random') $stmt->bindValue(':rand_seed', $rand_seed, PDO::PARAM_INT);
     $stmt->execute();
 } else {
     // Site-wide /hub/ = the UNIFIED feed: forum topics ∪ content (discovery).
@@ -498,6 +536,10 @@ if ($scoped_forum) {
     if ($hub_q !== '') { $stmt->bindValue(':hq_t', $hub_q); $stmt->bindValue(':hq_c', $hub_q); }
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
+    if ($sort_param === 'random') {
+        $stmt->bindValue(':rand_seed',   $rand_seed,             PDO::PARAM_INT);
+        $stmt->bindValue(':viewer_rank', (int)$viewer_tier_rank, PDO::PARAM_INT);
+    }
     $stmt->execute();
 }
 
@@ -927,8 +969,10 @@ $header_cat = $scoped_forum
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
+    <a href="<?= feed_sort_url('random', $forum_slug) ?>"
+       class="lg-random-tab<?= $sort_param === 'random' ? ' active' : '' ?>">Random</a>
     <a href="<?= feed_sort_url('new', $forum_slug) ?>"
-       class="<?= $sort_param !== 'old' ? 'active' : '' ?>">New</a>
+       class="<?= $sort_param === 'new' ? 'active' : '' ?>">New</a>
     <a href="<?= feed_sort_url('old', $forum_slug) ?>"
        class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
@@ -1204,6 +1248,8 @@ $header_cat = $scoped_forum
       if ($forum_slug !== '') $qs_parts[] = 'forum_slug=' . urlencode($forum_slug);
       $qs_parts[] = 'sort=' . urlencode($sort_param);
       $qs_parts[] = 'offset=' . $next_offset;
+      // Carry the random-shuffle seed so infinite scroll keeps ONE coherent order.
+      if ($sort_param === 'random') $qs_parts[] = 'seed=' . $rand_seed;
       // Carry active Hub filters into the next page (Type/Cat/Author/Search).
       foreach (hub_query_params() as $k => $v) $qs_parts[] = $k . '=' . urlencode($v);
   ?>
