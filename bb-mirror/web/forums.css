@@ -1493,11 +1493,17 @@ body.nav-open .nav-overlay { display: block; }
 .feed-page .fcr-palette { position: absolute; left: 13px; bottom: calc(100% - 2px); z-index: 20;
   display: flex; gap: 2px; padding: 6px; background: #fff;
   border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 14px;
-  box-shadow: 0 6px 22px rgba(26, 29, 26, .16); }
+  box-shadow: 0 6px 22px rgba(26, 29, 26, .16);
+  /* Absolute + left-only => auto width is shrink-to-fit, clamped to (containing
+     block - left). The .fcr bar is ~200px; the 7-opt palette wants ~250px, so it
+     gets clamped and the flexible image opts collapse to ~1px slivers (custom-image
+     reactions vanish in the picker; emoji opts survive on text min-content). Size to
+     content so it overflows the narrow bar instead of squeezing its items. */
+  width: max-content; max-width: none; }
 .feed-page .fcr-palette[hidden] { display: none; }  /* [hidden] must beat display:flex */
 .feed-page .fcr-opt { display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; border: 0; background: none; padding: 6px; border-radius: 10px;
-  font-size: 20px; line-height: 1; }
+  font-size: 20px; line-height: 1; flex: 0 0 auto; }  /* never shrink — keeps image opts at full size */
 .feed-page .fcr-opt:hover { background: var(--lg-sage-tint, #eef2e3); }
 .feed-page .fcr-opt .fcr-img { width: 22px; height: 22px; }
 .feed-page .fcr-opt .fcr-emoji { font-size: 20px; }
@@ -3528,11 +3534,17 @@ html.hub-theme-black .reply-stub__reply:hover {
 }
 
 /* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
-   between the quick input and Reply; opens the full feed-reply Quill modal. */
-.feed-page .fc-composer__rich { flex: 0 0 auto; border: 0; background: none; cursor: pointer;
-  color: var(--lg-mute, #6b6f6b); font-size: 16px; line-height: 1; padding: 6px 8px;
-  border-radius: 999px; transition: background .12s, color .12s; }
-.feed-page .fc-composer__rich:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #586b3f); }
+   between the quick input and Reply; opens the full feed-reply Quill modal. Reads
+   as a defined button AT REST (resting tint + ring) so the formatting/image escape
+   hatch isn't lost next to Reply — bumps on hover. */
+.feed-page .fc-composer__rich { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; cursor: pointer; color: var(--lg-sage-d, #586b3f);
+  background: var(--lg-sage-tint, #eef2e3); border: 1px solid color-mix(in srgb, var(--lg-sage, #87986a) 35%, transparent);
+  font-size: 17px; line-height: 1; padding: 0; border-radius: 999px;
+  transition: background .12s, color .12s, border-color .12s, transform .12s; }
+.feed-page .fc-composer__rich:hover { background: var(--lg-sage, #87986a); color: #fff;
+  border-color: var(--lg-sage, #87986a); transform: translateY(-1px); }
+.feed-page .fc-composer__rich:active { transform: translateY(0); }
 
 /* ── Unified in-place expand (Ian 6/7): ONE chevron replaces Read-more + View-replies.
    The originals stay in the DOM (the orchestration handler + the composer's post-reload
