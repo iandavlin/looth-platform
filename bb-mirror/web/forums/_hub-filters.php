@@ -194,7 +194,7 @@ function hub_facet_counts(PDO $db, array $content_tiers, array $forum_cat_map): 
     $tin = $tier_ph ? implode(',', $tier_ph) : "''";
 
     $tc = $db->prepare("SELECT kind, count(*) AS n FROM discovery.content_item
-                         WHERE tier IN ($tin) GROUP BY kind");
+                         WHERE tier IN ($tin) AND kind <> 'misc' GROUP BY kind");
     foreach ($content_tiers as $i => $t) $tc->bindValue(':ft' . $i, $t);
     $tc->execute();
     $types = [];
