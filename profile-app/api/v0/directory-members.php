@@ -257,7 +257,7 @@ if (!empty($_GET['pins'])) {
     profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
 }
 
-$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url,
+$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url, u.header_lights,
                u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug,
                (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
@@ -338,6 +338,9 @@ if ($rows) {
             'location'     => $loc,
             'highlights'   => $highlightsByUser[$subjectId] ?? [],
             'links'        => $linksByUser[$subjectId] ?? [],
+            // Header availability "status lights" (same widgets as the /u/ profile header),
+            // resolved from the row we already have — no extra query per member.
+            'lights'       => Block::mapHeaderLights($r['header_lights'] ?? null),
             'distance_mi'  => $dist,
         ];
     }

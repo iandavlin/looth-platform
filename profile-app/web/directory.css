@@ -122,3 +122,17 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
   border-radius: 16px 16px 0 0; overflow: hidden; background: var(--lg-sage-tint);
 }
 .dir-card__banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Availability "status lights" — the same widgets as the /u/ profile header
+ * (Block::HEADER_LIGHTS), surfaced read-only on the member card. Tones mirror
+ * the profile: go=green / stop=rust / maybe=amber. */
+.dir-lights { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.dir-light {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--lg-cream); border: 1px solid var(--lg-line); border-radius: 999px;
+  padding: 4px 10px; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-ink);
+}
+.dir-light__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lg-mute); flex: 0 0 auto; }
+.dir-light--go .dir-light__dot    { background: #3fa34d; box-shadow: 0 0 0 3px rgba(63,163,77,.18); }
+.dir-light--stop .dir-light__dot  { background: #c0492f; box-shadow: 0 0 0 3px rgba(192,73,47,.16); }
+.dir-light--maybe .dir-light__dot { background: var(--lg-amber); box-shadow: 0 0 0 3px rgba(224,168,60,.2); }

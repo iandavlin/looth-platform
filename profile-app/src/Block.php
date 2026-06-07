@@ -224,14 +224,15 @@ final class Block
         ],
     ];
 
-    /** The user's set lights, in canonical order: [{key,state,label,tone}]. */
-    public static function loadHeaderLights(int $userId): array
+    /**
+     * Map a raw header_lights value ({key:state} as a JSON string, decoded array, or null)
+     * to the canonical [{key,state,label,tone}] list — no DB hit. Lets batch callers (e.g.
+     * the directory feed) resolve lights from a row they already SELECTed, instead of an
+     * N+1 loadHeaderLights() per member.
+     */
+    public static function mapHeaderLights($raw): array
     {
-        $s = Db::pg()->prepare('SELECT header_lights FROM users WHERE id = :i');
-        $s->execute([':i' => $userId]);
-        $raw = $s->fetchColumn();
-        if ($raw === false) return [];
-        $map = is_string($raw) ? (json_decode($raw, true) ?: []) : [];
+        $map = is_string($raw) ? (json_decode($raw, true) ?: []) : (is_array($raw) ? $raw : []);
         if (!is_array($map)) $map = [];
         $out = [];
         foreach (self::HEADER_LIGHTS as $key => $cfg) {            // canonical order
@@ -241,6 +242,16 @@ final class Block
             $out[] = ['key' => $key, 'state' => $state] + $cfg['states'][$state];
         }
         return $out;
+    }
+
+    /** The user's set lights, in canonical order: [{key,state,label,tone}]. */
+    public static function loadHeaderLights(int $userId): array
+    {
+        $s = Db::pg()->prepare('SELECT header_lights FROM users WHERE id = :i');
+        $s->execute([':i' => $userId]);
+        $raw = $s->fetchColumn();
+        if ($raw === false) return [];
+        return self::mapHeaderLights($raw);
     }
 
     /** Lights not yet added — drives the "+ Status" picker. Returns [key => cfg]. */

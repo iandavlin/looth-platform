@@ -318,6 +318,7 @@ function renderResults(items, append) {
           </div>
         </div>
         ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(decodeEnt(h.name))}</span>`).join('')}</div>`:''}
+        ${it.lights?.length?`<div class="dir-lights">${it.lights.map(l=>`<span class="dir-light dir-light--${l.tone}"><span class="dir-light__dot"></span>${escH(l.label)}</span>`).join('')}</div>`:''}
       </a>
       <div class="dir-card__foot">
         ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
