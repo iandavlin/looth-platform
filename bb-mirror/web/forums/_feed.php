@@ -742,13 +742,18 @@ foreach ($topics as $_r) {
 if ($vid_ids) {
     try {
         $vph = implode(',', array_fill(0, count($vid_ids), '?'));
-        $vst = $db->prepare("SELECT id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind = 'video'");
+        // Prefer the engine's stored yt_id (commit 936b965 — 340/341 coverage, sourced
+        // from ACF youtube_link → v2 embed block → post_content at index time). Keep the
+        // body_text regex only as a fallback for any not-yet-reindexed row.
+        $vst = $db->prepare("SELECT id, yt_id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind = 'video'");
         $vst->execute($vid_ids);
         $yt_re = '~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i';
         foreach ($vst->fetchAll() as $vr) {
-            if (!empty($vr['body_text']) && preg_match($yt_re, (string)$vr['body_text'], $ym)) {
-                $video_yt[(int)$vr['id']] = $ym[1];
+            $yt = trim((string)($vr['yt_id'] ?? ''));
+            if ($yt === '' && !empty($vr['body_text']) && preg_match($yt_re, (string)$vr['body_text'], $ym)) {
+                $yt = $ym[1];
             }
+            if ($yt !== '') $video_yt[(int)$vr['id']] = $yt;
         }
     } catch (\Throwable $e) { $video_yt = []; }
 }

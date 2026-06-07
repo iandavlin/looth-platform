@@ -3505,9 +3505,11 @@ html.hub-theme-black .reply-stub__reply:hover {
 @media (min-width: 641px) {
   /* thumbs/players a little bigger (Ian) */
   .feed-page .feed-card--content .fc-cover { max-width: 480px; }
-  /* VIDEO cards: video LEFT, text RIGHT (Ian) — reuse the cooler-card area names,
-     cover spans the left column across the text rows. */
-  .feed-page .feed-card--content[data-kind="video"] {
+  /* ALL CPT (content) cards with a cover: image LEFT, text RIGHT, large 16:9 (Ian).
+     Reuses the cooler-card area names — cover spans the left column across the text
+     rows. :has(.fc-cover) so text-only cards (no image) keep the default 1-col grid
+     instead of an empty left gutter. Covers video, gated teaser, article, etc. */
+  .feed-page .feed-card--content:has(.fc-cover) {
     grid-template-columns: 360px 40px minmax(0,1fr) auto;
     grid-template-areas:
       "cover avatar  author   time"
@@ -3518,11 +3520,11 @@ html.hub-theme-black .reply-stub__reply:hover {
       "cover tags    tags     tags";
     align-items: start;
   }
-  .feed-page .feed-card--content[data-kind="video"] .fc-cover {
+  .feed-page .feed-card--content:has(.fc-cover) .fc-cover {
     grid-area: cover; align-self: start; margin-top: 0; max-width: none; width: 360px; }
-  .feed-page .feed-card--content[data-kind="video"] .fc-cover .feed-card__cover-img {
-    aspect-ratio: 16 / 9; height: auto; max-height: none; }
-  .feed-page .feed-card--content[data-kind="video"] .fc-title { margin-top: 0; }
+  .feed-page .feed-card--content:has(.fc-cover) .fc-cover .feed-card__cover-img {
+    aspect-ratio: 16 / 9; height: auto; max-height: none; object-fit: cover; }
+  .feed-page .feed-card--content:has(.fc-cover) .fc-title { margin-top: 0; }
 }
 
 /* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
