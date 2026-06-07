@@ -301,6 +301,12 @@ function renderResults(items, append) {
       const dis = (cx.state === 'pending_out' || cx.state === 'accepted') ? ' disabled' : '';
       connectBtn = `<button type="button" class="dir-connect dir-connect--${cx.state}" data-act="${act}" data-uuid="${escH(it.uuid||'')}" data-cid="${cx.id||''}"${dis}>${LBL[cx.state]||'Connect'}</button>`;
     }
+    // Connected members get a Message button that opens the shared header DM modal
+    // (lg:open-dm — same hook the /u/ profile actions + in-modal connection list use).
+    let msgBtn = '';
+    if (cx && cx.state === 'accepted' && it.uuid) {
+      msgBtn = `<button type="button" class="dir-msg" data-msg-uuid="${escH(it.uuid)}">Message</button>`;
+    }
     return `
     <div class="dir-card">
       <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
@@ -315,7 +321,7 @@ function renderResults(items, append) {
       </a>
       <div class="dir-card__foot">
         ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
-        ${connectBtn}
+        ${(connectBtn||msgBtn)?`<div class="dir-card__actions">${connectBtn}${msgBtn}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -333,8 +339,10 @@ function renderResults(items, append) {
     // Let the social-icon row take the available width and wrap horizontally instead of
     // collapsing to a one-icon-wide column when a Connect button shares the row.
     '.dir-card__foot .dir-links{flex:1 1 auto;min-width:0;margin-left:0}' +
-    '.dir-connect{border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;' +
+    '.dir-card__actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}' +
+    '.dir-connect,.dir-msg{border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;' +
     'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:8px 15px;cursor:pointer;flex:0 0 auto}' +
+    '.dir-msg:hover{filter:brightness(.95)}' +
     '.dir-connect--pending_out,.dir-connect--accepted{background:#fff;color:var(--lg-sage-d,#6b7c52)}' +
     '.dir-connect--pending_in{background:var(--lg-amber,#ecb351);border-color:var(--lg-amber,#ecb351);color:#1a1d1a}' +
     '.dir-connect[disabled]{opacity:.7;cursor:default}';
@@ -396,6 +404,13 @@ document.addEventListener('DOMContentLoaded', () => {
   wrap.addEventListener('click', (e) => {
     const cbtn = e.target.closest('.dir-connect');
     if (cbtn) { e.preventDefault(); e.stopPropagation(); dirHandleConnect(cbtn); return; }
+    const mbtn = e.target.closest('.dir-msg');
+    if (mbtn) {
+      e.preventDefault(); e.stopPropagation();
+      const u = mbtn.dataset.msgUuid;
+      if (u) document.dispatchEvent(new CustomEvent('lg:open-dm', { detail: { uuid: u } }));
+      return;
+    }
     const main = e.target.closest('.dir-card__main');
     if (!main) return;   // social-link icons live outside .dir-card__main -> open normally
     // Let ctrl/cmd/shift/alt/middle-click open the profile in a new tab as usual.
