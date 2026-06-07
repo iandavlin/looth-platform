@@ -106,11 +106,9 @@ $render_bucket = static function (bool $past) use ($active_region, $h): void {
         <h2 class="lg-evland__section-h">Upcoming</h2>
         <?php $render_bucket(false); ?>
     </section>
-
-    <section class="lg-evland__section">
-        <h2 class="lg-evland__section-h">Past events</h2>
-        <?php $render_bucket(true); ?>
-    </section>
+    <?php /* Past events removed (Buck 2026-06-07): a finished event's recording moves to
+             the Archive, so the events landing lists only upcoming/relevant events. The
+             $render_bucket(true) path stays in code, just no longer rendered here. */ ?>
 </main>
 
 <?php lg_shared_render_site_footer(['logo_url' => LG_EVENTS_LOGO]); ?>
