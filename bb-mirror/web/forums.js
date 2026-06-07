@@ -2011,6 +2011,36 @@
   }
   function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
 
+  // ── Composer avatar: the SSR placeholder ('You' initials) has no viewer context
+  // (bb-mirror FPM pool can't resolve the WP user). Clone the logged-in avatar that
+  // the shared site-header already painted — instant, no fetch, no flash. Falls back
+  // to the placeholder when no header avatar is present (anon / header absent). ──
+  function viewerAvatar() {
+    var sels = ['.lg-chrome__aside img[src*="/avatars/"]', '.lg-chrome__aside img[src*="/profile-media/"]',
+                '#site-header img[src*="/avatars/"]', 'header img[src*="/avatars/"]'];
+    for (var i = 0; i < sels.length; i++) {
+      var el = document.querySelector(sels[i]);
+      if (el && el.src && !/logo/i.test(el.src)) return el.src;
+    }
+    return null;
+  }
+  function hydrateComposerAvatars() {
+    var src = viewerAvatar(); if (!src) return;
+    var avs = document.querySelectorAll('.fc-composer__av:not([data-av-set])');
+    if (!avs.length) return;
+    var img = '<img class="avatar-init avatar-init--img" src="' + src.replace(/"/g, '&quot;') +
+              '" width="30" height="30" alt="" decoding="async">';
+    avs.forEach(function (av) { av.setAttribute('data-av-set', '1'); av.innerHTML = img; });
+  }
+  if (document.readyState !== 'loading') hydrateComposerAvatars();
+  else document.addEventListener('DOMContentLoaded', hydrateComposerAvatars);
+  var fcFeed = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+  if (fcFeed && window.MutationObserver) {                 // filter swap + infinite-scroll appends
+    var fcT = null;
+    new MutationObserver(function () { clearTimeout(fcT); fcT = setTimeout(hydrateComposerAvatars, 120); })
+      .observe(fcFeed, { childList: true, subtree: true });
+  }
+
   document.addEventListener('input', function (e) {
     var inp = e.target.closest && e.target.closest('.fc-composer__input'); if (!inp) return;
     var btn = inp.closest('.fc-composer').querySelector('.fc-composer__send');
