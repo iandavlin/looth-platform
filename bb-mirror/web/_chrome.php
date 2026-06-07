@@ -304,28 +304,29 @@ function bb_mirror_new_topic_modal(): void
           data-current-forum="<?= $current_forum_id ?>"
           data-public-path="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>">
 
-      <label class="ntm-label" for="ntm-forum">Forum</label>
-      <select class="ntm-select" id="ntm-forum" name="forum_id" required>
-        <option value="">— choose a forum —</option>
+      <span class="ntm-label" id="ntm-forum-label">Forum <span class="ntm-label__opt">(pick one)</span></span>
+      <!-- Single-select forum list: category headers + leaf radio rows. Replaces the
+           native <select> whose optgroup labels read as a second pickable level. The
+           category headers are plainly not pickable; exactly one leaf radio can be on. -->
+      <div class="ntm-forumlist" id="ntm-forum" role="radiogroup" aria-labelledby="ntm-forum-label">
         <?php
         $cur_group_pid = false;
         foreach ($forums as $f):
             $pid = $f['parent_forum_id'] !== null ? (int)$f['parent_forum_id'] : null;
             if ($pid !== $cur_group_pid) {
-                if ($cur_group_pid !== false) echo '</optgroup>';
                 $label = $pid !== null ? htmlspecialchars((string)$f['parent_title']) : 'General';
-                echo '<optgroup label="' . $label . '">';
+                echo '<div class="ntm-fl__cat">' . $label . '</div>' . "\n";
                 $cur_group_pid = $pid;
             }
-            $sel = ((int)$f['id'] === $current_forum_id) ? ' selected' : '';
-            echo '<option value="' . (int)$f['id'] . '"' . $sel
-               . ' data-slug="' . htmlspecialchars($f['slug']) . '">'
-               . htmlspecialchars($f['title'])
-               . '</option>' . "\n";
+            $chk = ((int)$f['id'] === $current_forum_id) ? ' checked' : '';
+            echo '<label class="ntm-fl__leaf">'
+               . '<input type="radio" name="forum_id" value="' . (int)$f['id'] . '"'
+               . ' data-slug="' . htmlspecialchars($f['slug']) . '" required' . $chk . '>'
+               . '<span class="ntm-fl__title">' . htmlspecialchars($f['title']) . '</span>'
+               . '</label>' . "\n";
         endforeach;
-        if ($cur_group_pid !== false) echo '</optgroup>';
         ?>
-      </select>
+      </div>
 
       <label class="ntm-label" for="ntm-title-in">Title</label>
       <input class="ntm-input" id="ntm-title-in" name="title" type="text"

@@ -898,7 +898,7 @@
   var ntmBackdrop = document.getElementById('ntm-backdrop');
   var ntmCancel   = document.getElementById('ntm-cancel');
   var ntmForm     = document.getElementById('ntm-form');
-  var ntmForumSel = document.getElementById('ntm-forum');
+  var ntmForumList= document.getElementById('ntm-forum');  // radiogroup of leaf forums
   var ntmTitleIn  = document.getElementById('ntm-title-in');
   var ntmContentEl= document.getElementById('ntm-content');
   var ntmSubmit   = document.getElementById('ntm-submit');
@@ -978,18 +978,37 @@
       input.click();
     }
 
+    // ── Forum radio-list helpers (single-select; replaces the native <select>) ─
+    function ntmGetForum() {
+      var r = ntmForumList && ntmForumList.querySelector('input[name="forum_id"]:checked');
+      return r ? { id: parseInt(r.value, 10), slug: r.dataset.slug } : null;
+    }
+    function ntmSetForum(id) {
+      if (!ntmForumList || !id) return false;
+      var r = ntmForumList.querySelector('input[name="forum_id"][value="' + id + '"]');
+      if (!r) return false;
+      r.checked = true;
+      var leaf = r.closest('.ntm-fl__leaf');
+      if (leaf) leaf.scrollIntoView({ block: 'nearest' });
+      return true;
+    }
+    // Focus the title once a forum is chosen, else the picker (checked row or first).
+    function ntmFocusEntry() {
+      if (ntmForm.hidden) return;
+      if (ntmGetForum()) { ntmTitleIn.focus(); return; }
+      var first = ntmForumList && ntmForumList.querySelector('input[name="forum_id"]');
+      (first || ntmTitleIn).focus();
+    }
+
     function ntmShowOverlay(overrideForumId) {
       ntmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
       if (ntmAuthState === 'idle') {
         ntmLoadAuth(overrideForumId);
       } else if (ntmAuthState === 'authed' && overrideForumId) {
-        ntmForumSel.value = String(overrideForumId);
+        ntmSetForum(overrideForumId);
       }
-      setTimeout(function () {
-        var el = ntmForm.hidden ? null : (ntmForumSel.value === '' ? ntmForumSel : ntmTitleIn);
-        if (el) el.focus();
-      }, 50);
+      setTimeout(ntmFocusEntry, 50);
     }
 
     function ntmHideOverlay() {
@@ -1016,8 +1035,8 @@
           ntmInitEditor();
           // pre-select: explicit override (e.g. "Post here" button) > data attr from URL
           var presel = overrideForumId || parseInt(ntmForm.dataset.currentForum, 10);
-          if (presel > 0 && ntmForumSel) ntmForumSel.value = String(presel);
-          setTimeout(function () { (ntmForumSel.value === '' ? ntmForumSel : ntmTitleIn).focus(); }, 30);
+          if (presel > 0) ntmSetForum(presel);
+          setTimeout(ntmFocusEntry, 30);
         })
         .catch(function () { ntmSetState('anon'); });
     }
@@ -1058,10 +1077,16 @@
     ntmForm.addEventListener('submit', function (e) {
       e.preventDefault();
       if (!ntmNonce) { ntmStatus.textContent = 'Not signed in.'; return; }
-      var forumId = parseInt(ntmForumSel.value, 10);
+      var forum   = ntmGetForum();
+      var forumId = forum && forum.id;
       var title   = ntmTitleIn.value.trim();
       var content = ntmGetContent();
-      if (!forumId) { ntmStatus.textContent = 'Please choose a forum.'; ntmForumSel.focus(); return; }
+      if (!forumId) {
+        ntmStatus.textContent = 'Please choose a forum.';
+        var firstRow = ntmForumList && ntmForumList.querySelector('input[name="forum_id"]');
+        if (firstRow) firstRow.focus();
+        return;
+      }
       if (!title)   { ntmStatus.textContent = 'Title is required.'; ntmTitleIn.focus(); return; }
 
       ntmSubmit.disabled = true;
@@ -1087,8 +1112,7 @@
             // Build bb-mirror URL from the selected forum slug + topic slug extracted from BB link
             var bbLink   = res.j && res.j.link; // e.g. /all-forums-all-topics/topic/my-slug/
             var pubPath  = ntmForm.dataset.publicPath || FORUM_BASE;
-            var opt      = ntmForumSel.options[ntmForumSel.selectedIndex];
-            var fSlug    = opt && opt.dataset.slug;
+            var fSlug    = forum && forum.slug;
             var topicSlug = bbLink && bbLink.replace(/^.*\/topic\/([^/]+)\/?$/, '$1');
             var dest = (fSlug && topicSlug && topicSlug !== bbLink)
               ? pubPath + '/' + fSlug + '/' + topicSlug + '/'

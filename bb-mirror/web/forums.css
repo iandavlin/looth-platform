@@ -2219,7 +2219,7 @@ body.ntm-active { overflow: hidden; }
   background: var(--bg-card, #fff);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-elev);
-  width: min(600px, calc(100vw - var(--s8)));
+  width: min(760px, calc(100vw - var(--s8)));
   max-height: calc(100vh - var(--s12));
   overflow-y: auto;
   padding: var(--s6);
@@ -2298,6 +2298,53 @@ body.ntm-active { overflow: hidden; }
   border-color: var(--accent);
 }
 .ntm-textarea { resize: vertical; min-height: 100px; }
+
+/* ── Forum picker: single-select list, clear category → leaf structure ──────
+   Replaces the native <select>. Category headers are plainly NOT pickable;
+   each leaf is a radio row, so exactly one forum can be chosen. */
+.ntm-forumlist {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg, #faf8f4);
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--s1) 0 var(--s2);
+}
+.ntm-fl__cat {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg, #faf8f4);
+  padding: var(--s2) var(--s3) 4px;
+  font: 700 10.5px/1 var(--font-body);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--accent, #6b7c52);
+}
+.ntm-fl__cat:not(:first-child) {
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  padding-top: var(--s2);
+}
+.ntm-fl__leaf {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 var(--s2);
+  padding: 7px var(--s2) 7px 26px;
+  border-radius: var(--r-sm);
+  font: 500 14px/1.2 var(--font-body);
+  color: var(--fg);
+  cursor: pointer;
+}
+.ntm-fl__leaf:hover { background: var(--lg-sage-tint, #eef2e3); }
+.ntm-fl__leaf input { accent-color: var(--accent, #6b7c52); cursor: pointer; }
+.ntm-fl__leaf:has(input:checked) {
+  background: var(--lg-sage-tint, #eef2e3);
+  font-weight: 700;
+  color: var(--fg);
+}
+.ntm-fl__leaf input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .ntm-row {
   display: flex;
@@ -2581,7 +2628,7 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 .ntm-editor {
   background: var(--bg, #faf8f4);
   border-radius: 0 0 var(--r-sm) var(--r-sm);
-  min-height: 160px;
+  min-height: 220px;
   /* No overflow/max-height HERE: this div is Quill's .ql-container, and Quill's
      link tooltip ("Save" popup) is an absolutely-positioned child of it. Clipping
      the container crops the tooltip. Cap + scroll the inner .ql-editor instead so
@@ -2600,8 +2647,8 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   font: 14px var(--font-body);
 }
 .ntm-form .ql-editor {
-  min-height: 140px;
-  max-height: 300px;
+  min-height: 200px;
+  max-height: 420px;
   overflow-y: auto;
   color: var(--fg);
 }
