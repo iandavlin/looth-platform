@@ -1231,7 +1231,7 @@
 
     // Delegated so it also works on lazily-loaded / optimistically-added cards.
     document.addEventListener('click', function (e) {
-      var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply');
+      var t = e.target.closest('.feed-card__reply-cta[data-frm-open], .reply-stub__reply, .fc-composer__rich');
       if (!t) return;
       e.stopPropagation();
       frmOpen(t);

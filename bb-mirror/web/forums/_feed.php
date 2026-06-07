@@ -1164,6 +1164,13 @@ $header_cat = $scoped_forum
           <span class="fc-composer__av"><?= bb_mirror_avatar('You', 'you', 30, null) ?></span>
           <span class="fc-composer__wrap">
             <input class="fc-composer__input" type="text" placeholder="Add a reply&hellip;" aria-label="Add a reply">
+            <?php /* Expand into the full rich (Quill) reply editor — reuses the feed-reply
+                     modal (image upload + formatting + nested-reply path). Carries topic/
+                     forum so frmOpen() targets this thread. */ ?>
+            <button type="button" class="fc-composer__rich" data-topic-id="<?= $topic_id ?>"
+                    data-forum-id="<?= (int)$topic['forum_id'] ?>"
+                    data-topic-title="<?= htmlspecialchars((string)$topic['topic_title'], ENT_QUOTES) ?>"
+                    title="Rich editor (formatting + images)" aria-label="Open the rich reply editor">&#9998;</button>
             <button type="button" class="fc-composer__send" disabled>Reply</button>
           </span>
           <span class="fc-composer__status" role="status"></span>

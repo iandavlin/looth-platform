@@ -3524,3 +3524,10 @@ html.hub-theme-black .reply-stub__reply:hover {
     aspect-ratio: 16 / 9; height: auto; max-height: none; }
   .feed-page .feed-card--content[data-kind="video"] .fc-title { margin-top: 0; }
 }
+
+/* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
+   between the quick input and Reply; opens the full feed-reply Quill modal. */
+.feed-page .fc-composer__rich { flex: 0 0 auto; border: 0; background: none; cursor: pointer;
+  color: var(--lg-mute, #6b6f6b); font-size: 16px; line-height: 1; padding: 6px 8px;
+  border-radius: 999px; transition: background .12s, color .12s; }
+.feed-page .fc-composer__rich:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #586b3f); }
