@@ -3707,6 +3707,14 @@ html.hub-theme-black .reply-stub__reply:hover {
    CPT/content covers navigate, so they keep the default link (pointer) cursor. */
 .feed-card--topic .feed-card__cover:not(.fc-cover--video):not(.fc-cover--gated) { cursor: zoom-in; }
 
+/* The category-as-chip (.fc-cat-chip, in the author badges) is a DESKTOP consolidation
+   element: it must NOT render below 641, where the standalone .fc-category shows instead —
+   otherwise the category appears TWICE (and the unstyled chip reads as a stray gray box).
+   Default-hidden here; shown only inside the >=641 block below. This is the <=640 complement
+   of the desktop consolidation, shipped in the SAME rule so the two can't diverge (replaces
+   Buck's app-mobile-fixes.js chip-hide stopgap; no <=640 media query needed). */
+.feed-page .fc-cat-chip { display: none; }
+
 /* ── Consolidated card meta + compact-CPT large images + tags spacing (Ian 6/7) ── */
 @media (min-width: 641px) {
   /* type + category + tier as chips in ONE cluster (the author badges line). The
@@ -3714,7 +3722,7 @@ html.hub-theme-black .reply-stub__reply:hover {
      flat contract + Buck's mobile layer. */
   .feed-page .fc-author { flex-wrap: wrap; row-gap: 4px; }
   .feed-page .fc-author__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .feed-page .fc-cat-chip { font: 700 10px/1 var(--lg-font-sans, sans-serif); letter-spacing: .04em;
+  .feed-page .fc-cat-chip { display: inline-flex; align-items: center; font: 700 10px/1 var(--lg-font-sans, sans-serif); letter-spacing: .04em;
     text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
     background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); white-space: nowrap; }
   .feed-page .feed-card .fc-category { display: none; }
