@@ -342,7 +342,10 @@ function bb_mirror_new_topic_modal(): void
       <label class="ntm-label" for="ntm-tags">Tags <span class="ntm-label__opt">(optional, comma-separated)</span></label>
       <input class="ntm-input" id="ntm-tags" name="topic_tags" type="text"
              placeholder="e.g. neck reset, fret press, martin d18" autocomplete="off">
-      <!-- Quick-add workflow tags: toggle the named tag in/out of #ntm-tags. -->
+      <!-- Quick-add workflow tags: toggle the named tag in/out of #ntm-tags.
+           These mirror FluentForms Form 38's Council/Weekly checkboxes (the LIVE-only
+           anon+tag flow). See docs/hub-anon-and-workflow-tags-FORM38.md. NB: anon
+           posting is NOT in this composer — it only exists via Form 38 on live. -->
       <div class="ntm-quicktags" id="ntm-quicktags">
         <button type="button" class="ntm-qtag" data-tag="councilyes">+ councilyes</button>
         <button type="button" class="ntm-qtag" data-tag="weeklyyes">+ weeklyyes</button>
