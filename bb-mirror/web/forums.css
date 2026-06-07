@@ -1494,7 +1494,7 @@ body.nav-open .nav-overlay { display: block; }
 .feed-page .fcr-add { display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; font: inherit; font-size: 14px; line-height: 1; width: 28px; height: 24px;
   border: 1px solid var(--lguser-line, #cdd6ba); border-radius: 999px;
-  background: var(--bg-card, #fff); color: var(--lguser-mute, #6b6f6b); padding: 0; }
+  background: var(--bg-card, #fff); color: var(--lguser-accent-d, #52613d); padding: 0; }
 .feed-page .fcr-add span { font-size: 11px; font-weight: 700; margin-left: -1px; }
 .feed-page .fcr-add:hover { background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); }
 .feed-page .fcr-palette { position: absolute; left: 13px; bottom: calc(100% - 2px); z-index: 20;
@@ -1534,15 +1534,26 @@ body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
 .feed-card__inline-compose .fic-status:empty { display: none; }
 /* Moderator Edit + Trash on reply stubs — hidden unless the viewer can moderate */
 .reply-stub__edit, .reply-stub__trash { display: none; margin-left: 6px; border: 0; background: none;
-  cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 6px; color: var(--lg-mute); opacity: .7; }
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 3px 5px; border-radius: 6px; color: var(--lg-ink, #323532); opacity: 1; }
 .reply-stub__edit:hover { opacity: 1; color: var(--lg-sage-d, #586b3f); background: var(--lg-sage-tint, #eef2e3); }
 .reply-stub__trash:hover { opacity: 1; color: var(--lg-rust, #c66845); background: var(--lg-sage-tint, #eef2e3); }
 .feed--can-moderate .reply-stub__edit, .feed--can-moderate .reply-stub__trash { display: inline-flex; }
 /* Inline reply editor */
-.reply-stub__editbox { margin: 6px 0 4px; }
+.reply-stub__editbox { margin: 6px 0 4px; width: 100%; flex: 1 1 100%; box-sizing: border-box; }
 .reply-stub__editbox .rse-input { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
   border: 1px solid var(--lg-line); border-radius: 10px; padding: 8px 11px; font: inherit; font-size: 14px;
   background: var(--bg-card); color: var(--lg-ink); }
+/* Inline Quill reply-edit editor — same snow treatment + inner-scroll as the reply
+   modal (#frm-editor): cap+scroll the inner .ql-editor, keep the container visible so
+   the link/format tooltip (bounds-clamped) isn't clipped. */
+.reply-stub__editbox .rse-editor { background: var(--bg-card, #fff); border-radius: 10px; }
+.reply-stub__editbox .ql-toolbar.ql-snow { border: 1px solid var(--lg-line); border-bottom: 0;
+  border-radius: 10px 10px 0 0; background: #fff; }
+.reply-stub__editbox .ql-container.ql-snow { border: 1px solid var(--lg-line);
+  border-radius: 0 0 10px 10px; font: 14px var(--font-body, inherit); }
+.reply-stub__editbox .ql-editor { min-height: 120px; max-height: 300px; overflow-y: auto; color: var(--lg-ink); }
+.reply-stub__editbox .ql-editor.ql-blank::before { color: var(--lg-mute); font-style: normal; }
+.reply-stub__editbox .ql-tooltip { max-width: 100%; white-space: normal; z-index: 6; }
 .reply-stub__editbox .rse-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .reply-stub__editbox .rse-save { border: 0; border-radius: 999px; background: var(--lg-sage-d); color: #fff;
   font: 700 12.5px/1 var(--lg-font-sans); padding: 7px 14px; cursor: pointer; }
@@ -1588,6 +1599,19 @@ body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
   font-family: var(--font-head);
   margin: 0 0 var(--s2);
   line-height: 1.3;
+}
+
+/* Slightly heavier weight on the LARGER headings only (Ian): the h1–h4 reset sets
+   600, which renders light in the feed's system/Trebuchet face. Bump card titles
+   (topic + content + expanded) and the forum-header title to a real bold — body /
+   excerpt / reply weight untouched. Desktop only; mobile heading weight is Buck's. */
+@media (min-width: 641px) {
+  .feed-page .feed-card__title    { font-weight: 700; }
+  .feed-page .forum-header__title { font-weight: 760; }
+  /* …and the reply author names (the salient "name" in a reply), so replies don't
+     read light next to the now-bolder titles. Body/excerpt text stays normal. */
+  .feed-page .reply-stub__author,
+  .feed-page .lg-fb-name { font-weight: 700; }
 }
 .feed-card__title a {
   font-family: var(--lg-font-serif);
@@ -1790,7 +1814,7 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   margin: 0 0 4px;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 6;   /* show more of the post before "…" (Ian); "Read more" reveals the rest */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -2704,6 +2728,15 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
 }
 /* Quill format/link tooltip must float above the editor (not be clipped by it). */
 .ql-snow .ql-tooltip { z-index: 6; }
+/* Belt-and-suspenders for the link/format popover: with Quill `bounds` set the
+   tooltip is clamped horizontally inside the editor, but keep it from ever
+   spilling past the modal — cap its width and let the input wrap. */
+.lg-fbc .ql-tooltip,
+.ntm-form .ql-tooltip,
+.reply-form__editor .ql-tooltip {
+  max-width: 100%;
+  white-space: normal;
+}
 
 .ntm-paste-hint {
   margin: var(--s1) 0 0;
@@ -3501,14 +3534,21 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .fc-cover img{ width:100%; display:block; }
   /* fc-tags */
   .feed-page .fc-tags    { grid-area:tags; display:flex; flex-wrap:wrap; gap:6px; margin-top:11px; }
-  /* fc-facepile */
-  .feed-page .fc-facepile{ display:flex; grid-area:facepile; align-items:center; margin-top:13px; cursor:pointer; }
+  /* fc-facepile — the reply-count CONTROL. Reads as a tappable pill BUTTON so it's
+     obviously the way to open the thread (Ian: bigger + clearly the entry to replies). */
+  .feed-page .fc-facepile{ display:inline-flex; grid-area:facepile; justify-self:start; align-items:center;
+    margin-top:13px; padding:7px 16px 7px 10px; border:1px solid var(--lg-line,#e3ddd0);
+    border-radius:999px; background:var(--lg-sage-tint,#eef2e3); cursor:pointer;
+    transition:background .12s ease, border-color .12s ease, box-shadow .15s ease; }
+  .feed-page .fc-facepile:hover{ background:var(--lg-sage,#87986a); border-color:var(--lg-sage,#87986a);
+    box-shadow:0 2px 8px rgba(26,29,26,.14); }
+  .feed-page .fc-facepile:focus-visible{ outline:2px solid var(--lg-sage-d,#586b3f); outline-offset:2px; }
   .feed-page .fc-facepile__stack{ display:flex; padding-left:8px; }
   .feed-page .fc-facepile__av{ display:inline-flex; margin-left:-8px; }
   .feed-page .fc-facepile__av .avatar-init,
   .feed-page .fc-facepile__av img{ width:26px; height:26px; border-radius:50%; border:2px solid var(--bg-card); font-size:10px; }
-  .feed-page .fc-facepile__count{ margin-left:9px; font:600 12.5px/1 var(--lg-font-sans); color:var(--lg-mute,#6b6f6b); }
-  .feed-page .fc-facepile:hover .fc-facepile__count{ color:var(--sage-d,#586b3f); }
+  .feed-page .fc-facepile__count{ margin-left:10px; font:700 14.5px/1 var(--lg-font-sans); color:var(--lg-sage-d,#586b3f); white-space:nowrap; }
+  .feed-page .fc-facepile:hover .fc-facepile__count{ color:#fff; }
   /* fc-actions — engagement block sits directly under the cover, left-aligned
      (left-anchored so the reaction picker opens rightward into the full card
      width instead of clipping off the right edge under overflow:hidden). */
@@ -3643,7 +3683,10 @@ html.hub-theme-black .reply-stub__reply:hover {
    The originals stay in the DOM (the orchestration handler + the composer's post-reload
    click .feed-card__expand) but are hidden. The card-level reply CTA is hidden too —
    the composer is the reply entry now — yet kept as the nested-reply topic/forum source. */
-.feed-page .feed-card__read-more,
+/* "Read more" is now the VISIBLE body-only expander (Ian: split from replies).
+   The lazy view-replies trigger (.feed-card__expand) stays hidden — the reply-count
+   control (.fc-facepile) drives it — and the card-level inline reply CTA stays hidden
+   (the composer is the reply entry). */
 .feed-page .feed-card__expand,
 .feed-page .feed-card__reply-cta--inline { display: none !important; }
 .feed-page .feed-card__expand-all { margin-left: auto; flex: 0 0 auto; display: inline-flex;
@@ -3656,8 +3699,13 @@ html.hub-theme-black .reply-stub__reply:hover {
 .feed-page .feed-card__expand-all[aria-expanded="true"] .feed-card__expand-all-chev { transform: rotate(180deg); }
 /* compact has its own caret — don't show two expanders */
 .hub-compact .feed-card:not(.is-verbose) .feed-card__expand-all { display: none !important; }
-/* compact thumb a little larger + lightboxes on click instead of navigating (Ian) */
-.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 72px; cursor: zoom-in; }
+/* compact thumb a little larger. Cursor is NOT set here: CPT/content covers click
+   through to the article (link cursor), only forum-topic covers lightbox (rule below). */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 72px; }
+/* forum-topic cover photo lightboxes on click (view full-size) instead of opening
+   the thread — at ALL widths (Ian). Video/gated covers keep their own cursor.
+   CPT/content covers navigate, so they keep the default link (pointer) cursor. */
+.feed-card--topic .feed-card__cover:not(.fc-cover--video):not(.fc-cover--gated) { cursor: zoom-in; }
 
 /* ── Consolidated card meta + compact-CPT large images + tags spacing (Ian 6/7) ── */
 @media (min-width: 641px) {

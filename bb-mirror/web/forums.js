@@ -87,15 +87,17 @@
     // bare card area are hijacked away from navigation.
     if (e.target.closest('button, input, textarea, select, label, [role="button"], img, ' +
           '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply, ' +
+          '.fc-facepile, .fc-composer, ' +   // reply-count opens replies; composer is its own control
           '[data-comments], .fcr, .lg-card-actions')) return;
     var titleA = e.target.closest('.feed-card__title a');
     if (e.target.closest('a') && !titleA) return;                 // author / thread links navigate
     if (titleA) e.preventDefault();                               // title no longer navigates
     if (window.getSelection && String(window.getSelection()).length) return;  // mid-selection
-    // Route through the ONE unified expand control (toggles body + thread together).
-    // No control on the card = nothing more to show → do nothing (no surprise reflow).
-    var u = card.querySelector('.feed-card__expand-all');
-    if (u) u.click();
+    // Bare-area click expands the POST BODY only (Ian split: replies open via the
+    // reply-count control). No read-more on the card = nothing more to show → do
+    // nothing (no surprise reflow).
+    var rm = card.querySelector('.feed-card__read-more');
+    if (rm) rm.click();
   });
 
   // ── Image lightbox: click any forum image to view it full-size ──────────────
@@ -137,20 +139,28 @@
       var alink = e.target.closest('a.attachment--image');
       if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
       // 2) feed cover image: normally CLICK THROUGH to the post. EXCEPTION (Ian):
-      //    in compact mode the small thumb lightboxes the full image instead of
-      //    navigating. Video facade + gated covers keep their own behavior.
+      //    forum-TOPIC cards lightbox their cover photo at ALL widths (compact or not)
+      //    — the photo is a user upload, viewing it shouldn't open the thread.
+      //    Video facade + gated covers keep their own behavior. CONTENT/CPT covers
+      //    always navigate to the article (cursor: pointer) — never lightbox, even in
+      //    compact mode. The href stays in the DOM for middle-click / open-in-new-tab
+      //    / no-JS fallback.
       var cover = e.target.closest('.feed-card__cover');
       if (cover) {
         var ccard = cover.closest('.feed-card');
-        var compact = document.documentElement.classList.contains('hub-compact')
-                      && ccard && !ccard.classList.contains('is-verbose');
-        if (compact && !cover.classList.contains('fc-cover--video') && !cover.classList.contains('fc-cover--gated')) {
+        var isTopic = ccard && ccard.classList.contains('feed-card--topic');
+        if (isTopic && !cover.classList.contains('fc-cover--video') && !cover.classList.contains('fc-cover--gated')) {
+          // Topic covers show the zoom-in cursor, so they must NEVER click through —
+          // preventDefault UNCONDITIONALLY (even if the cover image hasn't loaded yet,
+          // which would otherwise fall through to the <a href> and navigate, producing
+          // "magnifier + click-through"). Then lightbox the best available image URL.
+          e.preventDefault();
           var cimg = cover.querySelector('.feed-card__cover-img');
-          if (cimg && (cimg.currentSrc || cimg.getAttribute('src'))) {
-            e.preventDefault(); openLb(cimg.currentSrc || cimg.src); return;
-          }
+          var csrc = cimg && (cimg.currentSrc || cimg.getAttribute('src'));
+          if (csrc) openLb(cimg.currentSrc || cimg.src);
+          return;
         }
-        return;   // non-compact (or video/gated): click through to the post
+        return;   // content/CPT (or video/gated): click through to the post
       }
       // 3) bare content / reply images (deferred ones have no src yet → skip)
       var img = e.target.closest('.reply-stub__img, .post__body img, .feed-card__full-body img');
@@ -310,8 +320,9 @@
     // re-checks caps server-side, so the UI gate is convenience, not security.
     protoGetAuth(function (auth) { if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate'); });
 
-    // Moderator Edit — inline editor on a thread reply stub (PUT /reply/{id};
-    // topic/forum read from the card). Text-only for now; server re-checks caps.
+    // Moderator Edit — inline rich editor on a thread reply stub (PUT /reply/{id};
+    // topic/forum read from the card). Quill (same snow toolbar as the new-topic /
+    // reply-modal composers); server re-checks caps.
     feed.addEventListener('click', function (ev) {
       var e = ev.target.closest('.reply-stub__edit');
       if (!e || !feed.contains(e)) return;
@@ -328,23 +339,108 @@
       var cur = excerpt ? (excerpt.innerText || excerpt.textContent || '').trim() : '';
       var box = document.createElement('div');
       box.className = 'reply-stub__editbox';
-      box.innerHTML = '<textarea class="rse-input"></textarea>' +
+      box.innerHTML =
+        '<div class="rse-editor"></div>' +
         '<div class="rse-row"><button type="button" class="rse-save">Save</button>' +
         '<button type="button" class="rse-cancel">Cancel</button><span class="rse-status"></span></div>';
-      box.querySelector('.rse-input').value = cur;
       if (bodyDiv) { bodyDiv.style.display = 'none'; bodyDiv.parentNode.insertBefore(box, bodyDiv.nextSibling); }
       else { stub.appendChild(box); }
-      var ta = box.querySelector('.rse-input'); ta.focus();
-      ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+
+      var editorEl = box.querySelector('.rse-editor');
+      var status   = box.querySelector('.rse-status');
+
+      // Full reply body for round-trip: prefer the raw stored HTML (data-reply-raw,
+      // emitted by _reply-render.php — the COMPLETE body, not the truncated stub
+      // excerpt), fall back to the excerpt's HTML, then to its plain text.
+      var rawHtml = e.getAttribute('data-reply-raw');
+      if (!rawHtml) rawHtml = excerpt ? excerpt.innerHTML : '';
+      if (!rawHtml && cur) {
+        rawHtml = '<p>' + cur.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>';
+      }
+
+      var rseQuill = null, ta = null;
+
+      // Image button → upload to BB media → inline embed (mirrors frmImageHandler).
+      function rseImageHandler() {
+        var input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = function () {
+          var file = input.files && input.files[0];
+          if (!file) return;
+          status.textContent = 'Uploading image…';
+          protoGetAuth(function (auth) {
+            if (!auth || !auth.nonce) { status.textContent = 'Not signed in.'; return; }
+            var fd = new FormData(); fd.append('file', file);
+            fetch(protoReplyBase + '/media/upload', {
+              method: 'POST', credentials: 'same-origin',
+              headers: { 'X-WP-Nonce': auth.nonce }, body: fd,
+            })
+              .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+              .then(function (res) {
+                if (!res.ok || !res.j.upload_id) {
+                  status.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error'); return;
+                }
+                status.textContent = 'Image attached.';
+                var range = rseQuill.getSelection(true);
+                rseQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
+              })
+              .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
+          });
+        };
+        input.click();
+      }
+
+      // Rich editor — same snow toolbar/options as the new-topic / reply-modal
+      // composers (frmQuill). Falls back to a plain textarea if the Quill CDN
+      // didn't load.
+      if (typeof Quill !== 'undefined') {
+        rseQuill = new Quill(editorEl, {
+          theme: 'snow',
+          placeholder: 'Edit your reply…',
+          // Clamp the link/format tooltip inside the editor (same bounds fix as the
+          // other Hub composers) so it can't fly off the reply column's edge.
+          bounds: editorEl,
+          modules: { toolbar: {
+            container: [
+              [{ header: [2, 3, false] }],
+              ['bold', 'italic', 'underline'],
+              ['blockquote', 'code-block'],
+              [{ list: 'ordered' }, { list: 'bullet' }],
+              ['link', 'image'],
+              ['clean'],
+            ],
+            handlers: { image: rseImageHandler },
+          } },
+        });
+        if (rawHtml) rseQuill.clipboard.dangerouslyPasteHTML(rawHtml);
+        rseQuill.focus();
+      } else {
+        editorEl.innerHTML = '<textarea class="rse-input"></textarea>';
+        ta = editorEl.querySelector('.rse-input');
+        ta.value = cur; ta.focus();
+        ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+      }
+
       box.querySelector('.rse-cancel').addEventListener('click', function () { box.remove(); if (bodyDiv) bodyDiv.style.display = ''; });
       box.querySelector('.rse-save').addEventListener('click', function () {
-        var text = ta.value.trim(); var status = box.querySelector('.rse-status');
-        if (!text) { status.textContent = "Can't be empty."; return; }
+        var html;
+        if (rseQuill) {
+          // Serialize the Quill body. Unlike the new-reply composer we do NOT strip
+          // <img>: an existing reply's images already live in content_html and must
+          // round-trip (stripping would delete them); newly-inserted images ride
+          // inline by their uploaded URL.
+          html = rseQuill.root.innerHTML;
+          if (html === '<p><br></p>') html = '';
+          html = html.trim();
+        } else {
+          var text = (ta.value || '').trim();
+          html = text ? '<p>' + text.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>' : '';
+        }
+        if (!html) { status.textContent = "Can't be empty."; return; }
         if (!id || !topicId) { status.textContent = 'Missing reply/topic.'; return; }
         status.textContent = 'Saving…';
         protoGetAuth(function (auth) {
           if (!auth || !auth.nonce) { status.textContent = 'Not signed in.'; return; }
-          var html = '<p>' + text.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }).replace(/\n/g, '<br>') + '</p>';
           fetch(protoReplyBase + '/reply/' + id, {
             method: 'PUT', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
@@ -451,10 +547,8 @@
       feed.querySelectorAll('.feed-card--max').forEach(function (c) { if (c !== card) c.classList.remove('feed-card--max'); });
       card.classList.toggle('feed-card--max', willOpen);
       if (!willOpen) return;
-      var rm = card.querySelector('.feed-card__read-more');          // lazy full body
-      if (rm && rm.dataset.state !== 'expanded') rm.click();
-      var ex = card.querySelector('.feed-card__expand');             // lazy full thread (?replies=)
-      if (ex && !card.classList.contains('replies-expanded')) ex.click();
+      var rm = card.querySelector('.feed-card__read-more');          // body-only expand
+      if (rm && rm.dataset.state !== 'expanded') rm.click();         // replies open via the reply-count control
       protoMountComposer(card);                                       // inline reply box (no modal)
       card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
@@ -610,8 +704,12 @@
   });
 
   // ── 2b. Feed card full-body expand (Read more / Read less — lazy fetch) ──
-  document.querySelectorAll('.feed-card__read-more').forEach(btn => {
-    btn.addEventListener('click', async () => {
+  // Delegated (was per-button) so cards added by filter-swap / infinite-scroll get
+  // it too — read-more is now the primary, visible body-only expander (Ian).
+  document.addEventListener('click', async function (ev) {
+    const btn = ev.target.closest('.feed-card__read-more');
+    if (!btn) return;
+    {
       const card = btn.closest('.feed-card');
       const body = card.querySelector('.feed-card__full-body');
 
@@ -664,7 +762,7 @@
       body.hidden = false;
       btn.textContent = 'Read less ▲';
       btn.dataset.state = 'expanded';
-    });
+    }
   });
 
   // ── 2d. Client-side embeds ───────────────────────────────────────────────
@@ -927,6 +1025,8 @@
       ntmQuill = new Quill(ntmEditorEl, {
         theme: 'snow',
         placeholder: 'Share details, ask a question…',
+        // Clamp link/format tooltip inside the editor (else it overflows the modal).
+        bounds: ntmEditorEl,
         modules: {
           toolbar: {
             container: [
@@ -1203,6 +1303,9 @@
       frmQuill = new Quill(frmEditorEl, {
         theme: 'snow',
         placeholder: 'Share your thoughts…',
+        // Clamp the link/format tooltip inside the editor so it can't fly off the
+        // modal's left edge (Quill positions .ql-tooltip relative to `bounds`).
+        bounds: frmEditorEl,
         modules: { toolbar: {
           container: [
             [{ header: [2, 3, false] }],
@@ -1503,6 +1606,7 @@
     if (typeof Quill === 'undefined') { if (textarea) textarea.hidden = false; replyEditorEl.style.display = 'none'; return; }
     replyQuill = new Quill(replyEditorEl, {
       theme: 'snow', placeholder: 'Share your build, ask a question, drop a measurement…',
+      bounds: replyEditorEl,   // clamp link/format tooltip inside the editor
       modules: { toolbar: {
         container: [ [{ header: [2, 3, false] }], ['bold','italic','underline'], ['blockquote','code-block'], [{ list:'ordered' }, { list:'bullet' }], ['link','image'], ['clean'] ],
         handlers: { image: replyImageHandler },
@@ -1626,7 +1730,7 @@
       input.click();
     }
     if (typeof Quill !== 'undefined') {
-      quill = new Quill(qEl, { theme: 'snow', modules: { toolbar: {
+      quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: {
         container: [
           [{ header: [2, 3, false] }], ['bold','italic','underline'],
           ['blockquote','code-block'], [{ list:'ordered' }, { list:'bullet' }],

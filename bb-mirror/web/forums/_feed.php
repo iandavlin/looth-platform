@@ -1084,15 +1084,18 @@ $header_cat = $scoped_forum
       // Category color key for this topic's forum
       $cat_key  = $_forum_cat_map[(int)$topic['forum_id']] ?? 'general';
 
-      // Full-body expand: offer it when the text is meaningfully longer than the
-      // excerpt OR the post carries image(s) — expansion lazy-loads the full body
-      // + attachment gallery (?body=<id> → _topic-body.php). card_image is a
-      // cheap "has at least one image" signal (it's the first attachment / featured).
+      // Full-body expand: offer "Read more" ONLY when the post actually overflows —
+      // i.e. the body has genuinely more text than the (truncated) excerpt renders.
+      // A cover image alone no longer forces the control (Ian: drop the read button
+      // when there's no overflow). Expansion lazy-loads the full body + attachment
+      // gallery (?body=<id> → _topic-body.php).
       $full_html     = (string)($topic['content_html'] ?? '');
       $plain_full    = strip_tags($full_html);
-      // Only offer expansion when there's genuinely more than the ~2x excerpt now
-      // shows (Ian: drop the control when the text fits) — or there are image(s).
-      $show_read_more = (mb_strlen($plain_full) > 460) || !empty($card_image);
+      // The excerpt shown above is the truncated snippet; if the full body is longer
+      // than what it renders, there's more to read → show the control. The +8 margin
+      // absorbs minor plain-length jitter (entities / the trailing ellipsis).
+      $excerpt_plain_len = mb_strlen(strip_tags($excerpt));
+      $show_read_more = mb_strlen($plain_full) > $excerpt_plain_len + 8;
       $embed_url     = feed_first_embed_url($full_html);
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
@@ -1152,21 +1155,21 @@ $header_cat = $scoped_forum
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
-        <?php /* ONE unified in-place expand (Ian): replaces Read-more + View-replies — opens
-                 full body + thread together, collapses on re-click. Only when there's more. */ ?>
-        <?php if ($show_read_more || $has_more): ?>
-          <button class="feed-card__expand-all" type="button" aria-expanded="false" aria-label="Expand post" title="Expand post &amp; replies"><span class="feed-card__expand-all-chev" aria-hidden="true">&#9662;</span></button>
-        <?php endif; ?>
+        <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,
+                 in the .fc-excerpt block above) + the reply-count control (.fc-facepile →
+                 opens the thread). No single chevron opens both anymore. */ ?>
         <button class="feed-card__compact-expand" type="button" aria-expanded="false" title="Show full post" aria-label="Show full post"><span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span></button>
       </div>
-      <?php if ($teaser || $has_more): ?>
+      <?php /* No teaser reply on the card face (Ian): the reply COUNT (.fc-facepile above)
+               is the entry to the thread. The lazy target + the (CSS-hidden) view-replies
+               trigger stay so the count control expands the full thread inline — forums.js
+               .fc-facepile click → .feed-card__expand → ?replies=<id>. Rendered whenever the
+               topic has ANY reply (so a 1-reply thread is openable too). */ ?>
+      <?php if ($reply_count > 0): ?>
         <div class="fc-replies feed-card__replies">
-          <?php if ($teaser) bb_mirror_render_reply_stub($teaser, false, true, true); ?>
           <!-- Full thread lazy-loads here on click (see forums.js + ?replies=<id>) -->
           <div class="feed-card__replies-full" hidden></div>
-          <?php if ($has_more): ?>
-            <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
-          <?php endif; ?>
+          <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
         </div>
       <?php endif; ?>
       <?php /* fc-composer — PERSISTENT reply (the "reply is lost" fix). Authed only;
