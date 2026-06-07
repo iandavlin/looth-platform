@@ -634,7 +634,14 @@ if ($topic_ids) {
           ) reply_img ON true
          WHERE r.topic_id = ANY(:ids::bigint[])
            AND r.status = 'publish'
-         ORDER BY r.topic_id, r.created_at DESC
+         -- Teaser = the MOST-ACTIVE reply per topic (Buck [B]): rank by sub-reply
+         -- count (parent_reply_id) + reply-reaction count (discovery.card_reactions
+         -- post_type='reply'), newest as tie-break. Surfaces the liveliest reply,
+         -- not just the latest.
+         ORDER BY r.topic_id,
+           ( (SELECT count(*) FROM reply cr WHERE cr.parent_reply_id = r.id AND cr.status = 'publish')
+           + (SELECT count(*) FROM discovery.card_reactions cx WHERE cx.post_type = 'reply' AND cx.item_id = r.id) ) DESC,
+           r.created_at DESC
     ";
     $rstmt = $db->prepare($reply_sql);
     $rstmt->bindValue(':ids', $id_list);
@@ -1204,13 +1211,16 @@ $header_cat = $scoped_forum
                  opens the thread). No single chevron opens both anymore. */ ?>
         <button class="feed-card__compact-expand" type="button" aria-expanded="false" title="Show full post" aria-label="Show full post"><span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span></button>
       </div>
-      <?php /* No teaser reply on the card face (Ian): the reply COUNT (.fc-facepile above)
-               is the entry to the thread. The lazy target + the (CSS-hidden) view-replies
-               trigger stay so the count control expands the full thread inline — forums.js
-               .fc-facepile click → .feed-card__expand → ?replies=<id>. Rendered whenever the
-               topic has ANY reply (so a 1-reply thread is openable too). */ ?>
+      <?php /* ONE teaser reply on the card face (Buck 2026-06-07 — reverses the earlier
+               teaser-free pass, confirmed w/ Ian): show the MOST-ACTIVE reply inline with
+               its photo shown inline (collapse_image=false, not the deferred "Show image"
+               button), then "View N replies" opens the full thread for the rest. The
+               .fc-facepile reply-count control + the lazy target + the (CSS-hidden)
+               .feed-card__expand trigger all stay — forums.js .fc-facepile click →
+               .feed-card__expand → ?replies=<id>. */ ?>
       <?php if ($reply_count > 0): ?>
         <div class="fc-replies feed-card__replies">
+          <?php if ($teaser) bb_mirror_render_reply_stub($teaser, false, false, true); /* inline photo */ ?>
           <!-- Full thread lazy-loads here on click (see forums.js + ?replies=<id>) -->
           <div class="feed-card__replies-full" hidden></div>
           <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
