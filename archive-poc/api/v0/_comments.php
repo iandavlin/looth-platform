@@ -121,7 +121,8 @@ if (!function_exists('lg_comments_thread')) {
 function lg_comments_thread(PDO $pdo, string $postType, int $itemId): array {
     $st = $pdo->prepare(
         "SELECT id, parent_id, user_uuid, author_name, body,
-                EXTRACT(EPOCH FROM created_at)::bigint AS created_at
+                EXTRACT(EPOCH FROM created_at)::bigint AS created_at,
+                EXTRACT(EPOCH FROM edited_at)::bigint  AS edited_at
          FROM comments
          WHERE post_type = ? AND item_id = ? AND status = 'approved'
          ORDER BY created_at ASC, id ASC");
@@ -173,6 +174,61 @@ function lg_comments_insert(PDO $pdo, array $f): int {
         (string) $f['body'],
     ]);
     return (int) $st->fetchColumn();
+}
+}
+
+if (!function_exists('lg_comments_get')) {
+/**
+ * Fetch one comment row by id (any status), for the edit/delete authz gate.
+ * @return ?array { id, post_type, item_id, parent_id, user_uuid, author_wp_id, body, status }
+ */
+function lg_comments_get(PDO $pdo, int $id): ?array {
+    $st = $pdo->prepare(
+        'SELECT id, post_type, item_id, parent_id, user_uuid, author_wp_id, body, status
+           FROM comments WHERE id = ?');
+    $st->execute([$id]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+}
+
+if (!function_exists('lg_comment_author_match')) {
+/**
+ * Is the caller the author of this comment? Net-new comments stamp author_wp_id;
+ * legacy/backfilled rows may carry only user_uuid. Match on EITHER. The caller's
+ * identity is server-derived (validated WP cookie + profile bridge) — never client
+ * input — so this is IDOR-proof, like the write path.
+ */
+function lg_comment_author_match(array $row, int $uid, ?string $uuid): bool {
+    if ($uid > 0 && (int) ($row['author_wp_id'] ?? 0) === $uid) return true;
+    $rowUuid = strtolower((string) ($row['user_uuid'] ?? ''));
+    if (lg_comments_is_uuid($uuid) && lg_comments_is_uuid($rowUuid)
+        && strtolower((string) $uuid) === $rowUuid) return true;
+    return false;
+}
+}
+
+if (!function_exists('lg_comments_set_status')) {
+/**
+ * Flip a comment's moderation status (soft-delete = 'trash', restore = 'approved').
+ * Reversible — never hard-DELETEs, so the parent_id ON DELETE CASCADE never fires
+ * and a trashed comment keeps its subtree intact for restore. Authz is enforced by
+ * the caller (the endpoint), having already loaded the row.
+ */
+function lg_comments_set_status(PDO $pdo, int $id, string $status): void {
+    $st = $pdo->prepare('UPDATE comments SET status = ? WHERE id = ?');
+    $st->execute([$status, $id]);
+}
+}
+
+if (!function_exists('lg_comments_update_body')) {
+/**
+ * Replace a comment's body and stamp edited_at. Text is sanitized by the caller
+ * (the endpoint) exactly like the compose path. Authz enforced by the caller.
+ */
+function lg_comments_update_body(PDO $pdo, int $id, string $body): void {
+    $st = $pdo->prepare('UPDATE comments SET body = ?, edited_at = now() WHERE id = ?');
+    $st->execute([$body, $id]);
 }
 }
 

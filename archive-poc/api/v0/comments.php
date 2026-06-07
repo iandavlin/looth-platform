@@ -116,6 +116,7 @@ function lg_c_render_node(array $r, array $byParent, array $cards, array $reacti
     $avatar = $card['avatar_url'] ?? '';
     $id     = (int) $r['id'];
     $when   = lg_c_when((int) $r['created_at'], $tz);
+    $edited = !empty($r['edited_at']);
 
     $nameHtml = lg_c_h($name);
     if ($slug !== '') $nameHtml = '<a href="/u/' . lg_c_h($slug) . '" target="_top">' . $nameHtml . '</a>';
@@ -136,7 +137,7 @@ function lg_c_render_node(array $r, array $byParent, array $cards, array $reacti
     ob_start(); ?>
 <li class="lgc" id="lgc-<?= $id ?>">
   <div class="lgc-body">
-    <div class="lgc-head"><?= $avatarHtml ?><span class="lgc-name"><?= $nameHtml ?></span><span class="lgc-time"><?= lg_c_h($when) ?></span></div>
+    <div class="lgc-head"><?= $avatarHtml ?><span class="lgc-name"><?= $nameHtml ?></span><span class="lgc-time"><?= lg_c_h($when) ?><?php if ($edited): ?> <span class="lgc-edited" title="Edited">(edited)</span><?php endif; ?></span></div>
     <div class="lgc-text"><?= $body ?></div>
     <div class="lgc-meta">
       <?php if ($depth < 4): ?><button type="button" class="lgc-reply" data-id="<?= $id ?>" data-name="<?= lg_c_h($name) ?>">Reply</button><?php endif; ?>
