@@ -71,6 +71,8 @@ $_whoami = Whoami::resolve();
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="/profile/edit/edit.css">
 <link rel="stylesheet" href="/profile/edit/directory.css?v=<?= @filemtime(__DIR__ . '/directory.css') ?: '1' ?>">
+<!-- 640 split: mobile (≤640) overrides, Buck-owned, media-gated so they paint on first load without a JS-injection flash. -->
+<link rel="stylesheet" media="(max-width:640px)" href="/profile/edit/mobile-directory.css?v=<?= @filemtime(__DIR__ . '/mobile-directory.css') ?: '1' ?>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" crossorigin="">
