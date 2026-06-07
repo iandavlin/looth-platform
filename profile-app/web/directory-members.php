@@ -157,6 +157,9 @@ let curSort = <?= json_encode($sort) ?>;
 const DIR_ME_SLUG = <?= json_encode($_whoami['slug'] ?? null, JSON_UNESCAPED_SLASHES) ?>;
 
 function escH(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Some stored names/locations arrive already HTML-entity-encoded (e.g. "Repair &amp; Restoration").
+// Decode once before escH so they don't render double-encoded. Always pair with escH on output.
+function decodeEnt(s){ if(!s) return ''; const t=document.createElement('textarea'); t.innerHTML=String(s); return t.value; }
 
 // Filter-only query (no page) — shared by the list and the map-pin feed.
 function filterQs() {
@@ -276,7 +279,8 @@ function dirAviFallback(img) {
 function renderResults(items, append) {
   const wrap = document.getElementById('dir-results');
   const html = items.map(it => {
-    const ini = escH((it.display_name||'?').split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase());
+    const dn = decodeEnt(it.display_name) || 'Member';
+    const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
     const avi = it.avatar_url
       ? `<img class="avi-sm" src="${escH(it.avatar_url)}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
       : `<div class="avi-sm">${ini}</div>`;
@@ -303,11 +307,11 @@ function renderResults(items, append) {
         ${banner}
         <div class="row1">
           ${avi}
-          <div><div class="name">${escH(it.display_name||'Member')}</div>
-          ${it.location?.text?`<div class="loc-row">${escH(it.location.text)}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
+          <div><div class="name">${escH(dn)}</div>
+          ${it.location?.text?`<div class="loc-row">${escH(decodeEnt(it.location.text))}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
           </div>
         </div>
-        ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(h.name)}</span>`).join('')}</div>`:''}
+        ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(decodeEnt(h.name))}</span>`).join('')}</div>`:''}
       </a>
       <div class="dir-card__foot">
         ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
@@ -325,7 +329,10 @@ function renderResults(items, append) {
   var s = document.createElement('style');
   s.id = 'dir-connect-css';
   s.textContent =
-    '.dir-card__foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px 12px}' +
+    '.dir-card__foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;padding:0 12px 12px}' +
+    // Let the social-icon row take the available width and wrap horizontally instead of
+    // collapsing to a one-icon-wide column when a Connect button shares the row.
+    '.dir-card__foot .dir-links{flex:1 1 auto;min-width:0;margin-left:0}' +
     '.dir-connect{border:1px solid var(--lg-sage-d,#6b7c52);background:var(--lg-sage-d,#6b7c52);color:#fff;' +
     'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:8px 15px;cursor:pointer;flex:0 0 auto}' +
     '.dir-connect--pending_out,.dir-connect--accepted{background:#fff;color:var(--lg-sage-d,#6b7c52)}' +
