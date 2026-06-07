@@ -404,8 +404,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-gphoto figcaption{position:absolute;bottom:0;left:0;right:0;font:600 11px/1.3 var(--lg-font-sans);color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:16px 8px 6px}
 .lg-gphoto__rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;cursor:pointer;font-size:15px;line-height:1;z-index:3}
 .lg-gphoto__rm:hover{background:var(--lg-rust)}
-.lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-d);font:700 12.5px/1.3 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px}
-.lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
+.lg-gphoto__add{aspect-ratio:1;border:2px dashed var(--lg-sage-3);background:none;border-radius:10px;cursor:pointer;color:var(--lg-sage-3);font:300 34px/1 var(--lg-font-sans);display:flex;align-items:center;justify-content:center;text-align:center;padding:6px;transition:background .15s,border-color .15s,color .15s}
+.lg-gphoto__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage);color:var(--lg-sage-d)}
 /* gallery — owner: display-mode toggle */
 .lg-gmode{display:inline-flex;gap:0;margin:0 0 12px;border:1px solid var(--lg-line);border-radius:999px;padding:2px;background:#fff}
 .lg-gmode__btn{border:0;background:transparent;font:600 12px/1 var(--lg-font-sans);color:var(--lg-mute);padding:6px 14px;border-radius:999px;cursor:pointer}
@@ -419,6 +419,8 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-carousel__track{display:flex;transition:transform .35s ease;will-change:transform}
 .lg-carousel__track > .lg-gphoto{flex:0 0 100%;aspect-ratio:16/9;border-radius:0;background:#000}
 .lg-carousel__track > .lg-gphoto img{object-fit:contain}
+/* owner add-tile rides the track as a full-width slide (matches a photo slot) */
+.lg-carousel__track > .lg-gphoto__add{flex:0 0 100%;aspect-ratio:16/9;border-radius:0;font-size:48px}
 .lg-carousel__nav{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.94);color:var(--lg-ink);font-size:20px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);z-index:2;display:grid;place-items:center}
 .lg-carousel__nav:hover{background:#fff}
 .lg-carousel__nav:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
@@ -681,7 +683,9 @@ window.addEventListener('load', function () {
   document.querySelectorAll('.lg-carousel').forEach(function (car) {
     var track = car.querySelector('.lg-carousel__track');
     if (!track) return;
-    var slides = track.querySelectorAll('.lg-gphoto');
+    // Photos + the owner's trailing "+" add-tile are all navigable slots; the add
+    // tile is the last slide and deliberately has no dot (dots track real photos).
+    var slides = track.querySelectorAll('.lg-gphoto, .lg-gphoto__add');
     if (slides.length < 1) return;
     var prev = car.querySelector('.lg-carousel__nav--prev');
     var next = car.querySelector('.lg-carousel__nav--next');

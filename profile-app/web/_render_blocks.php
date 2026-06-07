@@ -209,9 +209,13 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         . ($isCar ? ' lg-gallery--carousel' : ' lg-gallery--grid');
     echo '<div class="' . $wrapClass . '" id="lg-gallery">';
 
+    // Owner gets an "add" tile as the last slide, so the carousel stays navigable
+    // even with a single real photo (1 photo + add tile = 2 navigable slots).
+    $navSlots = count($images) + ($isOwner ? 1 : 0);
+
     if ($isCar) {
         echo '<div class="lg-carousel" data-carousel>';
-        if (count($images) > 1) {
+        if ($navSlots > 1) {
             echo '<button type="button" class="lg-carousel__nav lg-carousel__nav--prev" aria-label="Previous photo">‹</button>';
             echo '<button type="button" class="lg-carousel__nav lg-carousel__nav--next" aria-label="Next photo">›</button>';
         }
@@ -228,6 +232,11 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         echo '</figure>';
     }
 
+    // Add-photos control: an empty "+" tile at the END of the photo run — the last
+    // grid cell in grid mode, the last slide inside the carousel track in carousel
+    // mode (it sits before the track close below).
+    if ($isOwner) echo '<button type="button" class="lg-gphoto__add" id="lg-gallery-add" aria-label="Add photos">＋</button>';
+
     if ($isCar) {
         echo '</div></div>'; // track + viewport
         if (count($images) > 1) {
@@ -241,7 +250,6 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         echo '</div>'; // .lg-carousel
     }
 
-    if ($isOwner) echo '<button type="button" class="lg-gphoto__add" id="lg-gallery-add">＋ Add photos</button>';
     echo '</div></section>';
 }
 
