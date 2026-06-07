@@ -3003,7 +3003,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 /* The added one-line excerpt under the title */
 .hub-compact .feed-card:not(.is-verbose) .feed-card__op-excerpt {
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;   /* ~2x text in compact (Ian) */
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin: 0;
@@ -3531,3 +3531,23 @@ html.hub-theme-black .reply-stub__reply:hover {
   color: var(--lg-mute, #6b6f6b); font-size: 16px; line-height: 1; padding: 6px 8px;
   border-radius: 999px; transition: background .12s, color .12s; }
 .feed-page .fc-composer__rich:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-sage-d, #586b3f); }
+
+/* ── Unified in-place expand (Ian 6/7): ONE chevron replaces Read-more + View-replies.
+   The originals stay in the DOM (the orchestration handler + the composer's post-reload
+   click .feed-card__expand) but are hidden. The card-level reply CTA is hidden too —
+   the composer is the reply entry now — yet kept as the nested-reply topic/forum source. */
+.feed-page .feed-card__read-more,
+.feed-page .feed-card__expand,
+.feed-page .feed-card__reply-cta--inline { display: none !important; }
+.feed-page .feed-card__expand-all { margin-left: auto; flex: 0 0 auto; display: inline-flex;
+  align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 999px; background: var(--bg-card, #fff);
+  color: var(--lg-mute, #6b6f6b); cursor: pointer; transition: background .12s, color .12s, border-color .12s; }
+.feed-page .feed-card__expand-all:hover { background: var(--lg-sage-tint, #eef2e3);
+  border-color: var(--lg-sage, #87986a); color: var(--lg-sage-d, #586b3f); }
+.feed-page .feed-card__expand-all-chev { font-size: 12px; line-height: 1; transition: transform .15s ease; }
+.feed-page .feed-card__expand-all[aria-expanded="true"] .feed-card__expand-all-chev { transform: rotate(180deg); }
+/* compact has its own caret — don't show two expanders */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__expand-all { display: none !important; }
+/* compact thumb a little larger + lightboxes on click instead of navigating (Ian) */
+.hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 72px; cursor: zoom-in; }

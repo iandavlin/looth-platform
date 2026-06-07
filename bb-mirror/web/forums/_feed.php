@@ -1063,7 +1063,7 @@ $header_cat = $scoped_forum
           : '<span class="feed-card__op-author">' . $author . '</span>';
       // OP excerpt: format from content_html so @mentions + URLs are clickable.
       // Falls back to the plain content_text teaser if there's no HTML.
-      $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 220, $db);
+      $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 440, $db); // ~2x (Ian)
       if ($excerpt === '') $excerpt = feed_op_excerpt($topic);
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
@@ -1085,7 +1085,9 @@ $header_cat = $scoped_forum
       // cheap "has at least one image" signal (it's the first attachment / featured).
       $full_html     = (string)($topic['content_html'] ?? '');
       $plain_full    = strip_tags($full_html);
-      $show_read_more = (mb_strlen($plain_full) > 250) || !empty($card_image);
+      // Only offer expansion when there's genuinely more than the ~2x excerpt now
+      // shows (Ian: drop the control when the text fits) — or there are image(s).
+      $show_read_more = (mb_strlen($plain_full) > 460) || !empty($card_image);
       $embed_url     = feed_first_embed_url($full_html);
 
       // Topic-level reply CTA, rendered inline on the "Started by …" byline row.
@@ -1144,7 +1146,12 @@ $header_cat = $scoped_forum
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count); ?>
-        <?= $reply_cta ?>
+        <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
+        <?php /* ONE unified in-place expand (Ian): replaces Read-more + View-replies — opens
+                 full body + thread together, collapses on re-click. Only when there's more. */ ?>
+        <?php if ($show_read_more || $has_more): ?>
+          <button class="feed-card__expand-all" type="button" aria-expanded="false" aria-label="Expand post" title="Expand post &amp; replies"><span class="feed-card__expand-all-chev" aria-hidden="true">&#9662;</span></button>
+        <?php endif; ?>
         <button class="feed-card__compact-expand" type="button" aria-expanded="false" title="Show full post" aria-label="Show full post"><span class="feed-card__compact-expand-icon" aria-hidden="true">&#9662;</span></button>
       </div>
       <?php if ($teaser || $has_more): ?>

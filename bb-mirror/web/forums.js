@@ -92,10 +92,10 @@
     if (e.target.closest('a') && !titleA) return;                 // author / thread links navigate
     if (titleA) e.preventDefault();                               // title no longer navigates
     if (window.getSelection && String(window.getSelection()).length) return;  // mid-selection
-    var rm = card.querySelector('.feed-card__read-more');         // expand full body
-    if (rm && rm.dataset.state !== 'expanded') rm.click();
-    var ex = card.querySelector('.feed-card__expand');            // expand full thread (?replies=)
-    if (ex && !card.classList.contains('replies-expanded')) ex.click();
+    // Route through the ONE unified expand control (toggles body + thread together).
+    // No control on the card = nothing more to show → do nothing (no surprise reflow).
+    var u = card.querySelector('.feed-card__expand-all');
+    if (u) u.click();
   });
 
   // ── Image lightbox: click any forum image to view it full-size ──────────────
@@ -136,10 +136,22 @@
       // 1) attachment-gallery image (wrapped in a.attachment--image → full-res href)
       var alink = e.target.closest('a.attachment--image');
       if (alink) { e.preventDefault(); openLb(alink.getAttribute('href')); return; }
-      // 2) feed cover image: let it CLICK THROUGH to the post (the a.feed-card__cover
-      //    href) instead of opening the lightbox — covers are post links, not gallery
-      //    images. (Body/reply images below still lightbox.)
-      if (e.target.closest('.feed-card__cover')) return;
+      // 2) feed cover image: normally CLICK THROUGH to the post. EXCEPTION (Ian):
+      //    in compact mode the small thumb lightboxes the full image instead of
+      //    navigating. Video facade + gated covers keep their own behavior.
+      var cover = e.target.closest('.feed-card__cover');
+      if (cover) {
+        var ccard = cover.closest('.feed-card');
+        var compact = document.documentElement.classList.contains('hub-compact')
+                      && ccard && !ccard.classList.contains('is-verbose');
+        if (compact && !cover.classList.contains('fc-cover--video') && !cover.classList.contains('fc-cover--gated')) {
+          var cimg = cover.querySelector('.feed-card__cover-img');
+          if (cimg && (cimg.currentSrc || cimg.getAttribute('src'))) {
+            e.preventDefault(); openLb(cimg.currentSrc || cimg.src); return;
+          }
+        }
+        return;   // non-compact (or video/gated): click through to the post
+      }
       // 3) bare content / reply images (deferred ones have no src yet → skip)
       var img = e.target.closest('.reply-stub__img, .post__body img, .feed-card__full-body img');
       if (img && img.tagName === 'IMG' && img.getAttribute('src')) {
@@ -534,6 +546,29 @@
     card.classList.add('replies-expanded');
     full.hidden = false;
     btn.textContent = 'Hide replies ▲';
+  });
+
+  // ── 2-unified. One in-place expand (Ian): a single chevron opens BOTH the full
+  // body and the full reply thread together, and collapses both on re-click. It
+  // ORCHESTRATES the existing lazy-loaders (read-more §2b + expand-thread §2 above),
+  // which stay in the DOM (CSS-hidden) so their fetch/collapse logic — and the
+  // composer's post-reload, which clicks .feed-card__expand — keep working.
+  document.addEventListener('click', function (e) {
+    var u = e.target.closest('.feed-card__expand-all'); if (!u) return;
+    e.stopPropagation();
+    var card = u.closest('.feed-card'); if (!card) return;
+    var rm = card.querySelector('.feed-card__read-more');
+    var ex = card.querySelector('.feed-card__expand');
+    var expanding = u.getAttribute('aria-expanded') !== 'true';
+    if (expanding) {
+      if (rm && rm.dataset.state !== 'expanded') rm.click();
+      if (ex && !card.classList.contains('replies-expanded')) ex.click();
+    } else {
+      if (rm && rm.dataset.state === 'expanded') rm.click();
+      if (ex && card.classList.contains('replies-expanded')) ex.click();
+    }
+    u.setAttribute('aria-expanded', expanding ? 'true' : 'false');
+    card.classList.toggle('is-expanded-all', expanding);
   });
 
   // ── 2c. Reply stub inline expand ("… more") ──────────────────────────────
