@@ -2206,6 +2206,21 @@ body.ntm-active { overflow: hidden; }
 }
 .ntm-overlay[hidden] { display: none; }
 
+/* The composer uses a fixed light palette, NOT the hub theme tokens. The Dark/
+   Black hub themes re-point --bg/--fg/etc on <html>, which left the modal's
+   fields dark-on-dark. Pinning the tokens here (on the overlay) makes the dialog,
+   inputs, forum list and Quill editor all render light in every theme. Brand
+   accent (sage) is kept so headers + the Post button stay on-brand. */
+.ntm-overlay {
+  --bg:        #f6f4ee;
+  --bg-card:   #ffffff;
+  --fg:        #1f231e;
+  --fg-muted:  #5b5f58;
+  --fg-soft:   #8d9088;
+  --border:    #dcd7ca;
+  --lg-sage-tint: #eef2e3;
+}
+
 .ntm-backdrop {
   position: absolute;
   inset: 0;
