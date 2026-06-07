@@ -126,8 +126,7 @@ foreach ($allowed_keys as $k) {
     if ($k === 'rows') {
         // Rows can have nested `query` objects + arbitrary metadata, so we
         // accept any associative structure — just require an `id` and `type`
-        // per row, and ensure the activity-strip is always present so the
-        // front page can't render without it.
+        // per row.
         $clean = lg_normalize_rows($v);
     } else {
         // Sponsor / CTA / Looth rows are flat key→scalar maps.
@@ -150,12 +149,9 @@ foreach ($allowed_keys as $k) {
  * Normalize the front-page `rows` array:
  *   - drop rows without an `id` or `type`
  *   - sanitize nested `query` to a key→scalar map (1 level deep)
- *   - guarantee the activity-strip row is present (re-inject at position 0
- *     if removed; otherwise leave the user's chosen position alone)
  */
 function lg_normalize_rows(array $rows): array {
     $clean = [];
-    $sawActivity = false;
     foreach ($rows as $row) {
         if (!is_array($row)) continue;
         if (empty($row['id']) || empty($row['type'])) continue;
@@ -182,21 +178,7 @@ function lg_normalize_rows(array $rows): array {
                 $r[$k] = $v;
             }
         }
-        if (($r['type'] ?? '') === 'activity-strip') $sawActivity = true;
         $clean[] = $r;
-    }
-    if (!$sawActivity) {
-        // Re-inject the activity strip at position 0. Same shape as the
-        // default rows.json entry — keeps the band intact even if a bad
-        // upload omitted it.
-        array_unshift($clean, [
-            'id'       => 'activity-strip',
-            'title'    => 'Looth Live',
-            'type'     => 'activity-strip',
-            'audience' => 'both',
-            'layout'   => 'activity',
-            'query'    => ['limit' => 15],
-        ]);
     }
     return $clean;
 }

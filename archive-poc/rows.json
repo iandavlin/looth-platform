@@ -2,16 +2,6 @@
   "_comment": "archive-poc Variant D row config. Render order is array order. 'audience' is structural insurance for scope C (public-mode); v0 only honors 'members'. 'seed: weekly' picks deterministically from floor(unix_ts / 604800).",
   "rows": [
     {
-      "id": "activity-strip",
-      "title": "Looth Live",
-      "type": "activity-strip",
-      "audience": "both",
-      "layout": "activity",
-      "query": {
-        "limit": 15
-      }
-    },
-    {
       "id": "video-promo-demo",
       "title": "Welcome to The Looth Group",
       "type": "video-promo",

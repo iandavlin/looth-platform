@@ -134,17 +134,6 @@
   ],
   "rows": [
     {
-      "id": "activity-strip",
-      "title": "Looth Live",
-      "type": "activity-strip",
-      "layout": "activity",
-      "column": "",
-      "audience": "both",
-      "query": {
-        "limit": 15
-      }
-    },
-    {
       "id": "video-promo-public",
       "title": "Welcome to The Looth Group",
       "type": "video-promo",
