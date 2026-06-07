@@ -3553,3 +3553,26 @@ html.hub-theme-black .reply-stub__reply:hover {
 .hub-compact .feed-card:not(.is-verbose) .feed-card__expand-all { display: none !important; }
 /* compact thumb a little larger + lightboxes on click instead of navigating (Ian) */
 .hub-compact .feed-card:not(.is-verbose) .feed-card__cover { width: 72px; cursor: zoom-in; }
+
+/* ── Consolidated card meta + compact-CPT large images + tags spacing (Ian 6/7) ── */
+@media (min-width: 641px) {
+  /* type + category + tier as chips in ONE cluster (the author badges line). The
+     standalone fc-category region is hidden on desktop but kept in the DOM for the
+     flat contract + Buck's mobile layer. */
+  .feed-page .fc-author { flex-wrap: wrap; row-gap: 4px; }
+  .feed-page .fc-author__badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .feed-page .fc-cat-chip { font: 700 10px/1 var(--lg-font-sans, sans-serif); letter-spacing: .04em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    background: var(--lguser-pill, #dde6c7); color: var(--lguser-accent-d, #52613d); white-space: nowrap; }
+  .feed-page .feed-card .fc-category { display: none; }
+
+  /* compact: CPT cards keep the LARGE image-left 16:9 (Ian) — only topic cards
+     shrink to the small thumb. */
+  .hub-compact .feed-card--content:not(.is-verbose):has(.fc-cover) .fc-cover { width: 360px; }
+  .hub-compact .feed-card--content:not(.is-verbose):has(.fc-cover) .feed-card__cover-img { aspect-ratio: 16 / 9; }
+
+  /* CPT cards have no bottom composer, so the tags/actions row was crammed against
+     the card edge — give the card bottom breathing room. */
+  .feed-page .feed-card--content { padding-bottom: 14px; }
+  .feed-page .feed-card--content .fc-tags { margin-top: 12px; row-gap: 6px; }
+}

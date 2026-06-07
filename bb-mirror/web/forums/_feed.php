@@ -1007,7 +1007,7 @@ $header_cat = $scoped_forum
       <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $c_author ?></span>
-        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span><?php if ($c_is_gated): ?><span class="fc-tier-badge fc-tier-badge--<?= htmlspecialchars($c_tier) ?>"><?= htmlspecialchars($c_tier_lbl) ?></span><?php endif; ?></span>
+        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span><?php if (!empty($topic['content_forum_label'])): ?><span class="fc-cat-chip"><?= htmlspecialchars((string)$topic['content_forum_label'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?><?php if ($c_is_gated): ?><span class="fc-tier-badge fc-tier-badge--<?= htmlspecialchars($c_tier) ?>"><?= htmlspecialchars($c_tier_lbl) ?></span><?php endif; ?></span>
       </div>
       <?php if (!empty($topic['content_forum_label'])): ?>
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars((string)$topic['content_forum_label'], ENT_QUOTES, 'UTF-8') ?></nav>
@@ -1113,7 +1113,7 @@ $header_cat = $scoped_forum
       <?php else: ?><span class="fc-avatar lg-card-avatar"><?= $av_t ?></span><?php endif; ?>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $author_link ?></span>
-        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--discussion">Discussion</span></span>
+        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--discussion">Discussion</span><?php if (!empty($topic['forum_title'])): ?><span class="fc-cat-chip"><?= htmlspecialchars((string)$topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?></span>
       </div>
       <?php if (!empty($topic['forum_title'])): ?>
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></nav>
