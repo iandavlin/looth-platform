@@ -342,6 +342,11 @@ function bb_mirror_new_topic_modal(): void
       <label class="ntm-label" for="ntm-tags">Tags <span class="ntm-label__opt">(optional, comma-separated)</span></label>
       <input class="ntm-input" id="ntm-tags" name="topic_tags" type="text"
              placeholder="e.g. neck reset, fret press, martin d18" autocomplete="off">
+      <!-- Quick-add workflow tags: toggle the named tag in/out of #ntm-tags. -->
+      <div class="ntm-quicktags" id="ntm-quicktags">
+        <button type="button" class="ntm-qtag" data-tag="councilyes">+ councilyes</button>
+        <button type="button" class="ntm-qtag" data-tag="weeklyyes">+ weeklyyes</button>
+      </div>
 
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="ntm-submit">Post</button>

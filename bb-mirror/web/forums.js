@@ -1062,6 +1062,35 @@
     ntmCancel.addEventListener('click', ntmHideOverlay);
     ntmBackdrop.addEventListener('click', ntmHideOverlay);
 
+    // ── Quick-add workflow tags (councilyes / weeklyyes) ─────────────────────
+    // Each button toggles its tag in/out of the comma-separated #ntm-tags field.
+    var ntmQuickTags = document.getElementById('ntm-quicktags');
+    var ntmTagsIn    = document.getElementById('ntm-tags');
+    function ntmTagList() {
+      return (ntmTagsIn.value || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function ntmSyncQuickTags() {
+      if (!ntmQuickTags) return;
+      var have = ntmTagList().map(function (s) { return s.toLowerCase(); });
+      [].forEach.call(ntmQuickTags.querySelectorAll('.ntm-qtag'), function (b) {
+        b.classList.toggle('is-on', have.indexOf(b.dataset.tag.toLowerCase()) > -1);
+      });
+    }
+    if (ntmQuickTags && ntmTagsIn) {
+      ntmQuickTags.addEventListener('click', function (e) {
+        var btn = e.target.closest('.ntm-qtag');
+        if (!btn) return;
+        var tag = btn.dataset.tag;
+        var list = ntmTagList();
+        var i = list.map(function (s) { return s.toLowerCase(); }).indexOf(tag.toLowerCase());
+        if (i > -1) list.splice(i, 1); else list.push(tag);
+        ntmTagsIn.value = list.join(', ');
+        ntmSyncQuickTags();
+      });
+      // Keep buttons in sync if the user edits the tags field directly.
+      ntmTagsIn.addEventListener('input', ntmSyncQuickTags);
+    }
+
     // Any element with [data-ntm-open] opens the modal (e.g. forum header "Post here" button).
     // If it carries data-forum-id, override the pre-selected forum.
     document.addEventListener('click', function (e) {
