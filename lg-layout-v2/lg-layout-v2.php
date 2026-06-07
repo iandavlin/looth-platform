@@ -2,7 +2,7 @@
 /**
  * Plugin Name: LG Layout v2
  * Description: JSON-driven article layouts for Looth Group CPTs. Successor to lg-layout. Cascade-layer CSS, manifest-driven blocks, data-driven editor.
- * Version: 0.1.65
+ * Version: 0.1.66
  * Author: Looth Group
  * Requires PHP: 8.1
  *
@@ -23,7 +23,7 @@ declare(strict_types=1);
 if (!defined('ABSPATH')) exit;
 
 /* ── Constants ─────────────────────────────────────────────────────── */
-define('LG_LAYOUT_V2_VERSION',         '0.1.65');
+define('LG_LAYOUT_V2_VERSION',         '0.1.66');
 define('LG_LAYOUT_V2_FILE',            __FILE__);
 define('LG_LAYOUT_V2_DIR',             plugin_dir_path(__FILE__));
 define('LG_LAYOUT_V2_URL',             plugin_dir_url(__FILE__));

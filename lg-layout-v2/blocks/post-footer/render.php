@@ -74,12 +74,14 @@ if ($author_id) {
 
 $pub_name = function_exists('get_bloginfo') ? (string) get_bloginfo('name') : '';
 
-/* CTA link: prefer ACF `author_looth_group_profile`, else author archive. */
+/* CTA link: prefer ACF `author_looth_group_profile`, else the Hub filtered to
+   this author (matches by NAME — see post-header). Built directly so the
+   standalone renderer (no WP filters) produces the same URL. */
 $cta_url = '';
 if ($author_id) {
     $cta_url = trim((string) (get_user_meta($author_id, 'author_looth_group_profile', true) ?: ''));
-    if ($cta_url === '' && function_exists('get_author_posts_url')) {
-        $cta_url = (string) (get_author_posts_url($author_id) ?: '');
+    if ($cta_url === '' && $author_name !== '') {
+        $cta_url = '/hub/?author=' . rawurlencode($author_name);
     }
 }
 $cta_label = $author_name !== ''
@@ -109,8 +111,8 @@ if ($author_id) {
         if ($url === '') continue;
         $author_links[] = ['url' => $url, 'title' => (string) ($slot['title'] ?? ''), 'svg' => (string) ($slot['svg'] ?? '')];
     }
-    /* Computed slots — mirrored from post-header. BP profile + author
-       archive (filterable to Search & Filter or whatever the site uses). */
+    /* Computed slots — mirrored from post-header. BP profile + the Hub
+       filtered to this author (matches by NAME — see post-header). */
     if (function_exists('bp_core_get_user_domain')) {
         $bp_url = (string) bp_core_get_user_domain($author_id);
         if ($bp_url !== '') {
@@ -121,8 +123,7 @@ if ($author_id) {
             ];
         }
     }
-    $archive_url = (string) get_author_posts_url($author_id);
-    $archive_url = (string) apply_filters('lg_layout_v2_author_archive_url', $archive_url, $author_id);
+    $archive_url = $author_name !== '' ? ('/hub/?author=' . rawurlencode($author_name)) : '';
     if ($archive_url !== '') {
         $author_links[] = [
             'url'   => $archive_url,

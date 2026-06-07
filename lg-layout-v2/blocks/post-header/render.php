@@ -152,13 +152,14 @@ if ($author_id) {
 }
 
 /* Author archive URL — used by both the avatar link in the byline and
-   the "All posts" icon in the social row. Computed once. Defaults to
-   WP's /author/{slug}/ then filtered through lg_layout_v2_author_archive_url
-   (Plugin.php points that at the Search & Filter result page). */
+   the "All posts" icon in the social row. Computed once. Points at the Hub
+   filtered to this author; the Hub matches authors by NAME (CSV), so we build
+   /hub/?author=<name> from the rendered $author_name. Built directly (not via
+   the WP author archive + lg_layout_v2_author_archive_url filter) so the
+   standalone renderer, which doesn't run WP filters, produces the same URL. */
 $author_archive_url = '';
-if ($author_id) {
-    $author_archive_url = (string) get_author_posts_url($author_id);
-    $author_archive_url = (string) apply_filters('lg_layout_v2_author_archive_url', $author_archive_url, $author_id);
+if ($author_name !== '') {
+    $author_archive_url = '/hub/?author=' . rawurlencode($author_name);
 }
 
 /* ── Author links: 4 slots, each backed by a user-meta key + SVG icon.
