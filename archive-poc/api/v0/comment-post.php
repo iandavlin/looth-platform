@@ -67,6 +67,9 @@ if ($method === 'GET') {
         'display_name'  => (string) $u->display_name,
         'nonce'         => wp_create_nonce('lg_comment'),
         'my_reactions'  => (object) $mine,
+        // Lets the modal reveal edit/delete on EVERY comment for moderators (the
+        // delete/edit endpoints enforce the same check server-side).
+        'can_moderate'  => current_user_can('moderate_comments'),
     ]);
 }
 

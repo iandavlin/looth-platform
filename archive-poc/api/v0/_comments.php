@@ -120,7 +120,7 @@ if (!function_exists('lg_comments_thread')) {
  */
 function lg_comments_thread(PDO $pdo, string $postType, int $itemId): array {
     $st = $pdo->prepare(
-        "SELECT id, parent_id, user_uuid, author_name, body,
+        "SELECT id, parent_id, user_uuid, author_wp_id, author_name, body,
                 EXTRACT(EPOCH FROM created_at)::bigint AS created_at,
                 EXTRACT(EPOCH FROM edited_at)::bigint  AS edited_at
          FROM comments

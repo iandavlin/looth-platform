@@ -115,6 +115,7 @@ function lg_c_render_node(array $r, array $byParent, array $cards, array $reacti
     $slug   = $card['slug'] ?? '';
     $avatar = $card['avatar_url'] ?? '';
     $id     = (int) $r['id'];
+    $authorWp = (int) ($r['author_wp_id'] ?? 0);
     $when   = lg_c_when((int) $r['created_at'], $tz);
     $edited = !empty($r['edited_at']);
 
@@ -135,12 +136,13 @@ function lg_c_render_node(array $r, array $byParent, array $cards, array $reacti
     $rxHtml = lg_c_render_reactions($id, $reactions[$id] ?? []);
 
     ob_start(); ?>
-<li class="lgc" id="lgc-<?= $id ?>">
+<li class="lgc" id="lgc-<?= $id ?>" data-author="<?= $authorWp ?>" data-raw="<?= lg_c_h((string) $r['body']) ?>">
   <div class="lgc-body">
-    <div class="lgc-head"><?= $avatarHtml ?><span class="lgc-name"><?= $nameHtml ?></span><span class="lgc-time"><?= lg_c_h($when) ?><?php if ($edited): ?> <span class="lgc-edited" title="Edited">(edited)</span><?php endif; ?></span></div>
+    <div class="lgc-head"><?= $avatarHtml ?><span class="lgc-name"><?= $nameHtml ?></span><span class="lgc-time"><?= lg_c_h($when) ?><span class="lgc-edited" title="Edited"<?= $edited ? '' : ' hidden' ?>> (edited)</span></span></div>
     <div class="lgc-text"><?= $body ?></div>
     <div class="lgc-meta">
       <?php if ($depth < 4): ?><button type="button" class="lgc-reply" data-id="<?= $id ?>" data-name="<?= lg_c_h($name) ?>">Reply</button><?php endif; ?>
+      <span class="lgc-own" hidden><button type="button" class="lgc-edit">Edit</button><button type="button" class="lgc-del">Delete</button></span>
       <?= $rxHtml ?>
     </div>
   </div>
@@ -196,6 +198,23 @@ $count = count($rows);
   .lgc-text{margin:8px 0 6px;font-size:15px;line-height:1.55;white-space:normal;}
   .lgc-reply{background:none;border:0;color:#6b7c52;cursor:pointer;font:inherit;font-weight:600;font-size:13px;padding:0;}
   .lgc-reply:hover{text-decoration:underline;}
+  .lgc-edited{font-style:italic;color:#b0aaa0;font-size:11px;}
+  .lgc-own{display:inline-flex;gap:12px;}
+  .lgc-own[hidden]{display:none;}
+  .lgc-edit,.lgc-del{background:none;border:0;cursor:pointer;font:inherit;font-weight:600;font-size:13px;padding:0;}
+  .lgc-edit{color:#6b7c52;} .lgc-edit:hover{text-decoration:underline;}
+  .lgc-del{color:#c66845;} .lgc-del:hover{text-decoration:underline;}
+  /* inline editor (replaces .lgc-text while editing) */
+  .lgc-editbox{margin:8px 0 6px;}
+  .lgc-editbox textarea{width:100%;box-sizing:border-box;font:inherit;font-size:15px;line-height:1.5;
+    padding:10px 12px;border:1px solid #87986a;border-radius:10px;background:#fff;color:#1a1d1a;resize:vertical;min-height:64px;}
+  .lgc-editbox textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(135,152,106,.18);}
+  .lgc-edit-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:8px;}
+  .lgc-edit-actions .lgc-err{margin-right:auto;color:#c66845;font-size:13px;}
+  .lgc-edit-save{-webkit-appearance:none;appearance:none;border:0;cursor:pointer;font:inherit;font-weight:600;
+    font-size:13px;padding:7px 18px;border-radius:999px;background:#87986a;color:#fff;}
+  .lgc-edit-save:hover{background:#6b7c52;} .lgc-edit-save:disabled{opacity:.5;cursor:default;}
+  .lgc-edit-cancel{background:none;border:0;cursor:pointer;font:inherit;font-size:13px;color:#8a857c;padding:0;}
 
   /* reactions */
   .lgc-meta{display:flex;align-items:center;gap:14px;margin-top:8px;flex-wrap:wrap;}
@@ -262,7 +281,10 @@ $count = count($rows);
       replyto = document.getElementById('lgc-replyto'),
       list    = document.getElementById('lgc-list');
   var nonce = '', parentId = 0, authed = false, myReactions = {};
-  var REACT = '/archive-api/v0/comment-react';
+  var REACT = '/archive-api/v0/comment-react',
+      EDIT  = '/archive-api/v0/comment-edit',
+      DELETE_= '/archive-api/v0/comment-delete';
+  var myUid = 0, canModerate = false;
   var RX_PALETTE = <?= json_encode(lg_reactions_palette(), JSON_UNESCAPED_UNICODE) ?>,
       RX_BASE    = <?= json_encode(LG_REACTIONS_ASSET_BASE) ?>;
 
@@ -286,7 +308,9 @@ $count = count($rows);
       if (d && d.authenticated && d.nonce) {
         nonce = d.nonce; authed = true; compose.hidden = false;
         myReactions = d.my_reactions || {};
+        myUid = d.wp_user_id || 0; canModerate = !!d.can_moderate;
         applyMine();
+        applyOwnerActions();
       } else {
         login.hidden = false;
         document.body.classList.add('lgc-anon');  // hide react triggers for logged-out
@@ -318,6 +342,96 @@ $count = count($rows);
       });
     });
   }
+  /* ---- edit / delete (own comments; moderators see them on all) ---- */
+  function canEdit(li){
+    if (!authed) return false;
+    if (canModerate) return true;
+    return myUid > 0 && parseInt(li.getAttribute('data-author'),10) === myUid;
+  }
+  function applyOwnerActions(){
+    Array.prototype.forEach.call(document.querySelectorAll('.lgc'), function(li){
+      var own = li.querySelector(':scope > .lgc-body > .lgc-meta > .lgc-own');
+      if (own) own.hidden = !canEdit(li);
+    });
+  }
+  function commentIdOf(li){ return parseInt((li.id||'').replace('lgc-',''),10) || 0; }
+  function reportCount(){
+    var n = list ? list.querySelectorAll('.lgc').length : 0;
+    parent.postMessage({lgCommentsCount:n}, location.origin);
+  }
+  function maybeEmpty(){
+    if (list && !list.querySelector('.lgc') && !document.getElementById('lgc-empty')){
+      var p = document.createElement('p'); p.className='lgc-empty'; p.id='lgc-empty';
+      p.textContent = 'No comments yet. Be the first.';
+      list.parentNode.insertBefore(p, list.nextSibling);
+    }
+  }
+  function doDelete(li){
+    var id = commentIdOf(li); if (!id) return;
+    if (!confirm('Delete this comment? Any replies under it are hidden too.')) return;
+    fetch(DELETE_, {method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},
+      body: JSON.stringify({comment_id:id, _wpnonce:nonce})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if (j && j.ok){ li.remove(); maybeEmpty(); reportCount(); postHeight(); }
+        else alert('Could not delete. Try again.');
+      })
+      .catch(function(){ alert('Could not delete. Try again.'); });
+  }
+  function openEditor(li){
+    var bodyEl = li.querySelector(':scope > .lgc-body');
+    if (!bodyEl || bodyEl.querySelector(':scope > .lgc-editbox')) return; // already editing
+    var textEl = bodyEl.querySelector(':scope > .lgc-text');
+    var id = commentIdOf(li); if (!id) return;
+    textEl.hidden = true;
+    var box = document.createElement('div');
+    box.className = 'lgc-editbox';
+    box.innerHTML = '<textarea maxlength="6000"></textarea>'+
+      '<div class="lgc-edit-actions"><span class="lgc-err"></span>'+
+      '<button type="button" class="lgc-edit-cancel">Cancel</button>'+
+      '<button type="button" class="lgc-edit-save">Save</button></div>';
+    textEl.insertAdjacentElement('afterend', box);
+    var taEdit = box.querySelector('textarea');
+    taEdit.value = li.getAttribute('data-raw') || ''; taEdit.focus();
+    var errE = box.querySelector('.lgc-err'), saveB = box.querySelector('.lgc-edit-save');
+    box.querySelector('.lgc-edit-cancel').addEventListener('click', function(){ closeEditor(li); });
+    saveB.addEventListener('click', function(){
+      var text = (taEdit.value||'').trim(); errE.textContent = '';
+      if (!text){ taEdit.focus(); return; }
+      saveB.disabled = true;
+      fetch(EDIT, {method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json','X-WP-Nonce':nonce},
+        body: JSON.stringify({comment_id:id, body:text, _wpnonce:nonce})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          saveB.disabled = false;
+          if (j && j.ok){
+            li.setAttribute('data-raw', j.body);
+            textEl.innerHTML = esc(j.body).replace(/\n/g,'<br>');
+            var ed = bodyEl.querySelector(':scope > .lgc-head > .lgc-time > .lgc-edited');
+            if (ed) ed.hidden = false;
+            closeEditor(li); postHeight();
+          } else {
+            errE.textContent = (j && j.error === 'auth_required') ? 'Please log in again.' : 'Could not save. Try again.';
+          }
+        })
+        .catch(function(){ saveB.disabled = false; errE.textContent = 'Could not save. Try again.'; });
+    });
+    postHeight();
+  }
+  function closeEditor(li){
+    var bodyEl = li.querySelector(':scope > .lgc-body'); if (!bodyEl) return;
+    var box = bodyEl.querySelector(':scope > .lgc-editbox'); if (box) box.remove();
+    var textEl = bodyEl.querySelector(':scope > .lgc-text'); if (textEl) textEl.hidden = false;
+    postHeight();
+  }
+  if (list) list.addEventListener('click', function(e){
+    var b;
+    if ((b = e.target.closest('.lgc-del')))  { doDelete(b.closest('.lgc'));  return; }
+    if ((b = e.target.closest('.lgc-edit'))) { openEditor(b.closest('.lgc')); return; }
+  });
+
   function closePalettes(except){
     Array.prototype.forEach.call(document.querySelectorAll('.lgc-rx-palette'), function(p){
       if (p !== except) p.hidden = true;
@@ -410,10 +524,14 @@ $count = count($rows);
       ? '<img class="lgc-av" src="'+esc(c.avatar_url)+'" width="36" height="36" alt="">'
       : '<span class="lgc-av lgc-av--ph">'+esc((c.author_name||'M').charAt(0).toUpperCase())+'</span>';
     var nm = c.slug ? '<a href="/u/'+esc(c.slug)+'" target="_top">'+esc(c.author_name)+'</a>' : esc(c.author_name);
+    li.setAttribute('data-author', myUid);
+    li.setAttribute('data-raw', c.body || '');
     li.innerHTML = '<div class="lgc-body"><div class="lgc-head">'+av+
-      '<span class="lgc-name">'+nm+'</span><span class="lgc-time">'+esc(c.when)+'</span></div>'+
+      '<span class="lgc-name">'+nm+'</span><span class="lgc-time">'+esc(c.when)+
+      '<span class="lgc-edited" title="Edited" hidden> (edited)</span></span></div>'+
       '<div class="lgc-text">'+esc(c.body).replace(/\n/g,'<br>')+'</div>'+
       '<div class="lgc-meta"><button type="button" class="lgc-reply" data-id="'+c.id+'" data-name="'+esc(c.author_name)+'">Reply</button>'+
+      '<span class="lgc-own"><button type="button" class="lgc-edit">Edit</button><button type="button" class="lgc-del">Delete</button></span>'+
       reactionBarHtml(c.id)+'</div></div>';
     // nest under parent if present, else append to root
     var target = list;
@@ -423,6 +541,7 @@ $count = count($rows);
         if(!ul){ ul=document.createElement('ul'); ul.className='lgc-children'; p.appendChild(ul);} target = ul; }
     }
     target.appendChild(li);
+    reportCount();
   }
 })();
 </script>
