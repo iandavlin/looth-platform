@@ -972,9 +972,9 @@ $header_cat = $scoped_forum
     <a href="<?= feed_sort_url('random', $forum_slug) ?>"
        class="lg-random-tab<?= $sort_param === 'random' ? ' active' : '' ?>">Random</a>
     <a href="<?= feed_sort_url('new', $forum_slug) ?>"
-       class="<?= $sort_param === 'new' ? 'active' : '' ?>">New</a>
-    <a href="<?= feed_sort_url('old', $forum_slug) ?>"
-       class="<?= $sort_param === 'old' ? 'active' : '' ?>">Old</a>
+       class="<?= $sort_param === 'new' ? 'active' : '' ?>">Newest</a>
+    <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
+       class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Trending</a>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
       <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
     <?php endif; ?>
