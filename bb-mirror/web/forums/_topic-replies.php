@@ -87,6 +87,20 @@ $offset = max(0, (int)($_GET['offset'] ?? 0));
 $total  = count($ordered);
 $page   = array_slice($ordered, $offset, $PER);
 
+// Reply reaction counts for the visible page (ec9a30e: 'reply' is a reactable
+// target). Same count contract as the feed; stashed for bb_mirror_render_reply_stub.
+$GLOBALS['__bb_reply_rx'] = [];
+$rx_reply_items = [];
+foreach ($page as $row) $rx_reply_items[] = ['post_type' => 'reply', 'item_id' => (int)$row['rid']];
+if ($rx_reply_items) {
+    try {
+        require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php';
+        $GLOBALS['__bb_reply_rx'] = lg_card_reactions_for_items($db, $rx_reply_items);
+    } catch (\Throwable $e) {
+        $GLOBALS['__bb_reply_rx'] = [];
+    }
+}
+
 header('Content-Type: text/html; charset=utf-8');
 
 // Newest/Oldest toggle — first page only, and only when there's more than one reply.

@@ -307,6 +307,68 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
                 echo '<img class="reply-stub__img" src="' . $iu . '" alt="" loading="lazy">';
             }
         }
-        echo '</div></div>';
+        echo '</div>'; // close .reply-stub__body
+        // Reaction bar (ec9a30e: replies are a reactable target). Counts come from
+        // the page's batch read stashed by _feed.php / _topic-replies.php; the picker
+        // + write are wired generically by forums.js on .fcr (post_type='reply').
+        if (isset($r['reply_id']) && function_exists('feed_reactions_bar')) {
+            $rid = (int)$r['reply_id'];
+            echo '<div class="reply-stub__actions">';
+            feed_reactions_bar('reply', $rid, $GLOBALS['__bb_reply_rx']['reply:' . $rid] ?? []);
+            echo '</div>';
+        }
+        echo '</div>'; // close .reply-stub
+    }
+}
+
+// Reaction-bar renderers — shared here (not in _feed.php) so BOTH the feed teaser
+// and the lazy full-thread endpoint (_topic-replies.php, which doesn't load
+// _feed.php) can emit identical .fcr markup for reply reactions. Guarded so
+// _feed.php's historical definitions (now removed) can't double-declare.
+if (!function_exists('feed_rx_glyph')) {
+    // One palette reaction's inner glyph (emoji char or static image). Mirrors
+    // comments.php's lg_c_rx_glyph so the feed reaction UI matches the modal's.
+    function feed_rx_glyph(array $rx): string
+    {
+        if (($rx['type'] ?? '') === 'image') {
+            // NOT lazy: these 18px glyphs render inside the hidden, off-screen
+            // .fcr-palette popup — lazy-loading never fires there (no viewport
+            // intersection), so a custom image renders blank when the picker opens.
+            return '<img class="fcr-img" src="'
+                 . htmlspecialchars(LG_REACTIONS_ASSET_BASE . ($rx['file'] ?? ''), ENT_QUOTES)
+                 . '" width="18" height="18" alt="">';
+        }
+        return '<span class="fcr-emoji">' . htmlspecialchars($rx['char'] ?? '') . '</span>';
+    }
+}
+
+if (!function_exists('feed_reactions_bar')) {
+    // Server-render the reaction control: count chips (palette order, non-zero only)
+    // + an "add reaction" trigger revealing the full palette. Inert until forums.js
+    // wires it; counts render for logged-out viewers too (read-only). No-op when the
+    // reactions engine isn't loaded (count read failed → degrade clean).
+    function feed_reactions_bar(string $postType, int $itemId, array $counts): void
+    {
+        if (!function_exists('lg_reactions_palette')) return; // engine read failed → skip
+        $palette = lg_reactions_palette();
+        $chips = '';
+        foreach ($palette as $rx) {
+            $n = (int) ($counts[$rx['slug']] ?? 0);
+            if ($n <= 0) continue;
+            $chips .= '<button type="button" class="fcr-chip" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
+                    . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx)
+                    . '<span class="fcr-n">' . $n . '</span></button>';
+        }
+        $opts = '';
+        foreach ($palette as $rx) {
+            $opts .= '<button type="button" class="fcr-opt" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
+                   . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx) . '</button>';
+        }
+        echo '<div class="fcr" data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
+           . '" data-item-id="' . $itemId . '">'
+           . '<span class="fcr-chips">' . $chips . '</span>'
+           . '<button type="button" class="fcr-add" aria-label="Add reaction">&#9786;<span>+</span></button>'
+           . '<span class="fcr-palette" hidden>' . $opts . '</span>'
+           . '</div>';
     }
 }

@@ -150,25 +150,77 @@
     });
   })();
 
+  // ── Inline video facade (content video cards) ──────────────────────────────
+  // Click the thumb/play → swap a YouTube iframe IN PLACE (overlays the thumb,
+  // which stays in the DOM). No iframe until click — no embed up front, fast first
+  // paint (Ian). Only ONE video plays at a time; gated cards never get a play
+  // host (server renders the lock overlay instead), so this can't reach them.
+  (function () {
+    document.addEventListener('click', function (e) {
+      var host = e.target.closest && e.target.closest('.fc-cover--video[data-yt-play]');
+      if (!host) return;
+      e.preventDefault();
+      var id = host.getAttribute('data-yt-play');
+      if (!id || host.querySelector('iframe')) return;
+      var prev = document.querySelector('.fc-cover--video iframe');  // one at a time
+      if (prev) prev.remove();
+      var iframe = document.createElement('iframe');
+      iframe.className = 'fc-video';
+      iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1&rel=0&modestbranding=1';
+      iframe.title = 'Video';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+      iframe.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; z-index:5;';
+      host.appendChild(iframe);
+    });
+    // Keyboard: Enter/Space on the focusable play host.
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var host = e.target.closest && e.target.closest('.fc-cover--video[data-yt-play]');
+      if (!host) return;
+      e.preventDefault();
+      host.click();
+    });
+  })();
+
   // ── 1. Corner hamburger ──────────────────────────────────────────────────
   // Desktop: default = nav visible; hamburger adds body.nav-closed to hide it.
   // Mobile:  default = nav hidden;  hamburger adds body.nav-open to show drawer.
   const ham     = document.getElementById('bb-ham');
   const overlay = document.getElementById('bb-overlay');
 
-  if (ham) {
-    ham.addEventListener('click', function () {
-      const mobile = window.innerWidth <= 960;
-      if (mobile) {
-        const opening = document.body.classList.toggle('nav-open');
-        ham.setAttribute('aria-expanded', opening ? 'true' : 'false');
-        overlay.setAttribute('aria-hidden', opening ? 'false' : 'true');
-      } else {
-        const closing = document.body.classList.toggle('nav-closed');
-        ham.setAttribute('aria-expanded', closing ? 'false' : 'true');
-      }
+  // Shared rail toggle — bound to the corner hamburger (legacy; hidden ≥641) AND
+  // the sort-bar "Filters" chip, which is now the desktop control (the green
+  // corner wedge is gone on desktop). Mobile/tablet ≤960 = slide-in drawer
+  // (nav-open); desktop ≥961 = collapse the persistent rail (nav-closed).
+  function syncRailControls(open) {
+    if (ham) ham.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.querySelectorAll('.lg-filters-chip').forEach(function (c) {
+      c.setAttribute('aria-expanded', open ? 'true' : 'false');
+      c.classList.toggle('is-on', open);
     });
   }
+  function railIsOpen() {
+    return window.innerWidth > 960
+      ? !document.body.classList.contains('nav-closed')
+      : document.body.classList.contains('nav-open');
+  }
+  function toggleNav() {
+    if (window.innerWidth <= 960) {
+      const opening = document.body.classList.toggle('nav-open');
+      if (overlay) overlay.setAttribute('aria-hidden', opening ? 'false' : 'true');
+    } else {
+      document.body.classList.toggle('nav-closed');
+    }
+    syncRailControls(railIsOpen());
+  }
+
+  if (ham) ham.addEventListener('click', toggleNav);
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.lg-filters-chip')) toggleNav();
+  });
+  syncRailControls(railIsOpen());   // reflect initial state on the chip(s)
 
   if (overlay) {
     overlay.addEventListener('click', function () {
@@ -376,7 +428,8 @@
       // body + bare area expand; real controls (read-more, reply, view-replies,
       // author/profile links, thread links) keep working.
       if (ev.target.closest('button, input, textarea, label, select, .feed-card__compact-expand, ' +
-            '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply')) return;
+            '.feed-card__read-more, .feed-card__expand, .feed-card__reply-cta, .reply-stub__reply, ' +
+            '.fc-facepile, .fc-composer')) return;
       // author + in-thread links still navigate; only the title link is hijacked to expand
       if (ev.target.closest('a') && !ev.target.closest('.feed-card__title a')) return;
       var titleA = ev.target.closest('.feed-card__title a');
@@ -1714,6 +1767,12 @@
   // height back, not a count. Rather than touch the engine, read the live thread
   // count same-origin off the iframe and reflect it on the card's comment button
   // so a freshly-posted comment shows up without a reload. Surface-only.
+  function setOpenerCount(n) {
+    if (!openerBtn || typeof n !== 'number') return;
+    openerBtn.textContent = '💬 ' +
+      (n > 0 ? n + ' ' + (n === 1 ? 'comment' : 'comments') : 'Comment');
+    openerBtn.setAttribute('title', n > 0 ? 'View comments' : 'Be the first to comment');
+  }
   function syncOpenerCount() {
     if (!openerBtn) return;
     var n = null;
@@ -1721,10 +1780,7 @@
       var doc = frame.contentDocument;
       if (doc) n = doc.querySelectorAll('.lgc-list .lgc').length;
     } catch (e) { /* cross-origin (shouldn't happen, same host) — skip */ }
-    if (n === null) return;
-    openerBtn.textContent = '💬 ' +
-      (n > 0 ? n + ' ' + (n === 1 ? 'comment' : 'comments') : 'Comment');
-    openerBtn.setAttribute('title', n > 0 ? 'View comments' : 'Be the first to comment');
+    setOpenerCount(n);
   }
 
   function closeModal() {
@@ -1754,10 +1810,15 @@
   /* Height handshake — size the iframe to the thread (same message the
      standalone page's modal listens for). Clamp to 82vh; taller scrolls. */
   window.addEventListener('message', function (e) {
-    if (e.origin !== location.origin || !e.data ||
-        typeof e.data.lgCommentsHeight !== 'number') return;
-    var cap = Math.round(window.innerHeight * 0.82);
-    frame.style.height = Math.max(220, Math.min(e.data.lgCommentsHeight, cap)) + 'px';
+    if (e.origin !== location.origin || !e.data) return;
+    if (typeof e.data.lgCommentsHeight === 'number') {
+      var cap = Math.round(window.innerHeight * 0.82);
+      frame.style.height = Math.max(220, Math.min(e.data.lgCommentsHeight, cap)) + 'px';
+    }
+    // Live comment count from the engine iframe (comment posted OR soft-deleted →
+    // its subtree drops, count reported). Reflect on the card's comment button now,
+    // not just on modal close. Engine: comments.php reportCount() (commit 5b262c0).
+    if (typeof e.data.lgCommentsCount === 'number') setOpenerCount(e.data.lgCommentsCount);
   });
 })();
 
@@ -1894,4 +1955,71 @@
     new MutationObserver(function () { clearTimeout(t); t = setTimeout(sync, 120); })
       .observe(feed, { childList: true, subtree: true });
   }
+})();
+
+/* ─── Cooler card: persistent reply composer (fc-composer) + face-pile (fc-facepile)
+   Always-on (NOT proto-gated). Composer posts via the existing /reply path; the
+   face-pile opens the thread. Desktop-only by CSS (display:none ≤640) until Buck's
+   mobile-hub.css arranges them, so this never affects mobile. ───────────────── */
+(function () {
+  'use strict';
+  var REPLY_BASE = (document.getElementById('frm-form') || { dataset: {} }).dataset.restBase || '/wp-json/buddyboss/v1';
+  var auth = null, authPending = null;
+  function getAuth(cb) {
+    if (auth) { cb(auth); return; }
+    if (authPending) { authPending.push(cb); return; }
+    authPending = [cb];
+    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { auth = d || { authenticated: false }; authPending.forEach(function (f) { f(auth); }); authPending = null; })
+      .catch(function () { auth = { authenticated: false }; authPending.forEach(function (f) { f(auth); }); authPending = null; });
+  }
+  function esc(s) { return s.replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+
+  document.addEventListener('input', function (e) {
+    var inp = e.target.closest && e.target.closest('.fc-composer__input'); if (!inp) return;
+    var btn = inp.closest('.fc-composer').querySelector('.fc-composer__send');
+    if (btn) btn.disabled = !inp.value.trim();
+  });
+
+  document.addEventListener('click', function (e) {
+    var fp = e.target.closest && e.target.closest('.fc-facepile');
+    if (fp) {                                            // face-pile → open the thread
+      var fcard = fp.closest('.feed-card');
+      var fex = fcard && fcard.querySelector('.feed-card__expand');
+      if (fex) fex.click();
+      else if (fcard && fcard.getAttribute('data-href')) location.href = fcard.getAttribute('data-href');
+      return;
+    }
+    var send = e.target.closest && e.target.closest('.fc-composer__send');
+    if (!send) return;
+    var box = send.closest('.fc-composer');
+    var inp = box.querySelector('.fc-composer__input');
+    var status = box.querySelector('.fc-composer__status');
+    var text = (inp.value || '').trim(); if (!text) return;
+    var topicId = parseInt(box.getAttribute('data-topic-id'), 10);
+    var forumId = parseInt(box.getAttribute('data-forum-id'), 10);
+    if (!topicId) return;
+    send.disabled = true; if (status) status.textContent = 'Posting…';
+    getAuth(function (a) {
+      if (!a || !a.authenticated) { if (status) status.textContent = 'Sign in to reply.'; send.disabled = false; return; }
+      var payload = { topic_id: topicId, content: '<p>' + esc(text).replace(/\n/g, '<br>') + '</p>' };
+      if (forumId) payload.forum_id = forumId;
+      fetch(REPLY_BASE + '/reply', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+        body: JSON.stringify(payload)
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) { if (status) status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; send.disabled = false; return; }
+          inp.value = ''; if (status) status.textContent = 'Posted ✓';
+          var card = box.closest('.feed-card');
+          var ex = card && card.querySelector('.feed-card__expand');   // reload thread to show the new reply
+          if (ex) { card.classList.remove('replies-expanded'); var full = card.querySelector('.feed-card__replies-full'); if (full) full.dataset.loaded = ''; ex.click(); }
+          setTimeout(function () { if (status) status.textContent = ''; }, 2600);
+        })
+        .catch(function () { if (status) status.textContent = 'Network error.'; send.disabled = false; });
+    });
+  });
 })();

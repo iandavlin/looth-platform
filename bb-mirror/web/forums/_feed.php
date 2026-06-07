@@ -161,11 +161,22 @@ require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
 $hub_filters = hub_filters_parse();
 $hub_muted   = hub_mute_parse();
 
-// -- Allowed content tiers (server-side absence-model gating) --
-// Content is tier-gated; forum posts are membership-gated (handled elsewhere).
-// Gated content is filtered out of the SQL entirely (never reaches the page).
-// Ladder public<lite<pro; ADMINS bypass -> all tiers. Fails open to public.
-$content_tiers = hub_content_tiers();
+// -- Content tiers: TEASER model (Ian 6/7) --
+// Content is tier-gated. The Hub now SHOWS all content tiers (so gated items
+// appear as locked teasers with an upgrade/login overlay — Archive parity) and
+// gates per-viewer at render time. We compute the viewer's max entitled rank here;
+// downstream the feed/counts/tree run over ALL tiers ($content_tiers below).
+// Leak-safety: the union selects only teaser-safe columns for content (title,
+// excerpt, thumb, metadata — NO body/embed/download URL), and the gated render
+// path suppresses the excerpt + inline play, so a gated card carries no payload.
+// Ladder public<lite<pro; ADMINS bypass (max rank). Fails open to public.
+$LG_TIER_RANK     = ['public' => 0, 'lite' => 1, 'pro' => 2];
+$viewer_tiers     = hub_content_tiers();
+$viewer_tier_rank = 0;
+foreach ($viewer_tiers as $vt) $viewer_tier_rank = max($viewer_tier_rank, $LG_TIER_RANK[$vt] ?? 0);
+$GLOBALS['LG_HUB_VIEWER_RANK'] = $viewer_tier_rank;
+// Display set = every known content tier (teasers for the ones above the viewer).
+$content_tiers = ['public', 'lite', 'pro'];
 
 // Sticky-mute toggle: flip the cookie + 302 back to the feed (no JS, headers
 // not yet sent — chrome only outputs inside bb_mirror_chrome_header()).
@@ -591,6 +602,29 @@ if ($topic_ids) {
     }
 }
 
+// -- Face-pile (fc-facepile): up to 3 distinct recent reply-authors per topic. --
+$reply_facepile = []; // topic_id → [ {author_name, author_slug, avatar_url}, … ≤3 ]
+if ($topic_ids) {
+    $fp_sql = "
+        SELECT topic_id, author_name, author_slug, avatar_url FROM (
+          SELECT r.topic_id,
+                 COALESCE(r.author_name, 'Anonymous') AS author_name,
+                 p.slug AS author_slug, p.avatar_url AS avatar_url,
+                 row_number() OVER (PARTITION BY r.topic_id ORDER BY MAX(r.created_at) DESC) AS rn
+            FROM reply r
+            LEFT JOIN person p ON p.id = r.author_id
+           WHERE r.topic_id = ANY(:ids::bigint[]) AND r.status = 'publish'
+           GROUP BY r.topic_id, r.author_id, r.author_name, p.slug, p.avatar_url
+        ) x WHERE rn <= 3 ORDER BY topic_id, rn
+    ";
+    $fpst = $db->prepare($fp_sql);
+    $fpst->bindValue(':ids', $id_list);
+    $fpst->execute();
+    foreach ($fpst->fetchAll() as $row) {
+        $reply_facepile[(int)$row['topic_id']][] = $row;
+    }
+}
+
 // -- Content comment counts (Hub content cards → WP-free comment modal). --
 // Content comments live in discovery.comments (pulled out of WP by the comments-db
 // lane), keyed (post_type, item_id) — same shape as discovery.likes. One grouped
@@ -672,6 +706,53 @@ if ($rx_items) {
     }
 }
 
+// -- Reply reaction counts (ec9a30e: 'reply' is a reactable target — same generic
+//    card_reactions store, no schema change). Batch-read the teaser replies' counts
+//    via the SAME count contract, keyed 'reply:<reply_id>', and stash for the shared
+//    reply-stub renderer (_reply-render.php emits feed_reactions_bar per reply; the
+//    picker + write are wired generically by forums.js on .fcr). --
+$reply_rx_items = [];
+foreach ($reply_teaser as $_rt) {
+    $rid = (int)($_rt['reply_id'] ?? 0);
+    if ($rid > 0) $reply_rx_items[] = ['post_type' => 'reply', 'item_id' => $rid];
+}
+$GLOBALS['__bb_reply_rx'] = [];
+if ($reply_rx_items) {
+    try {
+        require_once __DIR__ . '/../../../archive-poc/api/v0/_reactions.php';
+        $GLOBALS['__bb_reply_rx'] = lg_card_reactions_for_items($db, $reply_rx_items);
+    } catch (\Throwable $e) {
+        $GLOBALS['__bb_reply_rx'] = []; // unreadable → no chips, picker still works
+    }
+}
+
+// -- Video facade yt_id (Ian 6/7: play inline in the card). Same source as Archive
+//    (_rowlib.php): a cheap YouTube-id regex over the video's body_text, videos
+//    only. Batched for the content-video ids on the page → $video_yt[content_id].
+//    The facade renders the thumb + a play button; forums.js swaps in the iframe
+//    ONLY on click (no embed up front). Videos with no extractable id (or gated)
+//    keep their click-through. --
+$video_yt = [];
+$vid_ids = [];
+foreach ($topics as $_r) {
+    if (($_r['card_type'] ?? '') === 'content' && ($_r['content_kind'] ?? '') === 'video') {
+        $vid_ids[] = (int)$_r['topic_id'];
+    }
+}
+if ($vid_ids) {
+    try {
+        $vph = implode(',', array_fill(0, count($vid_ids), '?'));
+        $vst = $db->prepare("SELECT id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind = 'video'");
+        $vst->execute($vid_ids);
+        $yt_re = '~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i';
+        foreach ($vst->fetchAll() as $vr) {
+            if (!empty($vr['body_text']) && preg_match($yt_re, (string)$vr['body_text'], $ym)) {
+                $video_yt[(int)$vr['id']] = $ym[1];
+            }
+        }
+    } catch (\Throwable $e) { $video_yt = []; }
+}
+
 // -- Helpers --
 // bb_mirror_avatar(), feed_rel_time(), bb_mirror_render_reply_stub() live in
 // the shared partial so the lazy ?replies endpoint emits identical markup.
@@ -727,10 +808,10 @@ function feed_parse_pg_array(?string $lit): array
 function feed_render_tags(array $tags): void
 {
     if (!$tags) return;
-    echo '<div class="feed-card__tags">';
+    echo '<div class="fc-tags feed-card__tags">';
     foreach ($tags as $tag) {
         $url = LG_BB_MIRROR_PUBLIC_PATH . '/?q=' . urlencode($tag);
-        echo '<a class="tag-chip" href="' . htmlspecialchars($url) . '">'
+        echo '<a class="fc-tag tag-chip" href="' . htmlspecialchars($url) . '">'
            . htmlspecialchars($tag) . '</a>';
     }
     echo '</div>';
@@ -754,52 +835,9 @@ function feed_action_bar(int $reply_count): void
        . '</div>';
 }
 
-// One palette reaction's inner glyph (emoji char or static image), shared by the
-// count chips + the picker options. Mirrors comments.php's lg_c_rx_glyph so the feed
-// reaction UI matches the modal's. Requires _reactions.php loaded (palette + base).
-function feed_rx_glyph(array $rx): string
-{
-    if (($rx['type'] ?? '') === 'image') {
-        // NOT lazy: these 18px reaction glyphs render inside the hidden, off-screen
-        // .fcr-palette popup — lazy-loading never fires there (no viewport intersection),
-        // so a custom image with no visible count-chip renders blank when the picker opens.
-        return '<img class="fcr-img" src="'
-             . htmlspecialchars(LG_REACTIONS_ASSET_BASE . ($rx['file'] ?? ''), ENT_QUOTES)
-             . '" width="18" height="18" alt="">';
-    }
-    return '<span class="fcr-emoji">' . htmlspecialchars($rx['char'] ?? '') . '</span>';
-}
-
-// Server-render the card reaction control: count chips for reactions that exist
-// (palette order, non-zero only) + an "add reaction" trigger revealing the full
-// BuddyBoss palette. Inert until forums.js wires it; counts still render for
-// logged-out viewers (read-only). The viewer's own pick + the write nonce are
-// fetched client-side from the card-react GET door. $counts = [slug=>int].
-// No-op when the reactions engine isn't loaded (count read failed → degrade clean).
-function feed_reactions_bar(string $postType, int $itemId, array $counts): void
-{
-    if (!function_exists('lg_reactions_palette')) return; // engine read failed → skip
-    $palette = lg_reactions_palette();
-    $chips = '';
-    foreach ($palette as $rx) {
-        $n = (int) ($counts[$rx['slug']] ?? 0);
-        if ($n <= 0) continue;
-        $chips .= '<button type="button" class="fcr-chip" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
-                . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx)
-                . '<span class="fcr-n">' . $n . '</span></button>';
-    }
-    $opts = '';
-    foreach ($palette as $rx) {
-        $opts .= '<button type="button" class="fcr-opt" data-slug="' . htmlspecialchars($rx['slug'], ENT_QUOTES)
-               . '" title="' . htmlspecialchars($rx['label'], ENT_QUOTES) . '">' . feed_rx_glyph($rx) . '</button>';
-    }
-    echo '<div class="fcr" data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
-       . '" data-item-id="' . $itemId . '">'
-       . '<span class="fcr-chips">' . $chips . '</span>'
-       . '<button type="button" class="fcr-add" aria-label="Add reaction">&#9786;<span>+</span></button>'
-       . '<span class="fcr-palette" hidden>' . $opts . '</span>'
-       . '</div>';
-}
+// feed_rx_glyph() + feed_reactions_bar() now live in _reply-render.php (the shared
+// partial) so the lazy full-thread endpoint can emit reply reactions too. Required
+// below at the "-- Helpers --" include.
 
 // Forum feed URL, appending ?fid=<id> when the slug is shared by >1 forum.
 function feed_forum_url(array $f, array $slug_freq): string
@@ -943,50 +981,74 @@ $header_cat = $scoped_forum
             'article' => 'Article', 'video' => 'Video', 'event' => 'Event',
             'sponsor-post' => 'Sponsor', 'loothprint' => 'Loothprint',
         ][$c_kind] ?? ucfirst(str_replace('-', ' ', $c_kind));
+        // Teaser gating (Ian 6/7): a card is gated when its tier outranks the viewer.
+        // Gated cards render title + thumb + lock overlay only — excerpt/play/engagement
+        // suppressed below so no payload leaks. The lock CTA + cover link to the
+        // standalone page, which carries its own paywall/upgrade gate.
+        $rankmap     = $LG_TIER_RANK ?? ['public' => 0, 'lite' => 1, 'pro' => 2];
+        $c_is_gated  = (($rankmap[$c_tier] ?? 0) > ($GLOBALS['LG_HUB_VIEWER_RANK'] ?? 0));
+        $c_tier_lbl  = ['lite' => 'Lite', 'pro' => 'Pro'][$c_tier] ?? ucfirst((string)$c_tier);
+        // Inline-play id only for NON-gated videos (gated → overlay, never the embed).
+        $c_yt        = (!$c_is_gated && $c_kind === 'video') ? ($video_yt[$c_id] ?? null) : null;
     ?>
     <?php /* FLAT card contract (docs/hub-mobile-desktop-split.md): every fc-* region is a
              DIRECT child of .feed-card so desktop (forums.css ≥641) and mobile (Buck's
              mobile-hub.css ≤640) can grid-arrange the SAME markup — no JS reshape. Legacy
              feed-card__* / lg-card-* classes ride along as forums.js behavior hooks. */ ?>
-    <article class="feed-card feed-card--content" data-lg-card="1"
+    <article class="feed-card feed-card--content<?= $c_is_gated ? ' feed-card--gated feed-card--gated-' . htmlspecialchars($c_tier) : '' ?>" data-lg-card="1"
              data-id="<?= $c_id ?>" data-type="<?= htmlspecialchars($c_kind) ?>"
-             data-href="<?= htmlspecialchars($c_url) ?>" data-gated="0"
+             data-href="<?= htmlspecialchars($c_url) ?>" data-gated="<?= $c_is_gated ? '1' : '0' ?>"
              data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>">
       <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $c_author ?></span>
-        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span></span>
+        <span class="fc-author__badges"><span class="feed-card__kind-badge feed-card__kind-badge--<?= htmlspecialchars($c_kind) ?>"><?= htmlspecialchars($kind_label) ?></span><?php if ($c_is_gated): ?><span class="fc-tier-badge fc-tier-badge--<?= htmlspecialchars($c_tier) ?>"><?= htmlspecialchars($c_tier_lbl) ?></span><?php endif; ?></span>
       </div>
       <?php if (!empty($topic['content_forum_label'])): ?>
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars((string)$topic['content_forum_label'], ENT_QUOTES, 'UTF-8') ?></nav>
       <?php endif; ?>
       <time class="fc-time lg-card-time"><?= $c_time ?></time>
-      <?php if (!empty($c_img)): ?>
+      <?php if ($c_yt): /* NON-gated video → facade: thumb + play; forums.js swaps iframe on click (no embed up front) */ ?>
+        <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($c_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
+          <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+          <?php if ($c_dur > 0): ?><span class="fc-dur"><?= (int)$c_dur ?> min</span><?php endif; ?>
+        </div>
+      <?php elseif ($c_is_gated): /* GATED → locked teaser: dimmed thumb + lock overlay; links to the standalone page which carries its own paywall. NO inline play, no excerpt, no engagement. */ ?>
+        <a class="fc-cover feed-card__cover fc-cover--gated" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= htmlspecialchars($c_tier_lbl) ?> members only">
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
+          <span class="fc-gate">
+            <span class="fc-gate__lock" aria-hidden="true">&#128274;</span>
+            <span class="fc-gate__t"><?= htmlspecialchars($c_tier_lbl) ?> members only</span>
+            <span class="fc-gate__cta"><?= $c_kind === 'video' ? 'Unlock video' : 'Unlock' ?></span>
+          </span>
+        </a>
+      <?php elseif (!empty($c_img)): ?>
         <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
           <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
-      <?php if ($c_excerpt !== '' || $c_tags): ?>
-        <div class="fc-excerpt feed-card__op">
-          <?php if ($c_excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p><?php endif; ?>
-          <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
+      <?php if (!$c_is_gated): /* gated cards: suppress excerpt/tags/engagement — locked teaser carries no payload */ ?>
+        <?php if ($c_excerpt !== ''): ?>
+          <div class="fc-excerpt feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
+        <?php endif; ?>
+        <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
+        <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot.
+                 Server-rendered (counts + action row) — wired by forums.js / hub-polish.js. */ ?>
+        <div class="fc-actions">
+          <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
+          <?php feed_action_bar(0); ?>
+          <?php if ($c_can_comment): ?>
+            <button type="button" class="feed-card__comments-btn" data-comments
+                    data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>"
+                    aria-haspopup="dialog" aria-controls="lgc-modal"
+                    title="<?= $c_comments > 0 ? 'View comments' : 'Be the first to comment' ?>">
+              &#128172; <?= $c_comments > 0 ? $c_comments . ' ' . ($c_comments === 1 ? 'comment' : 'comments') : 'Comment' ?>
+            </button>
+          <?php endif; ?>
         </div>
       <?php endif; ?>
-      <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot.
-               Server-rendered (counts + action row) — wired by forums.js / hub-polish.js. */ ?>
-      <div class="fc-actions">
-        <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
-        <?php feed_action_bar(0); ?>
-        <?php if ($c_can_comment): ?>
-          <button type="button" class="feed-card__comments-btn" data-comments
-                  data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>"
-                  aria-haspopup="dialog" aria-controls="lgc-modal"
-                  title="<?= $c_comments > 0 ? 'View comments' : 'Be the first to comment' ?>">
-            &#128172; <?= $c_comments > 0 ? $c_comments . ' ' . ($c_comments === 1 ? 'comment' : 'comments') : 'Comment' ?>
-          </button>
-        <?php endif; ?>
-      </div>
     </article>
     <?php continue; endif;
       $turl        = feed_topic_url($topic);
@@ -1049,7 +1111,12 @@ $header_cat = $scoped_forum
       <?php if (!empty($topic['forum_title'])): ?>
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></nav>
       <?php endif; ?>
-      <time class="fc-time lg-card-time"><?= $rtime ?></time>
+      <time class="fc-time lg-card-time"><?= $start_time ?></time>
+      <?php /* fc-activity — live "active … ago" + pulse-dot (NEW; desktop-only until
+               Buck arranges it on mobile — base display:none ≤640). */ ?>
+      <?php if (!empty($topic['event_time']) && $rtime !== '—'): ?>
+        <div class="fc-activity"><span class="fc-pulse" aria-hidden="true"></span>active <?= htmlspecialchars($rtime) ?> ago</div>
+      <?php endif; ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
           <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" loading="lazy">
@@ -1063,8 +1130,16 @@ $header_cat = $scoped_forum
           <button class="feed-card__read-more" type="button" data-topic-id="<?= $topic_id ?>" data-state="collapsed">Read more &#9660;</button>
         <?php endif; ?>
         <?php if ($embed_url): ?><div class="feed-card__embed" data-embed-url="<?= htmlspecialchars($embed_url, ENT_QUOTES, 'UTF-8') ?>"></div><?php endif; ?>
-        <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
       </div>
+      <?php feed_render_tags(feed_parse_pg_array($topic['tags'] ?? null)); ?>
+      <?php /* fc-facepile — up to 3 recent repliers + N replies (NEW; desktop-only ≤640). */
+      $fp = $reply_facepile[$topic_id] ?? [];
+      if ($fp): ?>
+        <div class="fc-facepile" data-topic-id="<?= $topic_id ?>" role="button" tabindex="0" aria-label="View replies">
+          <span class="fc-facepile__stack"><?php foreach ($fp as $rp): ?><span class="fc-facepile__av"><?= bb_mirror_avatar($rp['author_name'] ?: 'A', $rp['author_slug'] ?: 'r', 26, $rp['avatar_url'] ?? null) ?></span><?php endforeach; ?></span>
+          <span class="fc-facepile__count"><?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?></span>
+        </div>
+      <?php endif; ?>
       <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot. */ ?>
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
@@ -1080,6 +1155,18 @@ $header_cat = $scoped_forum
           <?php if ($has_more): ?>
             <button class="feed-card__expand" type="button" data-topic-id="<?= $topic_id ?>">View <?= $reply_count ?> <?= $reply_count === 1 ? 'reply' : 'replies' ?> &#9660;</button>
           <?php endif; ?>
+        </div>
+      <?php endif; ?>
+      <?php /* fc-composer — PERSISTENT reply (the "reply is lost" fix). Authed only;
+               posts via the existing /reply path (forums.js). NEW; desktop-only ≤640. */ ?>
+      <?php if ($can_post): ?>
+        <div class="fc-composer" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>">
+          <span class="fc-composer__av"><?= bb_mirror_avatar('You', 'you', 30, null) ?></span>
+          <span class="fc-composer__wrap">
+            <input class="fc-composer__input" type="text" placeholder="Add a reply&hellip;" aria-label="Add a reply">
+            <button type="button" class="fc-composer__send" disabled>Reply</button>
+          </span>
+          <span class="fc-composer__status" role="status"></span>
         </div>
       <?php endif; ?>
     </article>
