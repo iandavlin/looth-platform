@@ -1289,8 +1289,20 @@
     var frmMediaIds = [];       // bbp_media upload_ids for this reply
     var frmMediaPreviews = [];  // preview URLs, for the optimistic stub (no refresh)
     var frmParentId = 0;        // reply_to: set when replying to a specific reply (nested)
+    var frmMentionSlug = '';    // BB nicename to auto-@mention (reply-to-reply only)
 
     function frmFocus() { if (frmQuill) frmQuill.focus(); else if (frmContent) frmContent.focus(); }
+
+    // Seed the composer with a leading "@slug " when replying to a specific reply.
+    // BuddyBoss parses @nicename on save into a real mention + notification, so this
+    // is the whole feature — no client-side mention markup needed.
+    function frmSeedMention() {
+      if (!frmMentionSlug) return;
+      var m = '@' + frmMentionSlug + ' ';
+      if (frmQuill) { frmQuill.setText(m); frmQuill.setSelection(m.length, 0); }
+      else if (frmContent) { frmContent.value = m; frmContent.selectionStart = frmContent.selectionEnd = m.length; }
+    }
+    function frmReady() { frmSeedMention(); frmFocus(); }
 
     // Lazy-init Quill; fall back to the plain textarea if the CDN didn't load.
     function frmInitEditor() {
@@ -1380,7 +1392,7 @@
           frmNonce = d.nonce; frmName = d.display_name || 'You';
           frmSetState('authed');
           frmInitEditor();
-          setTimeout(frmFocus, 30);
+          setTimeout(frmReady, 30);
         })
         .catch(function () { frmSetState('anon'); });
     }
@@ -1390,6 +1402,7 @@
       frmCard = trigger.closest('.feed-card');
       var replyTo = parseInt(trigger.dataset.replyTo, 10) || 0;
       frmParentId = replyTo;
+      frmMentionSlug = (replyTo && trigger.dataset.replyToSlug) ? trigger.dataset.replyToSlug : '';
       // A per-reply "Reply" button only carries reply-to/-author; topic + forum
       // live on the card's top-level reply CTA. The card CTA carries them directly.
       var src = trigger;
@@ -1412,7 +1425,7 @@
       frmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
       if (frmState !== 'authed') frmLoadAuth();
-      else { frmInitEditor(); setTimeout(frmFocus, 30); }
+      else { frmInitEditor(); setTimeout(frmReady, 30); }
     }
     function frmClose() {
       frmOverlay.hidden = true;

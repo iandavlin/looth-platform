@@ -267,14 +267,23 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         if ($show_reply_btn && isset($r['reply_id']) && lg_bb_mirror_can_post()) {
             echo '<button class="reply-stub__reply" type="button"'
                . ' data-reply-to="' . (int)$r['reply_id'] . '"'
-               . ' data-reply-to-author="' . htmlspecialchars($r['author_name'] ?: 'Anonymous', ENT_QUOTES) . '">'
-               . '&#8617; Reply</button>';
+               . ' data-reply-to-author="' . htmlspecialchars($r['author_name'] ?: 'Anonymous', ENT_QUOTES) . '"'
+               // slug = the BuddyBoss nicename → seeds a real @mention in the composer
+               // (BB parses @slug on save → mention + notification). Omit if anon.
+               . ($rslug ? ' data-reply-to-slug="' . htmlspecialchars((string)$rslug, ENT_QUOTES) . '"' : '')
+               . '>&#8617; Reply</button>';
         }
         // Moderator Edit + Trash — emitted for every reply, revealed only under
         // .feed--can-moderate (set client-side when auth says can_edit_others).
         // The PUT/DELETE endpoints re-check caps server-side regardless of the UI.
         if (isset($r['reply_id'])) {
+            // Carry the COMPLETE stored body (not the truncated stub excerpt) so the
+            // inline Quill edit editor can load + round-trip the real reply. Raw HTML
+            // (mention placeholders unresolved — they round-trip as-is and re-resolve
+            // on render); falls back to the excerpt if no content_html was passed.
+            $edit_raw = (string)($r['content_html'] ?? '');
             echo '<button class="reply-stub__edit" type="button" data-reply-id="' . (int)$r['reply_id'] . '"'
+               . ($edit_raw !== '' ? ' data-reply-raw="' . htmlspecialchars($edit_raw, ENT_QUOTES) . '"' : '')
                . ' title="Edit reply" aria-label="Edit reply">&#9998;</button>';
             echo '<button class="reply-stub__trash" type="button" data-reply-id="' . (int)$r['reply_id'] . '"'
                . ' title="Trash reply" aria-label="Trash reply">&#128465;</button>';
