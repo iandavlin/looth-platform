@@ -98,6 +98,9 @@ if (!is_array($blob) || !is_array($blob['layout'] ?? null) || !is_array($blob['p
 }
 $layout      = lg_standalone_normalize_blocks($blob['layout']);
 $postContext = $blob['post_context'];
+// CPT slug isn't stored inside post_context; inject it from the route
+// so get_post_type() (post-header type badge) resolves correctly.
+$postContext['post_type'] = $postType;
 
 /* ── Proof mode (CLI only) ───────────────────────────────────────────── */
 if ($IS_CLI && in_array('--proof', $argv ?? [], true)) {
@@ -337,6 +340,11 @@ function lg_standalone_front_js_href(): string {
 
 function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0): string {
     $title = htmlspecialchars((string) ($pc['title'] ?? 'Looth Group'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+    // Embed/modal mode (?embed=1): render the article + comments WITHOUT the shared
+    // site-header/footer chrome, so the Hub can iframe a content card into a modal with
+    // no double header. Default OFF — the normal full standalone page (and the desktop
+    // click-through, which hits this same renderer) is unchanged.
+    $embed = !empty($_GET['embed']);
 
     require_once '/srv/lg-shared/site-header.php';
     require_once '/srv/lg-shared/site-footer.php';
@@ -399,7 +407,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
 .lg-cmodal__frame { width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease; }
 </style>
 </head>
-<body>
+<body<?= $embed ? ' class="lg-embed"' : '' ?>>
 <?php
     // Identity from /whoami VERBATIM, mirroring archive-poc/web/_chrome.php (the
     // shared-header contract). lg_archive_poc_whoami() is static-cached this
@@ -407,7 +415,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
     // hardcoded null/[] here, so CPT headers showed an initial avatar + no admin
     // affordances, diverging from /archive/ and /hub/.
     $who = lg_archive_poc_whoami() ?: [];
-    lg_shared_render_site_header([
+    if (!$embed) lg_shared_render_site_header([
         'authenticated' => $authed,
         'tier'          => $tier,
         'display_name'  => $viewerName,
@@ -480,7 +488,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <?= (string) @file_get_contents(__DIR__ . '/engine/assets/lg-front.js') ?>
 </script>
 <?php endif; ?>
-<?php lg_shared_render_site_footer(); ?>
+<?php if (!$embed) lg_shared_render_site_footer(); ?>
 </body>
 </html>
 <?php
