@@ -1173,11 +1173,9 @@ $header_cat = $scoped_forum
         <nav class="fc-category lg-card-cat"><?= htmlspecialchars($topic['forum_title'], ENT_QUOTES, 'UTF-8') ?></nav>
       <?php endif; ?>
       <time class="fc-time lg-card-time"><?= $start_time ?></time>
-      <?php /* fc-activity — live "active … ago" + pulse-dot (NEW; desktop-only until
-               Buck arranges it on mobile — base display:none ≤640). */ ?>
-      <?php if (!empty($topic['event_time']) && $rtime !== '—'): ?>
-        <div class="fc-activity"><span class="fc-pulse" aria-hidden="true"></span>active <?= htmlspecialchars($rtime) ?> ago</div>
-      <?php endif; ?>
+      <?php /* fc-activity beacon removed per Ian 6/7 — the "active … ago" pulse-dot
+               was noise on the cards. CSS rules (.fc-activity/.fc-pulse) left in place
+               but now unused. */ ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
           <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" loading="lazy">
