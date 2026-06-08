@@ -2171,6 +2171,11 @@ a.reply-stub__author:hover { color: var(--lg-sage-d); text-decoration: underline
 }
 .feed-card__full-body p   { margin: 0 0 12px; }
 .feed-card__full-body p:last-child { margin-bottom: 0; }
+/* Collapse BuddyBoss blank-line spacer paragraphs (<p><br></p>): they stack a
+   full line-height + double margins, so paragraph gaps blow up as type scales.
+   The real <p> margins already give correct spacing. */
+.feed-card__full-body p:has(> br:only-child),
+.post__body p:has(> br:only-child) { display: none; }
 .feed-card__full-body img {
   display: block;
   max-width: 100%;
@@ -3124,7 +3129,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 
 /* Reflow header: title + one-line snippet + byline left, small thumb right */
 .hub-compact .feed-card:not(.is-verbose) .feed-card__header { margin-bottom: 0; align-items: center; gap: 12px; }
-.hub-compact .feed-card:not(.is-verbose) .feed-card__title  { font-size: 15px; margin: 0 0 2px; line-height: 1.25; }
+.hub-compact .feed-card:not(.is-verbose) .feed-card__title  { font-size: calc(16.5px * var(--lg-read-scale, 1)); margin: 0 0 2px; line-height: 1.25; }
 .hub-compact .feed-card:not(.is-verbose) .feed-card__op     { margin-top: 0; }
 .hub-compact .feed-card:not(.is-verbose) .feed-card__op-meta { margin: 2px 0 0; gap: 6px !important; }
 
@@ -3150,7 +3155,7 @@ a.forum-header__title--link:hover { text-decoration: underline; text-decoration-
 /* Per-card expand/collapse caret — only present in compact mode */
 .feed-card__compact-expand { display: none; }
 .hub-compact .feed-card__compact-expand {
-  display: inline-flex;
+  display: none;   /* Ian: drop the leftover compact caret — card click / unified expand handles it */
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
@@ -3737,3 +3742,8 @@ html.hub-theme-black .reply-stub__reply:hover {
   .feed-page .feed-card--content { padding-bottom: 14px; }
   .feed-page .feed-card--content .fc-tags { margin-top: 12px; row-gap: 6px; }
 }
+
+/* Divider between the title and the body, both compact + verbose (Ian). border-top
+   on the excerpt so it only shows when there IS a body (gated/title-only cards stay
+   clean). Appended last so it wins over the grid rule's margin. */
+.feed-page .fc-excerpt { border-top: 1px solid var(--lguser-line, #cdd6ba); margin-top: 9px; padding-top: 9px; }
