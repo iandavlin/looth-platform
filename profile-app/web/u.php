@@ -69,6 +69,24 @@ $viewLink = fn(string $v): string => '/u/' . rawurlencode($slugSafe) . '?view=' 
 // Self-suppresses for the owner viewing their own page; auth-gated when logged out.
 // Rendered inside the header card (threaded through the block renderer).
 $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$row['uuid']);
+
+// Discussion-author posting visibility (public|member) — the owner's preference for
+// whether LOGGED-OUT viewers see their real identity on DISCUSSION (forum) posts.
+// Default = 'member' (Ian 6/7): names hidden from the open web until opted Public.
+// Scope is discussions only — CPTs stay public. The column + set-endpoint + payload
+// are owned by the profile-app BACKEND lane (see docs/briefing-discussion-visibility.md);
+// read it defensively so this page never fatals before that migration lands, and so it
+// lights up automatically once the column exists.
+$discussionVis = 'member';
+if ($isOwner) {
+    $colChk = $pg->query("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='discussion_visibility' LIMIT 1");
+    if ($colChk && $colChk->fetchColumn()) {
+        $dq = $pg->prepare('SELECT discussion_visibility FROM users WHERE id = :i');
+        $dq->execute([':i' => $subjectId]);
+        $dv = $dq->fetchColumn();
+        if ($dv === 'public' || $dv === 'member') $discussionVis = $dv;
+    }
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -107,6 +125,11 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-viewas__vis-lbl{font:700 12px/1 var(--lg-font-sans)}
 .lg-viewas__vis .lg-vchip{font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer}
 .lg-viewas__vis-note{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);opacity:.8}
+/* discussion-author posting visibility toggle (owner) — sits beside Profile visibility */
+.lg-disc-seg{display:inline-flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
+.lg-disc-seg button{border:0;background:none;color:#cfd3cb;cursor:pointer;padding:6px 13px;font:700 12px/1 var(--lg-font-sans)}
+.lg-disc-seg button[aria-checked="true"]{background:var(--lg-sage);color:#fff}
+.lg-disc-seg button:disabled{opacity:.6;cursor:wait}
 
 /* Block shell */
 .lg-block{position:relative;background:#fff;border:1px solid var(--lg-line);border-radius:16px;padding:22px 24px;margin:0 0 16px}
@@ -500,6 +523,22 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
           <span class="lg-viewas__vis-lbl">Profile visibility</span>
           <?= looth_pmp_control('header', $hVis, '') ?>
           <span class="lg-viewas__vis-note"><?= looth_h($hNote) ?></span>
+        </span>
+        <?php
+          // Discussion-author posting visibility — a 2-state Public / Member-only toggle.
+          // Distinct from Profile visibility (whole-profile gate): this only controls whether
+          // logged-out viewers see the owner's real identity on their DISCUSSION posts.
+          $dvNote = $discussionVis === 'public'
+            ? 'Your name & avatar show on your discussion posts to everyone.'
+            : 'Logged-out visitors see "private member" on your discussion posts; signed-in members see you.';
+        ?>
+        <span class="lg-viewas__vis lg-viewas__disc">
+          <span class="lg-viewas__vis-lbl">Discussion posts</span>
+          <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts" data-disc-current="<?= looth_h($discussionVis) ?>">
+            <button type="button" role="radio" data-disc="public" aria-checked="<?= $discussionVis==='public'?'true':'false' ?>">Public</button>
+            <button type="button" role="radio" data-disc="member" aria-checked="<?= $discussionVis==='member'?'true':'false' ?>">Member-only</button>
+          </span>
+          <span class="lg-viewas__vis-note" id="lg-disc-note"><?= looth_h($dvNote) ?></span>
         </span>
         <?php if ($editing): ?>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
@@ -1101,6 +1140,46 @@ window.lgSortable = function (container, opts) {
       menu.style.top  = (window.scrollY + r.bottom + 6) + 'px';
       menu.style.left = (window.scrollX + Math.min(r.left, document.documentElement.clientWidth - 230)) + 'px';
       openMenu = menu;
+    });
+  });
+})();
+</script>
+
+<script>
+/* Discussion-author posting visibility (owner) — the 2-state Public / Member-only
+   toggle in the View-as bar. PUTs the live preference to the profile-app backend;
+   the Hub reads it to mask member-only authors from logged-out viewers (member-only =
+   logged-out see "private member" + fallback avatar; signed-in members always see the
+   real author). No reload: /u/ renders no discussion cards, so the choice has no
+   on-page effect — optimistic toggle + note swap is enough. Endpoint contract:
+   PUT /profile-api/v0/me/discussion-visibility {discussion_visibility:'public'|'member'}. */
+(function () {
+  var seg = document.querySelector('.lg-disc-seg');
+  if (!seg) return;
+  var note = document.getElementById('lg-disc-note');
+  var NOTE = {
+    'public': 'Your name & avatar show on your discussion posts to everyone.',
+    'member': 'Logged-out visitors see "private member" on your discussion posts; signed-in members see you.'
+  };
+  seg.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-disc]'); if (!btn) return;
+    var want = btn.getAttribute('data-disc');
+    var cur  = seg.getAttribute('data-disc-current');
+    if (want === cur) return;
+    var btns = seg.querySelectorAll('button[data-disc]');
+    btns.forEach(function (b) { b.setAttribute('aria-checked', b === btn ? 'true' : 'false'); b.disabled = true; });  // optimistic
+    fetch('/profile-api/v0/me/discussion-visibility', {
+      method: 'PUT', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ discussion_visibility: want })
+    }).then(function (r) {
+      btns.forEach(function (b) { b.disabled = false; });
+      if (!r.ok) throw 0;
+      seg.setAttribute('data-disc-current', want);
+      if (note && NOTE[want]) note.textContent = NOTE[want];
+    }).catch(function () {
+      btns.forEach(function (b) { b.setAttribute('aria-checked', b.getAttribute('data-disc') === cur ? 'true' : 'false'); b.disabled = false; });  // revert
+      alert('Could not update discussion posting visibility.');
     });
   });
 })();
