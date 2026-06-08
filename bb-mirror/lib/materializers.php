@@ -73,14 +73,81 @@ function bb_mirror_person_for(int $uid, PDO $db): array {
     }
 
     $sql = bb_mirror_upsert_sql('person',
-        ['id','slug','display_name','avatar_url','is_moderator','sync_at']);
+        ['id','slug','display_name','avatar_url','is_moderator','discussion_visibility','sync_at']);
     $db->prepare($sql)->execute([
         $uid, $u->user_nicename, $u->display_name,
         lg_bb_mirror_safe_avatar(get_avatar_url($uid)),
         bb_mirror_bool(false),
+        bb_mirror_discussion_vis($uid),
         bb_mirror_ts(time()),
     ]);
     return ['name' => $u->display_name, 'slug' => $u->user_nicename];
+}
+
+/**
+ * Discussion-author visibility for a WP user, pulled from profile-app's
+ * /profile-api/v0/users batch payload — profile-app OWNS the field (commit
+ * e8e44c7); forums.person is the synced cache the Hub feed already JOINs, so
+ * carrying it here lets the logged-out author mask ride that JOIN with NO
+ * per-render profile-app call (path (a), docs/briefing-discussion-visibility.md).
+ *
+ *   'public' → logged-out viewers see the real author.
+ *   'member' → logged-out viewers get "private member" + the fallback avatar.
+ *
+ * Defaults to 'member' — profile-app's default AND the leak-SAFE direction: a
+ * missing/failed/unbridged lookup HIDES identity, it never exposes a member-only
+ * author. Per-uid memoized for the life of the process (one sync run reuses an
+ * author's value across its posts). SINGULAR 'member' — must match profile-app.
+ */
+function bb_mirror_discussion_vis(int $uid): string {
+    static $memo = [];
+    if ($uid <= 0) return 'member';
+    if (array_key_exists($uid, $memo)) return $memo[$uid];
+    $map = bb_mirror_discussion_vis_batch([$uid]);
+    return $memo[$uid] = ($map[$uid] ?? 'member');
+}
+
+/**
+ * Batch resolver: wp_user_id => 'public'|'member' for the ids profile-app could
+ * resolve (bridged, non-archived). Unresolved ids are simply absent — callers
+ * default them to 'member'. Loopback to /profile-api/v0/users?wp_ids= (the
+ * contract route; live has no gate). On dev the cookie gate fronts it, so a gate
+ * token is forwarded when available (LG_LOOTHDEV_GATE_TOKEN env, set for the CLI
+ * reconcile/backfill; the live server-to-server path on prod needs none).
+ * Returns [] on any failure → every caller falls back to the safe 'member'.
+ */
+function bb_mirror_discussion_vis_batch(array $wpIds): array {
+    $wpIds = array_values(array_filter(array_map('intval', $wpIds), static fn($i) => $i > 0));
+    if (!$wpIds) return [];
+    $token  = (string) getenv('LG_LOOTHDEV_GATE_TOKEN');
+    $cookie = $token !== '' ? ('loothdev_auth=' . $token) : (string) ($_SERVER['HTTP_COOKIE'] ?? '');
+    $out = [];
+    foreach (array_chunk($wpIds, 100) as $chunk) {
+        $hdrs = ['Host: ' . LG_BB_MIRROR_HOST];
+        if ($cookie !== '') $hdrs[] = 'Cookie: ' . $cookie;
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => 'https://127.0.0.1/profile-api/v0/users?wp_ids=' . rawurlencode(implode(',', $chunk)),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_HTTPHEADER     => $hdrs,
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($code !== 200 || !$body) continue;
+        $data = json_decode($body, true);
+        if (!is_array($data) || !is_array($data['items'] ?? null)) continue;
+        foreach ($data['items'] as $it) {
+            $wid = (int) ($it['wp_user_id'] ?? 0);
+            if ($wid <= 0) continue;
+            $out[$wid] = (($it['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member';
+        }
+    }
+    return $out;
 }
 
 // ---------- rollup refresh -------------------------------------------------

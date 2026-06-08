@@ -207,6 +207,14 @@ CREATE TABLE IF NOT EXISTS person (
   display_name  TEXT        NOT NULL,
   avatar_url    TEXT,
   is_moderator  BOOLEAN     NOT NULL DEFAULT false,
+  -- Discussion-author mask preference, synced from profile-app (the owner) so
+  -- the Hub's logged-out author mask rides the feed's author JOIN with NO
+  -- per-render profile-app call (path (a), docs/briefing-discussion-visibility.md).
+  -- SINGULAR 'member' (2-state author mask) — must match profile-app's column +
+  -- /users payload exactly; distinct from forum.visibility's tri-state 'members'.
+  -- Default 'member' = leak-SAFE (hides identity until the user opts Public).
+  discussion_visibility TEXT NOT NULL DEFAULT 'member'
+                        CHECK (discussion_visibility IN ('public', 'member')),
   sync_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_person_slug ON person (slug);
