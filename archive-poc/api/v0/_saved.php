@@ -54,7 +54,8 @@ function lg_saved_list(PDO $pdo, ?int $wpId, ?string $uuid, int $limit = 100): a
        WHERE s.actor_key = :ak AND s.post_type <> 'topic'
       UNION ALL
       SELECT s.post_type, s.item_id, s.created_at AS saved_at,
-             t.title, NULL::text, NULL::text, 'topic'::text, NULL::text, NULL::text
+             t.title, ('/hub/#topic-' || s.item_id)::text,
+             NULLIF(t.featured_image_url, ''), 'topic'::text, NULL::text, NULL::text
         FROM discovery.saved_posts s
         JOIN forums.topic t ON t.id = s.item_id
        WHERE s.actor_key = :ak2 AND s.post_type = 'topic'
