@@ -434,7 +434,18 @@ if ($scoped_forum) {
         $q_content = "AND c.tsv @@ websearch_to_tsquery('english', :hq_c)";
     }
 
+    // Hot-sort engagement: rank on the LIVE reaction store (discovery.card_reactions,
+    // the one count source per the reaction contract), NOT the stale denormalized
+    // content_item.like_count. Pre-aggregate once (card_reactions is net-new/small;
+    // idx (post_type,item_id,slug)) and LEFT JOIN per branch. Counts ALL reactions on
+    // the target as the engagement signal — any reaction now feeds hotness, and topics
+    // (was hardcoded 0) finally contribute. Display counts are unchanged (rendered
+    // separately via lg_card_reactions_for_items).
     $topic_sql = "
+      WITH rx AS (
+        SELECT post_type, item_id, COUNT(*) AS n
+          FROM discovery.card_reactions GROUP BY post_type, item_id
+      )
       SELECT * FROM (
         SELECT
             'topic'::text                                              AS card_type,
@@ -446,7 +457,7 @@ if ($scoped_forum) {
             COALESCE(t.featured_image_url, first_img.url, reply_img.url) AS card_image,
             t.tags                                                     AS tags,
             t.reply_count,
-            0                                                          AS like_count,
+            COALESCE(trx.n, 0)                                         AS like_count,
             t.last_active_at                                           AS event_time,
             COALESCE(t.author_name, 'Anonymous')                       AS author_name,
             t.author_id,
@@ -487,6 +498,7 @@ if ($scoped_forum) {
              ORDER BY r.created_at ASC, a.id ASC
              LIMIT 1
           ) reply_img ON true
+          LEFT JOIN rx trx ON trx.post_type = 'topic' AND trx.item_id = t.id
          WHERE t.status = 'publish' AND f.visibility = 'public'
            AND t.forum_id NOT IN (3876)
            $q_topic
@@ -503,7 +515,7 @@ if ($scoped_forum) {
             c.thumb_url                                                AS card_image,
             NULL::text[]                                               AS tags,
             c.reply_count,
-            c.like_count,
+            COALESCE(crx.n, 0)                                         AS like_count,
             COALESCE(c.last_activity, c.published_at)                  AS event_time,
             COALESCE(c.author_name, 'Anonymous')                       AS author_name,
             c.author_id,
@@ -523,6 +535,7 @@ if ($scoped_forum) {
             c.forum_label                                              AS content_forum_label,
             c.subforum_label                                           AS content_subforum_label
           FROM discovery.content_item c
+          LEFT JOIN rx crx ON crx.post_type = c.cpt AND crx.item_id = c.id
          WHERE c.tier IN ($tier_in)
            $q_content
       ) u
