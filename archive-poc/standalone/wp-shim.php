@@ -46,13 +46,18 @@ function lg_pc_author(): array { return lg_pc()['author'] ?? []; }
    references at save time. */
 function lg_standalone_media_resolver(int $id): array {
     $m = lg_pc()['media'][(string) $id] ?? lg_pc()['media'][$id] ?? null;
-    if (!is_array($m)) return ['id' => $id, 'url' => '', 'alt' => '', 'mime' => '', 'sizes' => []];
+    if (!is_array($m)) return ['id' => $id, 'url' => '', 'alt' => '', 'mime' => '', 'sizes' => [],
+                               'title' => '', 'filename' => '', 'filesize_human' => ''];
     return [
-        'id'    => $id,
-        'url'   => (string) ($m['url'] ?? ''),
-        'alt'   => (string) ($m['alt'] ?? ''),
-        'mime'  => (string) ($m['mime'] ?? ''),
-        'sizes' => is_array($m['sizes'] ?? null) ? $m['sizes'] : [],
+        'id'             => $id,
+        'url'            => (string) ($m['url'] ?? ''),
+        'alt'            => (string) ($m['alt'] ?? ''),
+        'mime'           => (string) ($m['mime'] ?? ''),
+        'sizes'          => is_array($m['sizes'] ?? null) ? $m['sizes'] : [],
+        // Download-block fields - pre-baked in the media map by the materializer.
+        'title'          => (string) ($m['title'] ?? ''),
+        'filename'       => (string) ($m['filename'] ?? ''),
+        'filesize_human' => (string) ($m['filesize_human'] ?? ''),
     ];
 }
 
