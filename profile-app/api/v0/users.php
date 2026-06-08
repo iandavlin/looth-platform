@@ -29,6 +29,9 @@ $shape = static function (array $r) use ($byWp): array {
         'display_name' => $r['display_name'] ?? null,
         'avatar_url'   => $r['avatar_url'] ?? null,
         'bio'          => $r['at_a_glance'] ?? null,   // single-source author bio → bylines/author box
+        // Discussion-author mask preference (public|member, default member). Carried so the
+        // archive-poc person-sync can copy it into forums.person for the Hub logged-out mask.
+        'discussion_visibility' => (($r['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member',
     ];
     if ($byWp) $item['wp_user_id'] = (int) $r['wp_user_id'];   // map back to the post author
     return $item;
@@ -46,7 +49,7 @@ if ($byWp) {
 
     $ph = implode(',', array_fill(0, count($wpIds), '?'));
     $st = Db::pg()->prepare("
-        SELECT b.wp_user_id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance
+        SELECT b.wp_user_id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance, u.discussion_visibility
         FROM users u
         JOIN wp_user_bridge b ON b.user_id = u.id
         WHERE b.wp_user_id IN ($ph) AND u.archived_at IS NULL
@@ -69,7 +72,7 @@ if ($byWp) {
 
     $ph = implode(',', array_fill(0, count($uuids), '?'));
     $st = Db::pg()->prepare("
-        SELECT uuid, slug, display_name, avatar_url, at_a_glance
+        SELECT uuid, slug, display_name, avatar_url, at_a_glance, discussion_visibility
         FROM users
         WHERE uuid IN ($ph) AND archived_at IS NULL
     ");

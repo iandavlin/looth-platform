@@ -93,7 +93,7 @@ final class Whoami
         if ($cached !== null) return $cached;
 
         $stmt = Db::pg()->prepare('
-            SELECT u.uuid, u.slug, u.display_name, u.avatar_url
+            SELECT u.uuid, u.slug, u.display_name, u.avatar_url, u.discussion_visibility
             FROM users u JOIN wp_user_bridge b ON b.user_id = u.id
             WHERE b.wp_user_id = :w
         ');
@@ -109,7 +109,7 @@ final class Whoami
     private static function buildAuthed(int $wpUserId, string $userUuid): array
     {
         $stmt = Db::pg()->prepare('
-            SELECT u.uuid, u.slug, u.display_name, u.avatar_url
+            SELECT u.uuid, u.slug, u.display_name, u.avatar_url, u.discussion_visibility
             FROM users u WHERE u.uuid = :u
         ');
         $stmt->execute([':u' => strtolower($userUuid)]);
@@ -141,6 +141,10 @@ final class Whoami
             'slug'          => $row['slug'] ?: null,
             'display_name'  => $row['display_name'] ?? null,
             'avatar_url'    => $row['avatar_url'] ?? null,
+            // Discussion-author mask preference (public|member). Default member (Ian 6/7).
+            // The Hub reads this (via forums.person sync) to mask member-only authors
+            // from logged-out viewers; scope is discussions only.
+            'discussion_visibility' => (($row['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member',
             'tier'          => $tier,
             'provenance'    => $provenance,
             'capabilities'  => self::capabilitiesFor($wpUserId, $tier, $pollerCaps),
