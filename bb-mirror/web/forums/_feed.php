@@ -358,6 +358,7 @@ if ($scoped_forum) {
             COALESCE(t.author_name, 'Anonymous')                       AS author_name,
             t.author_id,
             p.slug                                                     AS author_slug,
+            t.is_anon::int                                             AS is_anon,
             t.created_at,
             t.forum_id,
             f.slug                                                     AS forum_slug,
@@ -468,6 +469,7 @@ if ($scoped_forum) {
             f.title                                                    AS forum_title,
             pf.slug                                                    AS parent_forum_slug,
             pf.title                                                   AS parent_forum_title,
+            t.is_anon::int                                             AS is_anon,
             NULL::text                                                 AS content_kind,
             NULL::text                                                 AS content_tier,
             NULL::text                                                 AS content_url,
@@ -526,6 +528,7 @@ if ($scoped_forum) {
             NULL::text                                                 AS forum_title,
             NULL::text                                                 AS parent_forum_slug,
             NULL::text                                                 AS parent_forum_title,
+            NULL::int                                                  AS is_anon,
             c.kind                                                     AS content_kind,
             c.tier                                                     AS content_tier,
             c.url                                                      AS content_url,
@@ -557,6 +560,18 @@ if ($scoped_forum) {
 }
 
 $topics = $stmt->fetchAll();
+
+// -- Anonymous-posting mask (anon-rebuild lane) -------------------------------
+// Apply BEFORE author identity resolution so masked authors are both leak-safe
+// (name/slug/avatar/author_id ABSENT from the row → never reach the DOM) AND
+// cheaper (a nulled author_id is skipped by the profile-app batch below). Mods
+// keep the real author + a "(posted anonymously)" marker. Topic cards only —
+// content cards are CPTs, never anonymous.
+$can_mod = lg_bb_mirror_can_moderate();
+foreach ($topics as &$_t) {
+    if (($_t['card_type'] ?? 'topic') === 'topic') lg_bb_mirror_mask_anon($_t, $can_mod);
+}
+unset($_t);
 
 // Live author avatars from profile-app, keyed by WP user id, for card bylines
 // (both topic.author_id and content.author_id are WP user ids). One batch call.
@@ -632,8 +647,10 @@ if ($topic_ids) {
         SELECT DISTINCT ON (r.topic_id)
                r.topic_id, r.id AS reply_id,
                COALESCE(r.author_name, 'Anonymous') AS author_name,
+               r.author_id,
                p.slug AS author_slug,
                p.avatar_url AS avatar_url,
+               r.is_anon::int AS is_anon,
                LEFT(r.content_text, 200) AS excerpt,
                r.content_html,
                r.created_at,
@@ -660,6 +677,7 @@ if ($topic_ids) {
     $rstmt->bindValue(':ids', $id_list);
     $rstmt->execute();
     foreach ($rstmt->fetchAll() as $row) {
+        lg_bb_mirror_mask_anon($row, $can_mod);   // leak-safe anon mask before render
         $reply_teaser[(int)$row['topic_id']] = $row;
     }
 }
@@ -668,10 +686,11 @@ if ($topic_ids) {
 $reply_facepile = []; // topic_id → [ {author_name, author_slug, avatar_url}, … ≤3 ]
 if ($topic_ids) {
     $fp_sql = "
-        SELECT topic_id, author_name, author_slug, avatar_url FROM (
+        SELECT topic_id, author_name, author_slug, avatar_url, is_anon FROM (
           SELECT r.topic_id,
                  COALESCE(r.author_name, 'Anonymous') AS author_name,
                  p.slug AS author_slug, p.avatar_url AS avatar_url,
+                 bool_or(r.is_anon)::int AS is_anon,
                  row_number() OVER (PARTITION BY r.topic_id ORDER BY MAX(r.created_at) DESC) AS rn
             FROM reply r
             LEFT JOIN person p ON p.id = r.author_id
@@ -683,6 +702,7 @@ if ($topic_ids) {
     $fpst->bindValue(':ids', $id_list);
     $fpst->execute();
     foreach ($fpst->fetchAll() as $row) {
+        lg_bb_mirror_mask_anon($row, $can_mod);   // leak-safe anon mask before render
         $reply_facepile[(int)$row['topic_id']][] = $row;
     }
 }
@@ -1130,6 +1150,12 @@ $header_cat = $scoped_forum
       $author_link = $author_slug
           ? '<a class="feed-card__op-author" href="/u/' . rawurlencode((string)$author_slug) . '">' . $author . '</a>'
           : '<span class="feed-card__op-author">' . $author . '</span>';
+      // Admin/mod reveal (anon-rebuild lane): is_anon rows keep the real author for
+      // moderators (lg_bb_mirror_mask_anon set _anon_revealed) + this marker. For
+      // everyone else the row was scrubbed above, so $author is "Anonymous" already.
+      if (!empty($topic['_anon_revealed'])) {
+          $author_link .= ' <span class="lg-anon-marker" title="This member chose to post anonymously">(posted anonymously)</span>';
+      }
       // OP excerpt: format from content_html so @mentions + URLs are clickable.
       // Falls back to the plain content_text teaser if there's no HTML.
       $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 440, $db); // ~2x (Ian)

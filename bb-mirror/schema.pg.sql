@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS topic (
   author_name       TEXT,
   author_slug       TEXT,
   anonymous_name    TEXT,
+  is_anon           BOOLEAN     NOT NULL DEFAULT false,   -- per-post "Post anonymously" flag (_lg_anon meta)
 
   status            TEXT        NOT NULL DEFAULT 'publish'
                                 CHECK (status IN ('publish','closed','spam','trash','pending')),
@@ -157,6 +158,7 @@ CREATE TABLE IF NOT EXISTS reply (
   author_name     TEXT,
   author_slug     TEXT,
   anonymous_name  TEXT,
+  is_anon         BOOLEAN     NOT NULL DEFAULT false,   -- per-post "Post anonymously" flag (_lg_anon meta)
 
   status          TEXT        NOT NULL DEFAULT 'publish'
                               CHECK (status IN ('publish','closed','spam','trash','pending')),
@@ -172,6 +174,16 @@ CREATE INDEX IF NOT EXISTS idx_reply_forum_created ON reply (forum_id, created_a
 CREATE INDEX IF NOT EXISTS idx_reply_author        ON reply (author_id);
 CREATE INDEX IF NOT EXISTS idx_reply_parent        ON reply (parent_reply_id) WHERE parent_reply_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_reply_search        ON reply USING GIN (search_doc);
+
+-- ============================================================================
+-- Anonymous-posting flag (per-post "Post anonymously" toggle, anon-rebuild lane)
+-- Idempotent ADD for installs created before is_anon existed. Source: WP post
+-- meta _lg_anon (set at write by the bb-mirror-sync mu-plugin); carried into pg
+-- by the topic/reply materializers. The Hub render masks anon authors leak-safe
+-- for non-moderators (see lg_bb_mirror_mask_anon in config.php).
+-- ============================================================================
+ALTER TABLE topic ADD COLUMN IF NOT EXISTS is_anon BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE reply ADD COLUMN IF NOT EXISTS is_anon BOOLEAN NOT NULL DEFAULT false;
 
 -- ============================================================================
 -- forum_subscription

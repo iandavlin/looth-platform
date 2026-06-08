@@ -70,6 +70,40 @@ function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert
 }
 }
 
+// -- Anonymous-posting capture (anon-rebuild lane) ---------------------------
+// The Hub composer ("Post anonymously" toggle) sends `_lg_anon` with the
+// topic/reply write. Forum writes ride bbPress via JSON REST (BuddyBoss
+// /topics, /reply, or bb-mirror's reply.php which forwards in-process), so the
+// flag arrives in the JSON request body, NOT $_REQUEST. We read it once from
+// php://input (re-readable for application/json under PHP-FPM) and stamp the
+// `_lg_anon` post meta on bbp_new_topic / bbp_new_reply. The materializer then
+// carries the meta into forums.{topic,reply}.is_anon at sync (deferred to
+// shutdown, after this meta is written). Absence = not anonymous; we never
+// write a 0 (keeps meta clean + the materializer reads !empty).
+if (!function_exists('bb_mirror_request_anon_flag')) {
+function bb_mirror_request_anon_flag(): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    $cached = false;
+    if (isset($_REQUEST['_lg_anon'])) {
+        $cached = (bool)(int)$_REQUEST['_lg_anon'];
+        return $cached;
+    }
+    $raw = file_get_contents('php://input');
+    if ($raw !== false && $raw !== '' && $raw[0] === '{') {
+        $body = json_decode($raw, true);
+        if (is_array($body) && !empty($body['_lg_anon'])) $cached = true;
+    }
+    return $cached;
+}
+}
+add_action('bbp_new_topic', function ($topic_id) {
+    if (bb_mirror_request_anon_flag()) update_post_meta((int)$topic_id, '_lg_anon', 1);
+}, 5, 1);   // prio 5: BEFORE the prio-99 deferred sync dispatch queues
+add_action('bbp_new_reply', function ($reply_id) {
+    if (bb_mirror_request_anon_flag()) update_post_meta((int)$reply_id, '_lg_anon', 1);
+}, 5, 1);
+
 // Deferred dispatch: fires on `shutdown` instead of immediately. Needed for
 // topic/reply CREATE + EDIT because BuddyBoss attaches forum media via an
 // `edit_post` priority-999 hook that runs AFTER bbp_new_topic/bbp_new_reply.

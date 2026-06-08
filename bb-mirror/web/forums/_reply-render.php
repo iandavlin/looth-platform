@@ -263,6 +263,12 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         } else {
             echo '<span class="reply-stub__author">' . $ra . '</span>';
         }
+        // Admin/mod reveal (anon-rebuild lane): is_anon replies keep the real author
+        // for moderators + this marker; for non-mods the row was scrubbed upstream
+        // (author_name "Anonymous", slug/avatar absent) so identity never reaches here.
+        if (!empty($r['_anon_revealed'])) {
+            echo ' <span class="lg-anon-marker" title="This member chose to post anonymously">(posted anonymously)</span>';
+        }
         echo '<time class="reply-stub__time">' . $rtime_r . '</time>';
         if ($show_reply_btn && isset($r['reply_id']) && lg_bb_mirror_can_post()) {
             echo '<button class="reply-stub__reply" type="button"'

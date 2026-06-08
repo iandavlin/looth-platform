@@ -23,8 +23,10 @@ $db = bb_mirror_db();
 $rs = $db->prepare("
     SELECT r.id AS reply_id, r.parent_reply_id,
            COALESCE(r.author_name, 'Anonymous') AS author_name,
+           r.author_id,
            p.slug AS author_slug,
            p.avatar_url AS avatar_url,
+           r.is_anon::int AS is_anon,
            LEFT(r.content_text, 200) AS excerpt,
            r.content_html,
            r.created_at,
@@ -46,8 +48,13 @@ $flat = $rs->fetchAll();
 if (!$flat) { header('Content-Type: text/html; charset=utf-8'); echo ''; exit; }
 
 // Build the tree: index by id, attach child ids, collect top-level roots.
+// Anonymous-posting mask (anon-rebuild lane): scrub anon authors leak-safe for
+// non-moderators BEFORE the tree is built, so even the "↪ @parent" deep-reply
+// prefix (sourced from a parent node's author_name) reads "Anonymous".
+$can_mod = lg_bb_mirror_can_moderate();
 $by_id = [];
 foreach ($flat as $r) {
+    lg_bb_mirror_mask_anon($r, $can_mod);
     $by_id[(int)$r['reply_id']] = $r + ['_children' => []];
 }
 $top = [];

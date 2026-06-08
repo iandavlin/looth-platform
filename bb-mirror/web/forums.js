@@ -1103,6 +1103,8 @@
     function ntmShowOverlay(overrideForumId) {
       ntmOverlay.hidden = false;
       document.body.classList.add('ntm-active');
+      var ntmAnonChk = document.getElementById('ntm-anon-check');
+      if (ntmAnonChk) ntmAnonChk.checked = false;   // anon toggle defaults off per post (Phase 1)
       if (ntmAuthState === 'idle') {
         ntmLoadAuth(overrideForumId);
       } else if (ntmAuthState === 'authed' && overrideForumId) {
@@ -1227,6 +1229,10 @@
       var tagsEl = document.getElementById('ntm-tags');
       var tags = tagsEl && tagsEl.value.trim();
       if (tags) payload.topic_tags = tags;
+      // Post anonymously (anon-rebuild lane): server stamps _lg_anon meta on the
+      // new topic → forums.topic.is_anon → masked render for non-moderators.
+      var ntmAnonChk = document.getElementById('ntm-anon-check');
+      if (ntmAnonChk && ntmAnonChk.checked) payload._lg_anon = 1;
 
       fetch(ntmRestBase + '/topics', {
         method: 'POST',
@@ -1375,6 +1381,8 @@
       frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
+      var frmAnonChk = document.getElementById('frm-anon-check');
+      if (frmAnonChk) frmAnonChk.checked = false;   // anon toggle defaults off per reply (Phase 1)
     }
 
     function frmSetState(s) {
@@ -1459,6 +1467,9 @@
       if (content) frmPayload.content = content;
       if (frmMediaIds.length) frmPayload.bbp_media = frmMediaIds;
       if (frmParentId) frmPayload.reply_to = frmParentId;   // nested reply
+      // Reply anonymously (anon-rebuild lane): server stamps _lg_anon on the reply.
+      var frmAnonChk = document.getElementById('frm-anon-check');
+      if (frmAnonChk && frmAnonChk.checked) frmPayload._lg_anon = 1;
       fetch(frmRestBase + '/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': frmNonce },

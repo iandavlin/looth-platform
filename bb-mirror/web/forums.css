@@ -2749,6 +2749,29 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   color: var(--fg-soft);
 }
 
+/* "Post anonymously" toggle (anon-rebuild lane) — composer row in #ntm-form /
+   #frm-form. Shared markup; mobile composer (Buck) inherits these. */
+.ntm-anon {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: var(--s3) 0 0;
+  cursor: pointer;
+  font: 13px var(--font-body);
+  color: var(--fg);
+  user-select: none;
+}
+.ntm-anon__check { margin-top: 2px; flex: 0 0 auto; cursor: pointer; }
+.ntm-anon__hint  { color: var(--fg-soft); font-size: 12px; }
+
+/* Admin/mod-only "(posted anonymously)" reveal marker on a masked author byline. */
+.lg-anon-marker {
+  font-size: .82em;
+  font-style: italic;
+  color: var(--fg-soft, #6b7280);
+  white-space: nowrap;
+}
+
 /* ══════════════════════════════════════════════════════════
    RENDERED EMBEDS (client-side)
    ══════════════════════════════════════════════════════════ */

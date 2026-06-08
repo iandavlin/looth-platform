@@ -222,6 +222,58 @@ function lg_bb_mirror_whoami(): ?array {
     return $result;
 }
 }
+// ---------- anonymous-posting: viewer-moderator check + author mask ----------
+//
+// The per-post "Post anonymously" feature (anon-rebuild lane). A topic/reply
+// carrying is_anon renders as "Anonymous" + generic avatar to everyone EXCEPT
+// admins/mods, who see the real author + a "(posted anonymously)" marker.
+//
+// Reveal authz is server-enforced (contract: admin/mod only). We read the SAME
+// capability set the tier-gate bypass uses (lg_bb_mirror_whoami caps), so a
+// plain member can't self-elevate. moderate_comments is the canonical mod cap
+// (matches the comment-delete authz pattern); the others are admin/editor.
+if (!function_exists('lg_bb_mirror_can_moderate')) {
+function lg_bb_mirror_can_moderate(): bool {
+    static $can = null;
+    if ($can !== null) return $can;
+    $can  = false;
+    $wa   = function_exists('lg_bb_mirror_whoami') ? lg_bb_mirror_whoami() : null;
+    $caps = is_array($wa) ? (array)($wa['capabilities'] ?? []) : [];
+    foreach (['moderate_comments', 'manage_options', 'administrator',
+              'edit_others_posts', 'activate_plugins'] as $c) {
+        if (!empty($caps[$c]) || in_array($c, $caps, true)) { $can = true; break; }
+    }
+    return $can;
+}
+}
+
+// Leak-safe anon mask. Mutates an author-bearing row IN PLACE before render:
+//   • non-moderator + is_anon  → identity ABSENT: name→"Anonymous", slug/avatar/
+//     author_id nulled so no /u/ link, no real avatar, no profile resolution.
+//     (Same discipline as gated teasers — suppressed server-side, not CSS-hidden.)
+//   • moderator + is_anon      → identity KEPT, $row['_anon_revealed']=true so the
+//     renderer can append the "(posted anonymously)" marker.
+// Recognizes the standard author columns; absent keys are skipped. is_anon is
+// selected as ::int ('1'/'0') so the truthy check is reliable across PDO casts.
+// Returns true when the row was anonymous (either masked or revealed).
+if (!function_exists('lg_bb_mirror_mask_anon')) {
+function lg_bb_mirror_mask_anon(array &$row, bool $can_mod): bool {
+    $v = $row['is_anon'] ?? null;
+    $is_anon = ($v === true || $v === 1 || $v === '1' || $v === 't' || $v === 'true');
+    if (!$is_anon) return false;
+    if ($can_mod) {
+        $row['_anon_revealed'] = true;   // keep real identity; renderer shows marker
+        return true;
+    }
+    $row['author_name'] = 'Anonymous';
+    if (array_key_exists('author_slug', $row)) $row['author_slug'] = null;
+    if (array_key_exists('avatar_url',  $row)) $row['avatar_url']  = null;
+    if (array_key_exists('author_id',   $row)) $row['author_id']   = null;
+    $row['_anon_masked'] = true;
+    return true;
+}
+}
+
 // ---------- pagination ----------
 if (!defined('LG_BB_MIRROR_PER_PAGE')) define('LG_BB_MIRROR_PER_PAGE', 15);
 

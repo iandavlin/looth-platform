@@ -351,6 +351,16 @@ function bb_mirror_new_topic_modal(): void
         <button type="button" class="ntm-qtag" data-tag="weeklyyes">+ weeklyyes</button>
       </div>
 
+      <!-- Post anonymously (anon-rebuild lane): per-post toggle. Sends _lg_anon
+           with the topic write; the post renders as "Anonymous" to members
+           (admins/mods still see the real author). Shared markup — Buck's mobile
+           composer reads #ntm-form; announce any shape change to buck-COORD. -->
+      <label class="ntm-anon" for="ntm-anon-check">
+        <input type="checkbox" class="ntm-anon__check" id="ntm-anon-check" name="_lg_anon" value="1">
+        <span class="ntm-anon__tx">Post anonymously
+          <span class="ntm-anon__hint">— your name &amp; avatar are hidden from other members</span></span>
+      </label>
+
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="ntm-submit">Post</button>
         <button type="button" class="ntm-cancel" id="ntm-cancel">Cancel</button>
@@ -384,6 +394,12 @@ function bb_mirror_new_topic_modal(): void
       <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"
                 placeholder="Share your thoughts…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
+      <!-- Post anonymously (anon-rebuild lane): per-reply toggle, sends _lg_anon. -->
+      <label class="ntm-anon" for="frm-anon-check">
+        <input type="checkbox" class="ntm-anon__check" id="frm-anon-check" name="_lg_anon" value="1">
+        <span class="ntm-anon__tx">Reply anonymously
+          <span class="ntm-anon__hint">— your name &amp; avatar are hidden from other members</span></span>
+      </label>
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
         <button type="button" class="ntm-cancel" id="frm-cancel">Cancel</button>

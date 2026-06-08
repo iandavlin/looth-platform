@@ -278,7 +278,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         : null;
 
     $cols = ['id','forum_id','slug','title','content_html','content_text','featured_image_url',
-             'author_id','author_name','author_slug','anonymous_name',
+             'author_id','author_name','author_slug','anonymous_name','is_anon',
              'status','sticky_kind','voice_count','reply_count',
              'last_reply_id','last_active_id','last_active_at',
              'tier_gate','tags','created_at','modified_at','sync_at'];
@@ -288,6 +288,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text, $featured_url,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
+        bb_mirror_bool(!empty($m['_lg_anon'])),
         $m['_bbp_topic_status'] ?? $p->post_status,
         $sticky,
         (int)($m['_bbp_voice_count']     ?? 0),
@@ -319,7 +320,7 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $person = bb_mirror_person_for((int)$p->post_author, $db);
 
     $cols = ['id','topic_id','forum_id','parent_reply_id','content_html','content_text',
-             'author_id','author_name','author_slug','anonymous_name',
+             'author_id','author_name','author_slug','anonymous_name','is_anon',
              'status','created_at','modified_at','sync_at'];
     $sql = bb_mirror_upsert_sql('reply', $cols);
     $db->prepare($sql)->execute([
@@ -327,6 +328,7 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
         wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
+        bb_mirror_bool(!empty($m['_lg_anon'])),
         $p->post_status,
         bb_mirror_ts(strtotime($p->post_date_gmt . ' UTC')),
         bb_mirror_ts(strtotime($p->post_modified_gmt . ' UTC')),
