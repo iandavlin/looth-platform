@@ -4,8 +4,14 @@
  *
  * Renders the sponsor listing from the indexed sponsor-page CPT (direct sqlite
  * read via lg_archive_poc_pdo(), no WP boot), each linking to its standalone
- * /sponsor-page/<slug>/ surface. thumb_url is used as the logo when the index
- * has one; otherwise the card falls back to the sponsor name.
+ * /sponsors/<slug>/ surface (the v2 sponsor page). The indexed `url` still
+ * carries the old /sponsor-page/<slug>/ permalink, so we rederive the link from
+ * the slug rather than trust the stale column. thumb_url is used as the logo
+ * when the index has one; otherwise the card falls back to the sponsor name.
+ *
+ * TODO (logos): the index has no thumb_url for sponsors yet. Cleanest fill is to
+ * backfill content_item.thumb_url from the brand store (/profile-api/v0/sponsor
+ * logo_url) at INDEX time — not a per-request HTTP fetch from this public page.
  */
 declare(strict_types=1);
 require __DIR__ . '/_page-shell.php';
@@ -48,10 +54,15 @@ lg_page_open($is_member, 'Our Sponsors', 'The sponsors who support The Looth Gro
 <?php else: ?>
   <div class="sponsor-grid">
     <?php foreach ($sponsors as $s):
-        $url   = (string) ($s['url'] ?? '');
         $name  = (string) ($s['title'] ?? 'Sponsor');
         $thumb = trim((string) ($s['thumb_url'] ?? ''));
-        if ($url === '') continue;
+        /* Link to the new /sponsors/<slug>/ surface. Derive the slug from the
+           indexed permalink's last path segment so we don't depend on the index
+           being re-pointed off the old /sponsor-page/ url. */
+        $slug = trim((string) parse_url((string) ($s['url'] ?? ''), PHP_URL_PATH), '/');
+        $slug = ($p = strrpos($slug, '/')) !== false ? substr($slug, $p + 1) : $slug;
+        if ($slug === '') continue;
+        $url = '/sponsors/' . rawurlencode($slug) . '/';
     ?>
     <a class="sponsor-card" href="<?= h($url) ?>">
       <?php if ($thumb !== ''): ?>

@@ -22,7 +22,7 @@ final class Plugin
      *  requires the meta), so unconverted events keep the legacy template —
      *  an incremental, per-post cutover. */
     public const MANAGED_CPTS = [
-        'post-imgcap', 'post-type-videos', 'sponsor-post', 'event',
+        'post-imgcap', 'post-type-videos', 'sponsor-post', 'sponsor-page', 'event',
         'loothprint', 'loothcuts', 'useful_links', 'document', 'member-benefit',
         'shorty',
     ];
