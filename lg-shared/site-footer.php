@@ -39,25 +39,23 @@ function lg_shared_render_site_footer(array $ctx = []): void
       <div class="lg-chrome-foot__col">
         <h3 class="lg-chrome-foot__h">Browse</h3>
         <ul>
-          <li><a href="/archive-poc/">Front page</a></li>
-          <li><a href="/calendar/">Calendar</a></li>
+          <li><a href="/">Home</a></li>
+          <li><a href="/events/">Events</a></li>
           <li><a href="/sponsors/">Sponsors</a></li>
-          <li><a href="/shops/">Shops</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">
         <h3 class="lg-chrome-foot__h">Community</h3>
         <ul>
-          <li><a href="/forums-poc/">Forums</a></li>
+          <li><a href="/hub/">The Hub</a></li>
           <li><a href="/archive-poc/">Activity</a></li>
-          <li><a href="/members/">Members</a></li>
+          <li><a href="/directory/members/">Members</a></li>
         </ul>
       </div>
       <div class="lg-chrome-foot__col">
         <h3 class="lg-chrome-foot__h">About</h3>
         <ul>
           <li><a href="/about/">About</a></li>
-          <li><a href="/lgjoin/">Membership</a></li>
           <li><a href="/contact/">Contact</a></li>
         </ul>
       </div>
@@ -67,9 +65,8 @@ function lg_shared_render_site_footer(array $ctx = []): void
   <div class="lg-chrome-foot__legal">
     <span>© <?= date('Y') ?> The Looth Group. All rights reserved.</span>
     <nav aria-label="Legal">
-      <a href="/privacy/">Privacy</a>
-      <a href="/terms/">Terms</a>
-      <a href="/billing-refund/">Billing &amp; Refund</a>
+      <a href="https://loothtool.com/privacy/">Privacy</a>
+      <a href="https://loothtool.com/terms/">Terms</a>
     </nav>
   </div>
 </footer>

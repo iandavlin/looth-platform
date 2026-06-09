@@ -19,7 +19,7 @@
  *       // 'logo_url'   => 'https://…/logo.png',     // optional override
  *       // 'search_id'  => 'chrome-q',               // optional; id of the <input>
  *       // 'search_placeholder' => 'Search…',        // optional
- *       // 'profile_url'        => '/profile/edit',   // optional; default /profile/edit
+ *       // 'profile_url'        => '/u/<slug>',       // optional; viewer's public profile page (/u/<slug>, which for the owner is the inline editor). Default /profile/edit only when slug-less.
  *       // 'logout_url'         => wp_logout_url(),  // optional; WP callers pass nonce'd URL
  *   ]);
  *
@@ -64,7 +64,7 @@ if (!function_exists('lg_shared_render_site_header')) {
  *   logo_url?: string,
  *   search_id?: string,
  *   search_placeholder?: string,
- *   profile_url?: string,
+ *   profile_url?: string,  // viewer's public profile page (/u/<slug>; owner edits inline there). Default /profile/edit when slug-less.
  *   logout_url?: string,   // optional; WP callers pass wp_logout_url() for nonce'd URL
  *   before_nav?: string,   // raw HTML injected between logo and <nav> (e.g. archive-poc back-link)
  * } $ctx
@@ -79,14 +79,14 @@ function lg_shared_render_site_header(array $ctx): void
     $caps          = (array)($ctx['capabilities'] ?? []);
     $msg_unread    = $ctx['msg_unread']   ?? null;   // null = lazy-load
     $notif_unread  = $ctx['notif_unread'] ?? null;   // null = lazy-load
-    $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');
+    $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');  // viewer's public profile (/u/<slug>); /profile/edit is only the slug-less fallback
     $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
     // P9 hooks: msg/notif icon hrefs. Default to BB paths for now; P9 modals will override.
     $msg_url       = (string)($ctx['msg_url']   ?? '/members/me/messages/');
     $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
-    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'archive'|'forum'|'events'|'members'
+    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'archive'|'hub'|'events'|'members'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
 
@@ -191,23 +191,26 @@ function lg_shared_render_site_header(array $ctx): void
 
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
-        <?php if ($active_nav !== 'archive'):  ?><li><a href="/archive/">Archive</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'forum'):   ?><li><a href="/forum/">Forum</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'events'):  ?><li><a href="/events/">Events</a></li><?php endif; ?>
-        <?php if ($active_nav !== 'members'): ?><li><a href="/directory/members/">Members</a></li><?php endif; ?>
+        <?php
+        // Always render the full nav on every surface; mark the current section
+        // with aria-current + .is-active (consumers pass $active_nav). Loothtool
+        // is external — it has no slug and is never marked active.
+        $nav_items = [
+            'stream'  => ['/stream/',            'Stream'],
+            'hub'     => ['/hub/',               'The Hub'],
+            'events'  => ['/events/',            'Events'],
+            'members' => ['/directory/members/', 'The Map'],
+        ];
+        foreach ($nav_items as $slug => [$href, $label]):
+            $is_active = ($active_nav === $slug);
+            ?>
+        <li><a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a></li>
+        <?php endforeach; ?>
+        <li><a href="https://loothtool.com/">Loothtool</a></li>
       </ul>
     </nav>
 
     <div class="lg-chrome__aside">
-
-      <button class="lg-chrome__search-btn" type="button"
-              aria-label="Search the archive" data-chrome-search>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-             stroke="currentColor" stroke-width="2"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-      </button>
 
       <?php if ($authenticated): ?>
 
@@ -299,16 +302,22 @@ function lg_shared_render_site_header(array $ctx): void
           <ul class="lg-chrome__account-menu" id="lg-account-menu"
               role="menu" aria-label="Account menu" hidden>
             <li role="none">
-              <a role="menuitem" href="<?= $h($profile_url) ?>">Edit Profile</a>
+              <a role="menuitem" href="<?= $h($profile_url) ?>">My Profile</a>
             </li>
+            <?php /* Patreon-member-facing — always visible to logged-in members */ ?>
             <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/membership-guide/">Membership Guide</a>
+              <a role="menuitem" href="/connect-your-patreon/">Connect Your Patreon</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/my-gifts/">My Gifts</a>
+              <a role="menuitem" href="/membership-guide/">Membership Guide</a>
+            </li>
+            <?php if ($manage_opts): /* Stripe money pages — dormant pre-launch; admin-only QA until cut */ ?>
+            <li role="none" class="lg-chrome__account-menu-divider"></li>
+            <li role="none">
+              <a role="menuitem" href="/lgjoin/">Join</a>
             </li>
             <li role="none">
               <a role="menuitem" href="/lggift-buy/">Gift Memberships</a>
@@ -317,11 +326,18 @@ function lg_shared_render_site_header(array $ctx): void
               <a role="menuitem" href="/lggift/">Redeem a Gift</a>
             </li>
             <li role="none">
+              <a role="menuitem" href="/my-gifts/">My Gifts</a>
+            </li>
+            <li role="none">
+              <a role="menuitem" href="/affiliate-earnings/">Earnings</a>
+            </li>
+            <li role="none">
               <a role="menuitem" href="/request-refund/">Request a Refund</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/affiliate-earnings/">Affiliate Earnings</a>
+              <a role="menuitem" href="/test-checklist/">Test Checklist</a>
             </li>
+            <?php endif; ?>
             <li role="none" class="lg-chrome__account-menu-divider"></li>
             <li role="none">
               <a role="menuitem" class="lg-chrome__account-menu-signout"
@@ -333,7 +349,7 @@ function lg_shared_render_site_header(array $ctx): void
       <?php else: ?>
 
         <a class="lg-chrome__signin" href="/wp-login.php">Sign in</a>
-        <a class="lg-chrome__join" href="/lgjoin/">Join</a>
+        <a class="lg-chrome__join" href="/join/">Join</a>
 
       <?php endif; ?>
 
@@ -355,18 +371,6 @@ function lg_shared_render_site_header(array $ctx): void
       } else {
         hdr.setAttribute('data-mobile-open', '');
         btn.setAttribute('aria-expanded', 'true');
-      }
-    });
-  }
-
-  /* Search — archive.js hooks [data-chrome-search] on the archive page and
-     opens the archive search modal. On all other pages, fall back to
-     navigating to the archive. */
-  var searchBtn = document.querySelector('[data-chrome-search]');
-  if (searchBtn) {
-    searchBtn.addEventListener('click', function () {
-      if (!document.getElementById('search-modal')) {
-        window.location.href = '/archive-poc/#search';
       }
     });
   }
@@ -448,6 +452,7 @@ function lg_shared_render_site_header(array $ctx): void
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
       <h2 class="lg-social-modal__title">Notifications</h2>
+      <button class="lg-social-modal__action" data-lg-notif-readall hidden>Mark all read</button>
       <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
@@ -459,9 +464,9 @@ function lg_shared_render_site_header(array $ctx): void
   </div>
 </div>
 
-<!-- Messages modal -->
-<div class="lg-social-modal" id="lg-messages-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages">
+<!-- Unified social modal: Messages + Connections tabs -->
+<div class="lg-social-modal" id="lg-social-modal"
+     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages and connections">
   <div class="lg-social-modal__backdrop"></div>
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
@@ -471,7 +476,10 @@ function lg_shared_render_site_header(array $ctx): void
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
-      <h2 class="lg-social-modal__title">Messages</h2>
+      <div class="lg-social-tabs" role="tablist" aria-label="Social">
+        <button class="lg-social-tab" data-lg-tab="messages" role="tab" aria-selected="true">Messages</button>
+        <button class="lg-social-tab" data-lg-tab="connections" role="tab" aria-selected="false">Connections</button>
+      </div>
       <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
              stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
@@ -479,48 +487,43 @@ function lg_shared_render_site_header(array $ctx): void
         </svg>
       </button>
     </div>
-    <!-- Thread list view -->
-    <div class="lg-social-modal__body" id="lg-msg-list"></div>
-    <!-- Thread detail view -->
-    <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div class="lg-msg__messages" id="lg-msg-messages"></div>
-      <div class="lg-msg__compose">
-        <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                  placeholder="Reply... (Enter to send, Shift+Enter for newline)"
-                  rows="2"></textarea>
-        <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-               stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
 
-<!-- Connections / Friends modal -->
-<div class="lg-social-modal" id="lg-connections-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Connections">
-  <div class="lg-social-modal__backdrop"></div>
-  <div class="lg-social-modal__panel">
-    <div class="lg-social-modal__head">
-      <h2 class="lg-social-modal__title">Connections</h2>
-      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-    <div class="lg-social-modal__body">
-      <div id="lg-conn-pending-section" hidden>
-        <h3 class="lg-conn__section-h">Pending requests</h3>
-        <div id="lg-conn-pending"></div>
+    <!-- Messages pane -->
+    <div class="lg-social-pane" data-lg-pane="messages" role="tabpanel">
+      <!-- Thread list view -->
+      <div class="lg-social-modal__body" id="lg-msg-list"></div>
+      <!-- Thread detail view -->
+      <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="lg-msg__messages" id="lg-msg-messages"></div>
+        <div class="lg-msg__compose" id="lg-msg-compose">
+          <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
+                    placeholder="Reply... (Enter to send, Shift+Enter for newline)"
+                    rows="2"></textarea>
+          <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      <h3 class="lg-conn__section-h">Your connections</h3>
-      <div id="lg-conn-accepted"></div>
+    </div>
+
+    <!-- Connections pane -->
+    <div class="lg-social-pane" data-lg-pane="connections" role="tabpanel" hidden>
+      <div class="lg-social-modal__body">
+        <div id="lg-conn-pending-section" hidden>
+          <h3 class="lg-conn__section-h">Pending requests</h3>
+          <div id="lg-conn-pending"></div>
+        </div>
+        <h3 class="lg-conn__section-h">Your connections</h3>
+        <div class="lg-conn__search-wrap">
+          <input type="search" id="lg-conn-search" class="lg-conn__search"
+                 placeholder="Search connections…" aria-label="Search your connections" autocomplete="off">
+        </div>
+        <div id="lg-conn-accepted"></div>
+      </div>
     </div>
   </div>
 </div>
