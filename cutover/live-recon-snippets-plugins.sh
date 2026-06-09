@@ -3,6 +3,10 @@
 # against LIVE's real data, not dev's drift. Run ON LIVE. Writes nothing to the
 # DB or filesystem outside the OUT dir. Ian runs; pastes/uploads OUT back to coord.
 #
+# ⚠️ OUTPUT IS SENSITIVE: section 4 dumps active snippet CODE, which can embed API
+#    keys / secrets. Treat the OUT dir + .tgz as SECRET — private upload to coord
+#    only, NEVER a shared channel, and delete after review.
+#
 #   bash live-recon-snippets-plugins.sh           # uses WP=/var/www/html, web user www-data
 #   WP=/path/to/wp WPUSER=www-data bash live-recon-snippets-plugins.sh
 #
