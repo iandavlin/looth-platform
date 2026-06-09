@@ -92,13 +92,15 @@
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    color: var(--brand-header-ink, #ffffff);
-    background: color-mix(in srgb, var(--brand-secondary, #87986a) 88%, transparent);
-    transition: transform .15s ease, background .15s ease;
+    /* Icon contrasts the CHIP background (--brand-secondary), not the bar —
+       so a dark-secondary sponsor gets light icons and vice-versa. */
+    color: var(--brand-secondary-ink, #ffffff);
+    background: var(--brand-secondary, #87986a);
+    transition: transform .15s ease, filter .15s ease;
   }
   .lg-brand-hero__socials a:hover {
     transform: translateY(-2px);
-    background: var(--brand-secondary, #87986a);
+    filter: brightness(1.12);
   }
   .lg-brand-hero__socials svg { width: 19px; height: 19px; }
 
