@@ -152,3 +152,25 @@ dropped.
   and authed; confirm location-fields gate as expected.
 - `/u/<slug>` with a private-visibility user shouldn't leak any
   location DOM (`class="loc"`).
+
+## Sponsor brand store (sponsor-pages v2, Lane A) — "doesn't ride git" infra
+
+⚠️ The `sponsor` table + its API route are NOT auto-created on live. Re-apply:
+
+1. **Schema:** `psql -d profile_app -f sql/2026-06-09-sponsor-brand-store.sql`
+   (apply as the `profile-app` role so the FPM pool can read it).
+2. **Data:** `sudo -u profile-app php bin/migrate-sponsors.php --commit`
+   — resolves attachment IDs to URLs against the LIVE uploads base
+   (`https://loothgroup.com/wp-content/uploads`, via `LG_PROFILE_APP_HOST`).
+   Idempotent; re-run anytime media moves.
+3. **nginx:** the `/profile-api/v0/sponsor/<slug>` (+ `?wp_id=` / `?email=`)
+   rewrites and the `sponsor` entry in the public-endpoint `location` group must
+   be present in the deployed `strangler-profile-app.conf` (source-of-truth copy
+   in repo `nginx-snippet.conf`). `nginx -t && systemctl reload nginx`.
+4. **Retire source (already done on dev):** ACF group "Sponsor Brand Information"
+   (#33147) set to `acf-disabled`; `brand_*` user-meta left DORMANT (rollback,
+   not deleted). On live: `wp post update 33147 --post_status=acf-disabled`.
+
+Smoke: `GET /profile-api/v0/sponsor/total-vise` → 200 brand JSON; logo/hero/
+gallery URLs 200; all 5 slugs (total-vise, gluboost, strings-micro-factory,
+go-acoustic-audio, stewmac) round-trip.
