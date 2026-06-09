@@ -20,14 +20,14 @@ $ind     = Renderer::indent($depth);
 $editorMode = !empty($ctx['editor_mode']);
 
 $forumUrl = $sponsor !== null ? trim((string) ($sponsor['forum_url'] ?? '')) : '';
-$tagUrl   = $sponsor !== null ? trim((string) ($sponsor['tag_url'] ?? '')) : '';
+$name    = $sponsor !== null ? (trim((string) ($sponsor['display_name'] ?? '')) ?: trim((string) ($sponsor['name'] ?? ''))) : '';
 
-if ($forumUrl === '' && $tagUrl === '') {
-    if ($editorMode) echo $ind . '<!-- lg-whos-talking: no forum_url or tag_url on sponsor record -->';
+/* Need at least a forum to link or a name to search; otherwise nothing to show. */
+if ($forumUrl === '' && $name === '') {
+    if ($editorMode) echo $ind . '<!-- lg-whos-talking: no forum_url and no sponsor name to search -->';
     return;
 }
 
-$name    = $sponsor !== null ? (trim((string) ($sponsor['display_name'] ?? '')) ?: trim((string) ($sponsor['name'] ?? ''))) : '';
 $heading = trim((string) ($args['heading'] ?? ''));
 if ($heading === '') $heading = $name !== '' ? "See who's talking about {$name}" : "Join the conversation";
 $blurb   = trim((string) ($args['blurb'] ?? ''));
@@ -52,10 +52,10 @@ ob_start();
 <?= $ind ?>        <span>Join the forum discussion</span>
 <?= $ind ?>      </a>
 <?php endif; ?>
-<?php if ($tagUrl !== ''): ?>
-<?= $ind ?>      <a class="lg-whos-talking__link lg-whos-talking__link--tag" href="<?= Renderer::attr($tagUrl) ?>" target="_blank" rel="noopener noreferrer">
-<?= $ind ?>        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-<?= $ind ?>        <span>Browse tagged content</span>
+<?php if ($name !== ''): /* regular keyword search on the archive, not the tag-archive filter */ ?>
+<?= $ind ?>      <a class="lg-whos-talking__link lg-whos-talking__link--tag" href="/archive/?q=<?= rawurlencode($name) ?>">
+<?= $ind ?>        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+<?= $ind ?>        <span>Browse related content</span>
 <?= $ind ?>      </a>
 <?php endif; ?>
 <?= $ind ?>    </div>

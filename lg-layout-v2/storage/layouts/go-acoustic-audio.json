@@ -9,7 +9,7 @@
         "email": "info@goacousticaudio.com",
         "name": "Go Acoustic Audio",
         "display_name": null,
-        "logo_url": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2025/08/Go-Acoustic-Square-Loto.png",
         "hero": {
             "url": "https://dev.loothgroup.com/wp-content/uploads/2025/08/Cable_Routing1.jpg",
             "caption": "We design advanced acoustic instrument pickup systems that combine engineering precision with natural acoustic tone, giving players balance, clarity, and freedom on stage.",
@@ -19,7 +19,7 @@
         "about": "In the world of music, where each note carries the potential to inspire, master guitar maker Paul McGill encountered a frustrating dilemma. For over 40 years, he crafted exquisite guitars for icons like Earl Klugh and Chet Atkins, yet amplification technology often failed them, riddling performances with feedback and robbing them of authentic tone. Determined to solve this, Paul joined forces with Ben Shaw, a modern and vintage pro audio electronics expert, to create a solution by merging instrument-making mastery with innovative electronic design. That collaboration led to Go Acoustic Audio, founded in 2019, and its first revolutionary product soon followed.<br><br>\r\n\r\nTheir patent-pending transducer design wasn’t just an enhancement; it reshaped acoustic amplification. By 2020, the duo perfected the Saddle-Pickup transducer, drastically reducing feedback while preserving the natural tone every guitarist craves. Freed from the constraints of traditional systems, musicians could finally express themselves without fear of feedback. Word spread quickly, and within a couple of years, Go Acoustic Audio’s products were embraced by touring artists and high-end guitar builders worldwide, cementing the company as a leader in acoustic pickups.<br><br>\r\n\r\nThe real proof of their success shines through customers’ stories. Many discovered a newfound freedom on stage, hearing their instruments come alive in ways they’d only imagined. Repeat customers and brand advocates soon followed, celebrating how these pickups transformed their live sound.<br><br>\r\n\r\nWith a continued commitment to excellence and innovation, Go Acoustic Audio now pioneers solutions for a range of instruments, including ukuleles. Their focus on solving real-world challenges faced by dedicated musicians sets them apart. Choosing Go Acoustic Audio means investing in a future of unparalleled, authentic acoustic performance—one where artists can finally play and connect with audiences the way they’ve always intended.<br><br>\r\n\r\nGo Acoustic Audio exists to transform live guitar performance, freeing players from feedback and granting authentic tone so they can focus on their music and captivate every audience.<br><br>\r\n\r\nEverything we create begins with a musician’s perspective, forging authentic, no-gimmick solutions that truly resonate onstage and beyond.<br><br>\r\n\r\nWhatever it takes – We relentlessly innovate, rethinking every aspect of acoustic amplification to shatter limitations and give musicians uncompromised, performance-ready solutions",
         "website": "https://www.goacousticaudio.com",
         "colors": {
-            "primary": null,
+            "primary": "#fdd304",
             "secondary": "#232323",
             "header": "#fdd304"
         },

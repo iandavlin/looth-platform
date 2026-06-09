@@ -9,7 +9,7 @@
         "email": "social@stewmac.com",
         "name": "Stewmac",
         "display_name": null,
-        "logo_url": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2023/11/Content-Link-Icon-Stew-Mac-Affiliate.png",
         "hero": {
             "url": "https://dev.loothgroup.com/wp-content/uploads/2026/03/i-5295-tileimage-1000px-1.webp",
             "caption": "For All Your Guitar Repair and Construction Needs !",
@@ -19,7 +19,7 @@
         "about": "StewMac (Stewart-MacDonald) is a well-known supplier of tools, parts, and materials primarily for guitar and instrument builders, luthiers, and repair technicians. They offer a wide range of products, including hardware (bridges, tuners, pickups), woodworking tools, finishing supplies, and specialized kits for guitar maintenance and customization.\r\n\r\nFounded in 1968, StewMac is a trusted resource for both professionals and hobbyists, providing high-quality components, detailed tutorials, and technical support. They’re especially popular among those who build or repair electric and acoustic guitars, basses, and other stringed instruments.",
         "website": "https://stewmac.sjv.io/stewmac",
         "colors": {
-            "primary": null,
+            "primary": "#ff0000",
             "secondary": "#000000",
             "header": "#ffffff"
         },

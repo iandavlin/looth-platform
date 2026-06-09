@@ -9,7 +9,7 @@
         "email": null,
         "name": "Gluboost",
         "display_name": null,
-        "logo_url": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2026/04/gluboost-logo-square-300x300.png",
         "hero": {
             "url": "https://dev.loothgroup.com/wp-content/uploads/2026/04/m009268-fill-n-finish-group-on-white-1500px.webp",
             "caption": "Home of Fill 'n Finish - Fast and Easy Finishing CA",
@@ -19,7 +19,7 @@
         "about": "The CA adhesive and finish system trusted by professional luthiers worldwide.\r\nGluBoost makes the tools that disappear into the work — crystal-clear CA glues that don't bloom, accelerators that don't pit or haze, and Fill n' Finish, the pore filler and ding repair solution that blends invisibly and cures fast. Whether you're chasing a showroom finish or pulling off a tight repair under the clock, GluBoost is built for the way working luthiers actually work.",
         "website": "https://gluboost.com/",
         "colors": {
-            "primary": null,
+            "primary": "#e8821e",
             "secondary": "#e8821e",
             "header": "#000000"
         },

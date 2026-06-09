@@ -71,7 +71,10 @@ $tagUrl   = trim((string) ($sponsor['tag_url'] ?? ''));
 $ctas = [];
 if ($website !== '')  $ctas[] = ['href' => $website,  'label' => 'Visit Website', 'svg' => '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2c3 3.5 3 17.5 0 20M12 2c-3 3.5-3 17.5 0 20"/>'];
 if ($forumUrl !== '') $ctas[] = ['href' => $forumUrl, 'label' => 'Visit Forum',   'svg' => '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'];
-if ($tagUrl !== '')   $ctas[] = ['href' => $tagUrl,   'label' => $relLabel,       'svg' => '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>'];
+/* "Related Content" runs a regular keyword search for the brand on the archive
+   search page (/archive/?q=…), NOT the old tag-archive filter. Shown whenever we
+   have a brand name to search for. */
+if ($name !== '')     $ctas[] = ['href' => '/archive/?q=' . rawurlencode($name), 'label' => $relLabel, 'svg' => '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'];
 
 $editorMode   = !empty($ctx['editor_mode']);
 $taglineEdit  = $editorMode ? ' data-lg-edit-prop="tagline"' : '';

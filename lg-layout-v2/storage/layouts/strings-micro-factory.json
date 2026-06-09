@@ -9,7 +9,7 @@
         "email": "stringsmicrofactory@gmail.com",
         "name": "Strings Micro Factory",
         "display_name": null,
-        "logo_url": null,
+        "logo_url": "https://dev.loothgroup.com/wp-content/uploads/2026/01/485189909_1866416607516111_8673439210587313512_n-300x300-1.jpg",
         "hero": {
             "url": "https://dev.loothgroup.com/wp-content/uploads/2026/01/ChatGPTImageDec28202505_24_51PM-1.webp",
             "caption": "SMF Builders Kit",
@@ -19,7 +19,7 @@
         "about": "The Strings Micro Factory provides a modern, systems-based approach to acoustic instrument building. Designed specifically for luthiers, educators, small shops, and serious hobbyists, the Micro Factory combines precision jigs, pinned-template tooling, and thoughtfully engineered workflows to improve accuracy, efficiency, and repeatability.",
         "website": "https://www.stringsmicrofactory.com/",
         "colors": {
-            "primary": null,
+            "primary": "#9f9d9d",
             "secondary": "#9f9d9d",
             "header": "#000000"
         },
