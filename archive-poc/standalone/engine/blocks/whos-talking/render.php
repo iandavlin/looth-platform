@@ -52,8 +52,8 @@ ob_start();
 <?= $ind ?>        <span>Join the forum discussion</span>
 <?= $ind ?>      </a>
 <?php endif; ?>
-<?php if ($name !== ''): /* regular keyword search on the archive, not the tag-archive filter */ ?>
-<?= $ind ?>      <a class="lg-whos-talking__link lg-whos-talking__link--tag" href="/archive/?q=<?= rawurlencode($name) ?>">
+<?php if ($name !== ''): /* regular keyword search on the Hub, not the tag-archive filter */ ?>
+<?= $ind ?>      <a class="lg-whos-talking__link lg-whos-talking__link--tag" href="/hub/?q=<?= rawurlencode($name) ?>">
 <?= $ind ?>        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
 <?= $ind ?>        <span>Browse related content</span>
 <?= $ind ?>      </a>
