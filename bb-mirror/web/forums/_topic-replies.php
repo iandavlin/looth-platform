@@ -26,6 +26,7 @@ $rs = $db->prepare("
            r.author_id,
            p.slug AS author_slug,
            p.avatar_url AS avatar_url,
+           COALESCE(p.discussion_visibility, 'member') AS discussion_visibility,
            r.is_anon::int AS is_anon,
            LEFT(r.content_text, 200) AS excerpt,
            r.content_html,
@@ -52,9 +53,13 @@ if (!$flat) { header('Content-Type: text/html; charset=utf-8'); echo ''; exit; }
 // non-moderators BEFORE the tree is built, so even the "↪ @parent" deep-reply
 // prefix (sourced from a parent node's author_name) reads "Anonymous".
 $can_mod = lg_bb_mirror_can_moderate();
+$viewer_logged_in = lg_bb_mirror_can_post();   // logged-out is the ONLY path that masks
 $by_id = [];
 foreach ($flat as $r) {
     lg_bb_mirror_mask_anon($r, $can_mod);
+    // Member-only author mask, BEFORE the tree/flatten so the "↪ @parent" deep-reply
+    // prefix (built from a parent's author_name) reads "Private member", not the real name.
+    lg_bb_mirror_mask_visibility($r, $viewer_logged_in);
     $by_id[(int)$r['reply_id']] = $r + ['_children' => []];
 }
 $top = [];

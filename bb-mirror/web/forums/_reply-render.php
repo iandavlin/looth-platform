@@ -246,6 +246,14 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
      */
     function bb_mirror_render_reply_stub(array $r, bool $is_child = false, bool $collapse_image = false, bool $show_reply_btn = false, ?string $reply_to_author = null): void
     {
+        // Defense-in-depth discussion-visibility mask (the reply identity choke point).
+        // Callers scrub member-only authors at data-prep (so the "↪ @parent" deep-reply
+        // prefix is masked too); this re-applies for any caller that carries
+        // discussion_visibility but didn't pre-mask. Idempotent — skips if already
+        // masked, and logged-in / 'public' rows fall straight through (zero cost).
+        if (empty($r['_visibility_masked']) && function_exists('lg_bb_mirror_mask_visibility')) {
+            lg_bb_mirror_mask_visibility($r, lg_bb_mirror_can_post());
+        }
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
         $raw_text    = trim(strip_tags($r['excerpt'] ?? ''));

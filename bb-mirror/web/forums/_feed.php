@@ -358,6 +358,7 @@ if ($scoped_forum) {
             COALESCE(t.author_name, 'Anonymous')                       AS author_name,
             t.author_id,
             p.slug                                                     AS author_slug,
+            COALESCE(p.discussion_visibility, 'member')                AS discussion_visibility,
             t.is_anon::int                                             AS is_anon,
             t.created_at,
             t.forum_id,
@@ -463,6 +464,7 @@ if ($scoped_forum) {
             COALESCE(t.author_name, 'Anonymous')                       AS author_name,
             t.author_id,
             p.slug                                                     AS author_slug,
+            COALESCE(p.discussion_visibility, 'member')                AS discussion_visibility,
             t.created_at,
             t.forum_id,
             f.slug                                                     AS forum_slug,
@@ -522,6 +524,7 @@ if ($scoped_forum) {
             COALESCE(c.author_name, 'Anonymous')                       AS author_name,
             c.author_id,
             NULL::text                                                 AS author_slug,
+            NULL::text                                                 AS discussion_visibility,
             c.published_at                                             AS created_at,
             NULL::bigint                                               AS forum_id,
             NULL::text                                                 AS forum_slug,
@@ -561,6 +564,11 @@ if ($scoped_forum) {
 
 $topics = $stmt->fetchAll();
 
+// Shared author/reply helpers (lg_bb_mirror_can_post, render stub) — loaded early
+// here because the masks below run before the main "-- Helpers --" require. Pure
+// function defs, require_once, so the later include is a no-op.
+require_once __DIR__ . '/_reply-render.php';
+
 // -- Anonymous-posting mask (anon-rebuild lane) -------------------------------
 // Apply BEFORE author identity resolution so masked authors are both leak-safe
 // (name/slug/avatar/author_id ABSENT from the row → never reach the DOM) AND
@@ -568,8 +576,12 @@ $topics = $stmt->fetchAll();
 // keep the real author + a "(posted anonymously)" marker. Topic cards only —
 // content cards are CPTs, never anonymous.
 $can_mod = lg_bb_mirror_can_moderate();
+$viewer_logged_in = lg_bb_mirror_can_post();   // logged-out is the ONLY path that masks (perf rule)
 foreach ($topics as &$_t) {
-    if (($_t['card_type'] ?? 'topic') === 'topic') lg_bb_mirror_mask_anon($_t, $can_mod);
+    if (($_t['card_type'] ?? 'topic') === 'topic') {
+        lg_bb_mirror_mask_anon($_t, $can_mod);
+        lg_bb_mirror_mask_visibility($_t, $viewer_logged_in);   // member-only author -> "Private member" @ logged-out
+    }
 }
 unset($_t);
 
@@ -650,6 +662,7 @@ if ($topic_ids) {
                r.author_id,
                p.slug AS author_slug,
                p.avatar_url AS avatar_url,
+               COALESCE(p.discussion_visibility, 'member') AS discussion_visibility,
                r.is_anon::int AS is_anon,
                LEFT(r.content_text, 200) AS excerpt,
                r.content_html,
@@ -678,6 +691,7 @@ if ($topic_ids) {
     $rstmt->execute();
     foreach ($rstmt->fetchAll() as $row) {
         lg_bb_mirror_mask_anon($row, $can_mod);   // leak-safe anon mask before render
+        lg_bb_mirror_mask_visibility($row, $viewer_logged_in);   // member-only author mask @ logged-out
         $reply_teaser[(int)$row['topic_id']] = $row;
     }
 }
@@ -686,16 +700,17 @@ if ($topic_ids) {
 $reply_facepile = []; // topic_id → [ {author_name, author_slug, avatar_url}, … ≤3 ]
 if ($topic_ids) {
     $fp_sql = "
-        SELECT topic_id, author_name, author_slug, avatar_url, is_anon FROM (
+        SELECT topic_id, author_name, author_slug, avatar_url, is_anon, discussion_visibility FROM (
           SELECT r.topic_id,
                  COALESCE(r.author_name, 'Anonymous') AS author_name,
                  p.slug AS author_slug, p.avatar_url AS avatar_url,
+                 COALESCE(p.discussion_visibility, 'member') AS discussion_visibility,
                  bool_or(r.is_anon)::int AS is_anon,
                  row_number() OVER (PARTITION BY r.topic_id ORDER BY MAX(r.created_at) DESC) AS rn
             FROM reply r
             LEFT JOIN person p ON p.id = r.author_id
            WHERE r.topic_id = ANY(:ids::bigint[]) AND r.status = 'publish'
-           GROUP BY r.topic_id, r.author_id, r.author_name, p.slug, p.avatar_url
+           GROUP BY r.topic_id, r.author_id, r.author_name, p.slug, p.avatar_url, p.discussion_visibility
         ) x WHERE rn <= 3 ORDER BY topic_id, rn
     ";
     $fpst = $db->prepare($fp_sql);
@@ -703,6 +718,7 @@ if ($topic_ids) {
     $fpst->execute();
     foreach ($fpst->fetchAll() as $row) {
         lg_bb_mirror_mask_anon($row, $can_mod);   // leak-safe anon mask before render
+        lg_bb_mirror_mask_visibility($row, $viewer_logged_in);   // member-only author mask @ logged-out
         $reply_facepile[(int)$row['topic_id']][] = $row;
     }
 }

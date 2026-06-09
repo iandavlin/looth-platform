@@ -274,6 +274,36 @@ function lg_bb_mirror_mask_anon(array &$row, bool $can_mod): bool {
 }
 }
 
+
+// Leak-safe DISCUSSION-AUTHOR visibility mask (discussion_visibility briefing 6/7).
+// Mutates a discussion (forum) author row IN PLACE before identity resolution.
+// The author's profile preference discussion_visibility ('public'|'member', DB
+// default 'member') x the viewer's login state:
+//   - viewer LOGGED-IN          -> no-op, returns false FIRST. Members always see
+//     the real author; the logged-in path never reads the column (zero added cost,
+//     per the perf rule -- masking is logged-out-only).
+//   - logged-out + 'member'      -> identity ABSENT: name->"Private member", slug/
+//     avatar/author_id/user_uuid nulled, so no /u/ link, no avatar URL, no profile
+//     resolution. Same discipline as gated teasers -- server-side, never CSS-hidden.
+//   - logged-out + 'public'      -> real author (returns false).
+// Value is the singular 'member' (load-bearing). Callers SELECT
+// COALESCE(p.discussion_visibility,'member') so a NULL (no person row yet) defaults
+// to masked. Discussion authors ONLY -- callers guard on card_type so CPT authors
+// are unaffected. Returns true when the row was masked.
+if (!function_exists('lg_bb_mirror_mask_visibility')) {
+function lg_bb_mirror_mask_visibility(array &$row, bool $viewer_logged_in): bool {
+    if ($viewer_logged_in) return false;                          // logged-in: never read it
+    if (($row['discussion_visibility'] ?? null) !== 'member') return false;
+    $row['author_name'] = 'Private member';
+    if (array_key_exists('author_slug', $row)) $row['author_slug'] = null;
+    if (array_key_exists('avatar_url',  $row)) $row['avatar_url']  = null;
+    if (array_key_exists('author_id',   $row)) $row['author_id']   = null;
+    if (array_key_exists('user_uuid',   $row)) $row['user_uuid']   = null;
+    $row['_visibility_masked'] = true;
+    return true;
+}
+}
+
 // ---------- pagination ----------
 if (!defined('LG_BB_MIRROR_PER_PAGE')) define('LG_BB_MIRROR_PER_PAGE', 15);
 
