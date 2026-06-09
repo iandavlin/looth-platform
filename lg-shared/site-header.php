@@ -86,7 +86,7 @@ function lg_shared_render_site_header(array $ctx): void
     $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
-    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'archive'|'hub'|'events'|'members'
+    $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'hub'|'events'|'members'|'sponsors'
     // Raw HTML injected between logo and nav — consumer responsibility to escape
     $before_nav    = $ctx['before_nav'] ?? null;
 
@@ -196,10 +196,11 @@ function lg_shared_render_site_header(array $ctx): void
         // with aria-current + .is-active (consumers pass $active_nav). Loothtool
         // is external — it has no slug and is never marked active.
         $nav_items = [
-            'stream'  => ['/stream/',            'Stream'],
-            'hub'     => ['/hub/',               'The Hub'],
-            'events'  => ['/events/',            'Events'],
-            'members' => ['/directory/members/', 'The Map'],
+            'stream'   => ['/stream/',            'Stream'],
+            'hub'      => ['/hub/',               'The Hub'],
+            'events'   => ['/events/',            'Events'],
+            'members'  => ['/directory/members/', 'The Map'],
+            'sponsors' => ['/sponsors/',          'Sponsors'],
         ];
         foreach ($nav_items as $slug => [$href, $label]):
             $is_active = ($active_nav === $slug);
