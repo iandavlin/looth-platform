@@ -28,6 +28,18 @@ $ind     = Renderer::indent($depth);
 $editorMode  = !empty($ctx['editor_mode']);
 $headingEdit = $editorMode ? ' data-lg-edit-prop="heading"' : '';
 
+/* LIVE LOOP: when the host provides a sponsor_feed resolver (the standalone
+   renderer queries the discovery index), loop over the sponsor's sponsor-product
+   posts at render time — so a newly published product appears automatically, no
+   re-materialize. The baked `items` are only a fallback for hosts without the
+   resolver (e.g. the WP editor preview). */
+$author = (int) ($args['author'] ?? 0);
+if ($author <= 0 && is_array($ctx['sponsor'] ?? null)) $author = (int) ($ctx['sponsor']['wp_user_id'] ?? 0);
+if ($author > 0 && isset($ctx['sponsor_feed']) && is_callable($ctx['sponsor_feed'])) {
+    $live = ($ctx['sponsor_feed'])('sponsor-product', $author, 12);
+    if (is_array($live)) $items = $live;   // authoritative live loop (empty = none → suppress)
+}
+
 /* Normalize cards — keep only those with at least a title or url. */
 $cards = [];
 foreach ($items as $it) {

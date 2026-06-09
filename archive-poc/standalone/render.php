@@ -211,6 +211,45 @@ function lg_standalone_build_viewer(bool $authed, string $tier, bool $isAdmin = 
     return [['is_admin' => $isAdmin, 'is_delinquent' => false, 'tiers' => $tiers, 'preview_role' => null]];
 }
 
+/** Live sponsor-page carousel loop: newest sponsor-post / sponsor-product cards
+ *  for an author, straight from the discovery index (no WP boot). Drives the
+ *  featured-products + recent-posts blocks so published content flows to the
+ *  page automatically. Returns null on error so the blocks fall back to the
+ *  baked items carried in the blob. */
+function lg_standalone_sponsor_feed(string $cpt, int $authorId, int $limit): ?array {
+    if ($authorId <= 0 || $limit <= 0) return [];
+    if (!in_array($cpt, ['sponsor-post', 'sponsor-product'], true)) return [];
+    try {
+        $db = lg_archive_poc_pdo();
+        $st = $db->prepare(
+            'SELECT title, url, thumb_url, excerpt, published_at
+               FROM content_item
+              WHERE cpt = :cpt AND author_id = :aid
+              ORDER BY published_at DESC
+              LIMIT :lim'
+        );
+        $st->bindValue(':cpt', $cpt);
+        $st->bindValue(':aid', $authorId, PDO::PARAM_INT);
+        $st->bindValue(':lim', $limit, PDO::PARAM_INT);
+        $st->execute();
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $ts = strtotime((string) ($r['published_at'] ?? ''));
+            $out[] = [
+                'title'   => (string) ($r['title'] ?? ''),
+                'url'     => (string) ($r['url'] ?? ''),
+                'image'   => (string) ($r['thumb_url'] ?? ''),
+                'excerpt' => (string) ($r['excerpt'] ?? ''),
+                'date'    => $ts ? date('M j, Y', $ts) : '',
+            ];
+        }
+        return $out;
+    } catch (\Throwable $e) {
+        error_log('lg_standalone_sponsor_feed: ' . $e->getMessage());
+        return null;
+    }
+}
+
 function lg_standalone_render_article(array $layout, array $pc, array $viewer, bool $authed): string {
     $GLOBALS['LG_PC']          = $pc + ['layout' => $layout];
     $GLOBALS['LG_VIEWER_AUTH'] = $authed;
@@ -221,6 +260,11 @@ function lg_standalone_render_article(array $layout, array $pc, array $viewer, b
         'media_resolver' => 'lg_standalone_media_resolver',
         'post_id'        => (int) ($pc['post_id'] ?? 0),
         'post_tier'      => (string) ($pc['post_tier'] ?? ''),
+        // Live feed loop for the sponsor-page carousels (featured-products /
+        // recent-posts): queries the discovery index by author + cpt at render
+        // time, so a newly published sponsor post/product appears with no
+        // re-materialize. Returns null on error -> blocks fall back to baked items.
+        'sponsor_feed'   => 'lg_standalone_sponsor_feed',
     ];
     // Brand tokens + dash style overrides from the materialized dash snapshot
     // (dash-theme.json — global lg_layout_v2_brand_palette + _block_styles, kept
