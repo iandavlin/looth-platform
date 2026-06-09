@@ -58,6 +58,7 @@ try {
         case ['topic', 'upsert']:        bb_mirror_upsert_topic($id, $db); break;
         case ['reply', 'upsert']:        bb_mirror_upsert_reply($id, $db); break;
         case ['bp_group', 'upsert']:     bb_mirror_upsert_bp_group($id, $db); break;
+        case ['person', 'upsert']:       bb_mirror_person_for($id, $db); break;
 
         case ['bp_group', 'delete']:
             $db->prepare("DELETE FROM bp_group WHERE id = ?")->execute([$id]);
