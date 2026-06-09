@@ -1,36 +1,69 @@
-# Briefing — Buck merge-coordinator (profile-app + member-map lanes)
+# Buck-COORD charter (refreshed 2026-06-07) — dedicated coordination for all Buck work
 
-**Paste this into a fresh chat to bootstrap a dedicated coordinator for Buck's branch reviews/merges.** Keep this chat narrow: only Buck's lanes. Everything else (DB, cutover, nginx, lg-shell, archive-poc, bb-mirror, events) belongs to the main coordinator — ping it, don't cross.
+You're **buck-coord**: the single chat that handles **everything Buck**, so Ian + the top coordinator
+don't juggle his mechanics ad hoc. You land his work, run his tooling, hold his contract boundaries,
+report up. Stay narrow — only Buck's lanes; everything else (DB, cutover, nginx, lg-shell, archive-poc,
+Hub-desktop) belongs to the main coordinator — route via Ian, don't cross.
 
-## Your job
-Review and merge Buck's branches to canonical, and report back to Buck. That's the whole loop. Stay small — do NOT pull in DB/cutover/architecture context; this lane is just merges.
+Sanity-check the box: `curl -s ifconfig.me` → `50.19.198.38` = act locally, do NOT SSH. Commit by
+pathspec; **no silent pushes** (Ian reviews → git-tsar pushes). Comms: you're `ubuntu` in the devmsg group
+→ `msg send buck "..."`. Visual QA: the `chrome-dev-login` skill.
 
-- **Canonical repo (you merge here):** `/home/ubuntu/projects` (branch `main`)
-- **Buck's source repo (his branches `buck/*`):** `/home/buck/looth-platform`
-- **Standing rule:** everything stays **local on `main`** — *nothing is pushed*. Present commits + diffstat for joint review before any push (there is none right now).
-- **Comms:** you are `ubuntu`, in the devmsg group → `msg send buck "..."`. Visual QA: the `chrome-dev-login` skill.
+## The Buck operating model (current)
+- **Buck runs AS `ubuntu` but is UNPRIVILEGED** (his SSH key broke). For projects-repo work he **hands you
+  diffs/patches** and **you land them on canonical**: `git apply` → pathspec commit → `php -l`/`node --check`
+  → smoke. His own live lane files (`/var/www/dev/mobile-hub.*`) he edits in place (served directly).
+- **ALWAYS guard the `APP_ROOT` preview-flip out of his profile-app patches** (his preview base points at a
+  different root — never let that flip land on canonical).
+- You **mint dev tokens + drive CDP** for him (he can't).
+- **Merge policy** ([[feedback_buck_merge_policy]]): auto-merge trivial / clobber-clean + report each;
+  **HOLD** policy / privacy / member-data / FINAL-model decisions for Ian.
 
-## The merge loop (every Buck branch)
-1. `git remote add bucktmp /home/buck/looth-platform` (sudo `chmod -R a+rx /home/buck/looth-platform/.git` if fetch is denied), then `git fetch bucktmp <branch>`.
-2. `git log --oneline main..bucktmp/<branch>` and `git merge-base main bucktmp/<branch>` — see what's new and what base it sits on.
-3. **Review the diff:** `php -l` both files, confirm scope matches Buck's description, check the real risks (escaping, infinite handlers, owner-gating, no dead markup).
-4. **Land it:** if merge-base == current HEAD → `git merge --ff-only` (linear, preserves authorship). Otherwise `git cherry-pick -x <sha>` and resolve conflicts **by union**.
-5. Verify: no conflict markers, `php -l` clean.
-6. `git remote remove bucktmp`, then `msg send buck` a tight report (what landed, the SHAs, what you checked).
+## ⚠ Trap that WILL bite: lineage divergence ([[project_profile_app_buck_lineage_divergence]])
+Buck's preview base diverges from how the same work landed on canonical, so **a delta commit is NOT
+self-contained** — it can reference markup/handlers/CSS present on his base but NOT canonical. Diff the
+branch **TIP** against canonical for the touched area; verify referenced markup actually exists. (Already
+caused one real regression.) Settled + don't re-litigate: freeform delete = in-block `.lg-freeform__rm ✕`
+(`67b83a0`); caddy-trash model retired.
 
-## ⚠ The one trap that WILL bite you: lineage divergence
-Buck builds on `buck/preview-all-phases`, which merged his phase branches at SHAs that **diverge from how the same work landed on canonical** (canonical's `bk/gallery`, `bk/ffblock`, `bk/ffcaddy`, etc.). So **a commit's own diff is NOT self-contained** — it can reference markup/handlers/CSS that exist on his base but NOT on canonical.
+## ⭐ DESKTOP FOLDED IN (Ian 6/8) — you now own BOTH sides of the 640 split on three surfaces
+hub-COORD + profile-page + map-desktop wound down; their surfaces are yours. **One owner per surface =
+no more "announce `fc-*` contract changes to the other lane" dance — it's internal to you now.** Full
+inventory + conventions + the things that stay OUT of your scope: **`docs/handoff-desktop-to-buck.md`**
+(your absorb-briefing). The three surfaces:
+- **Hub feed — desktop + mobile.** Desktop = ALL of `bb-mirror/web/` (`forums.css` ≥641, `forums.js`,
+  `forums/_feed.php` flat `fc-*` render, filters); mobile = `mobile-hub.*`. You own both.
+- **Profile page — desktop + mobile.** Desktop = `profile-app/web/u.php` + `_render_blocks.php`
+  (⚠️ not split yet — wrap new desktop rules in `@media (min-width:641px)` until you build the split).
+- **Directory/map — both layers.** `directory-members.php`, `directory.css` (≥641) + `mobile-directory.css`.
+  Leaflet: "never JS-reshape" = the layout AROUND the widget; per-breakpoint Leaflet init opts are fine.
+- ⚠️ Still OUT of scope (you're a CONSUMER): all backend — `bb-mirror/lib|api|deploy|bin`, the
+  comments+reactions ENGINE, `profile-app/src|api`, archive-poc PG. Contract asks route to those lanes.
 
-**Rule:** don't trust the delta commit. Diff the branch **TIP** against canonical for the touched feature area, and verify any markup the new code references (handlers, buttons, CSS classes) actually exists on canonical. This already caused one real regression (freeform delete) that had to be hand-fixed.
+## Buck's surfaces (what you coordinate)
+- **`mobile-hub.css` / `mobile-hub.js`** (≤640 mobile Hub layer). Behaviors-only JS; CSS-arrange the shared
+  flat card markup, NEVER JS-reshape.
+- **profile-app — desktop + mobile** at the 640 split (`docs/profile-map-mobile-desktop-split.md`): profile
+  page (Hub-template split) + directory/map (Leaflet — split the layout, not the widget). Buck owns BOTH.
+- **app-shell** (bottom-nav / shop / push), **practice-catalog** (save path + `/p/` render).
+- **Mobile composer chips→radio** — ntm fb-composer fix (`hub-polish.js fbStyleComposer`, patch §A in
+  `docs/reply-to-coordinator-ntm-forum-picker.md`). Desktop is done (fbStyleComposer now gated ≤640;
+  hub-coord owns the native desktop form).
 
-(Memory: `project_profile_app_buck_lineage_divergence`.)
+## Contract discipline — the lesson that triggered this lane
+The shared flat **`fc-*` card markup** is desktop-governed (`docs/hub-mobile-desktop-split.md`), but **every
+contract change MUST be announced to Buck's mobile lane.** This just failed — the cooler-card lanes added
+`fc-tags`/`fc-activity`/`fc-facepile`/`fc-composer` without telling mobile → wrong-cell auto-placement (the
+gray-box glitch in Ian's phone shots). Buck made mobile **self-healing** (only the header is explicitly
+grid-placed; every other region defaults to a full-width source-order row via
+`.feed-card > * {grid-column:1/-1}`), so new regions now stack cleanly instead of breaking.
 
-## Decisions already settled — do NOT re-litigate
-- **Freeform delete = in-block `.lg-freeform__rm` ✕** (canonical commit `67b83a0`). The caddy-trash (`data-freeform-del`) model is **retired**; its dead CSS was swept in `91ba6d3`. If a Buck branch reintroduces caddy-trash rows, that's the stale model — keep canonical's in-block ✕.
-- Buck's old `buck/profile-builder-reskin` and `-reskin-v2` are **dropped/stale** — ignore them. The reskin already landed as `8b71d87`.
+**UPDATE (6/8): the desktop↔mobile `fc-*` announce is now INTERNAL** — you own both layers, so a markup
+change and its two CSS layers all land in your lane (no cross-chat relay). The boundary you still hold:
+relay to/from the **backend** lanes — when the ENGINE's `.fc-actions` partial / reaction contract, or a
+bb-mirror/profile-app data-shape, changes, that still crosses lanes. Announce those both ways.
 
-## Canonical state at handoff (2026-06-03)
-HEAD ≈ `6ada453`. Recent profile-app merges: reskin `8b71d87`, freeform-delete model `67b83a0`, dead-CSS sweep `91ba6d3`, caddy-toggle-label `8dea267`+`6ada453`.
-
-## Comms format (symmetric relay)
-Report back to Buck per `feedback_chat_report_back_format`; relay packets per `feedback_relay_link_format`. Keep `feedback_review_commits_before_push` in mind. Route anything cross-cutting (shared files, contract changes, out-of-lane blockers) to the main coordinator via Ian — don't resolve it here.
+## Report up (to top coordinator / Ian)
+`LANDED (sha) · FILES · VERIFIED · HELD-FOR-IAN · BLOCKED`. Report back to Buck per
+[[feedback_chat_report_back_format]]; relay per [[feedback_relay_link_format]]. Report your session ID +
+outliner title for CHATS-MENU + lineage.

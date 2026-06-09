@@ -199,3 +199,49 @@ Not a chat replacement (no prior chat existed), but a scope expansion + rename w
 - **Reason:** both backends dev-proven; folded into one lane to own comments + reactions/likes going forward (Ian asked for a fresh chat)
 - **Carried over:** `SESSION-HANDOFF-comments-db.md` open items → the fresh briefing's queue; new lane handoff `SESSION-HANDOFF-comments-reactions.md`
 - **Landed first session:** dd248c5 (bb-mirror comments grant committed), 3dfda18 (badge count reads live store, not WP bake) — committed, not pushed
+
+## 2026-06-07 — coordinator: clean handoff to fresh successor
+
+- **Previous:** this session (retired, context full after a large session)
+- **New:** *(Ian to spawn fresh + capture ID)*
+- **Reason:** big session — Hub mobile/desktop split, reactions backend + BB backfill, profile-app launch P1–P6, paywall=(b) decision; clean handoff
+- **Carried over:** fresh `briefing-coordinator-successor.md` (rewritten 2026-06-07), `hub-mobile-desktop-split.md` (the architecture), `hub-deploy-roadmap.md`, `CHATS-MENU.md`, the `project_paywall_model` + reaction-count memories. Prior successor briefing archived to `strangler-handoffs/2026-06-07-coordinator-successor-prior.md`
+- **Live state at handoff:** Hub deploy-ready; 100 commits committed-not-pushed (Ian's gate — the open line); profile P1–P6 landed via coordinator-as-Buck's-hands; reactions real + WP-free (BB backfill runs --all at cutover); paywall=(b) profiles-free; cooler-card prompts ready; login skin pending
+- **Lost:** in-session reasoning; all destinations are in the docs
+
+## 2026-06-07 PM — Hub consolidation + engine edit/delete
+
+- **hub → hub-COORD** (`a5a33224-dc0c-4086-b78d-83f96de9f56e`, title *Hub Desktop Surface — resume → hub-coord*): promoted to drive all of Hub solo; **folds in** the old hub-fold (`9645be99`) + reactions-SURFACE (`0ad40ab7`) lanes. Owns all `bb-mirror/web/`. Charter: `briefing-hub-coord.md`.
+- **comments+reactions ENGINE (edit+delete)** (session pending — Ian confirm; cand. `6c51fab9`/`d0ba32af`): successor to `1c86c753`; shipped comment edit + soft-delete (`5b262c0`) + modal UI wiring (`a652b1c`).
+- **Reason:** Ian low on budget, mostly working Hub — collapse to two working chats (hub-coord consumer + engine provider, zero file overlap) to kill the `forums.*` collision + cut context re-reading.
+- **Model change logged:** Hub gating reversed to locked-teasers (not absence) — memory `project_hub_gating_teaser_model`.
+
+## 2026-06-07 PM (II) — three-chat consolidation
+
+- **card-surface chat** (*Hub cooler-card composer finishing*) → **folded into hub-COORD** (`a5a33224`).
+  Reason: a 2nd Hub-desktop chat in `forums.*` reintroduced the collision + the flat-contract-drift that
+  broke mobile (4 unannounced `fc-*` regions). End-state = ONE Hub-desktop owner = single source of
+  contract changes. Its composer avatar+pencil+placeholder landed clean (`f7666c4`).
+- **Buck sub-coord** (`b1b940d4`) → **buck-COORD** (refreshed charter `briefing-buck-coord.md`, session
+  pending Ian spawn). Dedicated handler for ALL Buck work (unprivileged-diff model, APP_ROOT guard,
+  tokens/CDP, profile-app 640 split, mobile chips→radio). Holds the flat-contract↔mobile announce boundary.
+- **Net working roster:** hub-COORD (Hub desktop, one contract source) · buck-COORD (all Buck/mobile +
+  profile-app) · comments+reactions ENGINE (backend). Plus standing lanes (poller, archive-poc, etc.).
+- **Lesson logged:** contract-change announcements between desktop↔mobile are now a buck-COORD standing
+  duty; Buck made mobile self-healing (`.feed-card > * {grid-column:1/-1}`) so drift no longer hard-breaks.
+
+## 2026-06-07 PM (III) — coordinator handoff (decommission)
+
+- **Retiring:** coordinator `eb7073b6-ce45-4e6e-b461-d95267ba06bb` (this session) — decommissioned clean by Ian.
+- **Successor:** fresh coord *(Ian to spawn + capture ID)* via `briefing-coordinator-successor.md` (rewritten 2026-06-07 PM).
+- **Also spawned this handoff:** new profile-page lane + new hub-coord (briefings ready; report IDs to successor).
+- **State at handoff:** dev healthy (Hub/login/loothprint 200). Focus = cutover/dev2 prep. Open: lg-layout-v2 3 tasks (download renderer = the loothprint fix), discussion-visibility feature (default member; routed Buck/profile/hub-coord), lg-snippets folded+uncommitted, the "doesn't ride git" cut playbook. Unpushed-to-main read 0 (confirm w/ Ian). Parked: per-post anon button, loothprint user-submission, post-notifications (sonar bell decision open).
+- **Lost:** in-session reasoning; all destinations are in the docs + memory.
+
+## 2026-06-09 00:22 — Hub-desktop + profile-desktop + map-desktop: folded into buck-COORD
+
+- **Previous:** hub-COORD `a5a33224-cccc-...` (Hub desktop / all `bb-mirror/web/`), profile-page lane (profile `u.php`/`_render_blocks.php`), map-desktop lane (directory/map desktop)
+- **New:** buck-COORD (single owner of desktop+mobile for Hub feed, profile page, directory/map)
+- **Reason:** Ian 6/8 — one owner per surface kills the desktop↔mobile `fc-*` contract-announce dance (root of the mobile-flash/gray-box regressions). Transfer ran AFTER the 13-commit push (clean pushed tree, no in-flight).
+- **Carried over:** `docs/handoff-desktop-to-buck.md` (full inventory + conventions + checklist) = buck-COORD's absorb-briefing; both features (discussion-visibility + anon Phase 1) shipped + on origin/main before the flip.
+- **Lost:** nothing material — all three lanes' work was committed + pushed; conventions are in the handoff doc + the split docs.

@@ -17,18 +17,32 @@ coordinator bookkeeping + lineage logging.
 |---|---|---|---|
 | **coordinator** *(this chat)* | *please review my last coord chat…* | `9ed18876-0f64-480f-bab2-e9c6d90b07cf` | cross-cutting contract, routing, dev sysadmin. Successor to `ecafaa30` / `de317117`. |
 | **archive-poc (PG)** | *Briefing archive-poc-pg* | `05b7f8d2-9c86-473f-aa7f-b66ca5f35738` | PG read-cutover + `_sync` PG writer + indexer taxonomy populate (a55871e/d97e63d). SQLite retirement HELD. |
-| **hub** | *Briefing hub-fold-cpts* | `9645be99-1ac6-42b1-902e-f789a5941da8` | unified /hub/ feed (forums ⋃ discovery), category accordion + content filter, inline comments/reactions wiring. |
-| **comments + reactions** | *comments-reactions* | `1c86c753-6716-44cb-b047-e888f09d3bf6` | content comments (`discovery.comments`, WP-free modal) + likes/reactions (`discovery.likes`, `/archive-api/v0/like`, X-Accel gated download). Consolidates comments-db `3df42b5c` + stream `b2bb9043` (both retired → lineage). Spawned 6/5; landed grant-commit (dd248c5) + badge-count-from-store (3dfda18). |
+| ~~hub~~ → **folded into hub-COORD** | *(was Briefing hub-fold-cpts)* | `9645be99` *(retired)* | unified /hub/ feed work absorbed by hub-COORD — one Hub-desktop owner. |
+| **comments + reactions (ENGINE)** *(edit+delete)* | *comments+reactions ENGINE (edit+delete)* | *pending — Ian confirm (cand. `6c51fab9` / `d0ba32af`)* | backend provider: store + endpoints + palette + gating. Successor to `1c86c753`. Shipped comment **edit + soft-delete** (`5b262c0`) + modal UI wiring (`a652b1c`) — local, awaiting push. New contract: modal emits `{lgCommentsCount:n}` postMessage for SURFACE's badge to listen. |
+| ~~**hub-COORD**~~ → **folded into buck-COORD (6/9)** | *(was Hub Desktop Surface)* | `a5a33224` *(retired)* | Hub-desktop ownership moved to buck-COORD. Was: owned all `bb-mirror/web/` solo = the ONE Hub-desktop owner + single source of flat-`fc-*`-contract changes (announce to buck-coord). Folds in: old hub (`9645be99`), reactions-SURFACE (`0ad40ab7`), **card-surface chat** (*Hub cooler-card composer finishing* — composer avatar+pencil+placeholder landed `f7666c4`). Now: filters chrome, reply reactions, inline video facade, gated teasers, ntm desktop native picker. Charter: `briefing-hub-coord.md`. |
 | **login / poller** | *Briefing lifecycle-poller* | `3035fd3f-b46f-428c-bd1f-9f40a54f7277` | Patreon auto-login, tier truth, identity stability (G1/G4/G7). |
 | **lifecycle / profile-app** | *Briefing lifecycle-profile-app* | `098c8f85-846d-4530-b756-39dc7aa502f2` | profile-app identity stores, bridge, erase-user. |
 | **membership-pages** | *membership-pages / Stripe-standalone lane* | `633f14c7-a66e-4529-9753-8797094c69a0` | 15 membership/purchase pages on the shared shell. |
 | **stripe-pages toggle** | *Briefing stripe-pages-toggle* | `825a2c1e-a322-44d5-a876-bfe9eaf65d32` | admin on/off for the purchase pages (prelaunch gate). |
 | **git-tsar** | *Briefing git-tsar* | `f14788c1-50f4-474f-8626-f42ce32a17cc` | sole merge/push gateway; pathspec sweeps. Worktree isolation SHELVED. |
-| **Buck sub-coord** | *Briefing buck-subcoord* | `b1b940d4-b189-421e-b935-cf18e3a22230` | all Buck profile-app branches (pro-gate, PWA, dropoffs). |
+| **buck-COORD** *(all Buck + ALL desktop now)* | *Briefing buck-coord* | *pending — Ian spawn* (succeeds `b1b940d4`) | dedicated Buck handler: lands his diffs (**guard APP_ROOT flip**), mints tokens + drives CDP. **⭐ 6/9: absorbed hub-COORD + profile-page + map-desktop — now owns desktop+mobile for the Hub feed (all `bb-mirror/web/`), profile page (`u.php`/`_render_blocks.php`), and directory/map (both layers).** `fc-*` announce now internal; still relays the BACKEND contract boundary. Also: app-shell, practice-catalog, mobile chips→radio. Charter: `briefing-buck-coord.md` + absorb-briefing `handoff-desktop-to-buck.md`. |
 | **perf-czar** | *Briefing perf-czar* | `221bd8d5-44fd-48e2-8921-676fc01bcfca` | perf baseline + regression watch across surfaces. |
 | **lg-shell** | *Briefing lg-shell-nav-active* | `dc066cf4-361b-4c36-8f70-efd3e305359e` | canonical site-header + nav active-state. |
 | **bb-mirror whoami fastpath** | *Briefing bb-mirror-whoami-fastpath* | `e22ff194-cc3b-4e64-922c-51eec6901b97` | bb-mirror JWT fast `/whoami` path. |
 | **conversion** | *Briefing conversion-coord* | `5020d57f-46b6-4bff-873d-17e539fff4fe` | legacy video → v2 → standalone render. |
+| **live-deploy / cutover** | *live-deploy / cutover* | `62cc0edc-0a0d-4718-8f7b-bd916f3d1a44` | owns the cut to live: git-native monorepo+symlink-farm runbook (DDL/grants/nginx/secrets/snippets/whoami-rearm). Writes bash, Ian runs on live. Mandate: `git-native-deploy-mandate.md` (fc161ab). Charter: `briefing-live-deploy.md`. |
+| **sponsor-pages v2** *(3 lanes)* | *Briefing sponsor-pages-v2* | Lane A: *pending — Ian* | rebuild sponsor pages+posts as v2 JSON, brand data ACF→profile-app PG, LLM spin-up skill. **Lane A DONE** (`a769bb3`+`1bfd85b`: `sponsor` table + read API + ACF migration, 5 sponsors round-trip, ACF #33147 retired). **Lane B (lg-layout-v2 blocks) ready to spin** — consumes `GET /profile-api/v0/sponsor/<slug>`, brand-var contract `--brand-primary/secondary/header`. C=`write-sponsor-v2` skill. Charter: `briefing-sponsor-pages-v2.md`. |
+
+## Feature task-lanes (in flight this session — held for push)
+| Lane (outliner title) | Session | Commit / state |
+|---|---|---|
+| **discussion_visibility — profile-app backend** | `098c8f85` | `e8e44c7` — column + PUT/GET `/me/discussion-visibility` + surfaced in `/whoami`+`/users`. ✅ |
+| **discussion_visibility — profile-page toggle** | profile-page | `94f52e8` — owner Public/Member toggle, info_schema-guarded. ✅ |
+| **bb-mirror person-sync — discussion_visibility → forums.person** | `2b5dd978-7e21-4d1a-86b6-766abff4efd8` | `9046513` — `forums.person.discussion_visibility` + profile-api loopback sync + backfill. ✅ (⚠️ `forums.person` is bb-mirror's, NOT archive-poc's `discovery.person` — earlier relay misrouted) |
+| **discussion_visibility — profile-app staleness poke** | `098c8f85` | `a8dfce7` — PUT pokes bb-mirror `_sync` on write. ✅ |
+| **bb-mirror person-sync — person/upsert receiver case** | *pending — Ian paste* | `8fca5f4` — receiver closes the poke loop; round-trip verified. ✅ |
+| **discussion_visibility — Hub render mask** | `a5a33224` (hub-coord) | `36d868a` — leak-safe mask (logged-out+member→"Private member", identity scrubbed server-side). Coord-reviewed ✅ PASS. |
+| **anon-posting rebuild — Phase 1 (native "Post anonymously")** | *pending — Ian paste* | `6ae1c90` — per-post toggle → `_lg_anon`→`is_anon`, leak-safe mask + admin reveal, 11 files. Buck announced. Legacy #93/95/96 kept as fallback. ✅ Cut-day infra (doesn't ride git): `ALTER TABLE forums.topic/reply ADD is_anon BOOLEAN` on cut DB; redeploy `bb-mirror/deploy/bb-mirror-sync.php` mu-plugin (captures `_lg_anon` from POST body on `bbp_new_topic`/`bbp_new_reply`). |
 
 ## Coordinator-held / awaiting Ian
 - **The push** — ~27 commits committed-not-pushed on `main`; Ian review → git-tsar pushes. No silent pushes.
@@ -36,6 +50,35 @@ coordinator bookkeeping + lineage logging.
 - **Buck pro-gate** — APPROVED 6/5; Buck to re-rebase `0842006`→`d6ba1fb` + merge, report final SHA.
 - **profile-app re-rot fix** — provision sets gravatar-placeholder default; needs the prefer-BB-avatar fix or the 496-avatar backfill re-rots (briefing owed to profile-app lane).
 - **cutover grant list** — `GRANT SELECT ON discovery.comments TO "bb-mirror"` (committed dd248c5, applied dev) must be re-applied at cut. Same pattern as the `content_item` grant.
+- **cutover: comment edit/delete (5b262c0)** — INFRA bits don't ride the git push, re-apply at cut: (1) the two `location =` route blocks + clean-URL rewrites for `comment-delete`/`comment-edit` in `/etc/nginx/snippets/strangler-archive-poc.conf`; (2) `ALTER TABLE discovery.comments ADD COLUMN IF NOT EXISTS edited_at` DDL on the cut DB; (3) confirm the cut WP-pool role has UPDATE on `comments`.
+- **cutover: discussion-visibility (e8e44c7 profile-app · 94f52e8 profile-page · hub-coord render)** — re-apply at cut: (1) `sql/2026-06-08-discussion-visibility.sql` (adds `users.discussion_visibility text NOT NULL DEFAULT 'member' CHECK IN ('public','member')`) on the profile-app DB — **must apply WITH the code push, whoami/users hard-reference the column**; (2) profile-app nginx rewrite + the `/me` authed regex add in `/etc/nginx/snippets/strangler-profile-app.conf`; (3) `ALTER TABLE forums.person ADD COLUMN discussion_visibility text NOT NULL DEFAULT 'member' CHECK IN ('public','member')` on the cut DB (synced by **bb-mirror**, NOT archive-poc — `forums.person` is bb-mirror-owned; archive-poc's `discovery.person` is a different table the feed doesn't read), commit `9046513` + one-time `bb-mirror/bin/backfill-discussion-visibility.php`. ⚠️ Field value is singular `member` (2-state), NOT `members` — load-bearing across column/endpoint/mask. ✅ STALENESS GAP CLOSED (path-a): profile-app PUT pokes bb-mirror `_sync` on write (`a8dfce7`) → bb-mirror `person/upsert` receiver case (`8fca5f4`) refreshes `forums.person` instantly. Round-trip verified (wp_id 1796 flip → poke → column refreshed, zero posts).
+
+- **cutover: sponsor brand-store** — re-apply on cut DB (doesn't ride git): `profile-app/sql/2026-06-09-sponsor-brand-store.sql` (`sponsor` table + trigger) on profile_app DB; the `/profile-api/v0/sponsor/` route in `strangler-profile-app.conf`; run `profile-app/bin/migrate-sponsors.php` to populate (or carry the rows). Lane A captured this in `profile-app/CUTOVER-CHECKLIST.md`. ACF #33147 stays deactivated on the cut DB.
+- **cutover: fuzzy search (pg_trgm)** — re-apply on the cut DB (doesn't ride git): `CREATE EXTENSION pg_trgm` + 4 GIN trigram indexes (`forums.topic.title`/`author_name`, `discovery.content_item.title`/`author_name`). Applied dev 6/9. The `_suggest.php` query change (fuzzy fallback) DOES ride git (Buck's lane).
+
+## ✅ Transfer DONE — Hub/profile/map desktop → buck-COORD (Ian 6/9)
+Executed after the 13-commit push (clean tree). hub-COORD `a5a33224` + profile-page + map-desktop retired;
+buck-COORD is sole owner of desktop+mobile for the Hub feed, profile page, and directory/map. `fc-*`
+announce-dance is now internal to buck-COORD; only the backend contract boundary still crosses lanes.
+Absorb-briefing: [handoff-desktop-to-buck.md](handoff-desktop-to-buck.md). Lineage logged.
+
+## ⛓️ DEPLOY MODEL — LOCKED (live-deploy lane, 6/9) — EVERY LANE READ
+- **Cut shape:** clone live → a NEW self-contained box (own local MariaDB + Postgres) → flip traffic →
+  old box frozen = instant rollback. loothtool stays on the old box.
+- **Deploy model:** ONE monorepo (`looth-platform`) + symlink farm on the box. Edit in the REPO → push →
+  `git pull` on live → live. Config zones (nginx/FPM) need one `reload` after pull.
+- **THE MANDATE (all lanes, now):** (1) STOP editing live-serving copies in place (`wp-content/`, `/srv/`,
+  `/etc/`, webroot) — in-place edits = drift = **silently lost at cut**. Edit the repo copy + deploy.
+  (2) Everything your lane added that drives a live feature MUST be committed to the monorepo, staged **by
+  pathspec** (never `git add -A`). (3) Cut-eligible = dev-proven **AND git-complete** (every relied-on file
+  in the repo at its canonical path; live-deploy publishes the path-map).
+- **Does NOT ride git** (→ live-deploy runbook): secrets (`/etc/lg-*`, JWT/VAPID), DB-stored state
+  (code-snippets, active-plugin set, active theme). NEW secret or DB-state dep → flag coordinator.
+- **Known drift** to reconcile (per owning lane): /etc nginx snippets (archive-poc 73 vs 309 live!,
+  profile-app, bb-mirror, lg-shared, membership); ~18 loose webroot JS/CSS (buck-COORD); missing mu-plugins
+  (lg-article-materializer, lg-comments-frame; drifted archive-poc-sync/bb-mirror-sync/profile-sync);
+  missing custom plugins (lg-apps, lg-anonymous-authors, lg-recent-posts-widget, lg-weekly-digest,
+  event-reminder-and-cleaner).
 
 ## Discipline
 At every chat spawn/resume, capture the session ID and pass it to coordinator. Coordinator updates this
