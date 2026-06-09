@@ -45,14 +45,28 @@ final class Renderer
         $ctx['viewer']       = $ctx['viewer']       ?? TierResolver::anonymous();
         $ctx['media_resolver'] = $ctx['media_resolver'] ?? fn(int $id) => ['id' => $id, 'url' => "(media $id)", 'alt' => '', 'sizes' => []];
 
+        /* Sponsor record (brand pages). The host may inject $ctx['sponsor']
+           directly (WP: fetched from the Lane-A API); otherwise we read it off
+           the layout itself ($layout['sponsor'], baked at author/materialize
+           time by the write-sponsor-v2 skill). Either way the sponsor blocks
+           (brand-hero, featured-products, …) read $ctx['sponsor'] for their
+           data, and the article root carries the brand-color CSS vars so every
+           block auto-themes — no per-page CSS. */
+        $sponsor = $ctx['sponsor'] ?? ($layout['sponsor'] ?? null);
+        $ctx['sponsor'] = is_array($sponsor) ? $sponsor : null;
+
         /* data-lg-v2 marks the article as v2-rendered HTML — handy in browser
            devtools to tell v2 output apart from v1 / cached / theme-template
            output. data-lg-blocks + data-lg-schema give counts + manifest
            version at a glance. */
+        $rootClass = 'lg-article' . ($ctx['sponsor'] ? ' lg-article--sponsor' : '');
+        $rootStyle = $ctx['sponsor'] ? self::brandVarStyle($ctx['sponsor']) : '';
         $out = [sprintf(
-            '<article class="lg-article" data-lg-v2="1" data-lg-blocks="%d" data-lg-schema="%d">',
+            '<article class="%s" data-lg-v2="1" data-lg-blocks="%d" data-lg-schema="%d"%s>',
+            $rootClass,
             count($blocks),
-            (int) ($layout['schema'] ?? 1)
+            (int) ($layout['schema'] ?? 1),
+            $rootStyle !== '' ? ' style="' . self::attr($rootStyle) . '"' : ''
         )];
         foreach ($blocks as $i => $b) {
             /* Section gate: a `paywall` block whose tier the viewer doesn't
@@ -230,4 +244,47 @@ final class Renderer
     public static function indent(int $depth): string { return str_repeat('  ', $depth); }
     public static function attr(string $s): string    { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
     public static function text(string $s): string    { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+
+    /**
+     * Build the inline `--brand-*` CSS-var declaration for a sponsor record's
+     * colors. This is the brand-theming contract (Lane A): the article root
+     * emits the vars, sponsor block shell.css reads them via
+     * var(--brand-primary, <fallback>). Only non-null colors are emitted so a
+     * sparse sponsor (e.g. gluboost has no primary) falls through to the
+     * block's baked fallback instead of an empty `var()`.
+     *
+     * For each emitted color we also derive a readable `*-ink` companion
+     * (black or white by luminance) so buttons/labels placed ON a brand color
+     * stay legible without the block having to compute contrast itself.
+     */
+    public static function brandVarStyle(array $sponsor): string
+    {
+        $colors = is_array($sponsor['colors'] ?? null) ? $sponsor['colors'] : [];
+        $map = [
+            'primary'   => '--brand-primary',
+            'secondary' => '--brand-secondary',
+            'header'    => '--brand-header',
+        ];
+        $decls = [];
+        foreach ($map as $key => $var) {
+            $hex = $colors[$key] ?? null;
+            if (!is_string($hex) || $hex === '') continue;
+            if (!preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $hex)) continue;
+            $decls[] = $var . ':' . $hex;
+            $decls[] = $var . '-ink:' . (self::luminance($hex) > 0.55 ? '#1a1a1a' : '#ffffff');
+        }
+        return implode(';', $decls);
+    }
+
+    /** Relative luminance (0..1) of a #rgb / #rrggbb hex. Used to pick a
+     *  readable ink color over a brand background. */
+    private static function luminance(string $hex): float
+    {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) === 3) $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        if (strlen($hex) !== 6) return 0.0;
+        return (0.299 * hexdec(substr($hex,0,2))
+              + 0.587 * hexdec(substr($hex,2,2))
+              + 0.114 * hexdec(substr($hex,4,2))) / 255;
+    }
 }
