@@ -210,6 +210,7 @@ switch ($sort_param) {
 
 // -- Control sidebar: active filter selection (site-wide /hub/ only) --
 require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
+require_once __DIR__ . '/../_anon-scrub.php'; // logged-out contact scrub (Ian 2026-06-10)
 $hub_filters = hub_filters_parse();
 $hub_muted   = hub_mute_parse();
 
@@ -1307,7 +1308,7 @@ $header_cat = $scoped_forum
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
       <div class="fc-excerpt feed-card__op">
-        <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $excerpt ?></p><?php endif; ?>
+        <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $can_post ? $excerpt : lg_scrub_anon_contacts((string)$excerpt) ?></p><?php endif; ?>
         <?php if ($show_read_more): ?>
           <div class="feed-card__full-body" hidden></div>
           <button class="feed-card__read-more" type="button" data-topic-id="<?= $topic_id ?>" data-state="collapsed">Read more &#9660;</button>

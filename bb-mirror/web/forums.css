@@ -3888,7 +3888,10 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     background: var(--lg-sage-tint); color: var(--fg-muted); font: 400 20px/1 var(--font-body);
   }
   #lg-dmodal .lg-dmodal__x:hover { background: var(--lg-sage); color: #fff; }
-  #lg-dmodal .lg-dmodal__scroll { overflow-y: auto; padding: 16px 18px 22px; }
+  /* .feed-page rides on the scroll body so the reaction picker/chips/fb styles
+     match the feed exactly (Ian: "make picker same as outside") — and we kill
+     the page-bg/width side effects the class drags in. */
+  #lg-dmodal .lg-dmodal__scroll { overflow-y: auto; padding: 16px 18px 22px; background: transparent; max-width: none; }
   #lg-dmodal .lg-dmodal__meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   #lg-dmodal .lg-dmodal__meta .fc-avatar img,
   #lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }

@@ -257,6 +257,12 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
         $raw_text    = trim(strip_tags($r['excerpt'] ?? ''));
+        // Logged-out contact scrub (Ian 2026-06-10): emails + @handles never
+        // reach anonymous eyes. See _anon-scrub.php.
+        if (function_exists('lg_bb_mirror_can_post') && !lg_bb_mirror_can_post()) {
+            require_once __DIR__ . '/../_anon-scrub.php';
+            $raw_text = lg_scrub_anon_contacts($raw_text);
+        }
         $reply_short = mb_substr($raw_text, 0, 160);
         $reply_rest  = mb_strlen($raw_text) > 160 ? mb_substr($raw_text, 160) : '';
         $rtime_r     = $r['created_at'] ? feed_rel_time((string)$r['created_at']) : '—';
@@ -290,7 +296,9 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         // Moderator Edit + Trash — emitted for every reply, revealed only under
         // .feed--can-moderate (set client-side when auth says can_edit_others).
         // The PUT/DELETE endpoints re-check caps server-side regardless of the UI.
-        if (isset($r['reply_id'])) {
+        // Logged-out viewers never edit: skip the buttons AND the data-reply-raw
+        // payload (it carried the raw body incl. contact handles — Ian 2026-06-10).
+        if (isset($r['reply_id']) && (!function_exists('lg_bb_mirror_can_post') || lg_bb_mirror_can_post())) {
             // Carry the COMPLETE stored body (not the truncated stub excerpt) so the
             // inline Quill edit editor can load + round-trip the real reply. Raw HTML
             // (mention placeholders unresolved — they round-trip as-is and re-resolve
@@ -310,7 +318,14 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         if (!empty($r['excerpt_html'])) {
             // Pre-formatted by the caller (bb_mirror_format_snippet): resolved
             // @mentions + clickable URLs, already truncated + safe HTML.
-            echo '<span class="reply-stub__excerpt">' . $r['excerpt_html'] . '</span>';
+            $lg_xh = (string)$r['excerpt_html'];
+            if (function_exists('lg_bb_mirror_can_post') && !lg_bb_mirror_can_post()) {
+                require_once __DIR__ . '/../_anon-scrub.php';
+                // mention anchors leak the handle in text + href — neutralize whole
+                $lg_xh = preg_replace('~<a\b[^>]*class="[^"]*bb-mention[^"]*"[^>]*>.*?</a>~is', '@member', $lg_xh) ?? $lg_xh;
+                $lg_xh = lg_scrub_anon_contacts($lg_xh);
+            }
+            echo '<span class="reply-stub__excerpt">' . $lg_xh . '</span>';
         } elseif ($reply_short !== '') {
             echo '<span class="reply-stub__excerpt">' . htmlspecialchars($reply_short);
             if ($reply_rest) {

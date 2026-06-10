@@ -344,6 +344,12 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         ? '{' . implode(',', array_map(fn($t) => '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], (string)$t) . '"', $tag_names)) . '}'
         : null;
 
+    // REAL reply count (Ian 2026-06-10: a card said "5 replies", the thread had
+    // 2 — bbPress's _bbp_reply_count meta drifts and we copied it verbatim).
+    // Count published replies at the source instead.
+    $real_reply_count = (int)$GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
+        "SELECT COUNT(*) FROM {$GLOBALS['wpdb']->posts} WHERE post_type='reply' AND post_status='publish' AND post_parent=%d", $id));
+
     $cols = ['id','forum_id','slug','title','content_html','content_text','featured_image_url',
              'author_id','author_name','author_slug','anonymous_name','is_anon',
              'status','sticky_kind','voice_count','reply_count',
@@ -359,7 +365,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         $m['_bbp_topic_status'] ?? $p->post_status,
         $sticky,
         (int)($m['_bbp_voice_count']     ?? 0),
-        (int)($m['_bbp_reply_count']     ?? 0),
+        $real_reply_count,
         (int)($m['_bbp_last_reply_id']   ?? 0) ?: null,
         (int)($m['_bbp_last_active_id']  ?? 0) ?: null,
         bb_mirror_ts(bb_mirror_ts_in($m['_bbp_last_active_time'] ?? null)),

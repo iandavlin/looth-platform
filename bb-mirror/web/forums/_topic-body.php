@@ -36,7 +36,10 @@ if (!$row) {
 }
 
 header('Content-Type: text/html; charset=utf-8');
-echo bb_mirror_resolve_mentions((string)$row['content_html'], $db);
+require_once __DIR__ . '/../_anon-scrub.php';
+$lg_body_html = bb_mirror_resolve_mentions((string)$row['content_html'], $db);
+if (!lg_bb_mirror_can_post()) $lg_body_html = lg_scrub_anon_contacts($lg_body_html);
+echo $lg_body_html;
 
 // -- Attachments below the text -----------------------------------------------
 $astmt = $db->prepare(

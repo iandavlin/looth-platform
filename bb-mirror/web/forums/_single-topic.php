@@ -1,4 +1,5 @@
 <?php
+
 /**
  * /forums-poc/<forum-slug>/<topic-slug>/ — single topic + threaded replies.
  *
@@ -14,6 +15,11 @@
 
 declare(strict_types=1);
 
+
+// Logged-out contact scrub (Ian 2026-06-10) — see _anon-scrub.php. Included
+// by index.php (config already loaded).
+require_once __DIR__ . '/../_anon-scrub.php';
+$lg_anon_view = function_exists('lg_bb_mirror_can_post') ? !lg_bb_mirror_can_post() : true;
 require __DIR__ . '/../_chrome.php';
 
 $db          = bb_mirror_db();
@@ -223,7 +229,7 @@ function render_reply(
           <?php endif; ?>
           <time class="post__time" datetime="<?= $dt_attr ?>"><?= $created ?></time>
         </div>
-        <div class="post__body"><?= $r['content_html'] /* sanitized at sync write */ ?></div>
+        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"
@@ -335,7 +341,7 @@ $fh_image      = $forum['header_image_url'] ?: null;
           <?php endif; ?>
           <time class="post__time" datetime="<?= $op_dt ?>"><?= $op_created ?></time>
         </div>
-        <div class="post__body"><?= $topic['content_html'] /* sanitized at sync write */ ?></div>
+        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$topic['content_html']) : $topic['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__edit-btn" hidden

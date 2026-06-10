@@ -2377,7 +2377,7 @@
           '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +
-        '<div class="lg-dmodal__scroll">' +
+        '<div class="lg-dmodal__scroll feed-page">' +
           '<div class="lg-dmodal__op"></div>' +
           '<div class="lg-dmodal__replies"></div>' +
         '</div>' +
