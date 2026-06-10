@@ -80,8 +80,11 @@ if $SUDO test -d "$REPO/platform/mu-plugins"; then
   done
 fi
 
-echo "--- standalone apps + lg-shared (projects/<name> -> /srv/<name>) [cut box] ---"
-for a in archive-poc bb-mirror profile-app events lg-shared lg-push lg-sudo-queue profile-app-media; do
+echo "--- standalone apps + lg-shared + folded svcs (projects/<name> -> /srv/<name>) [cut box] ---"
+# NOTE: lg-stripe-billing + lg-push need box-local vendor/ (composer install) + .env
+# (provisioned) INSIDE the repo dir; drift-guard SKIPs on dev (those box files differ).
+# NOT farmed: lg-sudo-queue (dev-only infra), profile-app-media (user-media DATA, rsync).
+for a in archive-poc bb-mirror profile-app events lg-shared lg-push lg-stripe-billing; do
   link "$a" "$REPO/$a" "/srv/$a"
 done
 

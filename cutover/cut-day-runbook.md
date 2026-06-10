@@ -32,6 +32,13 @@ Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
 - Create FPM pool OS users: archive-poc, bb-mirror, profile-app, events, membership,
   looth-dev. Create PG roles (same names, peer auth) + looth-dev write role.
 - `git clone` the monorepo to /home/ubuntu/projects (or chosen root).
+- **Separate clones (not in monorepo):**
+  - **thumb-app** — `git clone iandavlin/thumbnail-gen-editor` → `/srv/thumb-app`,
+    checkout branch `feature/per-user-namespacing` @ `e31f3b5` (pinned). Needs its
+    own deploy key/remote on the box (dev uses SSH alias `github-thumbnails`).
+- **composer install** for folded PHP apps that vendored deps: `lg-stripe-billing`,
+  `lg-push` (vendor/ is gitignored — regenerate on the box, inside the repo dir so
+  the symlink target is complete).
 
 ## PHASE 2 — Files via symlink farm  **[DEV✓ pattern]**
 - Run `cutover/symlink-farm.sh --apply` on the new box. Order inside is correct:
@@ -75,6 +82,9 @@ Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
   /etc/lg-events-db, /etc/lg-membership-db, /etc/looth/jwt-*.pem, /etc/lg-vapid/*.
 - `setfacl -m u:profile-app:r /etc/lg-internal-secret` (read gotcha).
 - Stripe/Patreon creds — ship DORMANT (no creds) per coord §3h.
+- **`/srv/lg-stripe-billing/.env`** — provisioned on box (gitignored), holds
+  STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET. Cut ships SANDBOX/test keys; swap to
+  `sk_live_`/`pk_live_` at Stripe-enable (PROD-CUTOVER.md), not at cut.
 - rclone → LIVE bucket (dev token is dev-scoped/IP-locked).
 
 ### App-owned media DATA (not git, not secret — migrate as data)  **[LIVE]**

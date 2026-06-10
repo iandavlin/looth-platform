@@ -58,8 +58,8 @@ Source dir: `projects/platform/mu-plugins/`. WP auto-loads only top-level `.php`
 | `projects/lg-push` | `/srv/lg-push` | ✅ CODE captured to repo (vendor excluded). Runtime: cron + /etc/lg-vapid + DB. |
 | `lg-sudo-queue` | — | ⛔ DEV-ONLY coordination infra (queue data + notify svc) — NOT git, NOT cut (like chrome-dev.service) |
 | `profile-app-media` | `/srv/profile-app-media` | ⛔ user-media DATA (15M avatars/banners/gallery/resumes) — NOT git; rsync as data at cut |
-| `/srv/lg-stripe-billing` (own .git: `iandavlin/lg-stripe-billing`) | `/srv/lg-stripe-billing` | ⏸ **HELD** — Ian: fold into monorepo vs separate clone |
-| `/srv/thumb-app` (own .git: `iandavlin/thumbnail-gen-editor`) | `/srv/thumb-app` | ⏸ **HELD** — Ian: fold vs separate clone |
+| `projects/lg-stripe-billing` | `/srv/lg-stripe-billing` | ✅ FOLDED to monorepo (Ian) — code in git, farm target. Box needs `composer install` + provisioned `.env` (test keys; live keys at Stripe-enable). |
+| `thumb-app` (SEPARATE CLONE) | `/srv/thumb-app` | 🔗 KEEP separate (Ian). Clone-on-box: `iandavlin/thumbnail-gen-editor`, branch `feature/per-user-namespacing` @ `e31f3b5`. NOT folded. |
 
 ## 5. nginx snippets  →  symlink  →  `/etc/nginx/snippets/`  (`nginx -t && reload` after)
 Source dir: `projects/platform/nginx/`.
