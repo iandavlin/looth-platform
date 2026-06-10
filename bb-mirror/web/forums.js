@@ -2346,3 +2346,119 @@
     });
   });
 })();
+
+
+/* ─── §4e. Desktop discussion modal (bespoke-cutover, Ian 2026-06-10) ─────────
+   "Only modals for discussions": on desktop (>=641) a tap on a discussion
+   card's title / excerpt / cover / replies control opens a centered modal:
+   the OP (lazy ?body= full text, excerpt as instant placeholder) + the SAME
+   one-deep nested thread the in-feed expand uses (?replies= — reply reactions
+   and the ↪ @parent prefix come server-rendered). Built as IN-PAGE DOM, not
+   an iframe: the document-delegated handlers (reaction picker §4d, read-more,
+   reply modal) keep working inside it, and there is no page chrome — so no
+   breadcrumbs. Esc / ✕ / backdrop close. Mobile (<=640) keeps its sheet. */
+(function () {
+  var BASE = (window.LG_FORUM_BASE || '').toString().replace(/\/+$/, '');
+  var modal = null;
+
+  function deskt() {
+    try { return window.matchMedia('(min-width:641px)').matches; } catch (e) { return false; }
+  }
+  function ensure() {
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'lg-dmodal';
+    modal.hidden = true;
+    modal.innerHTML =
+      '<div class="lg-dmodal__back" data-dm-close></div>' +
+      '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
+        '<header class="lg-dmodal__head">' +
+          '<h2 class="lg-dmodal__title"></h2>' +
+          '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
+        '</header>' +
+        '<div class="lg-dmodal__scroll">' +
+          '<div class="lg-dmodal__op"></div>' +
+          '<div class="lg-dmodal__replies"></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-dm-close]')) close();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal && !modal.hidden) close();
+    });
+    return modal;
+  }
+  function close() {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+  function open(card) {
+    var tid = card.getAttribute('data-topic-id') ||
+      (card.querySelector('.feed-card__expand') || { getAttribute: function () { return null; } }).getAttribute('data-topic-id');
+    if (!tid) return;
+    var m = ensure();
+    var titleEl = card.querySelector('.fc-title, .feed-card__title');
+    m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
+
+    // OP: author meta cloned off the card + full body (?body=; excerpt placeholder).
+    var op = m.querySelector('.lg-dmodal__op');
+    op.innerHTML = '';
+    var meta = document.createElement('div'); meta.className = 'lg-dmodal__meta';
+    var av = card.querySelector('.fc-avatar'); if (av) meta.appendChild(av.cloneNode(true));
+    var mw = document.createElement('div'); mw.className = 'lg-dmodal__meta-id';
+    var au = card.querySelector('.fc-author'); if (au) mw.appendChild(au.cloneNode(true));
+    var tm = card.querySelector('.fc-time'); if (tm) mw.appendChild(tm.cloneNode(true));
+    meta.appendChild(mw);
+    op.appendChild(meta);
+    var body = document.createElement('div'); body.className = 'lg-dmodal__body';
+    var ex = card.querySelector('.feed-card__op-excerpt, .fc-excerpt');
+    body.innerHTML = ex ? ex.innerHTML : '';
+    op.appendChild(body);
+    fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) { if (html && html.trim()) body.innerHTML = html; })
+      .catch(function () {});
+
+    // Thread: nested one-deep + reply reactions, straight off the shared endpoint.
+    var rep = m.querySelector('.lg-dmodal__replies');
+    rep.innerHTML = '<div class="lg-dmodal__note">Loading replies…</div>';
+    fetch(BASE + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+      .then(function (html) {
+        rep.innerHTML = '<div class="feed-card__replies-full lg-rshow lg-dmodal__thread"></div>';
+        var t = rep.firstChild;
+        t.innerHTML = html;
+        if (!t.querySelector('.reply-stub')) {
+          rep.innerHTML = '<div class="lg-dmodal__note">No replies yet. Be the first to reply.</div>';
+        }
+      })
+      .catch(function () {
+        rep.innerHTML = '<div class="lg-dmodal__note">Couldn’t load replies right now.</div>';
+      });
+
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!deskt()) return;
+    if (!e.target.closest) return;
+    if (e.target.closest('#lg-dmodal')) return;            // clicks inside self-handle
+    var card = e.target.closest('.feed-card--topic');
+    if (!card || e.target.closest('.feed-card--content')) return;
+    // The replies-count controls ALWAYS open the modal; for everything else,
+    // real controls (reactions, read-more, composer, author links…) self-handle
+    // and only title/excerpt/cover taps open it.
+    var viaReplies = e.target.closest('.feed-card__expand, .fc-facepile');
+    if (!viaReplies) {
+      if (e.target.closest('button, input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, .feed-card__read-more, .fc-readmore, a[href*="/u/"]')) return;
+      if (!e.target.closest('.fc-title, .feed-card__title, .feed-card__op-excerpt, .fc-excerpt, .fc-cover, .feed-card__cover')) return;
+    }
+    e.preventDefault();
+    e.stopPropagation();   // beat the legacy inline-expand handlers
+    open(card);
+  }, true);
+})();

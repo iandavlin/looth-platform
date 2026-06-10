@@ -2894,6 +2894,10 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   .feed-page .feed-card .feed-card__cover img,
   .feed-page .feed-card .fc-cover img {
     width: 100%; height: 100%; object-fit: cover; display: block;
+    /* release the legacy absorbed-polish img clamps (un-queried aspect-ratio:3/2
+       + max-height:360px) that kept DISCUSSION images from covering the box —
+       content cards had a 16:9 rescue rule, topics didn't (Ian 2026-06-10). */
+    aspect-ratio: auto; max-height: none;
   }
 }
 /* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
@@ -3854,3 +3858,58 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
    clean). Appended last so it wins over the grid rule's margin. */
 .feed-page .fc-excerpt { border-top: 1px solid var(--lguser-line, #cdd6ba); margin-top: 9px; padding-top: 9px; }
 /* fork: bespoke-cutover preview */
+
+
+/* ══ §4e DESKTOP DISCUSSION MODAL (bespoke-cutover, Ian 2026-06-10) ══
+   Token-driven, so Light/Dark follow automatically. Thread inherits the
+   .reply-stub family (incl. --child indent + .fcr reaction bars). */
+@media (min-width: 641px) {
+  #lg-dmodal { position: fixed; inset: 0; z-index: 9000; }
+  #lg-dmodal[hidden] { display: none; }
+  #lg-dmodal .lg-dmodal__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
+  #lg-dmodal .lg-dmodal__panel {
+    position: relative; width: min(760px, calc(100vw - 48px)); max-height: 86vh;
+    margin: 7vh auto 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg-card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+  }
+  #lg-dmodal .lg-dmodal__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  #lg-dmodal .lg-dmodal__title { flex: 1; min-width: 0; margin: 0; font: 700 18px/1.3 var(--font-head); color: var(--fg); }
+  #lg-dmodal .lg-dmodal__x {
+    flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer;
+    background: var(--lg-sage-tint); color: var(--fg-muted); font: 400 20px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__x:hover { background: var(--lg-sage); color: #fff; }
+  #lg-dmodal .lg-dmodal__scroll { overflow-y: auto; padding: 16px 18px 22px; }
+  #lg-dmodal .lg-dmodal__meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #lg-dmodal .lg-dmodal__meta .fc-avatar img,
+  #lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+  #lg-dmodal .lg-dmodal__meta-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  #lg-dmodal .lg-dmodal__meta .fc-author__name { font-weight: 700; color: var(--fg); }
+  #lg-dmodal .lg-dmodal__meta .fc-time { font-size: 12.5px; color: var(--fg-muted); }
+  #lg-dmodal .lg-dmodal__body { font-size: 15.5px; line-height: 1.6; color: var(--fg); margin-bottom: 16px; }
+  #lg-dmodal .lg-dmodal__body img { max-width: 100%; height: auto; border-radius: 10px; }
+  #lg-dmodal .lg-dmodal__thread { border-top: 1px solid var(--border); padding-top: 14px; }
+  #lg-dmodal .lg-dmodal__note { padding: 18px 4px; color: var(--fg-muted); font: 14px/1.5 var(--font-body); }
+}
+
+
+/* ── CARD PARE-DOWN with the discussion modal (Ian 2026-06-10: "pare the card
+   functionality down so it doesn't duplicate what is in the modal") — desktop
+   topic cards are PREVIEWS: title/excerpt/cover/facepile/reactions/save. The
+   thread (teaser reply, expand, read-more full body, inline composer, reply
+   CTA) lives in the §4e modal. ≥641 only — mobile keeps its sheet flow. The
+   modal's own thread renders OUTSIDE .feed-card, so these don't touch it. ── */
+@media (min-width: 641px) {
+  .feed-page .feed-card--topic .fc-replies,
+  .feed-page .feed-card--topic .feed-card__replies,
+  .feed-page .feed-card--topic .feed-card__replies-full,
+  .feed-page .feed-card--topic .feed-card__read-more,
+  .feed-page .feed-card--topic .fc-composer,
+  .feed-page .feed-card--topic .feed-card__reply-cta,
+  .feed-page .feed-card--topic .feed-card__reply-cta--inline { display: none; }
+}
