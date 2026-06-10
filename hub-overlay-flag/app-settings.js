@@ -208,12 +208,23 @@
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow,' + D + ' .reply-stub__editbox .ql-container.ql-snow,' + D + ' .ntm-form .ql-toolbar.ql-snow,' + D + ' .ntm-form .ql-container.ql-snow{background:#1e2124!important;border-color:#2c312d!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-stroke,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-stroke{stroke:#cdd0ca!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-fill,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-fill{fill:#cdd0ca!important}',
+      // Shared FOOTER (.lg-chrome-foot): fixed light slab — was never themed in
+      // dark ("footer needs some dark mode love", Ian 2026-06-10). Re-point its
+      // pinned shell tokens + darken the slab so link/text colors follow.
+      D + ' .lg-chrome-foot{background:#101214!important;border-color:#2c312d!important;color:#cdd0ca!important;' +
+        '--lg-ink:#e5e7e1!important;--lg-mute:#a6ac9f!important;--lg-line:#2c312d!important}',
+      D + ' .lg-chrome-foot a{color:#cdd0ca!important}',
+      D + ' .lg-chrome-foot a:hover{color:#e5e7e1!important}',
       // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two
       // explicit modes now; Dark is a deliberate pick, Light has no overrides.)
       ''
     ].join('\n');
+    // MOBILE/desktop separation (Ian 2026-06-10): dark mode is DESKTOP-only —
+    // <=640 keeps the normalized brand-light app look until the mobile engine
+    // adopts dark deliberately (C9 stage).
+    css = '@media (min-width:641px){\n' + css + '\n}';
     var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
@@ -235,13 +246,23 @@
     var z = byId(SIZES, getSize());
     var root = document.documentElement;
 
-    // Theme: revert all theme keys, then set the chosen theme's overrides. The
-    // 'custom' theme builds its vars from the picked color; presets use their own.
+    // Theme: revert all theme keys, then set the chosen mode's overrides
+    // (Light = none; Dark = the one override set).
     THEME_KEYS.forEach(function (k) { root.style.removeProperty(k); });
     var t = byId(THEMES, themeId);
+    // COLOR is desktop-only (Ian 2026-06-10): <=640 always renders the brand-
+    // light app look, whatever is picked. The pick persists, so the same
+    // device's desktop window still honors it.
+    if (window.matchMedia && !window.matchMedia('(min-width:641px)').matches) t = byId(THEMES, 'default');
     if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k)) root.style.setProperty(k, t.vars[k]);
     root.setAttribute('data-lguser-theme', t.id);
     root.setAttribute('data-lguser-dark', t.dark ? '1' : '0');
+
+    // Mid-session mode flip (Ian 2026-06-10: "Light picked but page stays dark"):
+    // the nginx boot injects #lg-boot-crit pre-paint from the LAST persisted blob —
+    // !important dark backgrounds on body/headers — and nothing removed it when
+    // the user switched to Light in-page. Drop it the moment dark is off.
+    try { var bc = document.getElementById('lg-boot-crit'); if (bc && !t.dark) bc.remove(); } catch (e) {}
 
     // Font: override the brand sans token + load the webfont (or revert).
     if (f.stack) {
@@ -353,10 +374,14 @@
       container.appendChild(sec);
     }
 
-    section('Color', THEMES, getTheme(), 'theme', function (b, it) {
-      b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
-        '<span class="lg-set-opt__t">' + it.name + '</span>';
-    });
+    // Color is desktop-only (mobile keeps the brand-light app look) — hide the
+    // control where it cannot apply.
+    if (!window.matchMedia || window.matchMedia('(min-width:641px)').matches) {
+      section('Color', THEMES, getTheme(), 'theme', function (b, it) {
+        b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
+          '<span class="lg-set-opt__t">' + it.name + '</span>';
+      });
+    }
     section('Font', FONTS, getFont(), 'font', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t"' + (it.stack ? ' style="font-family:' + it.stack + '"' : '') + '>' + it.name + '</span>';
       if (it.google) loadFont(it); // preview in its own face
