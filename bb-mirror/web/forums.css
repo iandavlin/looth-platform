@@ -2881,6 +2881,39 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   .topic-header__title   { font-size: 26px; }
 }
 
+/* ── Desktop MASONRY feed geometry — moved out of deferred hub-polish.js
+   (ensureDesktopCss) into forums.css so the multi-column layout paints on
+   FIRST load instead of reflowing when the deferred JS runs (kills the feed
+   flash the html.lg-feed-booting hold was masking). GEOMETRY ONLY — the JS
+   keeps the --lguser-* theme-coherence rules (they depend on JS-set tokens).
+   CSS multi-column packs cards tight (Pinterest-style); column-width drives a
+   responsive column count, capped by the 2100px feed width. Buck-greenlit
+   2026-06-10 (hub-coord). No !important: `.feed-page .feed` outspecifies the
+   base single-column `.feed` grid above; values match the JS so no reflow. */
+@media (min-width: 641px) {
+  .feed-page { max-width: 2100px; }
+  .feed-page .feed {
+    display: block;
+    column-width: 370px;
+    column-gap: 18px;
+    padding: 22px 24px 48px;
+  }
+  .feed-page .feed-card {
+    display: block;
+    width: 100%;
+    margin: 0 0 18px;
+    column-span: none;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .feed-page .feed-card__cover,
+  .feed-page .fc-cover { aspect-ratio: 16 / 9; max-height: 300px; }
+  /* full-width hero cover spans its column edge-to-edge */
+  .feed-page .feed-card:first-child .feed-card__cover,
+  .feed-page .feed-card:first-child .fc-cover { max-width: none; width: 100%; }
+}
+
 
 /* ── cream-sage: forum-parent prominence (brand-accent left bar + colored
       parent label + category icon). 9 categories map onto the 3 brand accent
