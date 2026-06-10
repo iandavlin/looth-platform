@@ -2760,8 +2760,9 @@
     // the picked Dark theme (dark="1"). Used to re-theme the desktop SHELL.
     var L = 'html[data-lguser-dark="0"]:not([data-lguser-theme="default"])';
     var css = [
-      // page background follows the theme (or forums' OS-aware cream fallback)
-      'html ' + P + '{background:var(--lguser-bg,var(--lg-cream,#f1efe8))!important}',
+      // (page-bg rule RETIRED 2026-06-10 with the C10 unification: default = body
+      // var(--bg); picked light = the forums.css bridge repoints --bg; picked dark
+      // = the boot script's critical CSS. First frame paints themed already.)
       // MASONRY geometry (feed max-width 2100 / column-width 370 / 16:9 covers)
       // RETIRED from this overlay 2026-06-10 (bespoke-cutover, audit C2): it lives in
       // forums.css @media(min-width:641) — commit 88955fb — and paints first-frame
@@ -2783,23 +2784,11 @@
       P + ' .feed-card__kind-badge,' + P + ' .fc-cat-chip{background:var(--lguser-pill,#eef2e3)!important;' +
         'color:var(--lguser-accent-d,#52613d)!important;border-color:transparent!important}',
 
-      // ── SHELL COHERENCE (audit 2026-06-09): forums.css surfaces (body, nav rail,
-      // sort bar, search, modals) read its OWN tokens --bg/--bg-card/--fg, driven by
-      // the native hub-theme-* class — NOT the app's --lguser-*. So picking a light
-      // app theme recolored the feed cards but left the page + left nav rail dark
-      // (a light feed floating on a dark shell). Fix: for an ACTIVELY-PICKED light
-      // theme, re-point forums' own tokens at the app theme so the WHOLE desktop
-      // shell recolors coherently through forums' cascade. The no-pick default and
-      // the picked Dark theme are untouched (they keep the OS/native dark).
-      L + '{--bg:var(--lguser-bg)!important;--bg-card:var(--lguser-card)!important;' +
-        '--bg-sticky:var(--lguser-card)!important;--bg-closed:var(--lguser-bg)!important;' +
-        '--fg:var(--lguser-ink)!important;--fg-muted:var(--lguser-mute)!important;' +
-        '--lg-ink:var(--lguser-ink)!important;--lg-charcoal:var(--lguser-ink)!important;--lg-mute:var(--lguser-mute)!important}',
-      // the nav rail rows/labels keep a stale light text color through their own
-      // rules — force the visible label text dark on the now-light rail.
-      L + ' .bb-layout__nav .hub-rail__row,' + L + ' .bb-layout__nav .hub-acc__parent,' +
-        L + ' .bb-layout__nav .hub-rail__nm,' + L + ' .bb-layout__nav .hub-rail__h,' +
-        L + ' .bb-layout__nav .hub-rail__sec-toggle,' + L + ' .bb-layout__nav summary{color:var(--lguser-ink,#1a1d1a)!important}',
+      // ── SHELL COHERENCE token repoint + rail-label force MOVED to forums.css
+      // 2026-06-10 (bespoke-cutover, audit C10 unification): same gate selector,
+      // plain cascade instead of !important, applied on the FIRST frame. The two
+      // theme systems are bridged server-side now — this overlay no longer
+      // re-themes the shell after load.
 
       // ── Reaction summary chips (.fcr-chip/.fcr-add): forums.css backs them with
       // var(--bg-card) (un-themed), so they were dark islands + failed-AA count text

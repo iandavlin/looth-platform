@@ -201,6 +201,46 @@ html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-mut
   --lg-rust:      #c66845;
 }
 
+/* ── PICKED-THEME UNIFICATION (moved here from hub-polish.js ensureDesktopCss,
+   2026-06-10 bespoke-cutover — audit C10) ─────────────────────────────────────
+   Two theme systems used to fight: this file's hub-theme-* classes re-point the
+   legacy tokens (--bg/--bg-card/--fg/--lg-*), while the app settings engine
+   writes --lguser-* INLINE on <html> (pre-paint, via the nginx boot script).
+   The overlay used to reconcile them after load with ~10 !important rules — the
+   repaint the lg-feed-booting blank exists to hide. Moving the bridge here makes
+   the FIRST frame paint fully themed, with plain cascade instead of !important:
+   the [data-lguser-…] attribute selector (0,2,1) outweighs both :root and the
+   html.hub-theme-* classes (0,1,1), and the :root --lguser aliases lose to the
+   inline values, so there is no var() cycle.
+   Gate matches an ACTIVELY-PICKED light theme only (cream/sage/amber/rust/
+   custom): the no-pick default and the picked Dark theme keep the native
+   hub-theme behavior, exactly as the overlay did. Desktop only — mobile is
+   brand-light by design (app-mobile-fixes normalize; folds into mobile-hub.css
+   at the C9 stage). */
+@media (min-width: 641px) {
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) {
+    --bg:        var(--lguser-bg);
+    --bg-card:   var(--lguser-card);
+    --bg-sticky: var(--lguser-card);
+    --bg-closed: var(--lguser-bg);
+    --fg:        var(--lguser-ink);
+    --fg-muted:  var(--lguser-mute);
+    --lg-ink:    var(--lguser-ink);
+    --lg-charcoal: var(--lguser-ink);
+    --lg-mute:   var(--lguser-mute);
+  }
+  /* Rail rows/labels carry their own color rules that lagged the repoint —
+     bind the visible label text to the themed ink (was the overlay's force). */
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__row,
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-acc__parent,
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__nm,
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__h,
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__sec-toggle,
+  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav summary {
+    color: var(--lguser-ink, #1a1d1a);
+  }
+}
+
 /* The theme-cycle pill in the sort bar (matches .feed-compact-toggle / -text-). */
 .feed-theme-toggle {
   display: inline-flex;
@@ -3832,3 +3872,4 @@ html.hub-theme-black .reply-stub__reply:hover {
    on the excerpt so it only shows when there IS a body (gated/title-only cards stay
    clean). Appended last so it wins over the grid rule's margin. */
 .feed-page .fc-excerpt { border-top: 1px solid var(--lguser-line, #cdd6ba); margin-top: 9px; padding-top: 9px; }
+/* fork: bespoke-cutover preview */
