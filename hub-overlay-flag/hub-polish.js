@@ -2885,97 +2885,12 @@
   // panel sits under the category filters: layout style-cards + theme swatches +
   // text size (theme/size proxy LGSettings, so they stay in sync with the gear).
   // Desktop only. ───────────────────────────────────────────────────────────────
-  var HUB_LAYOUTS = [
-    { id: 'masonry', name: 'Masonry', th: [[10, 16, 8], [8, 12, 18]] },
-    { id: 'cards',   name: 'Cards',   th: [[14, 14], [14, 14]] },
-    { id: 'stream',  name: 'Stream',  th: [[28], [28]] },
-    { id: 'compact', name: 'Compact', th: [[8, 6, 10, 7], [7, 10, 6, 8]] }
-  ];
-  function getHubLayout() { try { return localStorage.getItem('lg-hub-layout') || 'masonry'; } catch (e) { return 'masonry'; } }
-  function applyHubLayout(id) { document.documentElement.setAttribute('data-lg-hublayout', id || getHubLayout()); }
-  function setHubLayout(id) { try { localStorage.setItem('lg-hub-layout', id); } catch (e) {} applyHubLayout(id); }
-  function ensureHubLayoutCss() {
-    if (document.getElementById('lg-hublayout-css')) return;
-    var P = '.feed-page', H = 'html[data-lg-hublayout=';
-    var css = '@media (min-width:641px){' +
-      // CARDS — uniform bordered grid + a full-width hero (orderly, equal rows)
-      H + '"cards"] ' + P + ' .feed{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(340px,1fr))!important;gap:18px!important;align-items:start!important}' +
-      H + '"cards"] ' + P + ' .feed-card{margin:0!important;break-inside:auto!important}' +
-      H + '"cards"] ' + P + ' .feed-card:first-child{grid-column:1 / -1!important}' +
-      H + '"cards"] ' + P + ' .feed-card:first-child .feed-card__cover,' + H + '"cards"] ' + P + ' .feed-card:first-child .fc-cover{aspect-ratio:21 / 8!important;max-height:420px!important}' +
-      // STREAM — one centered column, large (focused reading)
-      H + '"stream"] ' + P + '{max-width:760px!important}' +
-      H + '"stream"] ' + P + ' .feed{display:block!important;column-width:auto!important;columns:1!important;padding:22px 16px 48px!important}' +
-      H + '"stream"] ' + P + ' .feed-card{margin:0 0 20px!important}' +
-      H + '"stream"] ' + P + ' .feed-card__cover,' + H + '"stream"] ' + P + ' .fc-cover{aspect-ratio:16 / 9!important;max-height:460px!important}' +
-      // COMPACT — denser, more columns, smaller covers/titles (power browsing)
-      H + '"compact"] ' + P + ' .feed{column-width:300px!important;column-gap:14px!important}' +
-      H + '"compact"] ' + P + ' .feed-card{margin:0 0 14px!important}' +
-      H + '"compact"] ' + P + ' .feed-card__cover,' + H + '"compact"] ' + P + ' .fc-cover{max-height:170px!important}' +
-      H + '"compact"] ' + P + ' .feed-card__title,' + H + '"compact"] ' + P + ' .fc-title{font-size:15px!important}' +
-      '}';
-    var s = document.createElement('style'); s.id = 'lg-hublayout-css'; s.textContent = css;
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function ensureHubStyleCss() {
-    if (document.getElementById('lg-appr-css')) return;
-    var css = '@media (min-width:641px){' +
-      '#lg-appr{padding:12px 12px 24px;border-top:1px solid var(--lguser-line,var(--lg-line,#e3ddd0));margin-top:8px}' +
-      '#lg-appr .lg-appr__h{font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.07em;text-transform:uppercase;color:var(--lguser-mute,var(--lg-mute,#6b6f6b));margin:8px 2px 9px}' +
-      '#lg-appr .lg-appr__grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}' +
-      '#lg-appr .lg-lay{cursor:pointer;border:1.5px solid var(--lguser-line,var(--lg-line,#e3ddd0));border-radius:10px;padding:7px 7px 6px;background:var(--lguser-card,var(--bg-card,#fff));transition:border-color .12s}' +
-      '#lg-appr .lg-lay:hover{border-color:var(--lguser-accent,var(--lg-sage,#87986a))}' +
-      '#lg-appr .lg-lay.is-on{border-color:var(--lguser-accent,var(--lg-sage,#87986a));box-shadow:0 0 0 1px var(--lguser-accent,var(--lg-sage,#87986a))}' +
-      '#lg-appr .lg-lay__th{height:34px;border-radius:5px;background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3));overflow:hidden;display:flex;gap:2px;padding:3px}' +
-      '#lg-appr .lg-lay__col{flex:1;display:flex;flex-direction:column;gap:2px}' +
-      '#lg-appr .lg-lay__b{background:var(--lguser-accent,var(--lg-sage,#87986a));opacity:.55;border-radius:2px}' +
-      '#lg-appr .lg-lay__t{display:block;font:600 11.5px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lguser-ink,var(--fg,#1a1d1a));margin-top:5px;text-align:center}' +
-      '#lg-appr .lg-appr__row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}' +
-      '#lg-appr .lg-sw{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}' +
-      '#lg-appr .lg-sw.is-on{border-color:var(--lguser-accent,var(--lg-sage,#87986a))}' +
-      '#lg-appr .lg-sz{cursor:pointer;border:1px solid var(--lguser-line,var(--lg-line,#e3ddd0));border-radius:999px;padding:5px 11px;font:600 12px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lguser-ink,var(--fg,#1a1d1a));background:var(--lguser-card,var(--bg-card,#fff))}' +
-      '#lg-appr .lg-sz.is-on{background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff;border-color:var(--lguser-accent,var(--lg-sage,#87986a))}' +
-      '}';
-    var s = document.createElement('style'); s.id = 'lg-appr-css'; s.textContent = css;
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function buildHubStyle() {
-    if (window.matchMedia('(max-width:640px)').matches) return;       // desktop only
-    var nav = document.querySelector('.bb-layout__nav');
-    if (!nav || document.getElementById('lg-appr')) return;
-    var L = window.LGSettings; if (!L) return;                        // need the theme/size store
-    ensureHubLayoutCss(); ensureHubStyleCss();
-    function thumb(rows) {
-      return rows.map(function (col) {
-        return '<span class="lg-lay__col">' + col.map(function (h) { return '<span class="lg-lay__b" style="height:' + h + 'px"></span>'; }).join('') + '</span>';
-      }).join('');
-    }
-    var box = document.createElement('div'); box.id = 'lg-appr';
-    box.innerHTML =
-      '<div class="lg-appr__h">Hub style</div>' +
-      '<div class="lg-appr__grid">' + HUB_LAYOUTS.map(function (l) {
-        return '<div class="lg-lay" data-lay="' + l.id + '" role="button" tabindex="0" aria-label="' + l.name + ' layout"><span class="lg-lay__th">' + thumb(l.th) + '</span><span class="lg-lay__t">' + l.name + '</span></div>';
-      }).join('') + '</div>' +
-      '<div class="lg-appr__h">Theme</div>' +
-      '<div class="lg-appr__row">' + L.THEMES.map(function (t) { return '<span class="lg-sw" data-th="' + t.id + '" role="button" tabindex="0" title="' + t.name + '" aria-label="' + t.name + ' theme" style="background:' + t.dot + '"></span>'; }).join('') + '</div>' +
-      '<div class="lg-appr__h">Text size</div>' +
-      '<div class="lg-appr__row">' + L.SIZES.map(function (s) { return '<span class="lg-sz" data-sz="' + s.id + '" role="button" tabindex="0">' + s.name + '</span>'; }).join('') + '</div>';
-    nav.appendChild(box);
-    function paint() {
-      var cl = getHubLayout();
-      box.querySelectorAll('.lg-lay').forEach(function (e) { e.classList.toggle('is-on', e.getAttribute('data-lay') === cl); });
-      var ct = L.getTheme(); box.querySelectorAll('.lg-sw').forEach(function (e) { e.classList.toggle('is-on', e.getAttribute('data-th') === ct); });
-      var cs = L.getSize(); box.querySelectorAll('.lg-sz').forEach(function (e) { e.classList.toggle('is-on', e.getAttribute('data-sz') === cs); });
-    }
-    function act(t) {
-      var lay = t.closest('.lg-lay'); if (lay) { setHubLayout(lay.getAttribute('data-lay')); paint(); return; }
-      var th = t.closest('.lg-sw'); if (th) { L.set('theme', th.getAttribute('data-th')); paint(); return; }
-      var sz = t.closest('.lg-sz'); if (sz) { L.set('size', sz.getAttribute('data-sz')); paint(); return; }
-    }
-    box.addEventListener('click', function (e) { act(e.target); });
-    box.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(e.target); } });
-    paint();
-  }
+  // Hub layout picker + the sidebar "Hub style" panel RETIRED 2026-06-10
+  // (bespoke-cutover; Ian: the header GEAR is the only page-state control zone).
+  // - The Mosaic/Stream toggle lives in the gear panel (app-settings buildPanel).
+  // - data-lg-hublayout is set PRE-PAINT by the nginx boot script (localStorage
+  //   lg-hub-layout; legacy cards/compact values map to masonry = Mosaic).
+  // - Stream variant CSS lives in forums.css @media(min-width:641).
 
   // Tapping the BODY text of a reply (not the author name, not a link/action)
   // expands the collapsed thread — same as tapping "View N replies" (Buck
@@ -3249,9 +3164,6 @@
     wireSearchPreview();
     ensureImmersiveCss();
     ensureDesktopCss();
-    ensureHubLayoutCss();
-    applyHubLayout();
-    buildHubStyle();
     wireDesktopQuickView();
     wireReplyBodyExpand();
     wirePostBodyExpand();

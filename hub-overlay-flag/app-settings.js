@@ -462,6 +462,39 @@
     section('Hub feed', FEEDVIEWS, getFeed(), 'feed', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });
+    // Hub layout (desktop only): Mosaic (masonry packing) vs Stream (one centered
+    // column). Moved here from the Hub sidebar panel 2026-06-10 (bespoke-cutover;
+    // Ian: the gear is the ONLY page-state control zone). Own localStorage key
+    // 'lg-hub-layout' (compat with prior picks); applied PRE-PAINT by the nginx
+    // boot script and live here on tap. Legacy cards/compact picks → Mosaic.
+    if (window.matchMedia && window.matchMedia('(min-width:641px)').matches) {
+      (function () {
+        var LAYOUTS = [{ id: 'masonry', name: 'Mosaic' }, { id: 'stream', name: 'Stream' }];
+        var cur = 'masonry';
+        try { cur = localStorage.getItem('lg-hub-layout') || 'masonry'; } catch (e) {}
+        if (cur === 'cards' || cur === 'compact') cur = 'masonry';
+        var sec = document.createElement('div'); sec.className = 'lg-set-sec';
+        var h = document.createElement('div'); h.className = 'lg-set-sec__h'; h.textContent = 'Hub layout';
+        sec.appendChild(h);
+        var row = document.createElement('div'); row.className = 'lg-set-row';
+        LAYOUTS.forEach(function (it) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lg-set-opt' + (it.id === cur ? ' is-on' : '');
+          b.setAttribute('data-id', it.id);
+          b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
+          b.addEventListener('click', function () {
+            try { localStorage.setItem('lg-hub-layout', it.id); } catch (e) {}
+            document.documentElement.setAttribute('data-lg-hublayout', it.id);
+            row.querySelectorAll('.lg-set-opt').forEach(function (x) { x.classList.remove('is-on'); });
+            b.classList.add('is-on');
+          });
+          row.appendChild(b);
+        });
+        sec.appendChild(row);
+        container.appendChild(sec);
+      })();
+    }
     section('Videos', PLAYONE, getPlayone(), 'playone', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });

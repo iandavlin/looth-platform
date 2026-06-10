@@ -24,7 +24,7 @@
     if (document.getElementById('looth-app-settings-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-app-settings-js';
-    s.src = '/app-settings.js?v=21';
+    s.src = '/app-settings.js?v=22';
     (document.head || document.documentElement).appendChild(s);
   })();
 
@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=141";
+    s.src = "/hub-polish.js?v=142";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();

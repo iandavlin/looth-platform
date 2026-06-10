@@ -97,26 +97,15 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     <?php
 }
 
-/** The view toggles (Compact / Text size / Theme). Shared so the Hub rail and
- *  the scoped-forum sort bar render identical, JS-bindable markup. */
+/** The view toggles (Compact / Text size / Theme) — RETIRED 2026-06-10
+ *  (bespoke-cutover; Ian: the header GEAR is the only page-state control zone).
+ *  Text size + color live in the gear (LGSettings panel); compact mode retired
+ *  with the layout pullback to Mosaic/Stream. Both render layers were already
+ *  CSS-hiding these buttons — now they are simply not emitted. forums.js's
+ *  legacy handlers are null-guarded, so they no-op. Function kept (empty) so
+ *  call sites stay valid. */
 function hub_render_view_toggles(): void
 {
-    ?>
-    <div class="feed-view-toggles">
-      <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
-              title="Cycle text size" aria-label="Cycle text size">
-        <span class="feed-text-toggle__icon" aria-hidden="true">T</span>
-      </button>
-      <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
-              title="Cycle color theme" aria-label="Cycle color theme">
-        <span class="feed-theme-toggle__icon" aria-hidden="true">C</span>
-      </button>
-      <button class="feed-compact-toggle" type="button" aria-pressed="false"
-              title="Toggle compact view" aria-label="Toggle compact view">
-        <span class="feed-compact-toggle__icon" aria-hidden="true">Cpt</span>
-      </button>
-    </div>
-    <?php
 }
 
 /** One accordion parent (+ its leaves) for the Category section. */

@@ -2954,6 +2954,23 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   .feed-page .feed-card:first-child .fc-cover { max-width: none; width: 100%; }
 }
 
+/* ── STREAM layout variant — one centered reading column. The default is the
+   mosaic/masonry geometry above; layouts pulled back to these TWO (Ian
+   2026-06-10, bespoke-cutover). html[data-lg-hublayout] is set PRE-PAINT by
+   the nginx boot script from localStorage lg-hub-layout (the gear panel is the
+   control), so the picked layout paints on the first frame. The attribute
+   selector outweighs the mosaic rules above; no !important. (Moved here from
+   hub-polish ensureHubLayoutCss; Cards/Compact variants retired.) ── */
+@media (min-width: 641px) {
+  html[data-lg-hublayout="stream"] .feed-page { max-width: 760px; }
+  html[data-lg-hublayout="stream"] .feed-page .feed {
+    display: block; column-width: auto; columns: 1; padding: 22px 16px 48px;
+  }
+  html[data-lg-hublayout="stream"] .feed-page .feed-card { margin: 0 0 20px; }
+  html[data-lg-hublayout="stream"] .feed-page .feed-card__cover,
+  html[data-lg-hublayout="stream"] .feed-page .fc-cover { aspect-ratio: 16 / 9; max-height: 460px; }
+}
+
 
 /* ── cream-sage: forum-parent prominence (brand-accent left bar + colored
       parent label + category icon). 9 categories map onto the 3 brand accent
