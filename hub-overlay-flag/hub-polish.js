@@ -2852,11 +2852,8 @@
       P + ' .feed-card:first-child .feed-card__cover,' + P + ' .feed-card:first-child .fc-cover{' +
         'max-width:none!important;width:100%!important}',
 
-      // ── Hide the desktop-only "Add an author" filter box (Buck 2026-06-09): it
-      // duplicates what "Search the Hub" + Filters + tapping a member's name already
-      // do, and it's not on mobile — so drop it for a cleaner, mobile-consistent
-      // toolbar. Keeps the topic search (.hub-tsearch--q).
-      P + ' .hub-tsearch--author{display:none!important}',
+      // (Author-search hide RETIRED 2026-06-10 — Ian: "we need author search
+      // back". The server-rendered .hub-tsearch--author box shows again.)
 
       // ── Make the "Search the Hub" box LONGER (Buck 2026-06-09: it's stubby). Let it
       // grow to fill the sort bar's free space (with the rail collapsed there's plenty).
