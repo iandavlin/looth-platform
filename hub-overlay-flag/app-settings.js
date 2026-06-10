@@ -34,7 +34,7 @@
         '--lg-cream': '#15171a', '--lg-sage': '#9cb37d', '--lg-sage-d': '#b0c693',
         '--lg-sage-tint': '#243024', '--lg-sage-3': '#2f3d2c', '--lg-line': '#2c312d',
         '--lg-charcoal': '#f2f4ee', '--lg-ink': '#e5e7e1', '--lg-mute': '#a6ac9f',
-        '--lg-amber': '#ecb351', '--lg-rust': '#d57a55',
+        '--lg-amber': '#ecb351', '--lg-rust': '#d57a55', '--lg-card-bg': '#1e2124',
         '--lguser-bg': '#15171a', '--lguser-card': '#1e2124', '--lguser-accent': '#9cb37d',
         '--lguser-accent-d': '#b0c693', '--lguser-pill': '#243024', '--lguser-line': '#2c312d',
         '--lguser-ink': '#e5e7e1', '--lguser-mute': '#a6ac9f', '--lguser-bubble': '#262b30' } }
@@ -221,10 +221,6 @@
       // explicit modes now; Dark is a deliberate pick, Light has no overrides.)
       ''
     ].join('\n');
-    // MOBILE/desktop separation (Ian 2026-06-10): dark mode is DESKTOP-only —
-    // <=640 keeps the normalized brand-light app look until the mobile engine
-    // adopts dark deliberately (C9 stage).
-    css = '@media (min-width:641px){\n' + css + '\n}';
     var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
@@ -250,10 +246,8 @@
     // (Light = none; Dark = the one override set).
     THEME_KEYS.forEach(function (k) { root.style.removeProperty(k); });
     var t = byId(THEMES, themeId);
-    // COLOR is desktop-only (Ian 2026-06-10): <=640 always renders the brand-
-    // light app look, whatever is picked. The pick persists, so the same
-    // device's desktop window still honors it.
-    if (window.matchMedia && !window.matchMedia('(min-width:641px)').matches) t = byId(THEMES, 'default');
+    // Mode applies at ALL widths (Ian 2026-06-10 v2: mobile users pick their
+    // own mode; the pick is per-device/localStorage, never synced).
     if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k)) root.style.setProperty(k, t.vars[k]);
     root.setAttribute('data-lguser-theme', t.id);
     root.setAttribute('data-lguser-dark', t.dark ? '1' : '0');
@@ -282,10 +276,18 @@
     root.style.setProperty('--lg-read-scale', String(z.scale));
     root.style.fontSize = (z.scale * 100) + '%';
 
-    // Comment bubble color (Facebook-style comment bubbles).
+    // Comment bubble color (Ian 2026-06-10): bubbles + text follow the MODE by
+    // default (light -> grey fallback, dark -> the theme's dark bubble, already
+    // set by the vars loop above). A custom tint applies only as a DESKTOP
+    // LIGHT-mode pick — pastel tints are illegible on dark, and mobile has no
+    // bubble control. (Also fixes: the old removeProperty wiped the dark
+    // theme's bubble when the pick was 'default'.)
     var bub = byId(BUBBLES, getBubble());
-    if (bub.color) root.style.setProperty('--lguser-bubble', bub.color);
-    else root.style.removeProperty('--lguser-bubble');
+    var deskt = !window.matchMedia || window.matchMedia('(min-width:641px)').matches;
+    if (!t.dark) {
+      if (deskt && bub.color) root.style.setProperty('--lguser-bubble', bub.color);
+      else root.style.removeProperty('--lguser-bubble');
+    }
 
     // Hub feed layout (cards vs immersive edge-to-edge). hub-polish.js reads this.
     root.setAttribute('data-lguser-feed', getFeed());
@@ -327,7 +329,8 @@
       theme: themeId, dark: dark, vars: vars,
       font: f.stack || null,
       fontHref: f.google ? ('https://fonts.googleapis.com/css2?family=' + f.google + '&display=swap') : null,
-      scale: z.scale, feed: getFeed(), bubble: bub.color || null,
+      scale: z.scale, feed: getFeed(),
+      bubble: (!dark && (!window.matchMedia || window.matchMedia('(min-width:641px)').matches)) ? (bub.color || null) : null,
       bg: vars['--lg-cream'] || null, ink: dark ? '#e5e7e1' : null
     };
   }
@@ -374,14 +377,10 @@
       container.appendChild(sec);
     }
 
-    // Color is desktop-only (mobile keeps the brand-light app look) — hide the
-    // control where it cannot apply.
-    if (!window.matchMedia || window.matchMedia('(min-width:641px)').matches) {
-      section('Color', THEMES, getTheme(), 'theme', function (b, it) {
-        b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
-          '<span class="lg-set-opt__t">' + it.name + '</span>';
-      });
-    }
+    section('Color', THEMES, getTheme(), 'theme', function (b, it) {
+      b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
+        '<span class="lg-set-opt__t">' + it.name + '</span>';
+    });
     section('Font', FONTS, getFont(), 'font', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t"' + (it.stack ? ' style="font-family:' + it.stack + '"' : '') + '>' + it.name + '</span>';
       if (it.google) loadFont(it); // preview in its own face
@@ -389,10 +388,15 @@
     section('Text size', SIZES, getSize(), 'size', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });
-    section('Comment bubble', BUBBLES, getBubble(), 'bubble', function (b, it) {
-      b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
-        '<span class="lg-set-opt__t">' + it.name + '</span>';
-    });
+    // Bubble control is DESKTOP-only (Ian 2026-06-10): mobile just gets Light/
+    // Dark, with bubble + text colors derived from the mode like desktop's
+    // defaults.
+    if (!window.matchMedia || window.matchMedia('(min-width:641px)').matches) {
+      section('Comment bubble', BUBBLES, getBubble(), 'bubble', function (b, it) {
+        b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
+          '<span class="lg-set-opt__t">' + it.name + '</span>';
+      });
+    }
     section('Hub feed', FEEDVIEWS, getFeed(), 'feed', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });

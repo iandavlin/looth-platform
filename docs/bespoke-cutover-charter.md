@@ -104,6 +104,9 @@ extraction → BuddyBoss retirement.
 **Open dependency:** live-box access for fable (SSH) or Ian as deploy hands.
 **Open decisions for Ian:** G8 trio (shop / forms / digest); front-page punch list;
 interim DM story at launch (legacy BB link vs absent).
+**Post-launch enhancement list (Ian-added):**
+- Account-synced appearance preferences across devices (profile-app-backed; today
+  the Light/Dark + font/size picks are per-device localStorage). Ian 6/10.
 
 ---
 

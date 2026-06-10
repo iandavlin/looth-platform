@@ -132,18 +132,10 @@
       // .lg-react-bar floating bar was removed 2026-06-07, unified on the real picker).
       '.lg-card-actions,.lg-card-actions *,.fc-actions,.fcr,.fcr-palette,.fcr-palette *{' +
         '-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}' +
-      // Theme normalize (Buck, 2026-06-06): the Hub color theme is saved per-browser
-      // (hub-theme-dark/black/panels), so Buck and Ian were on different saved themes.
-      // Force the brand LIGHT look on MOBILE so everyone is consistent + matches the
-      // cream app-card style. This restores the brand tokens the dark themes remap.
-      // DESKTOP IS UNTOUCHED: this lives inside the max-width:640px media query, so
-      // >640px keeps the user-picked theme; localStorage is not modified.
-      'html.hub-theme-dark,html.hub-theme-black,html.hub-theme-panels{' +
-        '--bg:#fbfbf8;--bg-card:#fff;--lg-card-bg:#fff;--lg-cream:#fbfbf8;--bg-sticky:#fbfbf8;--bg-closed:#f3f1ea;' +
-        '--fg:#323532;--fg-muted:#6b6f6b;--fg-soft:#9a9c92;--lg-ink:#323532;--lg-mute:#6b6f6b;' +
-        '--lg-line:#e3ddd0;--border:#e3ddd0;--border-soft:#eef0e6;' +
-        '--lg-sage-tint:#eef2e3;--lg-sage-d:#6b7c52;--accent:#6b7c52;' +
-        '--shadow-card:0 1px 0 rgba(0,0,0,.04);--shadow-elev:0 8px 24px -16px rgba(40,50,30,.20)}' +
+      // (Theme-normalize block REMOVED 2026-06-10 bespoke-cutover: it keyed on
+      // the retired hub-theme-* classes — dead code — and mobile now honors the
+      // user's own Light/Dark pick from the gear.)
+      ''+
     '}';
 
   function inject() {
