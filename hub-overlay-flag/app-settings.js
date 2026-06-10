@@ -286,18 +286,10 @@
     root.style.setProperty('--lg-read-scale', String(z.scale));
     root.style.fontSize = (z.scale * 100) + '%';
 
-    // Comment bubble color (Ian 2026-06-10): bubbles + text follow the MODE by
-    // default (light -> grey fallback, dark -> the theme's dark bubble, already
-    // set by the vars loop above). A custom tint applies only as a DESKTOP
-    // LIGHT-mode pick — pastel tints are illegible on dark, and mobile has no
-    // bubble control. (Also fixes: the old removeProperty wiped the dark
-    // theme's bubble when the pick was 'default'.)
-    var bub = byId(BUBBLES, getBubble());
-    var deskt = !window.matchMedia || window.matchMedia('(min-width:641px)').matches;
-    if (!t.dark) {
-      if (deskt && bub.color) root.style.setProperty('--lguser-bubble', bub.color);
-      else root.style.removeProperty('--lguser-bubble');
-    }
+    // Comment bubble: derived from the MODE, no user control anywhere (Ian
+    // 2026-06-10 final: picker removed from desktop too). Light -> the grey
+    // fallback; dark -> the theme's dark bubble (set by the vars loop above).
+    if (!t.dark) root.style.removeProperty('--lguser-bubble');
 
     // Hub feed layout (cards vs immersive edge-to-edge). hub-polish.js reads this.
     root.setAttribute('data-lguser-feed', getFeed());
@@ -330,7 +322,6 @@
     var themeId = getTheme();
     var f = byId(FONTS, getFont());
     var z = byId(SIZES, getSize());
-    var bub = byId(BUBBLES, getBubble());
     var vars = {}, dark = false, k;
     var t = byId(THEMES, themeId);
     if (t.vars) for (k in t.vars) if (t.vars.hasOwnProperty(k)) vars[k] = t.vars[k];
@@ -339,8 +330,7 @@
       theme: themeId, dark: dark, vars: vars,
       font: f.stack || null,
       fontHref: f.google ? ('https://fonts.googleapis.com/css2?family=' + f.google + '&display=swap') : null,
-      scale: z.scale, feed: getFeed(),
-      bubble: (!dark && (!window.matchMedia || window.matchMedia('(min-width:641px)').matches)) ? (bub.color || null) : null,
+      scale: z.scale, feed: getFeed(), bubble: null,
       bg: vars['--lg-cream'] || null, ink: dark ? '#e5e7e1' : null
     };
   }
@@ -398,15 +388,8 @@
     section('Text size', SIZES, getSize(), 'size', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });
-    // Bubble control is DESKTOP-only (Ian 2026-06-10): mobile just gets Light/
-    // Dark, with bubble + text colors derived from the mode like desktop's
-    // defaults.
-    if (!window.matchMedia || window.matchMedia('(min-width:641px)').matches) {
-      section('Comment bubble', BUBBLES, getBubble(), 'bubble', function (b, it) {
-        b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
-          '<span class="lg-set-opt__t">' + it.name + '</span>';
-      });
-    }
+    // (Comment-bubble picker removed EVERYWHERE — Ian 2026-06-10: bubbles +
+    // text derive from the mode. BUBBLES kept only for stored-key compat.)
     section('Hub feed', FEEDVIEWS, getFeed(), 'feed', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
     });

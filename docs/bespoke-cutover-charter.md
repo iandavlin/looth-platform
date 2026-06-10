@@ -107,6 +107,15 @@ interim DM story at launch (legacy BB link vs absent).
 **Post-launch enhancement list (Ian-added):**
 - Account-synced appearance preferences across devices (profile-app-backed; today
   the Light/Dark + font/size picks are per-device localStorage). Ian 6/10.
+- **lg-layout-v2 dark-mode overhaul** (Ian 6/10: "V2 needs mode overhaul in
+  general"). Today's state: article pages are INSULATED — the `.lg-standalone-main`
+  canvas stays the designed light "paper" with pinned light tokens while the
+  chrome around it darkens (app-settings dark sheet). The overhaul = a deliberate
+  dark treatment at the ENGINE level: mode-aware tokens in lg-layout-v2 shell.css
+  (block-shell layer rules respecting the @layer ordering gotchas), dark paper
+  palette designed for legibility, gate-CTA/paywall card variants, and the
+  comments iframe already follows. Design call for Ian: dark paper vs always-light
+  articles. Scope: lg-layout-v2 plugin + archive-poc vendored bundle regen.
 
 ---
 
