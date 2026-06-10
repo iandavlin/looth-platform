@@ -499,7 +499,9 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ?><!doctype html>
 <html lang="en">
 <head>
-<script>/* color theme (Default/Panels/Dark/Black): apply before paint to avoid flash */try{var t=localStorage.getItem('lg_hub_theme');if(t==='1')document.documentElement.classList.add('hub-theme-panel');else if(t==='2')document.documentElement.classList.add('hub-theme-dark');else if(t==='3')document.documentElement.classList.add('hub-theme-black');}catch(e){}</script>
+<?php /* legacy hub-theme + compact pre-paint appliers REMOVED 2026-06-10
+         (bespoke-cutover two-mode pare-back): color is Light/Dark via the gear
+         (applied pre-paint by the nginx boot script); compact view retired. */ ?>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>
@@ -515,7 +517,6 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
 <body class="bb-mirror">
-<script>/* compact feed view: apply before paint to avoid flash */try{if(localStorage.getItem('hub-compact')==='1')document.documentElement.classList.add('hub-compact');}catch(e){}</script>
 
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"

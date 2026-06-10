@@ -93,90 +93,16 @@ body.bb-mirror{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:gray
 }
 
 /* ══════════════════════════════════════════════════════════
-   COLOR THEME TOGGLE — 4-state cycle (Default → Panels → Dark → Black)
-   Set as .hub-theme-panel / -dark / -black on <html> by forums.js,
-   persisted in localStorage, applied before paint (_chrome.php head).
-   Each theme just re-points the design tokens defined on :root above,
-   so every component that reads --bg / --bg-card / --fg / --lg-* follows.
+   LEGACY COLOR-THEME CYCLE (Default → Panels → Dark → Black) RETIRED
+   2026-06-10 (bespoke-cutover two-mode pare-back). The hub-theme-panel/
+   -dark/-black token blocks + their hardcoded-white patches lived here.
+   The C-toggle button stopped being emitted earlier today; the _chrome.php
+   pre-paint class applier is removed with this commit, so the classes can
+   never appear. Color modes are now exactly TWO, owned by the gear
+   (app-settings): Light = no overrides; Dark = --lguser-*/--lg-* inline +
+   the dark token bridge below. forums.js's cycle handler is null-guarded
+   dead code (swept with C3).
    ══════════════════════════════════════════════════════════ */
-
-/* 2 — "Panels": literally SWAP the page and panel backgrounds. Default is
-   cream page (#f4f2ec) + white panels; this flips to a white page + cream
-   panels — softer cards, same brand palette (cream panels are easier on the
-   eyes than stark white). Text/borders unchanged. */
-html.hub-theme-panel {
-  --bg:          #2f302b;  /* dark-grey page so the cream panels + rail pop     */
-  --bg-card:     #f4f2ec;  /* panels (and the rail, via --bg-card) stay cream   */
-  --lg-card-bg:  #f4f2ec;
-  --lg-cream:    #f4f2ec;
-  --bg-sticky:   #efece3;
-  --bg-closed:   #e9e6dc;
-}
-
-/* 3 — "Dark": full dark-sage mode. */
-html.hub-theme-dark {
-  --bg:          #14170f;
-  --bg-card:     #1e2218;
-  --lg-card-bg:  #1e2218;
-  --lg-cream:    #14170f;
-  --bg-sticky:   #242a1b;
-  --bg-closed:   #1a1e14;
-  --fg:          #e9eae2;
-  --fg-muted:    #b6bcab;
-  --fg-soft:     #868c79;
-  --lg-ink:      #e9eae2;
-  --lg-mute:     #aab09c;
-  --lg-line:     #343b2a;
-  --border:      #343b2a;
-  --border-soft: #2a3022;
-  --lg-sage-tint:#2a3320;            /* hover wash */
-  --lg-sage-d:   #7c9a52;            /* lift brand sage so buttons/active pills read on dark */
-  --accent:      #7c9a52;
-  --shadow-card: 0 1px 0 rgba(0,0,0,.5);
-  --shadow-elev: 0 8px 24px rgba(0,0,0,.55);
-}
-
-/* 4 — "Black": true-black OLED / Reddit-style dark (pure black page, raised
-   near-black panels). */
-html.hub-theme-black {
-  --bg:          #060608;  /* reads black; a hair off pure #000 to avoid halation/eye-strain */
-  --bg-card:     #16181c;  /* raised panels separate from the near-black page */
-  --lg-card-bg:  #16181c;
-  --lg-cream:    #060608;
-  --bg-sticky:   #1e2024;
-  --bg-closed:   #0f1013;
-  --fg:          #d7dadc;  /* desaturated off-white (not #fff) — softer on dark */
-  --fg-muted:    #9a9d9f;
-  --fg-soft:     #6c6f71;
-  --lg-ink:      #d7dadc;
-  --lg-mute:     #9a9d9f;
-  --lg-line:     #2a2c30;
-  --border:      #2a2c30;
-  --border-soft: #1d1f22;
-  --lg-sage-tint:#1c2614;            /* hover wash */
-  --lg-sage-d:   #86a559;            /* lifted brand sage for buttons/active pills */
-  --accent:      #86a559;
-  --shadow-card: 0 1px 0 rgba(0,0,0,.7);
-  --shadow-elev: 0 8px 28px rgba(0,0,0,.75);
-}
-
-/* Dark/Black patches for a few surfaces that hardcode white. */
-html.hub-theme-dark .ntm-form .ql-toolbar.ql-snow,
-html.hub-theme-dark .post-edit .ql-toolbar.ql-snow,
-html.hub-theme-dark .post-edit__quill,
-html.hub-theme-dark .reply-form__editor,
-html.hub-theme-dark .search-form__input,
-html.hub-theme-dark .nav-tree__cat-pill,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow,
-html.hub-theme-black .post-edit .ql-toolbar.ql-snow,
-html.hub-theme-black .post-edit__quill,
-html.hub-theme-black .reply-form__editor,
-html.hub-theme-black .search-form__input,
-html.hub-theme-black .nav-tree__cat-pill { background: var(--bg-card); }
-html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-stroke,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-stroke { stroke: var(--fg-muted); }
-html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-fill,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-muted); }
 
 /* ── Insulate the shared shell chrome from the Hub's theme ───────────────────
    The Hub themes by re-pointing the global --lg-* tokens on <html> (so the feed,
@@ -201,43 +127,29 @@ html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-mut
   --lg-rust:      #c66845;
 }
 
-/* ── PICKED-THEME UNIFICATION (moved here from hub-polish.js ensureDesktopCss,
-   2026-06-10 bespoke-cutover — audit C10) ─────────────────────────────────────
-   Two theme systems used to fight: this file's hub-theme-* classes re-point the
-   legacy tokens (--bg/--bg-card/--fg/--lg-*), while the app settings engine
-   writes --lguser-* INLINE on <html> (pre-paint, via the nginx boot script).
-   The overlay used to reconcile them after load with ~10 !important rules — the
-   repaint the lg-feed-booting blank exists to hide. Moving the bridge here makes
-   the FIRST frame paint fully themed, with plain cascade instead of !important:
-   the [data-lguser-…] attribute selector (0,2,1) outweighs both :root and the
-   html.hub-theme-* classes (0,1,1), and the :root --lguser aliases lose to the
-   inline values, so there is no var() cycle.
-   Gate matches an ACTIVELY-PICKED light theme only (cream/sage/amber/rust/
-   custom): the no-pick default and the picked Dark theme keep the native
-   hub-theme behavior, exactly as the overlay did. Desktop only — mobile is
-   brand-light by design (app-mobile-fixes normalize; folds into mobile-hub.css
-   at the C9 stage). */
+/* ── DARK-MODE TOKEN BRIDGE (2026-06-10 bespoke-cutover — C10 unification,
+   then the two-mode pare-back: Ian wants exactly ONE light + ONE dark) ───────
+   LIGHT is the no-pick default with ZERO overrides — every surface renders its
+   native brand palette, so nothing can mismatch (this killed the "colors hit
+   some headers and not others" class of bug, along with the legacy hub-theme-*
+   classes that used to live right above this comment).
+   DARK is set by the gear (app-settings): --lguser-* + --lg-* land INLINE on
+   <html> pre-paint via the nginx boot script. This bridge chains the legacy
+   bb-mirror tokens to the same source so the whole Hub shell follows in the
+   SAME frame — plain cascade, no !important, no var() cycle (the inline
+   --lguser values beat the :root aliases). Desktop only: mobile is normalized
+   brand-light by design (folds into mobile-hub.css at the C9 stage). */
 @media (min-width: 641px) {
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) {
-    --bg:        var(--lguser-bg);
-    --bg-card:   var(--lguser-card);
-    --bg-sticky: var(--lguser-card);
-    --bg-closed: var(--lguser-bg);
-    --fg:        var(--lguser-ink);
-    --fg-muted:  var(--lguser-mute);
-    --lg-ink:    var(--lguser-ink);
-    --lg-charcoal: var(--lguser-ink);
-    --lg-mute:   var(--lguser-mute);
-  }
-  /* Rail rows/labels carry their own color rules that lagged the repoint —
-     bind the visible label text to the themed ink (was the overlay's force). */
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__row,
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-acc__parent,
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__nm,
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__h,
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav .hub-rail__sec-toggle,
-  html[data-lguser-dark="0"]:not([data-lguser-theme="default"]) .bb-layout__nav summary {
-    color: var(--lguser-ink, #1a1d1a);
+  html[data-lguser-theme="dark"] {
+    --bg:          var(--lguser-bg);
+    --bg-card:     var(--lguser-card);
+    --bg-sticky:   var(--lguser-card);
+    --bg-closed:   var(--lguser-bg);
+    --fg:          var(--lguser-ink);
+    --fg-muted:    var(--lguser-mute);
+    --border:      var(--lguser-line);
+    --border-soft: var(--lguser-line);
+    --lg-card-bg:  var(--lguser-card);
   }
 }
 
@@ -3725,33 +3637,29 @@ body:has(.feed-page) #bb-ham{display:none}
 .feed-card__reply-cta, .reply-stub__reply {
   transition: color .12s, background .12s, border-color .12s, box-shadow .15s ease;
 }
-/* Resting (before hover) */
-html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta,
-html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply {
+/* Resting (before hover) — re-keyed 2026-06-10 from the retired hub-theme-*
+   classes to the two-mode attribute (Light = no data-lguser-theme="dark"). */
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply {
   box-shadow: 0 1px 4px rgba(26, 29, 26, .16);
 }
-html.hub-theme-dark  .feed-card__reply-cta,
-html.hub-theme-black .feed-card__reply-cta,
-html.hub-theme-dark  .reply-stub__reply,
-html.hub-theme-black .reply-stub__reply {
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #7c9a52) 42%, transparent);
+html[data-lguser-theme="dark"] .feed-card__reply-cta,
+html[data-lguser-theme="dark"] .reply-stub__reply {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lguser-accent, #9cb37d) 42%, transparent);
 }
 /* Hover bump */
-html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta:hover,
-html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply:hover {
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta:hover,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply:hover {
   box-shadow: 0 3px 9px rgba(26, 29, 26, .24);
 }
-html.hub-theme-dark  .feed-card__reply-cta:hover,
-html.hub-theme-black .feed-card__reply-cta:hover,
-html.hub-theme-dark  .reply-stub__reply:hover,
-html.hub-theme-black .reply-stub__reply:hover {
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #7c9a52) 68%, transparent);
+html[data-lguser-theme="dark"] .feed-card__reply-cta:hover,
+html[data-lguser-theme="dark"] .reply-stub__reply:hover {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--lguser-accent, #9cb37d) 68%, transparent);
 }
-/* Cards — subtle sage glow on dark/black hover (desktop ≥641) */
+/* Cards — subtle sage glow on dark hover (desktop ≥641) */
 @media (min-width: 641px) {
-  html.hub-theme-dark  .feed-page .feed-card:hover,
-  html.hub-theme-black .feed-page .feed-card:hover {
-    box-shadow: 0 0 22px color-mix(in srgb, var(--accent, #7c9a52) 17%, transparent);
+  html[data-lguser-theme="dark"] .feed-page .feed-card:hover {
+    box-shadow: 0 0 22px color-mix(in srgb, var(--lguser-accent, #9cb37d) 17%, transparent);
   }
 }
 

@@ -22,46 +22,22 @@
 
   var KEY = { theme: 'lg-set-theme', font: 'lg-set-font', size: 'lg-set-size', bubble: 'lg-set-bubble', feed: 'lg-set-feed', custom: 'lg-set-custom', playone: 'lg-set-playone' };
 
-  // ---- Color themes (on-brand, from the Style Sandbox family) ----
-  // 'default' = no override (current look). Others override brand tokens (rest
-  // of the app) + --lguser-* (Hub feed) so the whole experience recolors.
+  // ---- Color modes — pared to TWO (Ian 2026-06-10, bespoke-cutover):
+  // LIGHT = the brand default with NO overrides (vars:null), so every page,
+  // header and app renders its native palette — nothing can mismatch.
+  // DARK = one sage-tinted dark set, tuned for legibility (no pure black,
+  // desaturated off-white ink ~12:1 on cards, mutes lifted to ~6:1).
+  // Legacy picks (cream/sage/amber/rust/custom) map to Light in getTheme().
   var THEMES = [
-    { id: 'default', name: 'Default', dot: '#e9eedd', dark: false, vars: null },
-    { id: 'cream-classic', name: 'Cream', dot: '#fbfbf8', dark: false, vars: {
-        '--lg-cream': '#fbfbf8', '--lg-sage': '#87986a', '--lg-sage-d': '#6b7c52',
-        '--lg-sage-tint': '#eef2e3', '--lg-line': '#e3ddd0',
-        '--lguser-bg': '#f1efe8', '--lguser-card': '#ffffff', '--lguser-accent': '#6b7c52',
-        '--lguser-accent-d': '#52613d', '--lguser-pill': '#eef2e3', '--lguser-line': '#e3ddd0',
-        '--lguser-ink': '#1a1d1a', '--lguser-mute': '#6b6f6b' } },
-    { id: 'sage-deep', name: 'Sage', dot: '#6b7c52', dark: false, vars: {
-        '--lg-cream': '#e6ecd9', '--lg-sage': '#6b7c52', '--lg-sage-d': '#52613d',
-        '--lg-sage-tint': '#d6e1bf', '--lg-line': '#c6d2ad',
-        '--lguser-bg': '#e6ecd9', '--lguser-card': '#ffffff', '--lguser-accent': '#5c6c45',
-        '--lguser-accent-d': '#44512f', '--lguser-pill': '#d6e1bf', '--lguser-line': '#c6d2ad',
-        '--lguser-ink': '#1a1d1a', '--lguser-mute': '#647053' } },
-    { id: 'amber-warm', name: 'Amber', dot: '#ecb351', dark: false, vars: {
-        '--lg-cream': '#f6efe2', '--lg-sage': '#b5872f', '--lg-sage-d': '#8f6620',
-        '--lg-sage-tint': '#f0e2c4', '--lg-line': '#e6dac2',
-        '--lguser-bg': '#f3ead8', '--lguser-card': '#fffdf8', '--lguser-accent': '#a9772a',
-        '--lguser-accent-d': '#7f5717', '--lguser-pill': '#f0e2c4', '--lguser-line': '#e6dac2',
-        '--lguser-ink': '#2a230f', '--lguser-mute': '#7a6f56' } },
-    { id: 'rust-accent', name: 'Rust', dot: '#c66845', dark: false, vars: {
-        '--lg-cream': '#f5efe9', '--lg-sage': '#c66845', '--lg-sage-d': '#a8512f',
-        '--lg-sage-tint': '#f0ddd2', '--lg-line': '#e7d9cd',
-        '--lguser-bg': '#f2e9e1', '--lguser-card': '#fffaf6', '--lguser-accent': '#b85a38',
-        '--lguser-accent-d': '#94431f', '--lguser-pill': '#f0ddd2', '--lguser-line': '#e7d9cd',
-        '--lguser-ink': '#2a1c14', '--lguser-mute': '#7c6a5e' } },
-    // Dark mode (Buck 2026-06-08). dark:true sets color-scheme:dark. Overrides the
-    // text tokens too (charcoal/ink/mute) — they're unioned into THEME_KEYS so they
-    // revert cleanly when switching back to a light theme.
+    { id: 'default', name: 'Light', dot: '#fbfbf8', dark: false, vars: null },
     { id: 'dark', name: 'Dark', dot: '#1e2320', dark: true, vars: {
         '--lg-cream': '#15171a', '--lg-sage': '#9cb37d', '--lg-sage-d': '#b0c693',
         '--lg-sage-tint': '#243024', '--lg-sage-3': '#2f3d2c', '--lg-line': '#2c312d',
-        '--lg-charcoal': '#f2f4ee', '--lg-ink': '#e5e7e1', '--lg-mute': '#9aa097',
+        '--lg-charcoal': '#f2f4ee', '--lg-ink': '#e5e7e1', '--lg-mute': '#a6ac9f',
         '--lg-amber': '#ecb351', '--lg-rust': '#d57a55',
         '--lguser-bg': '#15171a', '--lguser-card': '#1e2124', '--lguser-accent': '#9cb37d',
         '--lguser-accent-d': '#b0c693', '--lguser-pill': '#243024', '--lguser-line': '#2c312d',
-        '--lguser-ink': '#e5e7e1', '--lguser-mute': '#9aa097', '--lguser-bubble': '#262b30' } }
+        '--lguser-ink': '#e5e7e1', '--lguser-mute': '#a6ac9f', '--lguser-bubble': '#262b30' } }
   ];
   // Union of every theme var key, so apply() can cleanly revert before re-setting.
   var THEME_KEYS = (function () {
@@ -119,36 +95,21 @@
     { id: 'off', name: 'Allow several' }
   ];
 
-  // ---- Custom color (the "pick any color" wheel — Buck 2026-06-08) ----
-  // A picked hex drives the ACCENT family (sage/lguser-accent + tint/dark/line +
-  // a faint bg wash), leaving the ink/mute text dark so any chosen color stays
-  // legible. Stored separately (lg-set-custom); selecting it sets theme='custom'.
-  function hx2(n) { n = Math.max(0, Math.min(255, Math.round(n))).toString(16); return n.length < 2 ? '0' + n : n; }
-  function parseHex(h) { h = (h || '').replace('#', ''); if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0]; }
-  function mix(a, b, t) { var A = parseHex(a), B = parseHex(b); return '#' + hx2(A[0] + (B[0] - A[0]) * t) + hx2(A[1] + (B[1] - A[1]) * t) + hx2(A[2] + (B[2] - A[2]) * t); }
-  function customVars(hex) {
-    var d = mix(hex, '#000000', 0.18);
-    var tint = mix(hex, '#ffffff', 0.84);
-    var line = mix(hex, '#ffffff', 0.74);
-    return {
-      '--lg-cream': mix(hex, '#ffffff', 0.94), '--lg-sage': hex, '--lg-sage-d': d,
-      '--lg-sage-tint': tint, '--lg-line': line,
-      '--lguser-bg': mix(hex, '#ffffff', 0.93), '--lguser-card': '#ffffff',
-      '--lguser-accent': hex, '--lguser-accent-d': d, '--lguser-pill': tint, '--lguser-line': line
-    };
-  }
+  // (custom color wheel removed in the 2026-06-10 two-mode pare-back)
 
   function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return list[0]; }
   function rd(k) { try { return localStorage.getItem(KEY[k]); } catch (e) { return null; } }
   function wr(k, v) { try { localStorage.setItem(KEY[k], v); } catch (e) {} }
 
-  function getTheme() { return rd('theme') || 'default'; }
+  function getTheme() {
+    // Pare-back mapping (2026-06-10): anything that isn't 'dark' is Light.
+    return rd('theme') === 'dark' ? 'dark' : 'default';
+  }
   function getFont() { return rd('font') || 'default'; }
   function getSize() { return rd('size') || 'm'; }
   function getBubble() { return rd('bubble') || 'default'; }
   function getFeed() { return rd('feed') || 'immersive'; }   // Buck 2026-06-08: immersive is the default
   function getPlayone() { return rd('playone') || 'on'; }    // Buck 2026-06-09: single-video default ON
-  function getCustom() { var v = rd('custom'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : '#87986a'; }
 
   // Lazy-load a Google webfont once.
   function loadFont(font) {
@@ -247,18 +208,11 @@
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow,' + D + ' .reply-stub__editbox .ql-container.ql-snow,' + D + ' .ntm-form .ql-toolbar.ql-snow,' + D + ' .ntm-form .ql-container.ql-snow{background:#1e2124!important;border-color:#2c312d!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-stroke,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-stroke{stroke:#cdd0ca!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-fill,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-fill{fill:#cdd0ca!important}',
-      // ── OS dark + NO picked theme (Buck 2026-06-09) ──
-      // When no theme is picked (data-lguser-theme="default"), the Hub FOLLOWS the OS:
-      // forums.css redefines --lguser-* under prefers-color-scheme:dark so the FEED goes
-      // dark — but the shared site-header uses the brand --lg-* tokens, which are NOT
-      // OS-aware, so the top bar stayed WHITE on an otherwise-dark page. Mirror the
-      // picked-Dark header treatment for the default theme under OS dark so the bar
-      // matches the feed (gated to "default" so a picked LIGHT theme keeps a light bar).
-      '@media (prefers-color-scheme:dark){' +
-        'html[data-lguser-theme="default"] #site-header,html[data-lguser-theme="default"] .lg-chrome,html[data-lguser-theme="default"] #site-header .lg-chrome__inner{background:#000!important;border-color:#15171a!important}' +
-        'html[data-lguser-theme="default"] .lg-chrome{--lg-ink:#e5e7e1!important;--lg-mute:#9aa097!important;--lg-line:#2c312d!important}' +
-        'html[data-lguser-theme="default"] .lg-chrome__account{background:#1e2124!important;border-color:#2c312d!important}' +
-      '}'
+      // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
+      // blackened ONLY the header when OS was dark with no picked theme — the
+      // page stayed light = the "some headers and not others" mismatch. Two
+      // explicit modes now; Dark is a deliberate pick, Light has no overrides.)
+      ''
     ].join('\n');
     var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
@@ -284,17 +238,10 @@
     // Theme: revert all theme keys, then set the chosen theme's overrides. The
     // 'custom' theme builds its vars from the picked color; presets use their own.
     THEME_KEYS.forEach(function (k) { root.style.removeProperty(k); });
-    if (themeId === 'custom') {
-      var cv = customVars(getCustom());
-      for (var ck in cv) if (cv.hasOwnProperty(ck)) root.style.setProperty(ck, cv[ck]);
-      root.setAttribute('data-lguser-theme', 'custom');
-      root.setAttribute('data-lguser-dark', '0');
-    } else {
-      var t = byId(THEMES, themeId);
-      if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k)) root.style.setProperty(k, t.vars[k]);
-      root.setAttribute('data-lguser-theme', t.id);
-      root.setAttribute('data-lguser-dark', t.dark ? '1' : '0');
-    }
+    var t = byId(THEMES, themeId);
+    if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k)) root.style.setProperty(k, t.vars[k]);
+    root.setAttribute('data-lguser-theme', t.id);
+    root.setAttribute('data-lguser-dark', t.dark ? '1' : '0');
 
     // Font: override the brand sans token + load the webfont (or revert).
     if (f.stack) {
@@ -352,14 +299,9 @@
     var z = byId(SIZES, getSize());
     var bub = byId(BUBBLES, getBubble());
     var vars = {}, dark = false, k;
-    if (themeId === 'custom') {
-      var cv = customVars(getCustom());
-      for (k in cv) if (cv.hasOwnProperty(k)) vars[k] = cv[k];
-    } else {
-      var t = byId(THEMES, themeId);
-      if (t.vars) for (k in t.vars) if (t.vars.hasOwnProperty(k)) vars[k] = t.vars[k];
-      dark = !!t.dark;
-    }
+    var t = byId(THEMES, themeId);
+    if (t.vars) for (k in t.vars) if (t.vars.hasOwnProperty(k)) vars[k] = t.vars[k];
+    dark = !!t.dark;
     return {
       theme: themeId, dark: dark, vars: vars,
       font: f.stack || null,
@@ -411,43 +353,10 @@
       container.appendChild(sec);
     }
 
-    // The "pick any color" bubble at the end of the Color row: a swatch (the live
-    // custom color, or a rainbow ring when not chosen) that opens the OS color
-    // wheel. Picking a color sets theme='custom' and recolors the app live.
-    function colorWheelExtra(row) {
-      var cur = getCustom();
-      var active = getTheme() === 'custom';
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'lg-set-opt lg-set-opt--custom' + (active ? ' is-on' : '');
-      b.setAttribute('data-id', 'custom');
-      var ring = 'conic-gradient(from 0deg,#e74c3c,#f1c40f,#2ecc71,#1abc9c,#3498db,#9b59b6,#e74c3c)';
-      b.innerHTML = '<span class="lg-set-swatch" style="background:' + (active ? cur : ring) + '"></span>' +
-        '<span class="lg-set-opt__t">Custom</span>';
-      var inp = document.createElement('input');
-      inp.type = 'color';
-      inp.value = cur;
-      inp.setAttribute('aria-label', 'Pick a custom color');
-      inp.style.cssText = 'position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0';
-      b.appendChild(inp);
-      b.addEventListener('click', function (e) { if (e.target !== inp) inp.click(); });
-      function commit() {
-        wr('custom', inp.value);
-        wr('theme', 'custom');
-        apply();
-        row.querySelectorAll('.lg-set-opt').forEach(function (x) { x.classList.remove('is-on'); });
-        b.classList.add('is-on');
-        var sw = b.querySelector('.lg-set-swatch'); if (sw) sw.style.background = inp.value;
-      }
-      inp.addEventListener('input', commit);
-      inp.addEventListener('change', commit);
-      row.appendChild(b);
-    }
-
     section('Color', THEMES, getTheme(), 'theme', function (b, it) {
       b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
         '<span class="lg-set-opt__t">' + it.name + '</span>';
-    }, colorWheelExtra);
+    });
     section('Font', FONTS, getFont(), 'font', function (b, it) {
       b.innerHTML = '<span class="lg-set-opt__t"' + (it.stack ? ' style="font-family:' + it.stack + '"' : '') + '>' + it.name + '</span>';
       if (it.google) loadFont(it); // preview in its own face
@@ -503,7 +412,7 @@
   window.LGSettings = {
     THEMES: THEMES, FONTS: FONTS, SIZES: SIZES, BUBBLES: BUBBLES, FEEDVIEWS: FEEDVIEWS, PLAYONE: PLAYONE,
     get: rd, set: set, apply: apply,
-    getTheme: getTheme, getFont: getFont, getSize: getSize, getBubble: getBubble, getFeed: getFeed, getCustom: getCustom, getPlayone: getPlayone,
+    getTheme: getTheme, getFont: getFont, getSize: getSize, getBubble: getBubble, getFeed: getFeed, getPlayone: getPlayone,
     buildPanel: buildPanel
   };
 
