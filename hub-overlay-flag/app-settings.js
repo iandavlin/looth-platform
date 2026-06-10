@@ -108,7 +108,7 @@
   function getFont() { return rd('font') || 'default'; }
   function getSize() { return rd('size') || 'm'; }
   function getBubble() { return rd('bubble') || 'default'; }
-  function getFeed() { return rd('feed') || 'immersive'; }   // Buck 2026-06-08: immersive is the default
+  function getFeed() { return 'immersive'; }   // control removed 2026-06-10 (Ian): one canonical feed look; stored picks ignored
   function getPlayone() { return rd('playone') || 'on'; }    // Buck 2026-06-09: single-video default ON
 
   // Lazy-load a Google webfont once.
@@ -390,9 +390,8 @@
     });
     // (Comment-bubble picker removed EVERYWHERE — Ian 2026-06-10: bubbles +
     // text derive from the mode. BUBBLES kept only for stored-key compat.)
-    section('Hub feed', FEEDVIEWS, getFeed(), 'feed', function (b, it) {
-      b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
-    });
+    // (Hub feed Cards/Full-screen control REMOVED from the gear — Ian
+    // 2026-06-10. Immersive is the one canonical feed look.)
     // Hub layout (desktop only): Mosaic (masonry packing) vs Stream (one centered
     // column). Moved here from the Hub sidebar panel 2026-06-10 (bespoke-cutover;
     // Ian: the gear is the ONLY page-state control zone). Own localStorage key

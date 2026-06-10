@@ -2889,6 +2889,12 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   .feed-page .feed-card .fc-cover {
     aspect-ratio: 16 / 9; max-height: 300px; max-width: none; width: 100%;
   }
+  /* The IMAGE fills the 16:9 box (Ian 2026-06-10: "images need to be cover") —
+     without object-fit the natural-ratio img letterboxed inside the fixed box. */
+  .feed-page .feed-card .feed-card__cover img,
+  .feed-page .feed-card .fc-cover img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
 }
 /* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
    drop to 2 in that band. Full-size desktop gets the 3 Ian asked for. */
