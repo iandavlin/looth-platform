@@ -102,7 +102,18 @@ add_action('untrashed_post',     function ($post_id) { lg_materializer_dispatch(
  * options live. Snapshot them to a JSON file it reads (dash-theme.json). Keep
  * it fresh whenever the dash saves brand palette or block styles. File is
  * looth-dev:www-data 664 → www-data (wp-admin) can rewrite it. */
-const LG_DASH_THEME_SNAPSHOT = '/home/ubuntu/projects/archive-poc/standalone/dash-theme.json';
+/* Env-parameterized so the write target resolves on each box. Live sets
+ * LG_DASH_THEME_SNAPSHOT (env var, or a define() in wp-config) to the standalone
+ * renderer's dash-theme.json path on that host; dev leaves it unset and falls
+ * back to the repo path below, so behavior is unchanged on dev. */
+if (!defined('LG_DASH_THEME_SNAPSHOT')) {
+    $__lg_dash_snap_env = getenv('LG_DASH_THEME_SNAPSHOT');
+    define('LG_DASH_THEME_SNAPSHOT',
+        ($__lg_dash_snap_env !== false && $__lg_dash_snap_env !== '')
+            ? $__lg_dash_snap_env
+            : '/home/ubuntu/projects/archive-poc/standalone/dash-theme.json');
+    unset($__lg_dash_snap_env);
+}
 function lg_materializer_write_theme_snapshot() {
     $snap = [
         'brand'  => get_option('lg_layout_v2_brand_palette', []),
