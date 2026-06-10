@@ -3893,8 +3893,27 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   #lg-dmodal .lg-dmodal__meta .fc-time { font-size: 12.5px; color: var(--fg-muted); }
   #lg-dmodal .lg-dmodal__body { font-size: 15.5px; line-height: 1.6; color: var(--fg); margin-bottom: 16px; }
   #lg-dmodal .lg-dmodal__body img { max-width: 100%; height: auto; border-radius: 10px; }
-  #lg-dmodal .lg-dmodal__thread { border-top: 1px solid var(--border); padding-top: 14px; }
+  #lg-dmodal .lg-dmodal__thread { border-top: 1px solid var(--border); padding-top: 6px; }
   #lg-dmodal .lg-dmodal__note { padding: 18px 4px; color: var(--fg-muted); font: 14px/1.5 var(--font-body); }
+  /* Reply pill in the head — canonical frm trigger */
+  #lg-dmodal .lg-dmodal__reply {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid var(--lg-sage-d, #586b3f); border-radius: 999px; padding: 8px 16px;
+    background: var(--lg-sage-d, #586b3f); color: #fff;
+    font: 700 13px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__reply:hover { background: var(--lg-sage, #87986a); border-color: var(--lg-sage, #87986a); }
+  /* Thread rhythm: divided top-level stubs, breathing room, indented children */
+  #lg-dmodal .lg-dmodal__thread .reply-stub { padding: 12px 0; margin: 0; border-top: 1px solid var(--border-soft, var(--border)); }
+  #lg-dmodal .lg-dmodal__thread .reply-stub:first-child { border-top: 0; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub--child { margin-left: 42px; border-top: 0; padding-top: 4px; }
+  #lg-dmodal .lg-dmodal__thread .avatar-init,
+  #lg-dmodal .lg-dmodal__thread .reply-stub img.avatar { width: 32px; height: 32px; font-size: 13px; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__author { font-size: 13.5px; font-weight: 700; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__excerpt,
+  #lg-dmodal .lg-dmodal__thread .reply-stub__body { font-size: 14.5px; line-height: 1.55; }
+  /* the modal drains the pages itself — the per-5 button never shows */
+  #lg-dmodal .lg-dmodal__thread .replies-loadmore { display: none; }
 }
 
 

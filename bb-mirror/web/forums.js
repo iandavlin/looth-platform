@@ -2374,6 +2374,7 @@
       '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
         '<header class="lg-dmodal__head">' +
           '<h2 class="lg-dmodal__title"></h2>' +
+          '<button type="button" class="lg-dmodal__reply feed-card__reply-cta" data-frm-open>&#8617; Reply</button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +
         '<div class="lg-dmodal__scroll">' +
@@ -2395,6 +2396,28 @@
     modal.hidden = true;
     document.body.style.overflow = '';
   }
+  // The ?replies= endpoint pages 5 at a time (its .replies-loadmore button
+  // carries the next offset). The modal shows the WHOLE thread: walk the
+  // pages server-side style, replacing the button with the fetched rows.
+  function drain(t, tid, depth) {
+    if (depth > 20) return;
+    var btn = t.querySelector('.replies-loadmore');
+    if (!btn) return;
+    var off = btn.getAttribute('data-offset') || '';
+    var srt = btn.getAttribute('data-sort') || '';
+    btn.remove();
+    fetch(BASE + '/?replies=' + encodeURIComponent(tid) + '&offset=' + encodeURIComponent(off) + (srt ? '&sort=' + encodeURIComponent(srt) : ''), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) {
+        if (!html) return;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        while (tmp.firstChild) t.appendChild(tmp.firstChild);
+        drain(t, tid, depth + 1);
+      })
+      .catch(function () {});
+  }
+
   function open(card) {
     var tid = card.getAttribute('data-topic-id') ||
       (card.querySelector('.feed-card__expand') || { getAttribute: function () { return null; } }).getAttribute('data-topic-id');
@@ -2402,6 +2425,13 @@
     var m = ensure();
     var titleEl = card.querySelector('.fc-title, .feed-card__title');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
+    // Reply goes through the canonical composer (frm §4b, delegated on
+    // [data-frm-open]) — stamp the ids it reads off the trigger.
+    var rbtn = m.querySelector('.lg-dmodal__reply');
+    if (rbtn) {
+      rbtn.setAttribute('data-topic-id', tid);
+      rbtn.setAttribute('data-forum-id', card.getAttribute('data-forum-id') || '');
+    }
 
     // OP: author meta cloned off the card + full body (?body=; excerpt placeholder).
     var op = m.querySelector('.lg-dmodal__op');
@@ -2433,7 +2463,9 @@
         t.innerHTML = html;
         if (!t.querySelector('.reply-stub')) {
           rep.innerHTML = '<div class="lg-dmodal__note">No replies yet. Be the first to reply.</div>';
+          return;
         }
+        drain(t, tid, 0);
       })
       .catch(function () {
         rep.innerHTML = '<div class="lg-dmodal__note">Couldn’t load replies right now.</div>';
