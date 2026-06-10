@@ -535,8 +535,10 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
     // -- Author: multi-select, by name (across both worlds); OR within --
     if (!empty($filters['authors'])) {
         $ph = [];
-        foreach ($filters['authors'] as $i => $a) { $ph[] = ":ha$i"; $binds[":ha$i"] = $a; }
-        $and[] = 'u.author_name IN (' . implode(',', $ph) . ')';
+        // Case-insensitive (Ian 2026-06-10: typing "dan erlewine" must match
+        // "Dan Erlewine" — the exact IN produced 0 posts for a found author).
+        foreach ($filters['authors'] as $i => $a) { $ph[] = "LOWER(:ha$i)"; $binds[":ha$i"] = $a; }
+        $and[] = 'LOWER(u.author_name) IN (' . implode(',', $ph) . ')';
     }
 
     return [$and, $binds];

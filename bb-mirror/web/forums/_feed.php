@@ -653,14 +653,20 @@ if (!empty($GLOBALS['__bb_hub_rail']) && !empty($hub_filters['authors'])) {
     foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
     $atin = $atph ? implode(',', $atph) : "''";
     $acs = $db->prepare(
-        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND author_name = :an1)
-              + (SELECT count(*) FROM discovery.content_item WHERE author_name = :an2 AND tier IN ($atin))"
+        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND LOWER(author_name) = LOWER(:an1))
+              + (SELECT count(*) FROM discovery.content_item WHERE LOWER(author_name) = LOWER(:an2) AND tier IN ($atin))"
     );
     foreach ($hub_filters['authors'] as $an) {
         $an  = (string)$an;
         $aid = 0;
+        // Case-insensitive + CANONICAL display name: show the stored casing
+        // ("Dan Erlewine"), not whatever the visitor typed (Ian 2026-06-10).
         foreach ($topics as $_r) {
-            if ((string)($_r['author_name'] ?? '') === $an && !empty($_r['author_id'])) { $aid = (int)$_r['author_id']; break; }
+            if (mb_strtolower((string)($_r['author_name'] ?? '')) === mb_strtolower($an) && !empty($_r['author_id'])) {
+                $aid = (int)$_r['author_id'];
+                $an  = (string)$_r['author_name'];
+                break;
+            }
         }
         $acs->bindValue(':an1', $an);
         $acs->bindValue(':an2', $an);

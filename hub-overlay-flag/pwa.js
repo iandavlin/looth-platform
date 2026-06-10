@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=143";
+    s.src = "/hub-polish.js?v=144";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();

@@ -2899,7 +2899,8 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
      the matching outer width is 1100 - 2*16. */
   html[data-lg-hublayout="stream"] .feed-page .forum-header,
   html[data-lg-hublayout="stream"] .feed-page .feed-sort-bar,
-  html[data-lg-hublayout="stream"] .feed-page .hub-chipbar {
+  html[data-lg-hublayout="stream"] .feed-page .hub-chipbar,
+  html[data-lg-hublayout="stream"] .feed-page .hub-author-hdr {
     max-width: calc(1100px - 32px);
     margin-left: auto; margin-right: auto;
   }

@@ -120,69 +120,8 @@
     });
   }
 
-  // ── Search tag suggestions (Buck 2026-06-09): clicking the desktop "Search the
-  // Hub" box drops down the POPULAR hashtags found on the loaded posts (.fc-tag.
-  // tag-chip), so people can jump to a busy topic. Each chip links to /hub/?q=<tag>
-  // (the same search the tag chips use). Typing filters the list. Desktop only. ───
-  function ensureTagSugCss() {
-    if (document.getElementById('lg-tagsug-css')) return;
-    var css = '@media(min-width:641px){' +
-      '.lg-tagsug{position:absolute;left:0;right:0;top:calc(100% + 7px);z-index:60;background:var(--lguser-card,var(--bg-card,#fff));' +
-        'border:1px solid var(--lguser-line,#e3ddd0);border-radius:13px;box-shadow:0 16px 40px -12px rgba(0,0,0,.4);padding:11px 13px 13px;display:none}' +
-      '.lg-tagsug.is-open{display:block}' +
-      '.lg-tagsug__h{font:700 10px/1 var(--lg-font-sans,system-ui,-apple-system,sans-serif);letter-spacing:.07em;text-transform:uppercase;color:var(--lguser-mute,#6b6f6b);margin:2px 2px 9px}' +
-      '.lg-tagsug__wrap{display:flex;flex-wrap:wrap;gap:6px;max-height:230px;overflow:auto}' +
-      '.lg-tagsug__t{display:inline-flex;align-items:center;border:1px solid var(--lguser-line,#e3ddd0);border-radius:999px;padding:6px 12px;' +
-        'font:600 12.5px/1 var(--lg-font-sans,system-ui,-apple-system,sans-serif);color:var(--lguser-accent-d,var(--lg-sage-d,#52613d));' +
-        'background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3));cursor:pointer;text-decoration:none;white-space:nowrap}' +
-      '.lg-tagsug__t:hover{background:var(--lguser-accent,var(--lg-sage,#87986a));color:#fff}' +
-      '.lg-tagsug__none{color:var(--lguser-mute,#6b6f6b);font:13px/1.4 var(--lg-font-sans,system-ui,sans-serif)}' +
-      '}';
-    var s = document.createElement('style'); s.id = 'lg-tagsug-css'; s.textContent = css;
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function lgCollectTags() {
-    var freq = {};
-    [].forEach.call(document.querySelectorAll('.fc-tag.tag-chip'), function (a) {
-      var t = (a.textContent || '').trim(), href = a.getAttribute('href') || '';
-      if (!t || t.length > 42 || !href) return;
-      var k = t.toLowerCase();
-      if (!freq[k]) freq[k] = { text: t, href: href, n: 0 };
-      freq[k].n++;
-    });
-    return Object.keys(freq).map(function (k) { return freq[k]; })
-      .sort(function (a, b) { return b.n - a.n || a.text.localeCompare(b.text); });
-  }
-  function wireDesktopSearchTags() {
-    if (window.matchMedia('(max-width:640px)').matches) return;     // desktop only
-    if (document.body.getAttribute('data-lg-tagsug')) return;
-    var form = document.querySelector('.feed-toolbar-search .hub-tsearch--q');
-    var input = form && form.querySelector('.hub-tsearch__in');
-    var search = document.querySelector('.feed-toolbar-search');
-    if (!input || !search) return;
-    document.body.setAttribute('data-lg-tagsug', '1');
-    ensureTagSugCss();
-    if (getComputedStyle(search).position === 'static') search.style.position = 'relative';
-    var sug = document.createElement('div'); sug.className = 'lg-tagsug';
-    sug.setAttribute('role', 'listbox'); sug.setAttribute('aria-label', 'Popular tags');
-    sug.innerHTML = '<div class="lg-tagsug__h">Popular tags</div><div class="lg-tagsug__wrap"></div>';
-    search.appendChild(sug);
-    var wrap = sug.querySelector('.lg-tagsug__wrap');
-    function esc(x) { return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
-    function render(filter) {
-      var tags = lgCollectTags();
-      if (filter) { var f = filter.toLowerCase(); tags = tags.filter(function (t) { return t.text.toLowerCase().indexOf(f) >= 0; }); }
-      tags = tags.slice(0, 18);
-      wrap.innerHTML = tags.length ? tags.map(function (t) {
-        var disp = /^[@#]/.test(t.text) ? t.text : ('#' + t.text);
-        return '<a class="lg-tagsug__t" role="option" href="' + esc(t.href) + '">' + esc(disp) + '</a>';
-      }).join('') : '<span class="lg-tagsug__none">No tags found yet — scroll the feed to load more.</span>';
-    }
-    input.addEventListener('focus', function () { render(input.value.trim()); sug.classList.add('is-open'); });
-    input.addEventListener('input', function () { render(input.value.trim()); sug.classList.add('is-open'); });
-    input.addEventListener('keydown', function (e) { if (e.key === 'Escape') sug.classList.remove('is-open'); });
-    document.addEventListener('click', function (e) { if (!search.contains(e.target)) sug.classList.remove('is-open'); });
-  }
+  // (Popular-tags search dropdown REMOVED 2026-06-10 — Ian: "popular tags
+  // removed". ensureTagSugCss + wireDesktopSearchTags retired.)
 
   // Recompose ONE feed card into the Style-Sandbox card layout: build a top
   // meta row [OP avatar + author . time | category pill] from nodes the live
@@ -3175,7 +3114,6 @@
     relocateFilterToggle();
     restyleSortBar();
     setupDesktopFilterNav();
-    wireDesktopSearchTags();
     lgSyncSaved();
     wireFreshPill();
     buildTopSearch();
