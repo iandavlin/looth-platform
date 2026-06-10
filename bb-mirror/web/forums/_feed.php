@@ -938,6 +938,20 @@ function feed_action_bar(int $reply_count): void
        . '</div>';
 }
 
+// Save / bookmark toggle (☆) — binary per-card save → discovery.saved_posts via the
+// WP-cookie door (/archive-api/v0/save-post, sibling of card-react). Server-renders the
+// inert star button; forums.js hydrates the viewer's saved-state (batch GET resolves
+// auth+nonce+my_saves) and wires the optimistic toggle (POST). Logged-out viewers get
+// the button but the GET resolves anon → no nonce → it stays inert. Only emitted for
+// savable types (LG_HUB_REACT_TYPES == save-post.php's LG_SAVE_TYPES, incl. 'topic').
+function feed_save_btn(string $postType, int $itemId): void
+{
+    static $ICO = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.6l2.95 5.98 6.6.96-4.77 4.65 1.13 6.57L12 17.66 6.09 20.76l1.13-6.57L2.45 9.54l6.6-.96z"/></svg>';
+    echo '<button type="button" class="fc-save" data-save data-post-type="' . htmlspecialchars($postType, ENT_QUOTES)
+       . '" data-item-id="' . $itemId . '" aria-pressed="false" aria-label="Save" title="Save">'
+       . $ICO . '<span class="fc-save__lbl">Save</span></button>';
+}
+
 // feed_rx_glyph() + feed_reactions_bar() now live in _reply-render.php (the shared
 // partial) so the lazy full-thread endpoint can emit reply reactions too. Required
 // below at the "-- Helpers --" include.
@@ -1144,6 +1158,7 @@ $header_cat = $scoped_forum
         <div class="fc-actions">
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
           <?php feed_action_bar(0); ?>
+          <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id); ?>
           <?php if ($c_can_comment): ?>
             <button type="button" class="feed-card__comments-btn" data-comments
                     data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>"
@@ -1258,6 +1273,7 @@ $header_cat = $scoped_forum
       <div class="fc-actions">
         <?php feed_reactions_bar('topic', $topic_id, $card_reaction_counts['topic:' . $topic_id] ?? []); ?>
         <?php feed_action_bar($reply_count); ?>
+        <?php feed_save_btn('topic', $topic_id); ?>
         <?= $reply_cta /* card-level CTA: now hidden by CSS (composer is the reply entry, Ian) but KEPT as the topic/forum data-source that nested reply buttons read via frmOpen() */ ?>
         <?php /* expand-all RETIRED (Ian): SPLIT into "Read more" (full post BODY only,
                  in the .fc-excerpt block above) + the reply-count control (.fc-facepile →

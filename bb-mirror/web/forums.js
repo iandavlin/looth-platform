@@ -2173,6 +2173,83 @@
   }
 })();
 
+/* ─── Save / bookmark toggle (fc-save) — binary per-card save → discovery.saved_posts
+   via the WP-cookie door (/archive-api/v0/save-post, sibling of card-react). The ☆ button
+   is server-rendered inert; this hydrates the viewer's saved-state (batch GET → auth +
+   nonce + my_saves) and wires the optimistic toggle (POST). Anon viewers get no nonce →
+   the button stays inert. Mirrors the card-react module's GET-sync + MutationObserver
+   re-sync (filter swap / infinite-scroll appends). ─────────────────────────────────── */
+(function () {
+  var SAVE = '/archive-api/v0/save-post';
+  var nonce = '', authed = false;
+
+  function setState(btn, on) {
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('is-saved', !!on);
+    var lbl = btn.querySelector('.fc-save__lbl');
+    if (lbl) lbl.textContent = on ? 'Saved' : 'Save';
+    btn.setAttribute('title', on ? 'Saved' : 'Save');
+    btn.setAttribute('aria-label', on ? 'Saved' : 'Save');
+  }
+
+  function doSave(btn) {
+    if (!authed) return;                       // anon — no write door
+    var pt = btn.getAttribute('data-post-type'), id = parseInt(btn.getAttribute('data-item-id'), 10);
+    var was = btn.getAttribute('aria-pressed') === 'true';
+    setState(btn, !was);                       // optimistic flip
+    fetch(SAVE, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': nonce },
+      body: JSON.stringify({ post_type: pt, item_id: id, unsave: was, _wpnonce: nonce })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { setState(btn, j && j.ok ? j.saved : was); })  // reconcile / revert
+      .catch(function () { setState(btn, was); });                        // revert on failure
+  }
+
+  // Batch viewer-state fetch for any buttons not yet synced (initial load, filter swap,
+  // infinite-scroll appends). GET resolves auth + nonce + my_saves; SSR can't know the viewer.
+  function sync() {
+    var btns = [].slice.call(document.querySelectorAll('.fc-save:not([data-save-synced])'));
+    if (!btns.length) return;
+    btns.forEach(function (b) { b.setAttribute('data-save-synced', '1'); });
+    var items = btns.map(function (b) {
+      return b.getAttribute('data-post-type') + ':' + b.getAttribute('data-item-id');
+    }).join(',');
+    fetch(SAVE + '?items=' + encodeURIComponent(items),
+          { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (d) {
+        if (d && d.authenticated && d.nonce) {
+          nonce = d.nonce; authed = true; document.body.classList.add('fc-save-authed');
+        } else {
+          document.body.classList.add('fc-save-anon');
+        }
+        var mine = (d && d.my_saves) || {};
+        btns.forEach(function (b) {
+          var k = b.getAttribute('data-post-type') + ':' + b.getAttribute('data-item-id');
+          if (mine[k]) setState(b, true);
+        });
+      })
+      .catch(function () {});
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('.fc-save'); if (!btn) return;
+    e.preventDefault(); e.stopPropagation();   // don't bubble to the card's open-thread handler
+    doSave(btn);
+  });
+
+  if (document.readyState !== 'loading') sync();
+  else document.addEventListener('DOMContentLoaded', sync);
+  var saveFeed = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+  if (saveFeed && window.MutationObserver) {
+    var st = null;
+    new MutationObserver(function () { clearTimeout(st); st = setTimeout(sync, 120); })
+      .observe(saveFeed, { childList: true, subtree: true });
+  }
+})();
+
 /* ─── Cooler card: persistent reply composer (fc-composer) + face-pile (fc-facepile)
    Always-on (NOT proto-gated). Composer posts via the existing /reply path; the
    face-pile opens the thread. Desktop-only by CSS (display:none ≤640) until Buck's

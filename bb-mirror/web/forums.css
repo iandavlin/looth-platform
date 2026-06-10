@@ -3614,6 +3614,16 @@ body:has(.feed-page) #bb-ham{display:none}
      (left-anchored so the reaction picker opens rightward into the full card
      width instead of clipping off the right edge under overflow:hidden). */
   .feed-page .fc-actions { grid-area:actions; display:flex; align-items:center; flex-wrap:wrap; gap:8px; justify-content:flex-start; margin-top:13px; }
+  /* fc-save — binary ☆ bookmark toggle, sits at the right end of the actions row.
+     Inert star at rest; brand-sage fill when the viewer has saved it (.is-saved). */
+  .feed-page .fc-save { -webkit-appearance:none; appearance:none; margin-left:auto;
+    display:inline-flex; align-items:center; gap:4px; background:none; border:0; padding:2px 3px;
+    font:600 12px/1 var(--lg-font-sans); color:var(--lg-mute); cursor:pointer; transition:color .12s; }
+  .feed-page .fc-save .ico { width:16px; height:16px; flex:0 0 auto; }
+  .feed-page .fc-save:hover { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-save.is-saved { color:var(--lg-sage-d,#586b3f); }
+  .feed-page .fc-save.is-saved .ico { fill:currentColor; }
+  body.fc-save-anon .feed-page .fc-save { display:none; }   /* logged-out → no save affordance */
   .feed-page .fc-replies { grid-area:replies; min-width:0; margin-top:6px; }
   /* fc-composer — persistent, pinned to the card bottom (full-bleed) */
   .feed-page .fc-composer{ display:flex; grid-area:composer; align-items:center; gap:9px;
