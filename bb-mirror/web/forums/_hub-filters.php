@@ -122,6 +122,46 @@ function hub_viewer_muted_uuids(): array
     return $set;
 }
 
+/**
+ * The logged-in viewer's SAVED posts (Saved-rail filter), via the engine's
+ * my-saved endpoint (`/archive-api/v0/my-saved` → {authenticated, items:[…]}).
+ * Identity = the viewer's WP-login cookie (the SAME door the ☆ hydrate uses —
+ * runs on the looth-dev WP pool's get_current_user_id(), so it resolves real
+ * members even when /whoami would call them anon). We forward the visitor's
+ * Cookie; cross-DB is fine (we fetch the id list, the feed query does the WHERE).
+ * Returns ['topics' => [int id,…], 'content' => ['cpt:id',…]]. Empty (anon /
+ * error / no saves) → an empty set → the Saved view shows nothing (fail closed,
+ * which is correct: an empty Saved list IS empty).
+ */
+function hub_viewer_saved_set(): array
+{
+    $out = ['topics' => [], 'content' => []];
+    if (PHP_SAPI === 'cli' || empty($_SERVER['HTTP_COOKIE'])) return $out;
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/archive-api/v0/my-saved',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 3,
+        CURLOPT_HTTPHEADER     => ['Host: ' . LG_BB_MIRROR_HOST, 'Cookie: ' . $_SERVER['HTTP_COOKIE']],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    if ($code !== 200 || !$body) return $out;           // anon / error → empty
+    $data = json_decode($body, true);
+    foreach ((array)($data['items'] ?? []) as $it) {
+        $pt = (string)($it['post_type'] ?? '');
+        $id = (int)($it['item_id'] ?? 0);
+        if ($pt === '' || $id <= 0) continue;
+        if ($pt === 'topic') $out['topics'][]  = $id;
+        else                 $out['content'][] = $pt . ':' . $id;
+    }
+    return $out;
+}
+
 function hub_resolve_profiles(array $wp_ids): array
 {
     $wp_ids = array_values(array_unique(array_filter(array_map('intval', $wp_ids), fn($i) => $i > 0)));
@@ -178,6 +218,7 @@ function hub_filters_parse(): array
         'leaves'  => $csv('leaf'),                       // leaf subforums (subforum slug)
         'authors' => $csv('author'),                     // multi-select, by name (CSV)
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
+        'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
     ];
 }
 

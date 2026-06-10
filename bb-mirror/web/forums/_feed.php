@@ -417,6 +417,29 @@ if ($scoped_forum) {
     [$m_clauses, $mute_binds] = hub_mute_clause($hub_muted, $_forum_cat_map, $hub_clabels, $hub_leaf_reg);
     $all_clauses = array_merge($f_clauses, $m_clauses);
     $hub_binds   = $hub_binds + $mute_binds;
+
+    // Saved view (?saved=1) — constrain the union to the viewer's ☆ saves. Saved
+    // lives in discovery (saved_posts), so we resolve the id set via the my-saved
+    // loopback (same WP-cookie identity as the ☆ hydrate) and WHERE the union on it:
+    // topics by id, content by 'cpt:id'. No saves / anon → FALSE → an empty feed
+    // (an empty Saved list IS empty). Counts/facets stay full — saved is a view, not
+    // a facet recount.
+    if (!empty($hub_filters['saved'])) {
+        $sv = hub_viewer_saved_set();
+        $sv_or = [];
+        if ($sv['topics']) {
+            $ph = [];
+            foreach ($sv['topics'] as $i => $tid) { $k = ":svt$i"; $ph[] = $k; $hub_binds[$k] = (int)$tid; }
+            $sv_or[] = "(u.card_type = 'topic' AND u.topic_id IN (" . implode(',', $ph) . "))";
+        }
+        if ($sv['content']) {
+            $ph = [];
+            foreach ($sv['content'] as $i => $ck) { $k = ":svc$i"; $ph[] = $k; $hub_binds[$k] = $ck; }
+            $sv_or[] = "(u.card_type = 'content' AND (u.content_cpt || ':' || u.topic_id) IN (" . implode(',', $ph) . "))";
+        }
+        $all_clauses[] = $sv_or ? '(' . implode(' OR ', $sv_or) . ')' : 'FALSE';
+    }
+
     $hub_where   = $all_clauses ? 'WHERE ' . implode(' AND ', $all_clauses) : '';
 
     // Facet counts + stash so the chrome renders the control rail into the
