@@ -135,3 +135,65 @@ function lg_membership_header_ctx(string $active_nav = ''): array {
     ];
 }
 }
+
+/**
+ * "Your session has expired — sign in again" card (inner HTML).
+ *
+ * Actionable membership surfaces (gift send/void, affiliate withdraw, …) POST to
+ * cookie+nonce-gated /wp-json/lg-member-sync/v1/* routes. The gate is the
+ * wp_rest nonce minted by lg_membership_rest_nonce() — which loopbacks to the WP
+ * REST nonce route and only succeeds for a LIVE WP session. A '' nonce means the
+ * session is stale/rotated (or a Patreon-onboarded identity never minted a WP
+ * auth cookie): the routes will 401. We must gate the action UI on THIS, not on
+ * whoami / the cookie-username string (both of which can be present over a dead
+ * session) — otherwise the page renders a live button that POSTs an empty
+ * X-WP-Nonce and silently 401s. Render this re-auth state instead.
+ *
+ * Returns inner HTML for pages that own their <main>/page-wrap. The link sends
+ * the viewer through wp-login and back to the page they were on.
+ */
+if (!function_exists('lg_membership_session_expired_html')) {
+function lg_membership_session_expired_html(): string {
+    $h        = 'lg_membership_h';
+    $here     = 'https://' . LG_MEMBERSHIP_HOST . (string)($_SERVER['REQUEST_URI'] ?? '/');
+    $loginUrl = 'https://' . LG_MEMBERSHIP_HOST . '/wp-login.php?redirect_to=' . rawurlencode($here);
+    return
+        '<div class="lg-session-expired" style="max-width:560px;margin:2.5em auto;padding:1.4em 1.6em;background:#fff8f0;border:1px solid #ECB351;border-radius:10px;color:#1f1d1a;line-height:1.55;text-align:center;">'
+      . '<p style="margin:0 0 .5em;font-size:1.1em;font-weight:700;">Your session has expired</p>'
+      . '<p style="margin:0 0 1.1em;color:#555;">For your security we couldn&rsquo;t verify your sign-in. Please sign in again to manage your membership.</p>'
+      . '<a href="' . $h($loginUrl) . '" style="display:inline-block;padding:.6em 1.3em;background:#1f1d1a;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Sign in again</a>'
+      . '</div>';
+}
+}
+
+/**
+ * Emit a complete standalone "session expired" page (shared header + the card +
+ * footer) and exit — for actionable surfaces that emit their doctype/header/
+ * footer inline rather than through a page-wrap closure. Mirrors _admin-gate's
+ * stub shape. Call AFTER config + lib/whoami + the shared header/footer are
+ * required and $ctx is built.
+ */
+if (!function_exists('lg_membership_render_session_expired_or_exit')) {
+function lg_membership_render_session_expired_or_exit(array $ctx, string $title = 'Session expired — The Looth Group'): void {
+    if (!headers_sent()) { header('Content-Type: text/html; charset=utf-8'); }
+    ?><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title><?= lg_membership_h($title) ?></title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
+</head>
+<body class="lg-membership-page lg-session-expired-page">
+<?php lg_shared_render_site_header($ctx); ?>
+<main id="lg-main">
+<?= lg_membership_session_expired_html() ?>
+</main>
+<?php lg_shared_render_site_footer(['logo_url' => LG_MEMBERSHIP_LOGO]); ?>
+</body>
+</html>
+<?php
+    exit;
+}
+}

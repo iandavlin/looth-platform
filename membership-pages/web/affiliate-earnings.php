@@ -100,6 +100,17 @@ if ($wpUserId > 0) {
 
 $isAdmin = ($ctx['capabilities']['manage_options'] ?? false) === true;
 
+/* Gate the actionable portal (the "Request withdrawal" button) on a VALID WP
+ * SESSION (the nonce), not the cookie-username string used to resolve the
+ * affiliate above. lg_membership_rest_nonce() only mints for a live session; ''
+ * = stale/rotated session (or a Patreon identity with no WP auth cookie). Render
+ * the re-auth state instead of a live withdraw button that POSTs an empty
+ * X-WP-Nonce and silently 401s. */
+$restNonce = lg_membership_rest_nonce();
+if ($restNonce === '') {
+    lg_membership_render_session_expired_or_exit($ctx, 'Affiliate Earnings — The Looth Group');
+}
+
 // Header + (optional) "no affiliate account" early body are emitted inside the shell.
 $bodyHtml = '';
 if ($aff === null) {
@@ -115,7 +126,7 @@ if ($aff === null) {
     $rate          = $clicks > 0 ? round($conversions / $clicks * 100) . '%' : '—';
     $debits        = (int) $aff['total_debits_cents'];
     $retElig       = (int) $aff['retention_eligible'];
-    $withdrawNonce = lg_membership_rest_nonce();
+    $withdrawNonce = $restNonce;                   // gated non-empty above
     $est           = lg_ms_affiliate_estimate($pdo, (int) $aff['id'], (float) $aff['commission_pct'], (float) $aff['retention_bonus_pct']);
     $balanceCents  = max(0, $est['gross_cents'] + $est['retention_cents'] - $debits - $est['paid_out_cents']);
 
