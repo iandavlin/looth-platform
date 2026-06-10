@@ -2843,10 +2843,16 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
    2026-06-10 (hub-coord). No !important: `.feed-page .feed` outspecifies the
    base single-column `.feed` grid above; values match the JS so no reflow. */
 @media (min-width: 641px) {
-  .feed-page { max-width: 2100px; }
+  /* SPREAD (Ian 2026-06-10): no width cap — the 2100px ceiling read as an
+     invisible trap on wide screens; the feed now runs out to the header edges
+     (the 24px side padding matches the header inner gutter). */
+  .feed-page { max-width: none; }
   .feed-page .feed {
     display: block;
-    column-width: 370px;
+    /* Mosaic = exactly THREE columns (Ian 2026-06-10) — was column-width:370px
+       (responsive count). Narrow-desktop guard below drops to 2 so cards keep
+       a readable shape in a squeezed window. */
+    column-count: 3;
     column-gap: 18px;
     padding: 22px 24px 48px;
   }
@@ -2864,6 +2870,11 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   /* full-width hero cover spans its column edge-to-edge */
   .feed-page .feed-card:first-child .feed-card__cover,
   .feed-page .feed-card:first-child .fc-cover { max-width: none; width: 100%; }
+}
+/* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
+   drop to 2 in that band. Full-size desktop gets the 3 Ian asked for. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .feed-page .feed { column-count: 2; }
 }
 
 /* ── STREAM layout variant — one centered reading column. The default is the

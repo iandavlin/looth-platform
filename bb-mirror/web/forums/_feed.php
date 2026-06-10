@@ -175,15 +175,19 @@ switch ($sort_param) {
         $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
         break;
     case 'random':
-        // Front-door Random: seeded popularity-weighted shuffle over the unified feed.
-        // u = uniform from hashtextextended(card_type||':'||id, :rand_seed); key =
-        // u^(1/weight), weight = (reply_count+like_count+1)^2 so popular topics AND liked
-        // content float up, recency-independent (old posts surface), stable per seed for
-        // coherent infinite-scroll paging. Locked teasers (content tier above the viewer's
-        // :viewer_rank) take a 0.25 multiplicative key penalty so they sink without vanishing.
+        // Front-door Random: seeded shuffle over the unified feed with a GENTLE
+        // popularity edge. u = uniform from hashtextextended(card_type||':'||id,
+        // :rand_seed); key = u^(1/weight). Weight was (replies+likes+1)^2 — a
+        // 10-reply discussion got weight 121 vs content's ~1, so discussions
+        // statistically buried every CPT card on page one ("Random is only doing
+        // discussions", Ian 2026-06-10). Now weight = 1 + ln(1+engagement)/5:
+        // 0-engagement cards draw uniform, a 30-reply thread gets ~1.7 — a mild
+        // lift, not a monopoly, so Random is a true mix of all CPTs + discussions
+        // (both viewports; same query serves mobile). Stable per seed for
+        // coherent infinite-scroll paging. Locked teasers keep the 0.25 penalty.
         $union_order_by = "ORDER BY power(
             (hashtextextended(card_type || ':' || topic_id::text, :rand_seed) & 9223372036854775807)::double precision / 9223372036854775807.0,
-            1.0 / power(reply_count + like_count + 1, 2)
+            1.0 / (1.0 + ln(1 + reply_count + like_count) / 5.0)
         ) * CASE WHEN content_tier IS NOT NULL
                  AND (CASE content_tier WHEN 'lite' THEN 1 WHEN 'pro' THEN 2 ELSE 0 END) > :viewer_rank
                THEN 0.25 ELSE 1.0 END DESC";
