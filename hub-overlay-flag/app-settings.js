@@ -208,6 +208,16 @@
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow,' + D + ' .reply-stub__editbox .ql-container.ql-snow,' + D + ' .ntm-form .ql-toolbar.ql-snow,' + D + ' .ntm-form .ql-container.ql-snow{background:#1e2124!important;border-color:#2c312d!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-stroke,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-stroke{stroke:#cdd0ca!important}',
       D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-fill,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-fill{fill:#cdd0ca!important}',
+      // lg-layout-v2 ARTICLE pages (<main class="lg-standalone-main">, the
+      // standalone renderer): articles are DESIGNED as light "paper" — dark
+      // mode flipped the ink tokens site-wide, leaving light text on light
+      // paper (invisible body copy, Ian 2026-06-10). Insulate the article
+      // canvas: it stays light with its own light tokens while the chrome
+      // around it goes dark. Higher specificity than the boot-crit main{} rule.
+      D + ' main.lg-standalone-main{background:#f4f2ec!important;color-scheme:light;' +
+        '--lg-ink:#262925!important;--lg-mute:#565a55!important;--lg-charcoal:#1a1d1a!important;' +
+        '--lg-line:#e4e7d8!important;--lg-cream:#fbfbf8!important;--lg-card-bg:#ffffff!important;' +
+        '--lg-sage-d:#586b3f!important;--lg-sage-tint:#eef2e3!important}',
       // Shared FOOTER (.lg-chrome-foot): fixed light slab — was never themed in
       // dark ("footer needs some dark mode love", Ian 2026-06-10). Re-point its
       // pinned shell tokens + darken the slab so link/text colors follow.

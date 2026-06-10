@@ -24,7 +24,7 @@
     if (document.getElementById('looth-app-settings-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-app-settings-js';
-    s.src = '/app-settings.js?v=26';
+    s.src = '/app-settings.js?v=27';
     (document.head || document.documentElement).appendChild(s);
   })();
 
