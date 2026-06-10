@@ -42,7 +42,25 @@
 if (!defined('ABSPATH')) exit;
 
 const BB_MIRROR_SYNC_URL = 'https://127.0.0.1/bb-mirror-api/v0/_sync';
-const BB_MIRROR_SYNC_HOST = 'dev.loothgroup.com';
+
+if (!function_exists('bb_mirror_sync_host')) {
+/**
+ * Resolve the loopback Host header per box. An explicit override wins (set
+ * BB_MIRROR_SYNC_HOST_OVERRIDE via wp-config, or a BB_MIRROR_SYNC_HOST env var);
+ * otherwise detect from the request host, mirroring ArchivePocDash::resolve_host.
+ * Dev requests carry a dev.* / claude.loothgroup HTTP_HOST → dev; everything else
+ * → live. Behavior-neutral on dev, points at the live host on live. */
+function bb_mirror_sync_host(): string {
+    if (defined('BB_MIRROR_SYNC_HOST_OVERRIDE')) return (string) constant('BB_MIRROR_SYNC_HOST_OVERRIDE');
+    $env = getenv('BB_MIRROR_SYNC_HOST');
+    if ($env !== false && $env !== '') return $env;
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    if (str_contains($host, 'dev.') || str_contains($host, 'claude.loothgroup')) {
+        return 'dev.loothgroup.com';
+    }
+    return 'loothgroup.com';
+}
+}
 
 if (!function_exists('bb_mirror_sync_dispatch')) {
 function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert', array $extra = []): void {
@@ -61,7 +79,7 @@ function bb_mirror_sync_dispatch(string $kind, int $id, string $action = 'upsert
         'blocking'  => false,
         'sslverify' => false,
         'headers'   => [
-            'Host'         => BB_MIRROR_SYNC_HOST,
+            'Host'         => bb_mirror_sync_host(),
             'Content-Type' => 'application/json',
             'X-BB-Mirror-Sync' => '1',
         ],

@@ -36,7 +36,8 @@ final class ArchivePocDash
 
     public const SECRET_FILE   = '/etc/lg-archive-poc-secret';
     public const WEBHOOK_URL   = 'https://127.0.0.1/archive-api/v0/_config';
-    public const WEBHOOK_HOST  = 'dev.loothgroup.com'; // overridden via filter below for live
+    // Loopback Host header is resolved per-box via resolve_host() (LG_ARCHIVE_POC_DASH_HOST
+    // override → dev/live detection); there is no hardcoded host constant.
     public const EXPORT_ACTION = 'lg_archive_poc_dash_export';
     public const IMPORT_ACTION = 'lg_archive_poc_dash_import';
 
