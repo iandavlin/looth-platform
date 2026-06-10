@@ -55,9 +55,9 @@ Source dir: `projects/platform/mu-plugins/`. WP auto-loads only top-level `.php`
 ## 4. /srv support services  (box-only, NO .git → capture into monorepo)
 | Source (to create) | Live target | Status / action |
 |---|---|---|
-| `projects/lg-push` | `/srv/lg-push` | ➕ box-only → capture into repo |
-| `projects/lg-sudo-queue` | `/srv/lg-sudo-queue` | ➕ box-only → capture into repo |
-| `projects/profile-app-media` | `/srv/profile-app-media` | ➕ box-only → capture into repo |
+| `projects/lg-push` | `/srv/lg-push` | ✅ CODE captured to repo (vendor excluded). Runtime: cron + /etc/lg-vapid + DB. |
+| `lg-sudo-queue` | — | ⛔ DEV-ONLY coordination infra (queue data + notify svc) — NOT git, NOT cut (like chrome-dev.service) |
+| `profile-app-media` | `/srv/profile-app-media` | ⛔ user-media DATA (15M avatars/banners/gallery/resumes) — NOT git; rsync as data at cut |
 | `/srv/lg-stripe-billing` (own .git: `iandavlin/lg-stripe-billing`) | `/srv/lg-stripe-billing` | ⏸ **HELD** — Ian: fold into monorepo vs separate clone |
 | `/srv/thumb-app` (own .git: `iandavlin/thumbnail-gen-editor`) | `/srv/thumb-app` | ⏸ **HELD** — Ian: fold vs separate clone |
 

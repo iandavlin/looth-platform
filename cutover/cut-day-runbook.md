@@ -4,15 +4,12 @@ End-to-end ordered playbook for the cut. Each step tagged **[DEV✓]** (verified
 dev) / **[LIVE]** (Ian runs on the new/old box) / **[OPEN]** (decision needed).
 Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
 
-> ⚠️ OPEN QUESTION — POSTGRES SOURCE (needs Ian/coord): "adopt the Postgres DBs"
-> needs clarification. **Live has NO Postgres** — the strangler PG (profile_app +
-> looth: forums/discovery) was built on DEV from dev's WP data. So at cut, Postgres
-> is either:
->   (a) **REBUILT from the adopted live WP DB** via each lane's migration/sync
->       (bb-mirror forum sync, archive-poc indexer/backfill, profile-app xprofile
->       + social backfill) — authoritative, matches live exactly; OR
->   (b) **carried from dev** if dev's PG dataset is accepted as the cut source.
-> The WP-MariaDB adopt is unambiguous; PG needs this call. Runbook assumes (a).
+> POSTGRES SOURCE — DECIDED (Ian leaning REBUILD, 2026-06-09): **Live has NO
+> Postgres** (strangler PG is dev-built), so at cut Postgres is **REBUILT from the
+> adopted live WP DB** via each lane's migration/sync (bb-mirror forum sync +
+> person-resync, archive-poc indexer/backfill, profile-app xprofile + social
+> backfill) — authoritative, matches live exactly. (Fallback if rebuild is too slow
+> on cut day: carry dev's PG — but rebuild is the plan.) See Phase 5.
 
 ---
 
@@ -27,7 +24,9 @@ Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
   results feed final plugin/theme keep-drop. (Coord-reviewed PASS; output SENSITIVE.)
 
 ## PHASE 1 — Provision the new box  **[LIVE]**
-- EC2 **m7a.large** (2 vCPU / 8 GB, x86) — pending Ian confirm.
+- Box size DECIDED BY THE TRIAL (see rehearsal): start on the **m7a.medium**
+  loothtool box; the PG-rebuild peak-RAM measurement says whether the real cut
+  stays m7a.medium or bumps to **m7a.large**. Add swap + small-tune regardless.
 - Packages: `nginx php8.3-fpm php8.3-pgsql php8.3-mysql mariadb-server postgresql
   redis git wp-cli rclone` (⚠️ php8.3-pgsql is easy to forget — breaks every strangler).
 - Create FPM pool OS users: archive-poc, bb-mirror, profile-app, events, membership,
@@ -58,7 +57,7 @@ Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
 - **⚠️ DO NOT run a domain search-replace.** siteurl stays loothgroup.com untouched
   (COOKIEHASH = md5(siteurl); changing it = mass logout). **[DEV✓** mechanics].
 
-## PHASE 5 — Build Postgres from adopted WP data  **[LIVE]** (per OPEN question, assuming (a))
+## PHASE 5 — Build Postgres from adopted WP data  **[LIVE]** (REBUILD — Ian's lean)
 - Apply schema + DDL/extensions/grants **[DEV✓ — exact defs verified]**:
   - `CREATE EXTENSION pg_trgm` + 4 GIN trgm indexes (forums.topic.title/author_name,
     discovery.content_item.title/author_name).
@@ -77,6 +76,14 @@ Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
 - `setfacl -m u:profile-app:r /etc/lg-internal-secret` (read gotcha).
 - Stripe/Patreon creds — ship DORMANT (no creds) per coord §3h.
 - rclone → LIVE bucket (dev token is dev-scoped/IP-locked).
+
+### App-owned media DATA (not git, not secret — migrate as data)  **[LIVE]**
+- `/srv/profile-app-media` (15M: avatars/banners/gallery/resumes) — app-owned user
+  media store. **rsync the data dir to the new box** (NOT git). Migrate same as any
+  user-data dir; verify avatars resolve post-cut.
+- `lg-push` — CODE now in monorepo (deploys via pull); runtime needs: cron entry +
+  `/etc/lg-vapid` (secrets list) + DB access. `lg-sudo-queue` = dev-only coordination
+  infra (excluded, like chrome-dev.service) — does NOT carry to live.
 
 ## PHASE 7 — DB-state that doesn't ride the clone  **[LIVE]**
 - Theme: `wp theme activate twentytwentyfive`; do not carry BB child/parent.
@@ -107,25 +114,51 @@ A DB import breaks tier 4 ways — re-arm so logged-in members resolve to correc
 
 ---
 
-## DEV2 REHEARSAL PLAN (the de-risker — run the WHOLE thing on a throwaway box first)
-Provision a throwaway EC2 (same m7a.large), then execute Phases 1-9 against a CLONE
-of live, verify, and **prove rollback**. Ready to run the moment Ian provisions the box.
-1. **Clone source**: take a fresh live WP MariaDB dump (+ wp-config) for the rehearsal.
+## REHEARSAL-AS-TRIAL PLAN — on the m7a.MEDIUM loothtool box (constrained + measured)
+⚠️ The trial server is **m7a.medium (1 vCPU / 4 GB)** and is **already hosting
+loothtool (live)**. So this rehearsal is ALSO a sizing trial + a do-no-harm exercise:
+prove the cut runs end-to-end AND measure whether m7a.medium can host it without
+taking loothtool down. **Keep loothtool's own backup intact throughout.**
+
+**Do-no-harm setup (BEFORE anything heavy):**
+0a. **ADD SWAP FIRST** — OOM backstop so a PG-rebuild spike can't kill loothtool
+    (e.g. 4–8 GB swapfile). Non-negotiable, step zero.
+0b. **Tune everything SMALL** (co-resident budget): low FPM `pm.max_children`
+    (per pool), small PG `shared_buffers`/`work_mem`, small MariaDB
+    `innodb_buffer_pool_size`. Leave headroom for loothtool + the OS.
+0c. Confirm loothtool's backup exists + is current before you start.
+
+**Run:**
+1. **Clone source**: fresh live WP MariaDB dump (+ wp-config) for the trial.
 2. **Phases 1-2**: provision + symlink farm. Confirm every app serves.
-3. **Phase 3 rehearsal**: take the pre-cut snapshot, test-restore it → prove the
-   rollback artifact is valid BEFORE relying on it at cut.
-4. **Phases 4-8**: adopt WP DB, wp-config (salts kept), build PG, secrets, DB-state,
-   whoami re-arm. Time each step (cut-day budget).
-5. **Phase 9 gates**: run EVERY verify gate. Especially: carry a real live login
-   cookie to the rehearsal box → must stay authenticated + correct tier.
-6. **Prove rollback**: deliberately "break" then restore the Phase 3 snapshot; confirm
-   recovery + measure restore time (= the downtime budget if cut rolls back).
-7. Tear down the throwaway box. Record timings + any gaps → final cut-day checklist.
-**A clean rehearsal pass = cut is executable. This is the payoff of all the prep.**
+3. **Phase 3**: take the pre-cut snapshot, test-restore it → prove the rollback
+   artifact is valid before relying on it.
+4. **Phases 4-8**: adopt WP DB, wp-config (salts kept), **PG rebuild SERIALIZED /
+   THROTTLED as the ONLY heavy load** (don't run lane migrations in parallel — the
+   rebuild is the RAM spike), secrets, DB-state, whoami re-arm. Time each step.
+5. **Phase 9 gates**: run EVERY gate. Especially: real live cookie → trial box →
+   stays authenticated + correct tier.
+6. **Prove rollback**: break, restore the Phase 3 snapshot, measure restore time
+   (= the cut-day downtime budget). Confirm loothtool untouched throughout.
+
+**⭐ MEASURE (the whole point):**
+- **Peak RAM during the PG rebuild** ← the GATING number.
+- **Steady-state RAM** with loothtool co-resident + the strangler stack running.
+- **Decision rule:** if the rebuild peak OOMs or swaps hard → m7a.medium is too
+  small for the real cut. Signal = **bump the real cut to m7a.large**, OR run the
+  one-time PG rebuild on a bigger box and resize down to medium for steady-state.
+  If peak + steady-state fit comfortably under 4 GB (with swap as backstop, not
+  load-bearing) → m7a.medium is viable for the real cut.
+
+**A clean trial pass (cut works + loothtool unharmed + RAM fits) = cut is executable
+AND right-sized. This is the payoff of all the prep.**
 
 ---
 ### Status summary
 - DEV✓: app convergence, symlink farm, DDL/grants defs, login-consistency mechanics,
-  sponsor/hub/archive route serving, central git capture.
+  sponsor/hub/archive route serving, central git capture, lg-push capture.
 - NEEDS-IAN-ON-LIVE: box provision, recon run, DB adopt, secrets, whoami re-arm, gates, flip.
-- OPEN: Postgres source (rebuild-from-WP vs carry-dev); m7a.large confirm; lane env-fixes.
+- DECIDED: Postgres = REBUILD from adopted WP (Ian's lean); lane env-fixes DONE
+  (62e42ff/24bdac8); box size = trial-measured (m7a.medium vs large).
+- OPEN: run the m7a.medium trial to get the peak-RAM number; lg-stripe-billing /
+  thumb-app fold-vs-clone (HELD).
