@@ -3924,8 +3924,10 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   #lg-dmodal .lg-dmodal__acts {
     display: flex; align-items: center; gap: 14px; padding: 6px 0 0; width: 100%;
   }
-  /* Thread rhythm: divided top-level stubs, breathing room, indented children */
-  #lg-dmodal .lg-dmodal__thread .reply-stub { padding: 12px 0; margin: 0; border-top: 1px solid var(--border-soft, var(--border)); }
+  /* Thread rhythm: divided top-level stubs, breathing room, indented children.
+     The scroll body carries .feed-page (picker styling), which also brings the
+     feed's pill background for .reply-stub — modal rows stay flat separators. */
+  #lg-dmodal .lg-dmodal__thread .reply-stub { padding: 12px 0; margin: 0; border-top: 1px solid var(--border-soft, var(--border)); background: none !important; border-radius: 0; }
   #lg-dmodal .lg-dmodal__thread .reply-stub:first-child { border-top: 0; }
   #lg-dmodal .lg-dmodal__thread .reply-stub--child { margin-left: 42px; border-top: 0; padding-top: 4px; }
   #lg-dmodal .lg-dmodal__thread .avatar-init,

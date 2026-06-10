@@ -2468,7 +2468,9 @@
     var m = ensure();
     var titleEl = card.querySelector('.fc-title, .feed-card__title');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
-    var fid = card.getAttribute('data-forum-id') || '';
+    // forum_id is stamped on the card's reply CTA / composer, not the card itself.
+    var fidEl = card.querySelector('[data-forum-id]');
+    var fid = card.getAttribute('data-forum-id') || (fidEl && fidEl.getAttribute('data-forum-id')) || '';
 
     // OP: author meta cloned off the card + full body (?body=; excerpt placeholder).
     var op = m.querySelector('.lg-dmodal__op');
