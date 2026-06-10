@@ -180,7 +180,10 @@ switch ($sort_param) {
 // replies) can still surface, not just busy threads.
 switch ($sort_param) {
     case 'old':
-        $union_order_by = 'ORDER BY event_time ASC NULLS LAST';
+        // Oldest/Newest sort by CREATION time, not last activity — an old topic
+        // with a fresh reply must not jump the Newest feed (Ian 2026-06-10).
+        // Activity-recency still drives "hot"; reply teasers surface liveliness.
+        $union_order_by = 'ORDER BY created_at ASC NULLS LAST';
         break;
     case 'hot':
         $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
@@ -204,7 +207,7 @@ switch ($sort_param) {
                THEN 0.25 ELSE 1.0 END DESC";
         break;
     default: // new
-        $union_order_by = 'ORDER BY event_time DESC NULLS FIRST';
+        $union_order_by = 'ORDER BY created_at DESC NULLS LAST';
         break;
 }
 
