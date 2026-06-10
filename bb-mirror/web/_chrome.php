@@ -394,12 +394,11 @@ function bb_mirror_new_topic_modal(): void
       <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"
                 placeholder="Share your thoughts…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
-      <!-- Post anonymously (anon-rebuild lane): per-reply toggle, sends _lg_anon. -->
-      <label class="ntm-anon" for="frm-anon-check">
-        <input type="checkbox" class="ntm-anon__check" id="frm-anon-check" name="_lg_anon" value="1">
-        <span class="ntm-anon__tx">Reply anonymously
-          <span class="ntm-anon__hint">— your name &amp; avatar are hidden from other members</span></span>
-      </label>
+      <?php /* Anonymous toggle REMOVED from replies 2026-06-10 (Ian: "we don't
+               want anon replies. Just anon posts.") — anon stays on the
+               new-TOPIC composer only. forums.js guards on the checkbox's
+               existence, so no _lg_anon ever rides a reply now; the API door
+               is closed server-side too (reply.php). */ ?>
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
         <button type="button" class="ntm-cancel" id="frm-cancel">Cancel</button>

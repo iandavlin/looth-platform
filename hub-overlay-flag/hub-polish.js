@@ -2602,23 +2602,10 @@
       P + ' .fcr-add:hover{background:var(--lguser-accent,var(--lg-sage,#87986a))!important;color:#fff!important}',
       P + ' .fcr-add:active{transform:translateY(1px)}',
 
-      // ── SAVE button on cards (Buck 2026-06-09): the bookmark lives in the mobile
-      // action row (.lg-card-actions, display:none on desktop). Surface ONLY the Save
-      // from it as a clear "🔖 Save" pill (the Like/Replies/Share would duplicate the
-      // .fcr reactions + facepile, so keep them hidden). Already wired by buildActions
-      // + lgToggleSave + state-synced by lgSyncSaved — this just shows it. Covers ALL
-      // layout modes (masonry/cards/stream/compact). Saved view's own cards lack the row.
-      P + ' .lg-card-actions{display:flex!important;justify-content:flex-end;align-items:center;gap:0!important;padding:2px 16px 12px!important;margin:0!important;background:none!important;border:0!important}',
-      P + ' .lg-card-actions .lg-act-like,' + P + ' .lg-card-actions .lg-act-replies,' + P + ' .lg-card-actions .lg-act-share{display:none!important}',
-      P + ' .lg-card-actions .lg-act-save{display:inline-flex!important;align-items:center;gap:6px;height:30px;min-width:0!important;width:auto!important;padding:0 13px!important;margin:0!important;border-radius:999px!important;' +
-        'background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3))!important;border:1px solid var(--lguser-line,#e3ddd0)!important;color:var(--lguser-accent-d,var(--lg-sage-d,#52613d))!important;' +
-        'font:600 12.5px/1 var(--lg-font-sans,system-ui,-apple-system,sans-serif)!important;cursor:pointer;transition:background .12s,color .12s}',
-      P + ' .lg-card-actions .lg-act-save .ico{width:15px;height:15px;flex:0 0 auto}',
-      P + ' .lg-card-actions .lg-act-save::after{content:"Save";font:inherit}',
-      P + ' .lg-card-actions .lg-act-save:hover{background:var(--lguser-accent,var(--lg-sage,#87986a))!important;color:#fff!important;border-color:transparent!important}',
-      P + ' .lg-card-actions .lg-act-save.is-on{background:var(--lguser-accent,var(--lg-sage,#87986a))!important;color:#fff!important;border-color:transparent!important}',
-      P + ' .lg-card-actions .lg-act-save.is-on::after{content:"Saved"}',
-      P + ' .lg-card-actions .lg-act-save.is-on .ico{fill:currentColor}',
+      // (Desktop .lg-card-actions surfacing + bookmark-pill RETIRED 2026-06-10 —
+      // Ian: "the bottom row on cpts could use some love". The canonical
+      // .fc-actions row (reactions left, comment + ☆ save right) is THE row;
+      // forums.css owns its desktop layout. Mobile action row untouched.)
 
       // ── Reply composer. The DESKTOP card composer is .fc-composer > .fc-composer__wrap
       // (the input "bubble") > input.fc-composer__input. The wrap hardcodes a dark

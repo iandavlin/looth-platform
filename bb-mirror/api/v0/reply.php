@@ -119,14 +119,10 @@ if ($reply_id <= 0) {
 // Belt-and-suspenders throttle bookkeeping for our own pre-check.
 update_user_meta($uid, '_bbp_last_posted', time());
 
-// Anonymous-posting flag (anon-rebuild lane): the composer's "Post anonymously"
-// toggle rides `_lg_anon` in this body. The bb-mirror-sync mu-plugin also stamps
-// this meta from php://input on bbp_new_reply; we set it here too (we already
-// have the decoded body + the id) so the flag is guaranteed before the deferred
-// shutdown sync reads it. update_post_meta is idempotent.
-if (!empty($body['_lg_anon'])) {
-    update_post_meta($reply_id, '_lg_anon', 1);
-}
+// Anonymous REPLIES retired 2026-06-10 (Ian: "we don't want anon replies.
+// Just anon posts."). The composer toggle is gone from the reply modal and
+// this endpoint no longer honors `_lg_anon` on replies — anonymity remains a
+// new-TOPIC feature only. (Existing anon replies keep their stored meta.)
 
 $reply = get_post($reply_id);
 

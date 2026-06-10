@@ -2374,7 +2374,7 @@
       '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
         '<header class="lg-dmodal__head">' +
           '<h2 class="lg-dmodal__title"></h2>' +
-          '<button type="button" class="lg-dmodal__reply feed-card__reply-cta" data-frm-open>&#8617; Reply</button>' +
+          '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
           '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
         '</header>' +
         '<div class="lg-dmodal__scroll">' +
@@ -2385,6 +2385,21 @@
     document.body.appendChild(modal);
     modal.addEventListener('click', function (e) {
       if (e.target.closest('[data-dm-close]')) close();
+    });
+    // 3 panel sizes (Ian): S / M / L, cycled from the head, persisted per device.
+    var SIZES = ['s', 'm', 'l'];
+    function getSize() { try { var v = localStorage.getItem('lg-dmodal-size'); return SIZES.indexOf(v) > -1 ? v : 'm'; } catch (e) { return 'm'; } }
+    function applySize(sz) {
+      var p = modal.querySelector('.lg-dmodal__panel');
+      SIZES.forEach(function (x) { p.classList.remove('lg-dmodal--' + x); });
+      p.classList.add('lg-dmodal--' + sz);
+      modal.querySelector('.lg-dmodal__size').textContent = sz.toUpperCase();
+    }
+    applySize(getSize());
+    modal.querySelector('.lg-dmodal__size').addEventListener('click', function () {
+      var next = SIZES[(SIZES.indexOf(getSize()) + 1) % SIZES.length];
+      try { localStorage.setItem('lg-dmodal-size', next); } catch (e) {}
+      applySize(next);
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && modal && !modal.hidden) close();
@@ -2413,9 +2428,37 @@
         var tmp = document.createElement('div');
         tmp.innerHTML = html;
         while (tmp.firstChild) t.appendChild(tmp.firstChild);
+        fbRows(t, tid);
         drain(t, tid, depth + 1);
       })
       .catch(function () {});
+  }
+
+  // Social-style comment rows (Ian): each reply's reactions + Reply button sit
+  // together in one row UNDER the comment body. The per-reply buttons get the
+  // topic/forum ids stamped on them — in the modal there is no .feed-card
+  // ancestor for frmOpen to source them from.
+  function fbRows(t, tid) {
+    var fid = (t.closest('#lg-dmodal') && (document.querySelector('#lg-dmodal .lg-dmodal__act') || {}).getAttribute)
+      ? (document.querySelector('#lg-dmodal .lg-dmodal__act').getAttribute('data-forum-id') || '') : '';
+    [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) {
+      if (stub.getAttribute('data-lg-fbrow')) return;
+      stub.setAttribute('data-lg-fbrow', '1');
+      var row = document.createElement('div');
+      row.className = 'lg-dmodal__acts';
+      var fcr = stub.querySelector('.fcr');
+      var rb = stub.querySelector('.reply-stub__reply');
+      if (fcr) row.appendChild(fcr);
+      if (rb) {
+        rb.setAttribute('data-topic-id', tid);
+        rb.setAttribute('data-forum-id', fid);
+        row.appendChild(rb);
+      }
+      if (!row.childNodes.length) return;
+      var bodyEl = stub.querySelector('.reply-stub__body, .reply-stub__excerpt');
+      var col = bodyEl ? bodyEl.parentElement : stub;
+      col.appendChild(row);
+    });
   }
 
   function open(card) {
@@ -2425,13 +2468,7 @@
     var m = ensure();
     var titleEl = card.querySelector('.fc-title, .feed-card__title');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
-    // Reply goes through the canonical composer (frm §4b, delegated on
-    // [data-frm-open]) — stamp the ids it reads off the trigger.
-    var rbtn = m.querySelector('.lg-dmodal__reply');
-    if (rbtn) {
-      rbtn.setAttribute('data-topic-id', tid);
-      rbtn.setAttribute('data-forum-id', card.getAttribute('data-forum-id') || '');
-    }
+    var fid = card.getAttribute('data-forum-id') || '';
 
     // OP: author meta cloned off the card + full body (?body=; excerpt placeholder).
     var op = m.querySelector('.lg-dmodal__op');
@@ -2447,6 +2484,13 @@
     var ex = card.querySelector('.feed-card__op-excerpt, .fc-excerpt');
     body.innerHTML = ex ? ex.innerHTML : '';
     op.appendChild(body);
+    // FB-style: the actions live UNDER the post (Ian). Reply goes through the
+    // canonical composer (frm §4b, delegated on [data-frm-open]).
+    var opacts = document.createElement('div');
+    opacts.className = 'lg-dmodal__opacts';
+    opacts.innerHTML = '<button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open' +
+      ' data-topic-id="' + tid + '" data-forum-id="' + fid + '">&#8617; Reply</button>';
+    op.appendChild(opacts);
     fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) { if (html && html.trim()) body.innerHTML = html; })
@@ -2465,6 +2509,7 @@
           rep.innerHTML = '<div class="lg-dmodal__note">No replies yet. Be the first to reply.</div>';
           return;
         }
+        fbRows(t, tid);
         drain(t, tid, 0);
       })
       .catch(function () {
