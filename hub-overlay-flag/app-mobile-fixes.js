@@ -178,25 +178,9 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trimHamburgerDupes);
   else trimHamburgerDupes();
 
-  // Mobile only: kill compact mode entirely (Buck, 2026-06-06 - "I dont want that
-  // option for mobile"). Compact is applied as html.hub-compact (denser cards); it
-  // was also making Buck's Hub look different from Ian's when one device had it on.
-  // We strip the class on mobile and keep it stripped (the Cpt toggle is already
-  // hidden). localStorage hub-compact is NOT changed, so the same browser on desktop
-  // re-derives the class on its own load -> DESKTOP keeps compact if the user set it.
-  function killCompactOnMobile() {
-    try {
-      if (!window.matchMedia('(max-width:640px)').matches) return;
-      var h = document.documentElement;
-      var strip = function () { if (h.classList.contains('hub-compact')) h.classList.remove('hub-compact'); };
-      strip();
-      if ('MutationObserver' in window) {
-        new MutationObserver(strip).observe(h, { attributes: true, attributeFilter: ['class'] });
-      }
-    } catch (e) {}
-  }
-  killCompactOnMobile();
-  document.addEventListener('DOMContentLoaded', killCompactOnMobile);
+  // killCompactOnMobile RETIRED here 2026-06-10 (bespoke-cutover, audit C6): it was
+  // a byte-identical duplicate of mobile-hub.js §1, which owns it (mobile behaviors
+  // layer, ≤640-gated at load). One implementation, one owner.
 
   // Mobile only: the sort/filter bar should hide together with the search bar.
   // The header (#site-header, which contains the .lg-hub-search bar) auto-hides on

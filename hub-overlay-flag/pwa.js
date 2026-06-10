@@ -92,7 +92,7 @@
     if (document.getElementById("looth-mobile-fixes-js")) return;
     var s = document.createElement("script");
     s.id = "looth-mobile-fixes-js";
-    s.src = "/app-mobile-fixes.js?v=26";
+    s.src = "/app-mobile-fixes.js?v=27";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=139";
+    s.src = "/hub-polish.js?v=140";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();

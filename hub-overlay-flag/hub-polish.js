@@ -609,136 +609,11 @@
       }
     } catch (e) {}
   }
-
-  // ── "Saved" filter (Buck 2026-06-08): a pill in the sort bar (next to Newest/
-  // Trending, IG bookmark icon) that flips the Hub to show ONLY your saved posts,
-  // newest-saved on top — Instagram-style. The account is the source of truth
-  // (lgSyncSaved), localStorage is the instant cache. ?saved=1 auto-activates it
-  // (the You-menu "Saved" button warps to /hub/?saved=1). Mobile only. ──────────
-  var lgSavedMode = false;
-  function ensureSavedCss() {
-    if (document.getElementById('lg-saved-css')) return;
-    var s = document.createElement('style'); s.id = 'lg-saved-css';
-    s.textContent = [
-      // Buck 2026-06-09: applies at ALL widths now (was max-width:640) so the Saved
-      // pill + saved view work on desktop too.
-      '@media (min-width:1px){',
-      '.feed-sort-bar .lg-saved-pill{order:1;display:inline-flex;align-items:center;gap:5px;border:0;background:none;cursor:pointer;',
-      'border-radius:999px;padding:7px 12px;font:600 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--lguser-mute,#6b6f6b);white-space:nowrap}',
-      '.feed-sort-bar .lg-saved-pill .ico{width:15px;height:15px;flex:0 0 auto}',
-      '.feed-sort-bar .lg-saved-pill.is-on{background:var(--lguser-pill,#dde6c7);color:var(--lguser-accent-d,#52613d)}',
-      '.feed-sort-bar .lg-saved-pill.is-on .ico{fill:currentColor}',
-      'html[data-lguser-theme="dark"] .feed-sort-bar .lg-saved-pill.is-on{background:#243024!important;color:#b0c693!important}',
-      // Saved view renders REAL .feed-card markup so the hub card CSS styles it
-      // identically (Buck: "format the post the same way the hub does, not a text
-      // list"). #lg-saved-feed sits inside .feed-page so `.feed-page .feed-card`
-      // rules + immersive + dark all apply automatically.
-      // hide the main feed in saved mode (beats the desktop masonry display:block!important)
-      'html[data-lg-saved="1"] .feed-page .feed{display:none!important}',
-      '#lg-saved-feed{padding:4px 0 26px;display:flex;flex-direction:column;gap:11px;max-width:760px;margin-left:auto;margin-right:auto}',
-      '#lg-saved-feed .lg-saved-card{cursor:pointer}',
-      '#lg-saved-feed .lg-card-avatar{display:flex;align-items:center;justify-content:center;color:#fff;font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif)}',
-      '#lg-saved-feed .lg-sv-empty{padding:54px 26px;text-align:center;color:var(--lg-mute,#6b6f6b);font:500 14.5px/1.5 var(--lg-font-sans,system-ui,sans-serif)}',
-      '}'
-    ].join('\n');
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function savedKindLabel(kind) {
-    var m = { 'loothprint': 'Loothprint', 'post-imgcap': 'Photo', 'post-type-videos': 'Video', 'sponsor-post': 'Sponsor', 'useful_links': 'Link', 'member-benefit': 'Benefit', 'loothcuts': 'Loothcut', 'topic': 'Discussion' };
-    return m[kind] || 'Post';
-  }
-  function renderSavedFeed() {
-    var feed = document.querySelector('.feed'); if (!feed) return;
-    var host = document.getElementById('lg-saved-feed');
-    if (!host) { host = document.createElement('div'); host.id = 'lg-saved-feed'; feed.parentNode.insertBefore(host, feed.nextSibling); }
-    host.innerHTML = '';
-    var list = lgSavedItems || [];   // canonical /my-saved items: {title,url,thumb_url,kind,author_name}
-    if (!list.length) {
-      var e = document.createElement('div'); e.className = 'lg-sv-empty';
-      e.innerHTML = 'No saved posts yet.<br>Tap the bookmark on a post to save it.';
-      host.appendChild(e); return;
-    }
-    list.forEach(function (p) {
-      // Build REAL .feed-card markup so the hub's card CSS (inside .feed-page) styles it.
-      var card = document.createElement('article');
-      card.className = 'feed-card feed-card--content lg-saved-card';
-      if (p.kind) card.setAttribute('data-kind', p.kind);
-      if (p.url) card.setAttribute('data-href', p.url);
-      var meta = document.createElement('div'); meta.className = 'feed-card__meta-top';
-      var av = document.createElement('span'); av.className = 'lg-card-avatar';
-      av.textContent = ((p.author_name || '?').trim().charAt(0) || '?').toUpperCase();
-      var idw = document.createElement('span'); idw.className = 'lg-card-id';
-      var au = document.createElement('span'); au.className = 'lg-card-author'; au.textContent = p.author_name || 'Saved post';
-      idw.appendChild(au);
-      var cat = document.createElement('span'); cat.className = 'lg-card-cat fc-category'; cat.textContent = savedKindLabel(p.kind);
-      meta.appendChild(av); meta.appendChild(idw); meta.appendChild(cat);
-      card.appendChild(meta);
-      var header = document.createElement('div'); header.className = 'feed-card__header';
-      var cover = p.thumb_url || p.cover || '';
-      if (cover) {
-        var cw = document.createElement('span'); cw.className = 'fc-cover feed-card__cover';
-        var im = document.createElement('img'); im.className = 'feed-card__cover-img'; im.src = cover; im.loading = 'lazy'; im.alt = '';
-        cw.appendChild(im); header.appendChild(cw);
-      }
-      var hb = document.createElement('div'); hb.className = 'feed-card__header-body';
-      var h = document.createElement('h3'); h.className = 'feed-card__title fc-title'; h.textContent = p.title || 'Post';
-      hb.appendChild(h); header.appendChild(hb);
-      card.appendChild(header);
-      // Tap → open in-app (loothprint sheet / content sheet) or navigate; stays on Hub.
-      card.addEventListener('click', function (e) {
-        if (e.target.closest('a, button')) return;
-        if (!p.url) return;
-        if (p.kind === 'loothprint' && typeof openLoothprintSheet === 'function') { e.preventDefault(); openLoothprintSheet({ href: p.url, title: p.title, kind: 'loothprint' }); }
-        else if (typeof openContentSheet === 'function') { e.preventDefault(); openContentSheet(p.url); }
-        else { location.href = p.url; }
-      });
-      host.appendChild(card);
-    });
-  }
-  function setSavedMode(on) {
-    lgSavedMode = !!on;
-    // Mark on <html> so CSS can hide the main feed — on desktop the masonry rule
-    // sets display:block!important, which would otherwise beat the inline none below.
-    document.documentElement.setAttribute('data-lg-saved', on ? '1' : '0');
-    var feed = document.querySelector('.feed');
-    var pill = document.querySelector('.feed-sort-bar .lg-saved-pill');
-    var host = document.getElementById('lg-saved-feed');
-    var more = document.querySelector('.feed-more');   // infinite-scroll "Load older activity"
-    if (on) {
-      if (pill) pill.classList.add('is-on');
-      if (feed) feed.style.display = 'none';
-      if (more) more.style.display = 'none';
-      renderSavedFeed();
-      lgSyncSaved(function () { if (lgSavedMode) renderSavedFeed(); });   // refresh from account
-      try { window.scrollTo(0, 0); } catch (e) {}
-    } else {
-      if (pill) pill.classList.remove('is-on');
-      if (feed) feed.style.display = '';
-      if (more) more.style.display = '';
-      if (host) host.remove();
-    }
-  }
-  function wireSavedFilter() {
-    // Buck 2026-06-09: the Saved pill was mobile-only — add it on desktop too.
-    ensureSavedCss();
-    var bar = document.querySelector('.feed-sort-bar');
-    if (!bar) return;
-    if (!bar.querySelector('.lg-saved-pill')) {
-      var pill = document.createElement('button');
-      pill.type = 'button'; pill.className = 'lg-saved-pill';
-      pill.innerHTML = (typeof ICO_SAVE !== 'undefined' ? ICO_SAVE : '') + 'Saved';
-      var chip = bar.querySelector('.lg-filters-chip');
-      if (chip) bar.insertBefore(pill, chip); else bar.appendChild(pill);
-      pill.addEventListener('click', function (e) { e.preventDefault(); setSavedMode(!lgSavedMode); });
-    }
-    if (!bar.getAttribute('data-lg-savedwire')) {
-      bar.setAttribute('data-lg-savedwire', '1');
-      // Tapping a real sort tab (Newest/Trending/Random) exits saved mode.
-      bar.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { if (lgSavedMode) setSavedMode(false); }); });
-    }
-    // The You-menu "Saved" button warps here with ?saved=1.
-    if (/[?&]saved=1/.test(location.search) && !lgSavedMode) setSavedMode(true);
-  }
+  // "Saved" pill + client-rendered saved view RETIRED 2026-06-10 (bespoke-cutover,
+  // audit C5): superseded by the canonical server-side Saved view — ?saved=1
+  // constrains the feed union in _feed.php (9bcf24e) and the rail "Saved posts"
+  // toggle (+ the You-menu link) is the entry point. lgToggleSave/lgSyncSaved
+  // above STAY: they wire + state-sync the per-card bookmark buttons.
 
   // Tap the post text (clamped excerpt OR expanded full body) to toggle the
   // canonical "Read more" expander. Mobile only (we hide the Read-more button
@@ -2887,19 +2762,13 @@
     var css = [
       // page background follows the theme (or forums' OS-aware cream fallback)
       'html ' + P + '{background:var(--lguser-bg,var(--lg-cream,#f1efe8))!important}',
-      // MASONRY feed (Buck 2026-06-09): CSS multi-column so cards pack TIGHT vertically
-      // (Pinterest-style staggering) instead of grid rows that leave empty space under
-      // shorter cards. The content pane is already full-width; the only width cap was
-      // forums.css .page{max-width:1100px}, so we raise it to 2100 and let column-width
-      // drive a RESPONSIVE column count — more columns as the screen widens (~2 @1280,
-      // 3 @1600, 4 @1920, ~5 @≥2200, capped by the 2100 feed width). Cards keep a fixed
-      // ~370px min so their SHAPE never distorts; break-inside:avoid keeps each card
-      // whole; column-span:none + a uniform 16:9 cover mean every card flows the same
-      // (no full-width hero in masonry — that's what closes the vertical gaps).
-      P + '{max-width:2100px!important}',
-      P + ' .feed{display:block!important;column-width:370px!important;column-gap:18px!important;' +
-        'padding:22px 24px 48px!important}',
-      P + ' .feed-card__cover,' + P + ' .fc-cover{aspect-ratio:16 / 9!important;max-height:300px!important}',
+      // MASONRY geometry (feed max-width 2100 / column-width 370 / 16:9 covers)
+      // RETIRED from this overlay 2026-06-10 (bespoke-cutover, audit C2): it lives in
+      // forums.css @media(min-width:641) — commit 88955fb — and paints first-frame
+      // server-side. forums.css is the ONLY masonry-geometry source now. The
+      // .feed-card display:block/break-inside props below still ship until the C3
+      // arrangement/chrome fold: they also SUPPRESS forums.css's desktop grid
+      // arrangement, so removing them is a deliberate visual step, not a dupe kill.
       // card shell matches the app; bg chains to forums --bg-card so DEFAULT follows
       // the OS while a picked theme's --lguser-card overrides. Masonry props here too:
       // each card is a whole block in the column flow with an even vertical rhythm.
@@ -3409,7 +3278,6 @@
     restyleSortBar();
     setupDesktopFilterNav();
     wireDesktopSearchTags();
-    wireSavedFilter();
     lgSyncSaved();
     wireFreshPill();
     buildTopSearch();
