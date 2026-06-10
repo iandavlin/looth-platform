@@ -2209,6 +2209,20 @@ body.ntm-active { overflow: hidden; }
   --lg-sage-tint: #eef2e3;
 }
 
+/* DARK-mode repoint (Ian 2026-06-10: "all forms ignore dark mode") — the same
+   token-pinning trick as the light pin above, with the dark set. The gear's
+   mode is the single source; the whole dialog (panel, inputs, forum list,
+   Quill) follows through these tokens. */
+html[data-lguser-theme="dark"] .ntm-overlay {
+  --bg:        #1b1e21;
+  --bg-card:   #15171a;
+  --fg:        #e5e7e1;
+  --fg-muted:  #a6ac9f;
+  --fg-soft:   #80867d;
+  --border:    #2c312d;
+  --lg-sage-tint: #243024;
+}
+
 .ntm-backdrop {
   position: absolute;
   inset: 0;
@@ -2867,11 +2881,14 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;
   }
-  .feed-page .feed-card__cover,
-  .feed-page .fc-cover { aspect-ratio: 16 / 9; max-height: 300px; }
-  /* full-width hero cover spans its column edge-to-edge */
-  .feed-page .feed-card:first-child .feed-card__cover,
-  .feed-page .feed-card:first-child .fc-cover { max-width: none; width: 100%; }
+  /* UNIFORM covers (Ian 2026-06-10: "cards should be uniform") — every card,
+     first included, fills its column at 16:9; the first-child hero special-
+     case is retired (here AND in the overlay). Outweighs the arrangement
+     block's 440px cover cap. */
+  .feed-page .feed-card .feed-card__cover,
+  .feed-page .feed-card .fc-cover {
+    aspect-ratio: 16 / 9; max-height: 300px; max-width: none; width: 100%;
+  }
 }
 /* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
    drop to 2 in that band. Full-size desktop gets the 3 Ian asked for. */
@@ -2910,8 +2927,8 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
      special-case, no max-height crop. Outweighs the arrangement block's 440px
      cover cap and matches the overlay's first-child hero values, so nothing
      fights. */
-  html[data-lg-hublayout="stream"] .feed-page .feed-card__cover,
-  html[data-lg-hublayout="stream"] .feed-page .fc-cover {
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .feed-card__cover,
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .fc-cover {
     aspect-ratio: 16 / 9; max-height: none; max-width: none; width: 100%;
   }
 }

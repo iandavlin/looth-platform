@@ -1767,153 +1767,18 @@
           return;
         }
 
-        // (B) keep-on-hub: a tap on a content card stays on the Hub.
-        var kind = card.getAttribute('data-kind') || card.getAttribute('data-type') || '';
-        if (card.getAttribute('data-gated') === '1') return;  // gated → its page (paywall)
-
-        // LOOTHPRINT: tap anywhere on the card — title, cover, OR the body text — opens the
-        // inline sheet (Download + Email-the-file). Buck 2026-06-08: "expand when you click
-        // the text too, not just the photo." Real controls + author links still work.
-        if (kind === 'loothprint') {
-          if (e.target.closest('button, [data-comments], .lg-act, .lg-card-actions, .fcr, .fcr-palette, .fc-cover--video, video, iframe')) return;
-          if (e.target.closest('a[href]') && !e.target.closest('.feed-card__title a') && !e.target.closest('.feed-card__cover')) return; // author/other links navigate
-          e.preventDefault(); e.stopPropagation();
-          openLoothprintSheet(card); return;
-        }
-
-        // Other content (article/video/imgcap/sponsor-post/event): tap title/cover
-        // opens the FULL post (real article body + comments) in an in-app sheet
-        // (iframe of <href>?embed=1) instead of navigating to the desktop page.
-        // Buck 2026-06-08. Video play-button + [data-comments] still self-handle.
-        if (!(e.target.closest('.feed-card__title a') || e.target.closest('.feed-card__cover'))) return;
-        if (e.target.closest('.fc-cover--video, video, iframe, [data-comments]')) return; // video plays / comments btn self-handles
-        var href = card.getAttribute('data-href');
-        if (!href || href === '#') return;                    // no target → let the anchor do its thing
-        e.preventDefault();
-        e.stopPropagation();                                  // beat forums.js + the anchor nav
-        if (lgShouldPopup(card)) openContentSheet(href);      // photos / long body → pop-up
-        else lgInlineExpand(card);                            // short → expand inline (nothing if it already fits)
+        // (B) RETIRED 2026-06-10 (Ian: "all cpts click through to post. No
+        // modals for cpts — only discussions"). Content/loothprint cards no
+        // longer open sheets: the server markup already carries real anchors
+        // (cover + title + gated teaser), so taps navigate natively. The
+        // discussion branch above keeps its thread modal; the explicit
+        // Reply/Comment button keeps the comments modal (A).
       } catch (err) {}
     }, true);                                                 // capture: run before forums.js
   }
 
-  // ── DESKTOP quick-view modal (Buck 2026-06-09) ──────────────────────────────
-  // On desktop, clicking a post in the feed used to NAVIGATE to the topic page,
-  // losing your scroll position in the feed. Mobile keeps you in place (sheets);
-  // Buck wants the same on desktop "just a little more designed for desktop": a
-  // centered modal over a dimmed feed showing the full post + thread, so you never
-  // lose your spot. Reuses the same in-iframe post view as the mobile content sheet
-  // (load <href>?embed=1; the iframe shares this device's localStorage so it picks
-  // up the user's theme automatically). ?embed=1 chrome-frees CONTENT pages but not
-  // discussion topics, so on iframe-load we ALSO inject a style that hides the site
-  // header / nav / footer / tabbar inside the frame — works for every card type.
-  // Desktop only (min-width:641); the feed body scroll is frozen while open so the
-  // position is preserved; Esc / ✕ / backdrop / browser-Back all close it.
-  var lgQv = null, lgQvHist = false;
-  function ensureQuickViewCss() {
-    if (document.getElementById('lg-qv-css')) return;
-    var css = '@media (min-width:641px){' +
-      '#lg-qv{position:fixed;inset:0;z-index:2147483600;display:none;align-items:center;justify-content:center;padding:34px;background:rgba(12,14,10,.55);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}' +
-      '#lg-qv.is-open{display:flex}' +
-      '#lg-qv .lg-qv__panel{position:relative;width:min(940px,94vw);height:min(88vh,1000px);background:var(--lguser-card,var(--bg-card,#fff));border:1px solid var(--lguser-line,var(--lg-line,#e3ddd0));border-radius:18px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.6);display:flex;flex-direction:column;transform:translateY(8px) scale(.99);opacity:0;transition:opacity .16s ease,transform .18s ease}' +
-      '#lg-qv.is-open .lg-qv__panel{transform:none;opacity:1}' +
-      '#lg-qv .lg-qv__bar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;border-bottom:1px solid var(--lguser-line,var(--lg-line,#e3ddd0))}' +
-      '#lg-qv .lg-qv__ttl{flex:1 1 auto;min-width:0;font:700 15px/1.3 var(--lg-font-serif,Georgia,serif);color:var(--lguser-ink,var(--fg,#1a1d1a));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '#lg-qv .lg-qv__open{flex:0 0 auto;font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lguser-accent-d,var(--lg-sage-d,#52613d));text-decoration:none;padding:7px 10px;border-radius:8px}' +
-      '#lg-qv .lg-qv__open:hover{background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3))}' +
-      '#lg-qv .lg-qv__x{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;cursor:pointer;background:var(--lguser-pill,var(--lg-sage-tint,#eef2e3));color:var(--lguser-ink,var(--fg,#1a1d1a));font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center}' +
-      '#lg-qv .lg-qv__x:hover{filter:brightness(.95)}' +
-      '#lg-qv .lg-qv__frame{flex:1 1 auto;width:100%;border:0;background:var(--lguser-card,var(--bg-card,#fff))}' +
-      '#lg-qv .lg-qv__load{position:absolute;left:0;right:0;top:48px;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--lguser-mute,var(--fg-muted,#6b6f6b));font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);pointer-events:none}' +
-      '}';
-    var s = document.createElement('style'); s.id = 'lg-qv-css'; s.textContent = css;
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function qvKey(e) { if (e.key === 'Escape') closeQuickView(); }
-  function buildQuickView() {
-    if (lgQv) return lgQv;
-    ensureQuickViewCss();
-    lgQv = document.createElement('div');
-    lgQv.id = 'lg-qv'; lgQv.setAttribute('role', 'dialog'); lgQv.setAttribute('aria-modal', 'true'); lgQv.setAttribute('aria-label', 'Post');
-    lgQv.innerHTML = '<div class="lg-qv__panel">' +
-      '<div class="lg-qv__bar"><span class="lg-qv__ttl"></span>' +
-      '<button class="lg-qv__x" type="button" aria-label="Close">✕</button></div>' +
-      '<div class="lg-qv__load">Loading…</div>' +
-      '<iframe class="lg-qv__frame" title="Post" referrerpolicy="same-origin" allow="fullscreen; clipboard-write; web-share"></iframe>' +
-      '</div>';
-    document.body.appendChild(lgQv);
-    var frame = lgQv.querySelector('.lg-qv__frame');
-    frame.addEventListener('load', function () {
-      try {
-        var d = frame.contentDocument;
-        if (d && !d.getElementById('lg-qv-embed-css')) {
-          var st = d.createElement('style'); st.id = 'lg-qv-embed-css';
-          st.textContent = '#site-header,.lg-chrome,#site-footer,footer,#looth-tabbar,#looth-pwa-banner,.bb-layout__nav,.lg-set-gear,#lg-dset-pop{display:none!important}' +
-            'body{padding-top:0!important}.bb-layout__content,.bb-layout__content .page{max-width:none!important}';
-          (d.head || d.documentElement).appendChild(st);
-        }
-        lgMirrorTheme(d); lgPostPolish(d);   // pop-up follows the user's theme + Editorial/dark polish
-      } catch (e) {}
-      var l = lgQv.querySelector('.lg-qv__load'); if (l) l.style.display = 'none';
-    });
-    lgQv.querySelector('.lg-qv__x').addEventListener('click', function () { closeQuickView(); });
-    lgQv.addEventListener('click', function (e) { if (e.target === lgQv) closeQuickView(); }); // backdrop
-    return lgQv;
-  }
-  function openQuickView(href, title) {
-    if (!href || href === '#') return;
-    buildQuickView();
-    var frame = lgQv.querySelector('.lg-qv__frame');
-    var l = lgQv.querySelector('.lg-qv__load'); if (l) l.style.display = '';
-    frame.src = href + (href.indexOf('?') === -1 ? '?' : '&') + 'embed=1';
-    lgQv.querySelector('.lg-qv__ttl').textContent = title || 'Post';
-    lgQv.classList.add('is-open');
-    document.body.style.overflow = 'hidden';   // freeze the feed scroll position
-    document.addEventListener('keydown', qvKey);
-    try { history.pushState({ lgQv: 1 }, '', location.href); lgQvHist = true; } catch (e) {}
-  }
-  function closeQuickView(fromPop) {
-    if (!lgQv) return;
-    lgQv.classList.remove('is-open');
-    document.body.style.overflow = '';
-    document.removeEventListener('keydown', qvKey);
-    var frame = lgQv.querySelector('.lg-qv__frame');
-    setTimeout(function () { if (lgQv && !lgQv.classList.contains('is-open') && frame) frame.removeAttribute('src'); }, 220);
-    if (lgQvHist && !fromPop) { lgQvHist = false; try { history.back(); } catch (e) {} } else { lgQvHist = false; }
-  }
-  window.addEventListener('popstate', function () { if (lgQv && lgQv.classList.contains('is-open')) closeQuickView(true); });
-
-  function wireDesktopQuickView() {
-    if (window.matchMedia('(max-width:640px)').matches) return;   // desktop only
-    if (document.body.getAttribute('data-lg-qv-wired')) return;
-    document.body.setAttribute('data-lg-qv-wired', '1');
-    document.addEventListener('click', function (e) {
-      try {
-        if (window.matchMedia('(max-width:640px)').matches) return;   // re-check (viewport may have shrunk)
-        var card = e.target.closest && e.target.closest('.feed-card');
-        if (!card) return;
-        if (card.getAttribute('data-gated') === '1') return;          // paywalled → let it go to its page
-        // open the quick-view only from the post TITLE or its body text — never the
-        // cover (keeps image lightbox / video play) and never interactive controls.
-        var onText = e.target.closest('.feed-card__title a, .fc-title a, .feed-card__title, .fc-title, .feed-card__op-excerpt, .fc-excerpt, .feed-card__op');
-        if (!onText) return;
-        if (e.target.closest('a[href*="/u/"]')) return;              // author links navigate
-        if (e.target.closest('button, .lg-act, .lg-card-actions, .fcr, .fcr-palette, [data-comments], .fc-cover--video, video, iframe, .feed-card__read-more, .feed-card__expand, .fc-readmore')) return;
-        var tl = card.querySelector('.feed-card__title a, .fc-title a');
-        var href = card.getAttribute('data-href') || (tl && tl.getAttribute('href'));
-        if (!href || href === '#') return;
-        var tEl = card.querySelector('.feed-card__title, .fc-title');
-        var title = tEl ? (tEl.textContent || '').replace(/\s+/g, ' ').trim() : 'Post';
-        if (!lgShouldPopup(card)) {                                   // short listing → not pop-up worthy (Buck 2026-06-09)
-          if (lgInlineExpand(card)) { e.preventDefault(); e.stopPropagation(); }  // expand in place if there's a little more
-          return;                                                    // else let the title link open the page (nothing to expand)
-        }
-        e.preventDefault();
-        e.stopPropagation();                                          // beat forums.js + the anchor nav
-        openQuickView(href, title);
-      } catch (err) {}
-    }, true);                                                         // capture: run before forums.js
-  }
+  // (DESKTOP quick-view modal RETIRED 2026-06-10 — Ian: "no modals for cpts,
+  // only discussions". Title/cover anchors navigate to the post page.)
 
   // ── Loothprint inline sheet (Buck 2026-06-08) ───────────────────────────────
   // Tapping a loothprint stays on the Hub and opens a sheet with the print's cover/
@@ -2090,19 +1955,8 @@
         var db = sheet.querySelector('#llp-desc'); if (db && !db.innerHTML) db.innerHTML = '<div class="llp-note">Couldn’t load the details right now.</div>';
       });
   }
-  // Hub search results open this popup instead of navigating to the (desktop) page.
-  function wireSearchPreview() {
-    if (document.body.getAttribute('data-lg-searchprev')) return;
-    document.body.setAttribute('data-lg-searchprev', '1');
-    document.addEventListener('click', function (e) {
-      var a = e.target.closest && e.target.closest('.lg-hub-search__item');
-      if (!a) return;
-      var url = a.getAttribute('data-url') || a.getAttribute('href');
-      if (!url) return;
-      e.preventDefault(); e.stopPropagation();
-      openLoothprintSheet(null, { href: url, title: a.getAttribute('data-title') || (a.textContent || '').trim(), kind: a.getAttribute('data-kind') || 'page' });
-    }, true);
-  }
+  // (Search-preview popup RETIRED 2026-06-10 — same rule: search results
+  // navigate to the post page.)
 
   // ── Stop an inline YouTube video when it scrolls off-screen (Buck 2026-06-08) ──
   // forums.js plays a content video by injecting an iframe.fc-video (autoplay, no JS-API)
@@ -2785,11 +2639,8 @@
       P + ' .fc-author__name,' + P + ' .fc-author__name a{color:var(--lguser-ink,#1a1d1a)!important}',
       P + ' .fc-time{color:var(--lguser-mute,#6b6f6b)!important}',
 
-      // ── MOSAIC hero cover: forums.css caps covers at max-width:440px (and content
-      // covers at 300px), so the full-width hero never filled its spanned row. Let
-      // the hero cover go edge-to-edge across both columns.
-      P + ' .feed-card:first-child .feed-card__cover,' + P + ' .feed-card:first-child .fc-cover{' +
-        'max-width:none!important;width:100%!important}',
+      // (MOSAIC first-child hero RETIRED 2026-06-10 — Ian: uniform cards.
+      // forums.css owns uniform cover sizing in both layouts now.)
 
       // (Author-search hide RETIRED 2026-06-10 — Ian: "we need author search
       // back". The server-rendered .hub-tsearch--author box shows again.)
@@ -3097,10 +2948,8 @@
     ensureFbReactionsCss();
     wireImageLightbox();
     wireFilterDrawer();
-    wireSearchPreview();
     ensureImmersiveCss();
     ensureDesktopCss();
-    wireDesktopQuickView();
     wireReplyBodyExpand();
     wirePostBodyExpand();
     wireFastFilters();

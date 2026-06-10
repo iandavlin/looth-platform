@@ -42,8 +42,19 @@ if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
 // keeps newest-first so a specific forum reads chronologically.
 $sort_param   = strtolower(trim((string)($_GET['sort'] ?? '')));
 $default_sort = ($forum_slug !== '' || $fid > 0) ? 'new' : 'random';
-if (!in_array($sort_param, ['new', 'old', 'hot', 'random'], true)) {
-    $sort_param = $default_sort;
+// Persist the picked sort across visits (Ian 2026-06-10): an explicit ?sort=
+// writes a 1-year cookie; a bare /hub/ load reads it back, so Newest/Trending/
+// Random survives navigation and hard refresh. Random's SEED still re-rolls
+// each visit (it is only pinned across one visit's infinite scroll).
+$lg_valid_sorts = ['new', 'old', 'hot', 'random'];
+if (in_array($sort_param, $lg_valid_sorts, true)) {
+    if (($_COOKIE['lg_hub_sort'] ?? '') !== $sort_param) {
+        setcookie('lg_hub_sort', $sort_param,
+            ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax', 'secure' => true]);
+    }
+} else {
+    $lg_saved_sort = strtolower(trim((string)($_COOKIE['lg_hub_sort'] ?? '')));
+    $sort_param = in_array($lg_saved_sort, $lg_valid_sorts, true) ? $lg_saved_sort : $default_sort;
 }
 // Random uses a per-visit seed so the weighted shuffle is STABLE across infinite-scroll
 // pages (same seed -> identical order -> coherent offset paging) and re-rolls on a fresh
@@ -1072,12 +1083,22 @@ $header_cat = $scoped_forum
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
-    <a href="<?= feed_sort_url('random', $forum_slug) ?>"
-       class="lg-random-tab<?= $sort_param === 'random' ? ' active' : '' ?>">Random</a>
-    <a href="<?= feed_sort_url('new', $forum_slug) ?>"
-       class="<?= $sort_param === 'new' ? 'active' : '' ?>">Newest</a>
-    <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
-       class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Trending</a>
+    <?php
+      // The ACTIVE sort leads the pill row (Ian 2026-06-10); the rest keep
+      // their usual order. usort is stable on PHP 8.
+      $lg_sort_pills = [
+          ['random', 'Random',   'lg-random-tab'],
+          ['new',    'Newest',   ''],
+          ['hot',    'Trending', ''],
+      ];
+      usort($lg_sort_pills, function ($a, $b) use ($sort_param) {
+          return (int)($b[0] === $sort_param) <=> (int)($a[0] === $sort_param);
+      });
+      foreach ($lg_sort_pills as [$lg_sid, $lg_slabel, $lg_scls]):
+        $lg_cls = trim($lg_scls . ($sort_param === $lg_sid ? ' active' : ''));
+    ?>
+    <a href="<?= feed_sort_url($lg_sid, $forum_slug) ?>"<?= $lg_cls !== '' ? ' class="' . $lg_cls . '"' : '' ?>><?= $lg_slabel ?></a>
+    <?php endforeach; ?>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
       <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
     <?php endif; ?>
