@@ -1,0 +1,486 @@
+/* Looth app settings — user-pickable color theme, webfont, and text size.
+   Site-wide, persisted per-device in localStorage. No backend.
+
+   How it applies (the trick): the brand design tokens on :root (--lg-cream,
+   --lg-sage*, --lg-line, --lg-font-sans, ...) are what the whole site already
+   references, so a THEME just OVERRIDES those tokens and the app recolors; a
+   FONT overrides --lg-font-sans (and loads the webfont); SIZE scales the rem
+   base. Themes also set --lguser-* vars that hub-polish.js reads for the Hub
+   feed (whose colors are otherwise hardcoded), so the Hub follows the theme too.
+
+   DEFAULTS preserve the current look exactly: theme 'default' / font 'default'
+   apply NO override (app stays brand-cream, Hub stays its Sage-Tint look), so
+   existing users see zero change until they actively pick something.
+
+   Exposes window.LGSettings { THEMES, FONTS, SIZES, get, set, apply,
+   getTheme/getFont/getSize, buildPanel(container) } for the settings UI
+   (rendered by bottom-nav.js inside the profile sheet).
+   Loaded EARLY site-wide via /pwa.js (before hub-polish.js). */
+(function () {
+  'use strict';
+  if (window.LGSettings) return;
+
+  var KEY = { theme: 'lg-set-theme', font: 'lg-set-font', size: 'lg-set-size', bubble: 'lg-set-bubble', feed: 'lg-set-feed', custom: 'lg-set-custom', playone: 'lg-set-playone' };
+
+  // ---- Color themes (on-brand, from the Style Sandbox family) ----
+  // 'default' = no override (current look). Others override brand tokens (rest
+  // of the app) + --lguser-* (Hub feed) so the whole experience recolors.
+  var THEMES = [
+    { id: 'default', name: 'Default', dot: '#e9eedd', dark: false, vars: null },
+    { id: 'cream-classic', name: 'Cream', dot: '#fbfbf8', dark: false, vars: {
+        '--lg-cream': '#fbfbf8', '--lg-sage': '#87986a', '--lg-sage-d': '#6b7c52',
+        '--lg-sage-tint': '#eef2e3', '--lg-line': '#e3ddd0',
+        '--lguser-bg': '#f1efe8', '--lguser-card': '#ffffff', '--lguser-accent': '#6b7c52',
+        '--lguser-accent-d': '#52613d', '--lguser-pill': '#eef2e3', '--lguser-line': '#e3ddd0',
+        '--lguser-ink': '#1a1d1a', '--lguser-mute': '#6b6f6b' } },
+    { id: 'sage-deep', name: 'Sage', dot: '#6b7c52', dark: false, vars: {
+        '--lg-cream': '#e6ecd9', '--lg-sage': '#6b7c52', '--lg-sage-d': '#52613d',
+        '--lg-sage-tint': '#d6e1bf', '--lg-line': '#c6d2ad',
+        '--lguser-bg': '#e6ecd9', '--lguser-card': '#ffffff', '--lguser-accent': '#5c6c45',
+        '--lguser-accent-d': '#44512f', '--lguser-pill': '#d6e1bf', '--lguser-line': '#c6d2ad',
+        '--lguser-ink': '#1a1d1a', '--lguser-mute': '#647053' } },
+    { id: 'amber-warm', name: 'Amber', dot: '#ecb351', dark: false, vars: {
+        '--lg-cream': '#f6efe2', '--lg-sage': '#b5872f', '--lg-sage-d': '#8f6620',
+        '--lg-sage-tint': '#f0e2c4', '--lg-line': '#e6dac2',
+        '--lguser-bg': '#f3ead8', '--lguser-card': '#fffdf8', '--lguser-accent': '#a9772a',
+        '--lguser-accent-d': '#7f5717', '--lguser-pill': '#f0e2c4', '--lguser-line': '#e6dac2',
+        '--lguser-ink': '#2a230f', '--lguser-mute': '#7a6f56' } },
+    { id: 'rust-accent', name: 'Rust', dot: '#c66845', dark: false, vars: {
+        '--lg-cream': '#f5efe9', '--lg-sage': '#c66845', '--lg-sage-d': '#a8512f',
+        '--lg-sage-tint': '#f0ddd2', '--lg-line': '#e7d9cd',
+        '--lguser-bg': '#f2e9e1', '--lguser-card': '#fffaf6', '--lguser-accent': '#b85a38',
+        '--lguser-accent-d': '#94431f', '--lguser-pill': '#f0ddd2', '--lguser-line': '#e7d9cd',
+        '--lguser-ink': '#2a1c14', '--lguser-mute': '#7c6a5e' } },
+    // Dark mode (Buck 2026-06-08). dark:true sets color-scheme:dark. Overrides the
+    // text tokens too (charcoal/ink/mute) — they're unioned into THEME_KEYS so they
+    // revert cleanly when switching back to a light theme.
+    { id: 'dark', name: 'Dark', dot: '#1e2320', dark: true, vars: {
+        '--lg-cream': '#15171a', '--lg-sage': '#9cb37d', '--lg-sage-d': '#b0c693',
+        '--lg-sage-tint': '#243024', '--lg-sage-3': '#2f3d2c', '--lg-line': '#2c312d',
+        '--lg-charcoal': '#f2f4ee', '--lg-ink': '#e5e7e1', '--lg-mute': '#9aa097',
+        '--lg-amber': '#ecb351', '--lg-rust': '#d57a55',
+        '--lguser-bg': '#15171a', '--lguser-card': '#1e2124', '--lguser-accent': '#9cb37d',
+        '--lguser-accent-d': '#b0c693', '--lguser-pill': '#243024', '--lguser-line': '#2c312d',
+        '--lguser-ink': '#e5e7e1', '--lguser-mute': '#9aa097', '--lguser-bubble': '#262b30' } }
+  ];
+  // Union of every theme var key, so apply() can cleanly revert before re-setting.
+  var THEME_KEYS = (function () {
+    var seen = {}, out = [];
+    THEMES.forEach(function (t) { if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k) && !seen[k]) { seen[k] = 1; out.push(k); } });
+    return out;
+  })();
+
+  // ---- Webfonts (cross-platform — always load, never rely on a system face) ----
+  // 'default' = no override (Hub keeps Trebuchet/Cabin, app keeps brand sans).
+  var FONTS = [
+    { id: 'default', name: 'Default', stack: null, google: null },
+    { id: 'cabin', name: 'Cabin', stack: '"Cabin", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', google: 'Cabin:wght@400;500;600;700' },
+    { id: 'nunito', name: 'Nunito', stack: '"Nunito Sans", system-ui, sans-serif', google: 'Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700' },
+    { id: 'inter', name: 'Inter', stack: '"Inter", system-ui, sans-serif', google: 'Inter:wght@400;500;600;700' },
+    { id: 'source-serif', name: 'Source Serif', stack: '"Source Serif 4", Georgia, serif', google: 'Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700' }
+  ];
+
+  // ---- Text size (scales the rem base, the standard a11y approach) ----
+  var SIZES = [
+    { id: 's', name: 'Small', scale: 0.92 },
+    { id: 'm', name: 'Default', scale: 1 },
+    { id: 'l', name: 'Large', scale: 1.12 },
+    { id: 'xl', name: 'Larger', scale: 1.25 }
+  ];
+
+  // ---- Comment bubble color (the Facebook-style comment bubbles) ----
+  // 'default' = the standard grey (#eceff3). Others set --lguser-bubble.
+  var BUBBLES = [
+    { id: 'default', name: 'Grey', color: null, dot: '#eceff3' },
+    { id: 'white', name: 'White', color: '#ffffff', dot: '#ffffff' },
+    { id: 'sage', name: 'Sage', color: '#eef2e3', dot: '#eef2e3' },
+    { id: 'cream', name: 'Cream', color: '#f5f1e6', dot: '#f5f1e6' },
+    { id: 'sky', name: 'Sky', color: '#e7f0fb', dot: '#e7f0fb' },
+    { id: 'amber', name: 'Amber', color: '#f6ecd6', dot: '#f6ecd6' },
+    { id: 'rose', name: 'Rose', color: '#f7e8e6', dot: '#f7e8e6' }
+  ];
+
+  // ---- Hub feed layout (Buck 2026-06-08) ----
+  // 'immersive' = the DEFAULT (Buck 2026-06-08): an Instagram-style edge-to-edge
+  // feed where photos go full-bleed and the card chrome (border/radius/side
+  // gutter) drops away. 'cards' = the older bordered cards. Applied as data-lguser-feed on
+  // <html>; the actual CSS lives in hub-polish.js (Hub-scoped), this just sets the
+  // switch site-wide so it's in place before the Hub paints.
+  var FEEDVIEWS = [
+    { id: 'cards', name: 'Cards' },
+    { id: 'immersive', name: 'Full screen' }
+  ];
+
+  // ---- Video playback (Buck 2026-06-09): only ONE YouTube video plays at a time.
+  // 'on' (default) = starting any video stops the others (desktop + mobile);
+  // 'off' = allow several at once. Read by hub-polish.js enforceSingleVideo(). ----
+  var PLAYONE = [
+    { id: 'on', name: 'One at a time' },
+    { id: 'off', name: 'Allow several' }
+  ];
+
+  // ---- Custom color (the "pick any color" wheel — Buck 2026-06-08) ----
+  // A picked hex drives the ACCENT family (sage/lguser-accent + tint/dark/line +
+  // a faint bg wash), leaving the ink/mute text dark so any chosen color stays
+  // legible. Stored separately (lg-set-custom); selecting it sets theme='custom'.
+  function hx2(n) { n = Math.max(0, Math.min(255, Math.round(n))).toString(16); return n.length < 2 ? '0' + n : n; }
+  function parseHex(h) { h = (h || '').replace('#', ''); if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0]; }
+  function mix(a, b, t) { var A = parseHex(a), B = parseHex(b); return '#' + hx2(A[0] + (B[0] - A[0]) * t) + hx2(A[1] + (B[1] - A[1]) * t) + hx2(A[2] + (B[2] - A[2]) * t); }
+  function customVars(hex) {
+    var d = mix(hex, '#000000', 0.18);
+    var tint = mix(hex, '#ffffff', 0.84);
+    var line = mix(hex, '#ffffff', 0.74);
+    return {
+      '--lg-cream': mix(hex, '#ffffff', 0.94), '--lg-sage': hex, '--lg-sage-d': d,
+      '--lg-sage-tint': tint, '--lg-line': line,
+      '--lguser-bg': mix(hex, '#ffffff', 0.93), '--lguser-card': '#ffffff',
+      '--lguser-accent': hex, '--lguser-accent-d': d, '--lguser-pill': tint, '--lguser-line': line
+    };
+  }
+
+  function byId(list, id) { for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i]; return list[0]; }
+  function rd(k) { try { return localStorage.getItem(KEY[k]); } catch (e) { return null; } }
+  function wr(k, v) { try { localStorage.setItem(KEY[k], v); } catch (e) {} }
+
+  function getTheme() { return rd('theme') || 'default'; }
+  function getFont() { return rd('font') || 'default'; }
+  function getSize() { return rd('size') || 'm'; }
+  function getBubble() { return rd('bubble') || 'default'; }
+  function getFeed() { return rd('feed') || 'immersive'; }   // Buck 2026-06-08: immersive is the default
+  function getPlayone() { return rd('playone') || 'on'; }    // Buck 2026-06-09: single-video default ON
+  function getCustom() { var v = rd('custom'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : '#87986a'; }
+
+  // Lazy-load a Google webfont once.
+  function loadFont(font) {
+    if (!font || !font.google) return;
+    var id = 'lg-font-' + font.id;
+    if (document.getElementById(id)) return;
+    var head = document.head || document.documentElement;
+    if (!document.getElementById('lg-font-pre')) {
+      var p = document.createElement('link');
+      p.id = 'lg-font-pre'; p.rel = 'preconnect'; p.href = 'https://fonts.gstatic.com'; p.crossOrigin = 'anonymous';
+      head.appendChild(p);
+    }
+    var l = document.createElement('link');
+    l.id = id; l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=' + font.google + '&display=swap';
+    head.appendChild(l);
+  }
+
+  // Real dark-mode surfaces. Token overrides alone don't darken the Hub (its bg/
+  // cards are hardcoded / use forums.css's own --bg, which isn't wired here), so we
+  // force the key surfaces dark, gated on the chosen theme. Injected once; inert
+  // unless data-lguser-theme="dark" (Buck 2026-06-08).
+  var DARK_STYLE_ID = 'lg-dark-style';
+  function ensureDarkStyle() {
+    if (document.getElementById(DARK_STYLE_ID)) return;
+    var D = 'html[data-lguser-theme="dark"]';
+    var css = [
+      D + '{background:#15171a;color-scheme:dark}',
+      D + ' body{background:#15171a!important;color:#e5e7e1!important}',
+      D + ' .feed-page,' + D + ' .feed,' + D + ' .bb-layout,' + D + ' .bb-layout__main,' + D + ' main{background:#15171a!important}',
+      D + ' .feed-card{background:#1e2124!important;border-color:#2c312d!important;box-shadow:none!important}',
+      D + ' .feed-card__title,' + D + ' .fc-title,' + D + ' .fc-title a,' + D + ' .feed-card__title a,' + D + ' .feed-card__op-author,' + D + ' .fc-author__name,' + D + ' .lg-fb-name,' + D + ' .reply-stub__author{color:#f2f4ee!important}',
+      D + ' .feed-card__op-excerpt,' + D + ' .fc-excerpt,' + D + ' .feed-card__full-body,' + D + ' .reply-stub,' + D + ' .reply-stub__body,' + D + ' .reply-stub__excerpt,' + D + ' .feed-card__meta-top,' + D + ' .fc-time,' + D + ' .feed-card__time,' + D + ' .lg-fb-time,' + D + ' .fc-breadcrumb,' + D + ' .feed-card__ctx-forum{color:#cdd0ca!important}',
+      D + ' .lg-fb-bubble{background:#262b30!important;color:#e5e7e1!important}',
+      D + ' .feed-sort-bar,' + D + ' .feed-toolbar{background:#15171a!important;border-color:#2c312d!important}',
+      D + ' .lg-sort-pill,' + D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{color:#cdd0ca}',
+      D + ' .lg-hub-search .ubar,' + D + ' .lg-hub-search input,' + D + ' .lgdm-ubar,' + D + ' .lgev-ubar{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}',
+      D + ' .lg-hub-search input::placeholder,' + D + ' input::placeholder{color:#7e857c!important}',
+      D + ' #looth-tabbar{background:rgba(21,23,26,.92)!important;border-color:#2c312d!important}',
+      D + ' .lt-sheet,' + D + ' .lt-sheet__row,' + D + ' .lg-set-opt{color:#e5e7e1}',
+      D + ' .lt-sheet,' + D + ' #looth-rep-sheet .lrs-card,' + D + ' #looth-lp-sheet .llp-card,' + D + ' #looth-ev-sheet .lev-card,' + D + ' #lgdm-sheet,' + D + ' .lgdm-fsheet,' + D + ' #lgdm-suggest,' + D + ' .bb-layout__nav{background:#1b1e21!important;color:#e5e7e1!important}',
+      D + ' .lt-sheet__name,' + D + ' .lrs-t,' + D + ' .llp-t,' + D + ' .lev-t{color:#f2f4ee!important}',
+      D + ' .lg-set-opt{background:#222629!important;border-color:#333833!important;color:#e5e7e1!important}',
+      D + ' .lg-set-opt.is-on{background:#2a341f!important;border-color:#9cb37d!important}',
+      D + ' input,' + D + ' textarea,' + D + ' select{background:#222629!important;color:#e5e7e1!important;border-color:#333833!important}',
+      D + ' .feed-card__tags .tag-chip,' + D + ' .fc-tag,' + D + ' .hl,' + D + ' .fcr-chip{background:#243024!important;color:#b6c79a!important;border-color:transparent!important}',
+      // ── dark-mode audit fixes (2026-06-08) ──
+      // search bar: the WHITE slab is .lg-hub-search itself (mobile), not .ubar
+      D + ' .lg-hub-search{background:#1e2124!important;border-color:#000!important}',   // Buck: black border ring in dark
+      // the top header bar (.lg-chrome / #site-header) is white in dark — make it black (Buck 2026-06-08)
+      D + ' #site-header,' + D + ' .lg-chrome,' + D + ' #site-header .lg-chrome__inner{background:#000!important;border-color:#15171a!important}',
+      // ...but .lg-chrome locally redefines the brand tokens (--lg-ink:#323532 etc),
+      // which SHADOW the dark theme — so the inactive nav links/icons stayed dark-on-
+      // black and near-invisible. Re-point the header's own ink/mute/line dark so menu
+      // links + icon buttons light up. NOTE: do NOT touch --lg-charcoal here — it's the
+      // DARK background for the Edit btn / ADMIN badge (+ footer), with white text on top.
+      D + ' .lg-chrome{--lg-ink:#e5e7e1!important;--lg-mute:#9aa097!important;--lg-line:#2c312d!important}',
+      D + ' .lg-chrome__account{background:#1e2124!important;border-color:#2c312d!important}',
+      // Edit btn + ADMIN badge use var(--lg-charcoal) as bg; the picked-Dark theme set
+      // that token light → light-bg + white text = invisible. Pin them to a dark chip.
+      D + ' .lg-chrome__edit,' + D + ' .lg-chrome__tier--admin{background:#2c312d!important;color:#f2f4ee!important}',
+      D + ' .lg-hub-search input::placeholder{color:#9aa097!important}',
+      D + ' .lg-hub-search .lg-hub-search__ico,' + D + ' .lg-hub-search svg{color:#9aa097!important;stroke:#9aa097!important}',
+      D + ' .lg-hub-search__panel{background:#15171a!important;border-color:#2c312d!important}',
+      D + ' .lg-hub-search__item{border-color:#2c312d!important}',
+      D + ' .lg-hub-search__t{color:#e5e7e1!important}',
+      // sort pills: Newest/Trending + the toggle icon buttons render WHITE → dark
+      D + ' .feed-sort-bar > a,' + D + ' .feed-sort-bar button{background:#1e2124!important;color:#cdd0ca!important;border-color:#2c312d!important}',
+      D + ' .feed-sort-bar > a.active,' + D + ' .feed-sort-bar .is-active{background:#243024!important;color:#b0c693!important}',
+      D + ' .feed-sort-bar .lg-filters-chip{background:#9cb37d!important;color:#15171a!important}',   // dark text on sage
+      D + ' .feed-sort-bar .lg-newpost{background:#243024!important;color:#e5e7e1!important}',
+      // card borders compute near-WHITE on edges → unify dark. The shorthand
+      // border-color rule lost to forums.css per-edge longhands, so set each
+      // edge longhand at higher specificity (.feed-page .feed-card).
+      D + ' .feed-page .feed-card,' + D + ' .feed .feed-card,' + D + ' .feed-card{border-color:#2c312d!important;border-top-color:#2c312d!important;border-right-color:#2c312d!important;border-bottom-color:#2c312d!important;border-left-color:#2c312d!important}',
+      D + ' .feed-page .fc-actions,' + D + ' .feed-card .fc-actions,' + D + ' .fc-actions{border-color:#2c312d!important;border-top-color:#2c312d!important}',
+      // replies sheet: inactive "Oldest" tab was dark-on-dark + cream border
+      D + ' .replies-sort__btn{color:#cdd0ca!important;border-color:#2c312d!important}',
+      D + ' .replies-sort__btn.is-active{color:#15171a!important;background:#b0c693!important}',
+      // inline comment-row Like/Reply was ~#65676b (2.5:1) → readable
+      D + ' .lg-fb-act{color:#9aa097!important}',
+      D + ' .lg-fb-time{color:#80867d!important}',
+      // members directory (/directory/members/): the .dir-card is hardcoded white
+      // → member NAMES (light token) were invisible in dark. Darken the card.
+      D + ' .dir-card{background:#1e2124!important;border-color:#2c312d!important}',
+      D + ' .dir-card__name,' + D + ' .dir-card a:not(.dir-link),' + D + ' .dir-name{color:#f2f4ee!important}',
+      D + ' .dir-card__loc,' + D + ' .dir-loc,' + D + ' .dir-card__meta{color:#cdd0ca!important}',
+      D + ' .dir-members__count,' + D + ' .dir-results__count{color:#cdd0ca!important}',
+      // ── desktop-Hub dark-theme audit (2026-06-09) ──
+      // inline-reply / edit SEND buttons were inverted (white-on-light-sage ~1.9:1)
+      // in picked Dark — match the other dark action chips.
+      D + ' .feed-card__inline-compose .fic-send,' + D + ' .reply-stub__editbox .rse-save,' + D + ' .lg-fb-send{background:#2a341f!important;color:#e5e7e1!important;border-color:#3d5233!important}',
+      // reply-EDIT Quill toolbar stayed #fff (forums only patches hub-theme-dark, not
+      // the app data-lguser-theme="dark"); darken the toolbar AND its icon strokes/fills
+      // so the icons don't go invisible on the now-dark bar.
+      D + ' .reply-stub__editbox .ql-toolbar.ql-snow,' + D + ' .reply-stub__editbox .ql-container.ql-snow,' + D + ' .ntm-form .ql-toolbar.ql-snow,' + D + ' .ntm-form .ql-container.ql-snow{background:#1e2124!important;border-color:#2c312d!important}',
+      D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-stroke,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-stroke{stroke:#cdd0ca!important}',
+      D + ' .reply-stub__editbox .ql-toolbar.ql-snow .ql-fill,' + D + ' .ntm-form .ql-toolbar.ql-snow .ql-fill{fill:#cdd0ca!important}',
+      // ── OS dark + NO picked theme (Buck 2026-06-09) ──
+      // When no theme is picked (data-lguser-theme="default"), the Hub FOLLOWS the OS:
+      // forums.css redefines --lguser-* under prefers-color-scheme:dark so the FEED goes
+      // dark — but the shared site-header uses the brand --lg-* tokens, which are NOT
+      // OS-aware, so the top bar stayed WHITE on an otherwise-dark page. Mirror the
+      // picked-Dark header treatment for the default theme under OS dark so the bar
+      // matches the feed (gated to "default" so a picked LIGHT theme keeps a light bar).
+      '@media (prefers-color-scheme:dark){' +
+        'html[data-lguser-theme="default"] #site-header,html[data-lguser-theme="default"] .lg-chrome,html[data-lguser-theme="default"] #site-header .lg-chrome__inner{background:#000!important;border-color:#15171a!important}' +
+        'html[data-lguser-theme="default"] .lg-chrome{--lg-ink:#e5e7e1!important;--lg-mute:#9aa097!important;--lg-line:#2c312d!important}' +
+        'html[data-lguser-theme="default"] .lg-chrome__account{background:#1e2124!important;border-color:#2c312d!important}' +
+      '}'
+    ].join('\n');
+    var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  var APPLY_STYLE_ID = 'lg-settings-apply';
+  function ensureApplyStyle() {
+    if (document.getElementById(APPLY_STYLE_ID)) return;
+    var s = document.createElement('style');
+    s.id = APPLY_STYLE_ID;
+    s.textContent =
+      'body{font-family:var(--lg-font-sans)}' +
+      'html[data-lguser-dark="1"]{color-scheme:dark}';
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function apply() {
+    var themeId = getTheme();
+    var f = byId(FONTS, getFont());
+    var z = byId(SIZES, getSize());
+    var root = document.documentElement;
+
+    // Theme: revert all theme keys, then set the chosen theme's overrides. The
+    // 'custom' theme builds its vars from the picked color; presets use their own.
+    THEME_KEYS.forEach(function (k) { root.style.removeProperty(k); });
+    if (themeId === 'custom') {
+      var cv = customVars(getCustom());
+      for (var ck in cv) if (cv.hasOwnProperty(ck)) root.style.setProperty(ck, cv[ck]);
+      root.setAttribute('data-lguser-theme', 'custom');
+      root.setAttribute('data-lguser-dark', '0');
+    } else {
+      var t = byId(THEMES, themeId);
+      if (t.vars) for (var k in t.vars) if (t.vars.hasOwnProperty(k)) root.style.setProperty(k, t.vars[k]);
+      root.setAttribute('data-lguser-theme', t.id);
+      root.setAttribute('data-lguser-dark', t.dark ? '1' : '0');
+    }
+
+    // Font: override the brand sans token + load the webfont (or revert).
+    if (f.stack) {
+      loadFont(f);
+      root.style.setProperty('--lg-font-sans', f.stack);
+      root.style.setProperty('--lguser-font', f.stack);
+    } else {
+      root.style.removeProperty('--lg-font-sans');
+      root.style.removeProperty('--lguser-font');
+    }
+
+    // Size: scale the rem base AND both feed scale vars. The Hub's prominent text
+    // (card title 18-20px, post excerpt 15px) is fixed-px * var(--lg-read-scale), and the
+    // secondary text is * var(--lguser-scale) — neither follows the rem base. So drive
+    // BOTH vars off the user's size, or "Small" only shrinks the little text (Buck 2026-06-08).
+    root.style.setProperty('--lguser-scale', String(z.scale));
+    root.style.setProperty('--lg-read-scale', String(z.scale));
+    root.style.fontSize = (z.scale * 100) + '%';
+
+    // Comment bubble color (Facebook-style comment bubbles).
+    var bub = byId(BUBBLES, getBubble());
+    if (bub.color) root.style.setProperty('--lguser-bubble', bub.color);
+    else root.style.removeProperty('--lguser-bubble');
+
+    // Hub feed layout (cards vs immersive edge-to-edge). hub-polish.js reads this.
+    root.setAttribute('data-lguser-feed', getFeed());
+
+    ensureApplyStyle();
+    ensureDarkStyle();
+
+    // Phone status-bar color (PWA theme-color): black in dark mode so the OS top
+    // bar matches the app, else the brand sage (Buck 2026-06-08). Stash the original
+    // once so light/custom restore correctly.
+    try {
+      var tcMeta = document.querySelector('meta[name="theme-color"]');
+      if (tcMeta) {
+        if (!tcMeta.getAttribute('data-lg-orig')) tcMeta.setAttribute('data-lg-orig', tcMeta.getAttribute('content') || '#87986a');
+        var isDark = root.getAttribute('data-lguser-dark') === '1';
+        tcMeta.setAttribute('content', isDark ? '#000000' : (tcMeta.getAttribute('data-lg-orig') || '#87986a'));
+      }
+    } catch (e) {}
+
+    // Persist a compact RESOLVED snapshot for the pre-paint bootstrap (injected in
+    // <head> before this script). It reads this and applies the same tokens/attrs
+    // synchronously on the first frame, so themed/dark users never flash the default
+    // light look on a page navigation. Idempotent: this apply() re-applies identically.
+    persistBoot();
+  }
+
+  // Build the same resolved values apply() just set, as a flat blob the early
+  // bootstrap can replay with zero knowledge of the theme maps.
+  function bootBlob() {
+    var themeId = getTheme();
+    var f = byId(FONTS, getFont());
+    var z = byId(SIZES, getSize());
+    var bub = byId(BUBBLES, getBubble());
+    var vars = {}, dark = false, k;
+    if (themeId === 'custom') {
+      var cv = customVars(getCustom());
+      for (k in cv) if (cv.hasOwnProperty(k)) vars[k] = cv[k];
+    } else {
+      var t = byId(THEMES, themeId);
+      if (t.vars) for (k in t.vars) if (t.vars.hasOwnProperty(k)) vars[k] = t.vars[k];
+      dark = !!t.dark;
+    }
+    return {
+      theme: themeId, dark: dark, vars: vars,
+      font: f.stack || null,
+      fontHref: f.google ? ('https://fonts.googleapis.com/css2?family=' + f.google + '&display=swap') : null,
+      scale: z.scale, feed: getFeed(), bubble: bub.color || null,
+      bg: vars['--lg-cream'] || null, ink: dark ? '#e5e7e1' : null
+    };
+  }
+  function persistBoot() {
+    try { localStorage.setItem('lg-set-boot', JSON.stringify(bootBlob())); } catch (e) {}
+  }
+
+  function set(kind, id) {
+    if (!KEY[kind]) return;
+    wr(kind, id);
+    apply();
+  }
+
+  // Render the settings UI into `container`. Pure DOM; each control calls
+  // set(...) for live apply + persistence. Styling piggybacks on brand tokens.
+  function buildPanel(container) {
+    container.innerHTML = '';
+    if (!/lg-set-panel/.test(container.className)) container.className = (container.className + ' lg-set-panel').trim();
+
+    function section(title, items, current, kind, render, extra) {
+      var sec = document.createElement('div');
+      sec.className = 'lg-set-sec';
+      var h = document.createElement('div');
+      h.className = 'lg-set-sec__h';
+      h.textContent = title;
+      sec.appendChild(h);
+      var row = document.createElement('div');
+      row.className = 'lg-set-row';
+      items.forEach(function (it) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lg-set-opt' + (it.id === current ? ' is-on' : '');
+        b.setAttribute('data-id', it.id);
+        render(b, it);
+        b.addEventListener('click', function () {
+          set(kind, it.id);
+          row.querySelectorAll('.lg-set-opt').forEach(function (x) { x.classList.remove('is-on'); });
+          b.classList.add('is-on');
+        });
+        row.appendChild(b);
+      });
+      if (extra) extra(row);
+      sec.appendChild(row);
+      container.appendChild(sec);
+    }
+
+    // The "pick any color" bubble at the end of the Color row: a swatch (the live
+    // custom color, or a rainbow ring when not chosen) that opens the OS color
+    // wheel. Picking a color sets theme='custom' and recolors the app live.
+    function colorWheelExtra(row) {
+      var cur = getCustom();
+      var active = getTheme() === 'custom';
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lg-set-opt lg-set-opt--custom' + (active ? ' is-on' : '');
+      b.setAttribute('data-id', 'custom');
+      var ring = 'conic-gradient(from 0deg,#e74c3c,#f1c40f,#2ecc71,#1abc9c,#3498db,#9b59b6,#e74c3c)';
+      b.innerHTML = '<span class="lg-set-swatch" style="background:' + (active ? cur : ring) + '"></span>' +
+        '<span class="lg-set-opt__t">Custom</span>';
+      var inp = document.createElement('input');
+      inp.type = 'color';
+      inp.value = cur;
+      inp.setAttribute('aria-label', 'Pick a custom color');
+      inp.style.cssText = 'position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0';
+      b.appendChild(inp);
+      b.addEventListener('click', function (e) { if (e.target !== inp) inp.click(); });
+      function commit() {
+        wr('custom', inp.value);
+        wr('theme', 'custom');
+        apply();
+        row.querySelectorAll('.lg-set-opt').forEach(function (x) { x.classList.remove('is-on'); });
+        b.classList.add('is-on');
+        var sw = b.querySelector('.lg-set-swatch'); if (sw) sw.style.background = inp.value;
+      }
+      inp.addEventListener('input', commit);
+      inp.addEventListener('change', commit);
+      row.appendChild(b);
+    }
+
+    section('Color', THEMES, getTheme(), 'theme', function (b, it) {
+      b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
+        '<span class="lg-set-opt__t">' + it.name + '</span>';
+    }, colorWheelExtra);
+    section('Font', FONTS, getFont(), 'font', function (b, it) {
+      b.innerHTML = '<span class="lg-set-opt__t"' + (it.stack ? ' style="font-family:' + it.stack + '"' : '') + '>' + it.name + '</span>';
+      if (it.google) loadFont(it); // preview in its own face
+    });
+    section('Text size', SIZES, getSize(), 'size', function (b, it) {
+      b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
+    });
+    section('Comment bubble', BUBBLES, getBubble(), 'bubble', function (b, it) {
+      b.innerHTML = '<span class="lg-set-swatch" style="background:' + it.dot + '"></span>' +
+        '<span class="lg-set-opt__t">' + it.name + '</span>';
+    });
+    section('Hub feed', FEEDVIEWS, getFeed(), 'feed', function (b, it) {
+      b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
+    });
+    section('Videos', PLAYONE, getPlayone(), 'playone', function (b, it) {
+      b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
+    });
+  }
+
+  window.LGSettings = {
+    THEMES: THEMES, FONTS: FONTS, SIZES: SIZES, BUBBLES: BUBBLES, FEEDVIEWS: FEEDVIEWS, PLAYONE: PLAYONE,
+    get: rd, set: set, apply: apply,
+    getTheme: getTheme, getFont: getFont, getSize: getSize, getBubble: getBubble, getFeed: getFeed, getCustom: getCustom, getPlayone: getPlayone,
+    buildPanel: buildPanel
+  };
+
+  apply();
+  // forums.js's feed text-size pill ALSO writes --lg-read-scale on load, racing us
+  // — if it runs after our apply() it resets the user's size (Buck 2026-06-08: "set
+  // to small but not small until I toggled it"). Re-assert after the DOM + a couple
+  // of ticks so the user's chosen size deterministically wins.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+  setTimeout(apply, 350);
+  setTimeout(apply, 1000);
+})();
