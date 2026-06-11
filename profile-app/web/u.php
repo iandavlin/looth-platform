@@ -51,7 +51,7 @@ if ($isOwner) {
     $role = $viewer ? 'member' : 'public';
 }
 
-// Editor chrome (left Sections palette, inline-edit hints, legacy-edit link)
+// Editor chrome (left Sections palette, inline-edit hints)
 // shows ONLY in true edit mode: the owner on their own "Me" view. In View-as
 // Member/Public the owner sees the profile EXACTLY as that audience does — no
 // sections bar — while the slim "View as" switcher stays so they can return.
@@ -118,8 +118,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-viewas__seg{display:flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
 .lg-viewas__seg a{padding:6px 14px;color:#cfd3cb;text-decoration:none;font:700 12px/1 var(--lg-font-sans)}
 .lg-viewas__seg a[aria-current="true"]{background:var(--lg-sage);color:#fff}
-.lg-viewas__edit{margin-left:auto;background:#fff;color:var(--lg-ink);border-radius:999px;
-  padding:7px 15px;text-decoration:none;font:700 12.5px/1 var(--lg-font-sans)}
 .lg-viewas__hint{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);color:#9aa091}
 .lg-viewas__vis{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:6px;padding-left:12px;border-left:1px solid rgba(255,255,255,.18)}
 .lg-viewas__vis-lbl{font:700 12px/1 var(--lg-font-sans)}
@@ -513,7 +511,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
      dark, where #fff lands ~1.9:1 — pin dark text instead (Hub does the same)
    - the vis chips are hardcoded light badges; give them dark-tint equivalents */
 html[data-lguser-theme="dark"] .lg-viewas{background:#22262a}
-html[data-lguser-theme="dark"] .lg-viewas__edit{background:#2c312d;color:#f2f4ee}
 html[data-lguser-theme="dark"] .lg-viewas__seg a[aria-current="true"],
 html[data-lguser-theme="dark"] .lg-disc-seg button[aria-checked="true"],
 html[data-lguser-theme="dark"] .lg-idrow__pic,
@@ -568,9 +565,8 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         </span>
         <?php if ($editing): ?>
         <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
-        <a class="lg-viewas__edit" href="/profile/edit">Edit details (legacy)</a>
-        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks. “Edit details (legacy)” is the old form for fields not inline yet.</span>
-        <?php endif; /* /editing: Sections toggle + legacy + hint */ ?>
+        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks.</span>
+        <?php endif; /* /editing: Sections toggle + hint */ ?>
       </div>
     <?php endif; /* /isOwner: View-as switcher */ ?>
     <?php if ($editing): ?>
