@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260612e">
+    <link rel="stylesheet" href="style.css?v=20260612f">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -171,9 +171,12 @@
             <!-- End state — replaces guess area + keyboard after game ends -->
             <div class="end-state" id="end-state" style="display:none">
 
-                <!-- Loss card -->
+                <!-- Loss card. Ouch from the reaction palette, flipped
+                     upside down (Ian 6/11). Forfeit/already-played JS
+                     overwrites this slot with its own symbol via textContent
+                     (which intentionally drops the img). -->
                 <div class="result-card" id="result-loss" style="display:none">
-                    <div class="result-emoji">🙁</div>
+                    <div class="result-emoji"><img class="result-emoji-img result-emoji-img--flip" src="/archive-poc/reactions/ouch.png" alt="Ouch" width="44" height="44"></div>
                     <p class="result-headline">Aw! Not this time.</p>
                     <p class="result-subline">Try again tomorrow.</p>
                 </div>
@@ -301,6 +304,6 @@
         </main>
     </div>
 
-    <script src="game.js?v=20260612e"></script>
+    <script src="game.js?v=20260612f"></script>
 </body>
 </html>

@@ -1102,3 +1102,6 @@ body.is-embed {
     height: 44px;
     object-fit: contain;
 }
+
+/* Ouch, upside down, for the loss card */
+.result-emoji-img--flip { transform: rotate(180deg); }
