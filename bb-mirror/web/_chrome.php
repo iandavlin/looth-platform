@@ -452,6 +452,11 @@ function lg_bb_mirror_viewer_from_whoami(): array {
 
 function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 {
+    // HTML must revalidate every load — we shipped NO cache headers, so Chrome
+    // kept showing stale pages after server-side changes (Ian repeatedly saw
+    // already-removed UI; 2026-06-11). Assets keep filemtime-busted caching.
+    if (!headers_sent()) header('Cache-Control: no-cache, max-age=0, must-revalidate');
+
     require_once '/srv/lg-shared/site-header.php';
 
     // Inline-verify fast path (design §4 Step A): verify looth_id locally with
