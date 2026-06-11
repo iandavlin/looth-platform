@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260612d">
+    <link rel="stylesheet" href="style.css?v=20260612e">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -178,9 +178,11 @@
                     <p class="result-subline">Try again tomorrow.</p>
                 </div>
 
-                <!-- Win card -->
+                <!-- Win card. The Optimum reaction (the site palette's
+                     shop.png, relabeled Optimum by Ian 6/11) replaces the
+                     generic smiley — same artwork as the feed reactions. -->
                 <div class="result-card" id="result-win" style="display:none">
-                    <div class="result-emoji">😀</div>
+                    <div class="result-emoji"><img class="result-emoji-img" src="/archive-poc/reactions/shop.png" alt="Optimum" width="44" height="44"></div>
                     <p class="result-headline">You did it!</p>
                     <div class="result-spacer"></div>
                     <p class="share-date" id="share-date">🎸 Guitardle · —</p>
@@ -299,6 +301,6 @@
         </main>
     </div>
 
-    <script src="game.js?v=20260612d"></script>
+    <script src="game.js?v=20260612e"></script>
 </body>
 </html>

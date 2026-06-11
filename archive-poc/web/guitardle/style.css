@@ -1094,3 +1094,11 @@ body.is-embed {
     margin: 6px 16px 2px;
 }
 .game-main.game-over .refresh-warning { display: none; }
+
+/* Optimum reaction image standing in for the win emoji */
+.result-emoji-img {
+    display: block;
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+}
