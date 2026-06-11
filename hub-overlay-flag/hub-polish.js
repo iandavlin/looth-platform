@@ -3240,25 +3240,23 @@
       '.feed-sort-bar .feed-text-toggle,.feed-sort-bar .feed-theme-toggle,.feed-sort-bar .feed-compact-toggle{display:none!important}'
     ].join('\n');
     css = '@media (min-width:641px){\n' + css + '\n}';
-    // ULTRAWIDE cap (Buck 2026-06-11): forums.css's 3-column masonry has no feed
-    // max-width, so on a 3440px monitor each card stretched past 1100px and the
-    // covers stopped filling the card. Cap the feed where a column ≈ 560px (the
-    // width Buck pointed at, covers edge-to-edge) and center it. The full 5-col
-    // ultrawide layout stays parked post-launch per the 6/10 call.
-    css += '\n@media (min-width:1780px){\n' +
-                  '}';
-    // ULTRAWIDE columns (Buck 2026-06-11): same Mosaic mode — when the empty
-    // margin on EITHER side of the capped 3-col feed passes a full card width
-    // (~560px + gap), spend that space on another column instead of margins.
-    // Triggers: 1716 + 2x578 ~= 2872 -> 4 cols (2294px); 2294 + 2x578 ~= 3414
-    // -> 5 cols (2872px). Plain media queries: normal monitors never hit this.
-    // Overlay <style> loads after forums.css, so the same-specificity
-    // column-count wins in cascade order. (Supersedes the 6/10 "park
-    // ultrawide" note — Buck asked for this explicitly today.)
-    css += '\n@media (min-width:2872px){\n' +
-                  '}';
-    css += '\n@media (min-width:3414px){\n' +
-                  '}';
+    // WIDE-SCREEN geometry, round 3 (Buck 2026-06-11 night, on his 1080p:
+    // "it should max on 3 columns for this, have some buffer on the sides so
+    // you dont over stretch the cards"): CAP the feed per column-count band
+    // (a column ≈ 560px max) and center it — extra width becomes side margin
+    // until a WHOLE new ~560px column fits, then the cap steps up. This is
+    // the restored 1716/2294/2872 design the 17:21 forums.css cutover gutted;
+    // it diverges from Ian's 6/11 "no caps, content meets the banner" — Buck
+    // overrode that on sight tonight, flagged to the coordinator. Overlay
+    // <style> loads after forums.css → same-specificity rules win in cascade
+    // (forums' own 4@2400/5@3200 steps agree with these bands, so no fight).
+    // 3-col cap is 1520 (not the old 1716): the ~272px nav rail eats into the
+    // viewport, and at Buck's 1920×1080 the available 1648px must still leave
+    // VISIBLE side buffer (≈64px/side, ≈478px cards) — 1716 left zero.
+    css += '\n@media (min-width:1101px){.feed-page .feed{max-width:1520px;margin-left:auto;margin-right:auto}}' +
+           '\n@media (min-width:2294px){.feed-page .feed{max-width:2294px;column-count:4}}' +
+           '\n@media (min-width:2872px){.feed-page .feed{max-width:2872px;column-count:5}}' +
+           '\n@media (min-width:3450px){.feed-page .feed{max-width:3450px;column-count:6}}';
     var s = document.createElement('style'); s.id = 'lg-desktop-css'; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }

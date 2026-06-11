@@ -259,4 +259,102 @@
   // before you could tap it (Buck report). We unified on the REAL picker: the
   // canonical, persisted .fcr palette, opened by mobile-hub.js's long-press. Nothing
   // reaction-related lives here anymore.
+
+  // ── Profile editor: one-tap Move up / Move down per section (Buck 2026-06-11,
+  // MOBILE). The drag grip is fiddly on a phone. The canonical version of these
+  // buttons is awaiting merge (buck/profile-section-move @ a30096e); this overlay
+  // injects the SAME .lg-block__mv buttons into the owner editor chrome and
+  // becomes a no-op once canonical lands (both sides guard on button presence).
+  // Gates: ≤640, /u/ paths, and ONLY true edit mode (the owner chrome's
+  // .lg-block__grip must be present — View-as and visitor views never get it).
+  (function () {
+    try {
+      if (!window.matchMedia('(max-width:640px)').matches) return;
+      if (!/^\/u(\/|$)/.test(location.pathname || '')) return;
+    } catch (e) { return; }
+
+    function bodyBlocks(profile) {
+      return Array.prototype.slice.call(profile.querySelectorAll('.lg-block:not(.lg-block--header)'));
+    }
+    function order(profile) {
+      return bodyBlocks(profile).map(function (s) { return s.getAttribute('data-block'); }).filter(Boolean);
+    }
+    function putLayout(arr) {
+      fetch('/profile-api/v0/me/layout', {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: arr })
+      }).catch(function () {});
+    }
+
+    function wire(profile) {
+      if (profile.querySelector('.lg-block__mv')) return;   // canonical already provides them
+      var st = document.createElement('style');
+      st.id = 'lg-secmv-css';
+      st.textContent =
+        '.lg-block__mv{display:inline-flex;align-items:center;justify-content:center;border:0;background:none;cursor:pointer;color:var(--lg-mute,#6b6f6b);padding:0 2px;min-width:30px;height:30px;vertical-align:middle}' +
+        '.lg-block__mv svg{width:16px;height:16px}' +
+        '.lg-block__mv[disabled]{opacity:.28;cursor:default}';
+      (document.head || document.documentElement).appendChild(st);
+
+      function mk(dir, label, path) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lg-block__mv lg-block__mv--' + dir;
+        btn.setAttribute('data-mv', dir);
+        btn.setAttribute('title', label); btn.setAttribute('aria-label', label);
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>';
+        return btn;
+      }
+      bodyBlocks(profile).forEach(function (b) {
+        var host = b.querySelector('.lg-bh') || b;
+        if (host.querySelector('.lg-block__mv--up')) return;
+        var up = mk('up', 'Move section up', '<path d="m5 14.5 7-7 7 7"/>');
+        var dn = mk('down', 'Move section down', '<path d="m5 9.5 7 7 7-7"/>');
+        var anchor = host.querySelector('.lg-block__rm') ||
+                     (host.querySelector('.lg-block__grip') && host.querySelector('.lg-block__grip').nextSibling) || host.firstChild;
+        host.insertBefore(dn, anchor);
+        host.insertBefore(up, dn);
+      });
+      function refresh() {
+        var list = bodyBlocks(profile);
+        list.forEach(function (b, i) {
+          var u = b.querySelector('.lg-block__mv--up'), d = b.querySelector('.lg-block__mv--down');
+          if (u) u.disabled = (i === 0);
+          if (d) d.disabled = (i === list.length - 1);
+        });
+      }
+      refresh();
+      profile.addEventListener('click', function (e) {
+        var mv = e.target.closest && e.target.closest('.lg-block__mv');
+        if (!mv || mv.disabled) return;
+        var block = mv.closest('.lg-block:not(.lg-block--header)');
+        if (!block) return;
+        var list = bodyBlocks(profile);
+        var i = list.indexOf(block);
+        if (i < 0) return;
+        if (mv.getAttribute('data-mv') === 'up') {
+          if (i === 0) return;
+          list[i - 1].parentNode.insertBefore(block, list[i - 1]);
+        } else {
+          if (i === list.length - 1) return;
+          list[i + 1].parentNode.insertBefore(block, list[i + 1].nextSibling);
+        }
+        putLayout(order(profile));
+        refresh();
+        try { block.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (err) {}
+      });
+    }
+
+    // The owner chrome injects after DOM-ready via u.php's own script — poll
+    // briefly for the grip (its presence = true edit mode), then wire once.
+    var tries = 0;
+    var iv = setInterval(function () {
+      if (++tries > 60) { clearInterval(iv); return; }
+      var profile = document.querySelector('.lg-profile');
+      if (!profile || !profile.querySelector('.lg-block__grip')) return;
+      clearInterval(iv);
+      wire(profile);
+    }, 200);
+  })();
 })();

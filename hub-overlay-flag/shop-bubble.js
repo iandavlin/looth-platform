@@ -1,7 +1,11 @@
-/* Looth shop bubble — the floating "Shop" FAB.
+/* Looth shop — the Loothtool pop-up modal. NO floating FAB (Ian + Buck
+ * 2026-06-11: no corner Shop button on any viewport, ever).
  *
- * MOBILE (≤640): the FAB stays hidden (bottom-nav's Shop tab → the /shop/ page).
- * DESKTOP (≥641, Buck 2026-06-11): the FAB opens a centered POP-UP MODAL skinned
+ * MOBILE (≤640): bottom-nav's Shop tab → the /shop/ page; the header
+ * "Loothtool" link redirects there too. Zero further cost on mobile.
+ * DESKTOP (≥641, Buck 2026-06-11): the header "Loothtool" tab opens a
+ * centered POP-UP MODAL — pre-built + feed-warmed at idle so it opens
+ * instantly ("like an article") — skinned
  * like loothtool.com's CURRENT theme (loothtool-wordpress-theme tokens): hero
  * gradient #021C1E→#004445, teal accent #2C7873 (--lt-red), mint #6FB98F
  * (--lt-gold), #f1f1f1 sections + white cards, Barlow Condensed headings +
@@ -63,14 +67,6 @@
       (document.head || document.documentElement).appendChild(l);
     }
     var css =
-      /* FAB (unchanged look) */
-      '#looth-shop-fab{position:fixed;right:20px;bottom:20px;z-index:2147482000;' +
-      'width:54px;height:54px;border-radius:50%;border:0;cursor:pointer;' +
-      'background:var(--lg-sage,#87986a);color:#fff;display:flex;align-items:center;justify-content:center;' +
-      'box-shadow:0 6px 20px rgba(26,29,26,.28);transition:transform .18s ease,background .18s ease}' +
-      '#looth-shop-fab:hover{transform:scale(1.08);background:var(--lg-sage-d,#6b7c52)}' +
-      '#looth-shop-fab svg{width:24px;height:24px;pointer-events:none}' +
-      '@media (max-width:640px){#looth-shop-fab{bottom:88px}}' +
       /* ── Loothtool pop-up modal (desktop) — brand-fixed: teal/mint/Barlow+Inter ── */
       '#looth-shop-ov{position:fixed;inset:0;overflow:hidden;z-index:2147482100;visibility:hidden;opacity:0;' +
       'transition:opacity .22s ease,visibility 0s linear .22s;' +
@@ -146,22 +142,16 @@
     (document.head || document.documentElement).appendChild(s);
   }
 
-  var ov, bodyEl, searchEl, fab;
+  var ov, bodyEl, searchEl;
 
-  function buildUI() {
-    // FAB removed for now (Ian 2026-06-11): no floating Shop button on any
-    // viewport. Guard BEFORE injectStyles so the dormant modal ships ZERO css
-    // + zero Google webfonts site-wide (perf). Restore by deleting this line.
-    if (true) return;
+  // Build the modal overlay (NO FAB — Ian + Buck 2026-06-11: no floating Shop
+  // button on any viewport, ever; the header "Loothtool" tab is the desktop
+  // entry and the bottom-bar Shop tab is mobile's). Idempotent; called at
+  // desktop idle so the tab click opens the modal instantly, and again from
+  // the click interceptor as a fallback if idle never fired.
+  function ensureUI() {
+    if (ov) return;
     injectStyles();
-
-    fab = document.createElement('button');
-    fab.id = 'looth-shop-fab';
-    fab.type = 'button';
-    fab.setAttribute('aria-label', 'Shop the Loothtool marketplace');
-    fab.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
 
     ov = document.createElement('div');
     ov.id = 'looth-shop-ov';
@@ -181,39 +171,11 @@
         '<div class="lt-body"><div class="lt-status">Loading…</div></div>' +
       '</div>';
 
-    (document.body || document.documentElement).appendChild(fab);
     (document.body || document.documentElement).appendChild(ov);
 
     bodyEl = ov.querySelector('.lt-body');
     searchEl = ov.querySelector('.lt-search');
 
-    // Mobile: the /shop/ page is the surface. Desktop: the pop-up modal.
-    fab.addEventListener('click', function () {
-      if (window.matchMedia('(max-width:640px)').matches) {
-        try { window.location.assign('/shop/'); } catch (e) { window.location.href = '/shop/'; }
-        return;
-      }
-      open();
-    });
-    // The header nav's "Loothtool" item is a bare link to loothtool.com that
-    // navigated the app away in the SAME tab (Buck 2026-06-11: "pop up is not
-    // working" = he was using this link). Desktop → open the modal instead;
-    // mobile → the /shop/ page.
-    document.addEventListener('click', function (e) {
-      if (!e.target.closest) return;
-      var a = e.target.closest('a[href^="https://loothtool.com"], a[href^="http://loothtool.com"]');
-      if (!a) return;
-      if (a.closest('#looth-shop-ov')) return;                 // modal's own links: new tab, untouched
-      var href = a.getAttribute('href') || '';
-      // only the bare site link (the nav item) — deep links (products etc.) keep working
-      if (!/^https?:\/\/loothtool\.com\/?$/.test(href)) return;
-      e.preventDefault(); e.stopPropagation();
-      if (window.matchMedia('(max-width:640px)').matches) {
-        try { window.location.assign('/shop/'); } catch (e2) { window.location.href = '/shop/'; }
-      } else {
-        open();
-      }
-    }, true);
     ov.addEventListener('click', function (e) {
       if (e.target.closest('[data-close]')) close();
     });
@@ -225,6 +187,37 @@
       var q = this.value.trim().toLowerCase();
       debounce = setTimeout(function () { render(q); }, 160);
     });
+  }
+
+  function buildUI() {
+    // The header nav's "Loothtool" item is a bare link to loothtool.com that
+    // navigated the app away in the SAME tab (Buck 2026-06-11: "pop up is not
+    // working" = he was using this link). Desktop → open the modal instead;
+    // mobile → the /shop/ page. The interceptor is the ONLY thing registered
+    // at boot; mobile pays zero further cost (no styles, fonts, DOM, or feed).
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest) return;
+      var a = e.target.closest('a[href^="https://loothtool.com"], a[href^="http://loothtool.com"]');
+      if (!a) return;
+      if (ov && a.closest('#looth-shop-ov')) return;           // modal's own links: new tab, untouched
+      var href = a.getAttribute('href') || '';
+      // only the bare site link (the nav item) — deep links (products etc.) keep working
+      if (!/^https?:\/\/loothtool\.com\/?$/.test(href)) return;
+      e.preventDefault(); e.stopPropagation();
+      if (window.matchMedia('(max-width:640px)').matches) {
+        try { window.location.assign('/shop/'); } catch (e2) { window.location.href = '/shop/'; }
+      } else {
+        ensureUI();
+        open();
+      }
+    }, true);
+    // Desktop: pre-build the modal + warm the feed at idle so the tab click is
+    // instant (Buck 2026-06-11: "load like an article — super fast and snappy").
+    if (!window.matchMedia('(max-width:640px)').matches) {
+      var pre = function () { ensureUI(); warm(); };
+      if ('requestIdleCallback' in window) requestIdleCallback(pre, { timeout: 2000 });
+      else setTimeout(pre, 600);
+    }
   }
 
   function open() {
@@ -358,5 +351,6 @@
   } else {
     buildUI();
   }
-  warm(); // preload + hydrate the feed so the first tap is instant
+  // warm() now runs desktop-only at idle (inside buildUI) — mobile ships zero
+  // shop cost beyond the click interceptor.
 })();

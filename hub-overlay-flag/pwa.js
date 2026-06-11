@@ -34,7 +34,7 @@
     if (document.getElementById('looth-shop-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-shop-js';
-    s.src = '/shop-bubble.js?v=20';
+    s.src = '/shop-bubble.js?v=21';
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -92,7 +92,7 @@
     if (document.getElementById("looth-mobile-fixes-js")) return;
     var s = document.createElement("script");
     s.id = "looth-mobile-fixes-js";
-    s.src = "/app-mobile-fixes.js?v=28";
+    s.src = "/app-mobile-fixes.js?v=29";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=177";
+    s.src = "/hub-polish.js?v=180";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -174,7 +174,7 @@
     if (document.getElementById("looth-prof-sheet-js")) return;
     var s = document.createElement("script");
     s.id = "looth-prof-sheet-js";
-    s.src = "/profile-sheet.js?v=6";
+    s.src = "/profile-sheet.js?v=7";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
