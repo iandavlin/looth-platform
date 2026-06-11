@@ -2699,11 +2699,13 @@
       // card shell matches the app; bg chains to forums --bg-card so DEFAULT follows
       // the OS while a picked theme's --lguser-card overrides. Masonry props here too:
       // each card is a whole block in the column flow with an even vertical rhythm.
+      // C3 flip (2026-06-11): arrangement/geometry props REMOVED here — forums.css's
+      // desktop grid (@media min-width:641, commit 88955fb) now lays the cards out.
+      // Only the card CHROME (bg/border/radius/shadow) still ships from the overlay;
+      // those retire next once confirmed value-identical via the theme bridge.
       P + ' .feed-card{background:var(--lguser-card,var(--bg-card,#fff))!important;' +
         'border:1px solid var(--lguser-line,#e3ddd0)!important;border-radius:16px!important;' +
-        'box-shadow:0 1px 2px rgba(26,29,26,.05),0 10px 22px -14px rgba(26,29,26,.28)!important;' +
-        'display:block!important;width:100%!important;margin:0 0 18px!important;column-span:none!important;' +
-        'break-inside:avoid!important;-webkit-column-break-inside:avoid!important;page-break-inside:avoid!important}',
+        'box-shadow:0 1px 2px rgba(26,29,26,.05),0 10px 22px -14px rgba(26,29,26,.28)!important}',
       // text + pills follow the theme tokens (OS-aware for default)
       P + ' .feed-card__title,' + P + ' .feed-card__title a,' + P + ' .feed-card__op-author{color:var(--lguser-ink,#1a1d1a)!important}',
       P + ' .feed-card__op-excerpt,' + P + ' .fc-excerpt,' + P + ' .fc-time,' + P + ' .fc-category{color:var(--lguser-mute,#6b6f6b)!important}',
