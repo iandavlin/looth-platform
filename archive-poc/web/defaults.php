@@ -28,6 +28,20 @@ return [
         ['name' => 'Member Benefits',       'url' => 'https://loothgroup.com/archive/?_post_type=member-benefit', 'logo' => 'https://loothgroup.com/wp-content/uploads/2024/06/Member-Benefits-300x80.webp',    'bg' => '#fff'],
     ],
 
+    // Featured-member band on the LOGGED-IN front page (Bento layout,
+    // Buck/Ian 2026-06-11). Rotate via the config.json overlay; enabled=false
+    // hides the band. Dan Erlewine first.
+    'featured_member' => [
+        'enabled'   => true,
+        'name'      => 'Dan Erlewine',
+        'role'      => 'Master Luthier & Repair Authority',
+        'where'     => 'Athens, Ohio',
+        'bio'       => 'Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.',
+        'avatar'    => 'https://i.ytimg.com/vi/2IBxue3zPxE/hqdefault.jpg',
+        'cta_label' => "See Dan's videos",
+        'cta_href'  => '/archive/?q=Dan+Erlewine',
+    ],
+
     'local_looths' => [
         ['name' => 'Tri State Looths (NYC)',  'url' => 'https://loothgroup.com/groups/tri-state-looths-nyc/',  'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/38/6703eb1642637-bpthumb.jpg'],
         ['name' => 'SoCal Looths',            'url' => 'https://loothgroup.com/groups/socal-looths/',          'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/39/67059fc8c8f52-bpthumb.png'],

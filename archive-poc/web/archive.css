@@ -3085,3 +3085,115 @@ html[data-lguser-theme="dark"] body.view-discover {
    rule reads correctly in both. Last-in-file so source order wins at equal specificity. */
 body.view-discover .vpromo__copy .vp-cta--secondary { color: var(--lg-sage-d, #4a5a4a) !important; }
 body.view-discover .vpromo__copy .vp-cta--secondary:hover { background: rgba(135, 152, 106, 0.14); }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   BENTO (logged-in front page) — Buck's pick, Ian-greenlit 2026-06-11.
+   Featured-member band + map/events bento pair + Loothalong link.
+   Scope: body.view-discover.is-member ONLY (public Classic Landing
+   untouched). All colors via --lg-*/--fp-* tokens so the dark counterpart
+   (html[data-lguser-theme=dark] / OS-dark) flows through with no extra rules.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Featured-member band ── */
+body.view-discover.is-member .row--featured-member { margin: 26px 0; }
+body.view-discover.is-member .lg-fm {
+  position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 22px; align-items: center;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line, #ebe9e2);
+  border-left: 5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 14px; padding: 22px 26px;
+}
+body.view-discover.is-member .lg-fm__badge {
+  position: absolute; top: 14px; right: 18px;
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--lg-amber, #ecb351);
+}
+body.view-discover.is-member .lg-fm__avi {
+  width: 104px; height: 104px; border-radius: 50%; overflow: hidden; display: block;
+  border: 3px solid var(--lg-card-bg, #fff); box-shadow: 0 0 0 1px var(--lg-line, #ebe9e2);
+  background: var(--fp-img-ph, #d4ccb8); flex: 0 0 auto;
+}
+body.view-discover.is-member .lg-fm__avi img { width: 100%; height: 100%; object-fit: cover; display: block; }
+body.view-discover.is-member .lg-fm__name { margin: 0 0 2px; font: 400 26px/1.12 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover.is-member .lg-fm__role { font: 600 13px/1.3 var(--lg-font-sans); color: var(--lg-sage-d, #6f7c54); }
+body.view-discover.is-member .lg-fm__where { font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); margin-top: 1px; }
+body.view-discover.is-member .lg-fm__bio { margin: 9px 0 0; font: 400 14px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532); max-width: 600px; }
+body.view-discover.is-member .lg-fm__cta {
+  display: inline-block; background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff);
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+  text-decoration: none; white-space: nowrap;
+}
+body.view-discover.is-member .lg-fm__cta:hover { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+/* ── Bento pair: member-map tile + events ── */
+body.view-discover.is-member .lg-bento {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch;
+  margin: 26px 0;
+}
+body.view-discover.is-member .lg-bento .row { margin: 0; }
+body.view-discover.is-member .lg-bento__map {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+  min-height: 280px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--lg-line, #ebe9e2); background: var(--fp-img-ph, #d4ccb8);
+}
+body.view-discover.is-member .lg-bento__map-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+}
+body.view-discover.is-member .lg-bento__map-copy {
+  position: relative; z-index: 2; padding: 40px 20px 16px;
+  background: linear-gradient(transparent, rgba(20, 22, 15, .78));
+}
+body.view-discover.is-member .lg-bento__map-title { margin: 0 0 2px; font: 400 22px/1.15 var(--lg-font-serif); color: #fbfbf8; }
+body.view-discover.is-member .lg-bento__map-sub { margin: 0 0 12px; font: 400 13.5px/1.4 var(--lg-font-sans); color: rgba(251,251,248,.85); }
+body.view-discover.is-member .lg-bento__map-btn {
+  display: inline-block; width: auto; align-self: flex-start; cursor: pointer;
+  background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff); border: 0;
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+}
+body.view-discover.is-member .lg-bento__map-btn:hover { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+/* ── Loothalong link (top of the events tile) ── */
+body.view-discover.is-member .lg-loothalong {
+  display: flex; align-items: center; gap: 13px; margin: 0 0 14px;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-sage, #8a9670); border-left: 5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 12px; padding: 12px 15px; text-decoration: none;
+}
+body.view-discover.is-member .lg-loothalong__live {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--lg-mute, #6b6f6b);
+}
+body.view-discover.is-member .lg-loothalong.is-live .lg-loothalong__live { color: var(--lg-rust, #c66845); }
+body.view-discover.is-member .lg-loothalong__dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--lg-mute, #6b6f6b);
+}
+body.view-discover.is-member .lg-loothalong.is-live .lg-loothalong__dot {
+  background: var(--lg-rust, #c66845);
+  animation: lg-la-pulse 1.7s infinite;
+}
+@keyframes lg-la-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(198, 104, 69, .55); }
+  100% { box-shadow: 0 0 0 10px rgba(198, 104, 69, 0); }
+}
+body.view-discover.is-member .lg-loothalong__txt { flex: 1 1 auto; min-width: 0; font: 600 15px/1.25 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover.is-member .lg-loothalong__txt small { display: block; font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); margin-top: 2px; }
+body.view-discover.is-member .lg-loothalong__go {
+  flex: 0 0 auto; font: 700 13px/1 var(--lg-font-sans);
+  background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff);
+  border-radius: 999px; padding: 9px 15px;
+}
+body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__go { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+@media (max-width: 1080px) {
+  body.view-discover.is-member .lg-bento { grid-template-columns: 1fr; }
+  body.view-discover.is-member .lg-fm { grid-template-columns: auto minmax(0,1fr); }
+  body.view-discover.is-member .lg-fm__act { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  body.view-discover.is-member .lg-fm { grid-template-columns: 1fr; text-align: center; }
+  body.view-discover.is-member .lg-fm__avi { margin: 0 auto; }
+  body.view-discover.is-member .lg-loothalong { flex-wrap: wrap; }
+}
