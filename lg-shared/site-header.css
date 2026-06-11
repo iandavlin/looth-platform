@@ -57,6 +57,13 @@
   border-bottom: 1px solid var(--lg-line);
   position: sticky; top: 0; z-index: 40;
 }
+/* Desktop: the header scrolls away with the page — it must not overhang the
+   content (Ian 2026-06-11); sticky CONTROL surfaces (e.g. the Hub sort bar)
+   own the top of the viewport instead. ≤640 keeps sticky + the overlay's
+   tuck-on-scroll behavior. */
+@media (min-width: 641px) {
+  .lg-chrome { position: static; }
+}
 .lg-chrome__inner {
   max-width: 1280px;
   margin: 0 auto;
