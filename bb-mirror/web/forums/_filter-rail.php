@@ -86,13 +86,10 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     $on     = in_array($key, $filters[$mkey], true);     // filtered-to
     $is_mut = in_array($key, $muted[$mkey], true);       // sticky-muted
     $f_url  = hub_url(hub_toggle($filters, $facet, $key), $sort);
-    $m_url  = hub_mute_url($filters, $sort, $facet === 'type' ? 't' : 'c', $key);
     ?>
     <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= $n === 0 ? ' hub-rail__row--empty' : '' ?>">
       <a class="hub-rail__nm" href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
       <span class="hub-rail__ct"><?= $n ?></span>
-      <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= $m_url ?>"
-         title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($label) ?>"></a>
     </div>
     <?php
 }
@@ -134,8 +131,6 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
         <?= $chev ?>
         <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
         <span class="hub-rail__ct"><?= (int)$p['count'] ?></span>
-        <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'c', $p['key']) ?>"
-           title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($p['label']) ?>"></a>
         <?php
     };
     if ($has): ?>
@@ -148,8 +143,6 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
           <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
             <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
             <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
-            <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
-               title="<?= $lmut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $lmut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($lf['label']) ?>"></a>
           </div>
         <?php endforeach; ?>
       </div>
@@ -194,7 +187,7 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         <label class="hub-rail__seg hub-rail__seg--type" for="hrs-type">Type</label>
       </div>
 
-      <p class="hub-rail__help">Tap a name to filter. Flip its <span class="hub-sw hub-sw--demo is-on" aria-hidden="true"></span> switch to mute — muted items stay hidden across visits.</p>
+      <p class="hub-rail__help">Tap a name to filter.</p>
 
       <div class="hub-rail__panel hub-rail__panel--cat">
         <div class="hub-rail__group" id="hub-cat-accordion">

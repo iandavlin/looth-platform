@@ -553,6 +553,12 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
 
 function hub_mute_parse(): array
 {
+    // FACET MUTE RETIRED from filter surfaces (Ian 2026-06-11: "filters should
+    // be filter only"). Stored hub_mute cookies are IGNORED so nothing stays
+    // hidden with no control to unmute it; the serialize/toggle helpers below
+    // stay (harmless) for the dead mute_toggle URLs. Author-mutes (/me/mutes)
+    // are a separate member feature and unaffected.
+    return ['types' => [], 'cats' => [], 'leaves' => []];
     $types = []; $cats = []; $leaves = [];
     foreach (array_filter(explode(',', (string)($_COOKIE['hub_mute'] ?? ''))) as $tok) {
         $tok = trim($tok);
