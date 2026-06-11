@@ -155,13 +155,9 @@ foreach (array_keys($_COOKIE) as $name) {
 // ungated every paid card on the front page + rails (Buck paywall audit 6/11).
 // Same rule as bb-mirror's hub_content_tiers(). Anon (or whoami-unreachable)
 // defaults public — entitlement fails CLOSED.
-$viewer_tier = 'public';
 $whoami = lg_archive_poc_whoami();
-if (!empty($whoami['authenticated'])) {
-    $is_member   = true;
-    $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
-                 ? $whoami['tier'] : 'public';
-}
+$viewer_tier = lg_archive_poc_viewer_tier($whoami);   // anon→public, admin→pro
+if (!empty($whoami['authenticated'])) $is_member = true;
 $edit_capable = ($whoami['capabilities']['edit_archive_poc'] ?? false) === true;
 
 // Admin preview: ?as=public|lite|pro forces viewer state for QA. DOWNGRADES

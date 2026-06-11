@@ -15,19 +15,17 @@ foreach (array_keys($_COOKIE) as $name) {
     if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
 }
 // Tier from /whoami ONLY — never the forgeable lg_tier cookie (Buck 6/11
-// paywall audit; anon fails closed to public, same as index.php).
-$viewer_tier = 'public';
+// paywall audit; anon fails closed to public, admin resolves pro — config.php).
 $whoami = lg_archive_poc_whoami();
-if (!empty($whoami['authenticated'])) {
-    $is_member   = true;
-    $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
-                 ? $whoami['tier'] : $viewer_tier;
-}
+$viewer_tier = lg_archive_poc_viewer_tier($whoami);
+if (!empty($whoami['authenticated'])) $is_member = true;
 $edit_capable = ($whoami['capabilities']['edit_archive_poc'] ?? false) === true;
+// ?as= QA preview: downgrades open; tier-raising requires the edit capability
+// (anon ?as=pro was an entitlement bypass).
 $preview_as = $_GET['as'] ?? null;
 if ($preview_as === 'public') { $is_member = false; $viewer_tier = 'public'; $edit_capable = false; }
-elseif ($preview_as === 'lite') { $is_member = true;  $viewer_tier = 'lite'; }
-elseif ($preview_as === 'pro')  { $is_member = true;  $viewer_tier = 'pro'; }
+elseif ($preview_as === 'lite' && $edit_capable) { $is_member = true; $viewer_tier = 'lite'; }
+elseif ($preview_as === 'pro'  && $edit_capable) { $is_member = true; $viewer_tier = 'pro'; }
 $GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
 $GLOBALS['LG_EDIT_CAPABLE'] = $edit_capable;
 

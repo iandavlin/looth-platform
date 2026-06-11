@@ -134,6 +134,23 @@ function lg_archive_poc_whoami(): ?array {
 }
 }
 
+// Viewer gate-bucket from a whoami payload — THE one tier rule for archive-poc
+// (mirrors bb-mirror hub_content_tiers): anon fails CLOSED to public; the
+// forgeable lg_tier cookie is never consulted; ADMINS resolve to pro ("admin
+// sees all", TIER-TAXONOMY.md) via their capabilities, since the poller's
+// user-context reports an administrator's ROLE tier as public.
+if (!function_exists('lg_archive_poc_viewer_tier')) {
+function lg_archive_poc_viewer_tier(?array $whoami): string {
+    if (empty($whoami['authenticated'])) return 'public';
+    $caps = (array)($whoami['capabilities'] ?? []);
+    foreach (['manage_options', 'administrator', 'edit_others_posts', 'activate_plugins'] as $c) {
+        if (!empty($caps[$c]) || in_array($c, $caps, true)) return 'pro';
+    }
+    $t = $whoami['tier'] ?? '';
+    return in_array($t, ['public', 'lite', 'pro'], true) ? $t : 'public';
+}
+}
+
 // ---------- hostname → filesystem map (for thumb localization) ----------
 if (!function_exists('lg_archive_poc_host_to_path_map')) {
 function lg_archive_poc_host_to_path_map(): array {

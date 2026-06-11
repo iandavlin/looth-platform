@@ -36,12 +36,7 @@ if (($row['layout'] ?? '') !== 'rail') send_json(['error' => 'row is not a rail'
 // Viewer tier from /whoami ONLY — this endpoint had NO server check at all,
 // so anon + a forged lg_tier=pro cookie paged every gated rail ungated (Buck
 // paywall audit 6/11). Mirrors web/index.php; anon fails closed to public.
-$viewer_tier = 'public';
-$rm_whoami = function_exists('lg_archive_poc_whoami') ? lg_archive_poc_whoami() : null;
-if (!empty($rm_whoami['authenticated'])
-    && in_array($rm_whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)) {
-    $viewer_tier = $rm_whoami['tier'];
-}
+$viewer_tier = lg_archive_poc_viewer_tier(lg_archive_poc_whoami()); // anon→public, admin→pro (config.php)
 $GLOBALS['LG_VIEWER_TIER'] = $viewer_tier;
 
 // Inject offset + force limit=$want for this page.

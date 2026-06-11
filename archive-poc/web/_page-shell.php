@@ -29,14 +29,10 @@ function lg_page_boot(): array {
         if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
     }
     // Tier from /whoami ONLY — never the forgeable lg_tier cookie (Buck 6/11
-    // paywall audit; anon fails closed to public, same as index.php).
-    $viewer_tier = 'public';
+    // paywall audit). One rule, in config.php: anon→public, admin→pro.
     $whoami = lg_archive_poc_whoami();
-    if (!empty($whoami['authenticated'])) {
-        $is_member   = true;
-        $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
-                     ? $whoami['tier'] : 'public';
-    }
+    $viewer_tier = lg_archive_poc_viewer_tier($whoami);
+    if (!empty($whoami['authenticated'])) $is_member = true;
     $GLOBALS['LG_VIEWER_TIER'] = $viewer_tier;
     return [$is_member, $viewer_tier];
 }
