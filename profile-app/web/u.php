@@ -310,8 +310,11 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
     grid-template-areas:"viewas viewas viewas" "caddy profile spacer"}
   .lg-shell--owner .lg-viewas{grid-area:viewas;max-width:760px;width:100%;margin:0 auto}
   .lg-shell--owner .lg-profile{grid-area:profile}
-  .lg-shell--owner .lg-caddy{grid-area:caddy;position:sticky;top:24px;left:auto;right:auto;box-sizing:border-box;
-    width:auto;height:auto;max-height:calc(100vh - 48px);overflow-y:auto;transform:none;
+  /* top clears the sticky site header (61px) + breathing room; z-index drops below the
+     header's (40) so the sticky caddy can never paint over the chrome — the base .lg-caddy
+     rule's z-index:1200 is for the sub-1380 off-canvas drawer only. */
+  .lg-shell--owner .lg-caddy{grid-area:caddy;position:sticky;top:85px;left:auto;right:auto;box-sizing:border-box;
+    width:auto;height:auto;max-height:calc(100vh - 109px);overflow-y:auto;transform:none;z-index:30;
     border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .lg-shell--owner .lg-caddy__close{display:none}      /* permanent — no close button */
   .lg-viewas__caddy{display:none}                       /* permanent — no toggle */
