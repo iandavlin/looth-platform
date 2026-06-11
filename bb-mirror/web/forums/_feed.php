@@ -32,6 +32,26 @@ $card_limit = 18;   // Smaller first page (Ian 2026-06-11 "load on button push")
                     // rest in 18-card batches ($has_next/$next_offset below, unchanged).
 $fetch_size = 300; // fetch extra to cover collapse loss
 
+if (!function_exists('lg_cover_src')) {
+    /**
+     * Route a cover image through the on-the-fly resizer (/img.php) so the feed
+     * serves display-sized WebP instead of full-res originals (3024px phone
+     * photos were ~9 MB/page). Only rewrites our own /wp-content/uploads/ URLs;
+     * external URLs pass through. Also normalises http:// uploads to a
+     * same-origin request (kills the mixed-content warning). Ian 2026-06-11.
+     */
+    function lg_cover_src(?string $url, int $w = 800): ?string
+    {
+        if (!$url) {
+            return $url;
+        }
+        if (preg_match('#/wp-content/uploads/(.+)$#', $url, $m)) {
+            return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
+        }
+        return $url;
+    }
+}
+
 // ?fid=<id> disambiguates duplicate-slug forums (e.g. two 'finish' forums).
 $fid = 0;
 if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
@@ -977,7 +997,9 @@ function feed_render_tags(array $tags): void
 // 0 for content cards → "Reply".
 function feed_action_bar(int $reply_count): void
 {
-    static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+    // Thumbs-up, not a heart: the Like applies a 👍 reaction so the icon matches
+    // (Buck 2026-06-11 — was swapped client-side; canonical now, his replace no-ops).
+    static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
     static $ICO_REPLIES = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>';
     static $ICO_SHARE   = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
     $label = $reply_count === 0 ? 'Reply' : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
@@ -1062,7 +1084,7 @@ $header_cat = $scoped_forum
           data-cat="<?= htmlspecialchars($header_cat) ?>">
     <?php if ($has_header_image): ?>
       <div class="forum-header__bg"
-           style="background-image: url('<?= htmlspecialchars($header_image_url, ENT_QUOTES, 'UTF-8') ?>')"></div>
+           style="background-image: url('<?= htmlspecialchars(lg_cover_src($header_image_url, 1600), ENT_QUOTES, 'UTF-8') ?>')"></div>
     <?php endif; ?>
     <div class="forum-header__body">
       <?php if ($parent_forum): ?>
@@ -1141,7 +1163,7 @@ $header_cat = $scoped_forum
         $c_url     = (string)($topic['content_url'] ?? '#');
         $c_title   = htmlspecialchars((string)$topic['topic_title']);
         $c_kind    = (string)($topic['content_kind'] ?? 'content');
-        $c_img     = $topic['card_image'] ?? null;
+        $c_img     = lg_cover_src($topic['card_image'] ?? null);
         $c_time    = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
         $c_author  = htmlspecialchars((string)$topic['author_name']);
         $c_excerpt = feed_op_excerpt($topic);
@@ -1177,7 +1199,8 @@ $header_cat = $scoped_forum
     <article class="feed-card feed-card--content<?= $c_is_gated ? ' feed-card--gated feed-card--gated-' . htmlspecialchars($c_tier) : '' ?>" data-lg-card="1"
              data-id="<?= $c_id ?>" data-type="<?= htmlspecialchars($c_kind) ?>"
              data-href="<?= htmlspecialchars($c_url) ?>" data-gated="<?= $c_is_gated ? '1' : '0' ?>"
-             data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>">
+             data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>"
+             data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>">
       <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $c_author ?></span>
@@ -1253,7 +1276,7 @@ $header_cat = $scoped_forum
       if ($excerpt === '') $excerpt = feed_op_excerpt($topic);
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
-      $card_image  = $topic['card_image'] ?? null;
+      $card_image  = lg_cover_src($topic['card_image'] ?? null);
 
       // One teaser reply (newest); full thread lazy-loads via ?replies=<id>.
       $teaser    = $reply_teaser[$topic_id] ?? null;

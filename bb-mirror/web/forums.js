@@ -1110,9 +1110,13 @@
       document.body.classList.add('ntm-active');
       var ntmAnonChk = document.getElementById('ntm-anon-check');
       if (ntmAnonChk) ntmAnonChk.checked = false;   // anon toggle defaults off per post (Phase 1)
-      if (ntmAuthState === 'idle') {
+      // Retry auth whenever we're NOT already authed (idle/anon/loading). A single
+      // transient auth.php failure used to flip state to 'anon' and, because the
+      // guard only retried on 'idle', wedge the composer in Sign-in for the whole
+      // page session even for a logged-in member (Buck 2026-06-11).
+      if (ntmAuthState !== 'authed') {
         ntmLoadAuth(overrideForumId);
-      } else if (ntmAuthState === 'authed' && overrideForumId) {
+      } else if (overrideForumId) {
         ntmSetForum(overrideForumId);
       }
       setTimeout(ntmFocusEntry, 50);
@@ -1133,8 +1137,14 @@
 
     function ntmLoadAuth(overrideForumId) {
       ntmSetState('loading');
-      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject('auth ' + r.status); })
+      // Timeout so a hung auth.php doesn't strand the composer in 'loading'
+      // forever — it falls to 'anon', which the open-guard above will retry.
+      var ntmTimeout = new Promise(function (_, reject) { setTimeout(function () { reject('timeout'); }, 8000); });
+      Promise.race([
+        fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject('auth ' + r.status); }),
+        ntmTimeout,
+      ])
         .then(function (data) {
           if (!data.authenticated) { ntmSetState('anon'); return; }
           ntmNonce = data.nonce;
