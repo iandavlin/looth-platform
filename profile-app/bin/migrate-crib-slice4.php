@@ -8,7 +8,7 @@ declare(strict_types=1);
  *   1. migrate-from-xprofile.php    — display_name + business_name (xprofile 1/2)   [--commit]
  *   2. snapshot-location-from-bb.php — location_text + location_address + coords (96) [direct write, idempotent]
  *   3. migrate-socials.php           — field 266 + ACF author_* (locked mapping)      [--commit]
- *   4. backfill-avatars.php          — avatar_url (BB upload URL / Gravatar)          [direct write, NULL-only]
+ *   4. backfill-avatars.php          — avatar_url (app-owned copy of BB upload; no-BB rows stay NULL/initials) [direct write, NULL-only]
  *
  * Precedence (locked): existing profile_socials > xprofile > ACF > skip. Three-tier
  * is per (user, kind); cross-kind additive. NOT swept: at_a_glance (no clean BB
@@ -122,7 +122,7 @@ if (!$f) {
         $touch = [];
         if ($xName && $nameEmpty) $touch[] = 'name/business (current EMPTY → xprofile fills)';
         if ($xLoc)  $touch[] = '⚠ LOCATION (field 96 OVERWRITES location_text/address — full snapshot, not only-if-empty)';
-        if (!$f['avatar_url']) $touch[] = 'avatar (NULL → BB/Gravatar URL)';
+        if (!$f['avatar_url']) $touch[] = 'avatar (NULL → app-owned copy of BB upload, if one exists; else stays NULL/initials)';
         out("  semantics: name/business/slug only-if-empty (merge); socials precedence-protected; avatar NULL-only; LOCATION overwrites.");
         out($touch
             ? "  → crib WOULD touch: " . implode('; ', $touch) . ".\n    (To preserve the fixture's location exactly, re-seed user 3 after --commit, or skip if wp=$fxWp has no field 96.)"
@@ -154,7 +154,7 @@ foreach ($steps as $s) {
             out("   candidates with a BB location (field 96 / geocode_96): $n  (idempotent: skips rows already matching)");
         } elseif ($s['script'] === 'backfill-avatars.php') {
             $n = (int) $pg->query("SELECT count(*) FROM users WHERE avatar_url IS NULL")->fetchColumn();
-            out("   candidates with NULL avatar_url: $n  (fills from BB upload / Gravatar; re-run is a no-op)");
+            out("   candidates with NULL avatar_url: $n  (fills from BB upload only — no-BB rows stay NULL/initials; re-run is a no-op)");
         }
         continue;
     }

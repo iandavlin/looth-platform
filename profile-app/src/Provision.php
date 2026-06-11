@@ -36,6 +36,13 @@ final class Provision
     /**
      * Idempotent create-or-heal for a WP user. Returns
      * ['user_id'=>int, 'uuid'=>string, 'created'=>bool].
+     *
+     * avatar_url is INTENTIONALLY left NULL on create: NULL renders as the
+     * member's initials (Block.php), which is the canonical no-avatar state.
+     * Do not default it to a Gravatar/placeholder URL here — that was the
+     * avatar-rot bug (1,300+ rows stamped with fake gravatars the BB backfill
+     * then had to repair). Real avatars arrive only via me-avatar.php upload
+     * or the BB-upload crib (bin/backfill-avatars.php, NULL-only).
      */
     public static function ensure(int $wpUserId, string $email, ?string $displayName): array
     {
