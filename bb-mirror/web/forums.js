@@ -933,6 +933,11 @@
     });
   }
 
+  // Expose so the §4e discussion modal (separate IIFE) can embed provider URLs
+  // in its lazily-fetched OP body + reply thread — the load-time scan below only
+  // sees static page content, never the modal's injected HTML.
+  window.bbProcessEmbeds = bbProcessEmbeds;
+
   // Initial scan of any rendered bodies present at load (single-topic pages).
   document.querySelectorAll('.post__body, .feed-card__full-body[data-loaded]').forEach(bbProcessEmbeds);
 
@@ -2433,6 +2438,7 @@
         tmp.innerHTML = html;
         while (tmp.firstChild) t.appendChild(tmp.firstChild);
         fbRows(t, tid);
+        if (window.bbProcessEmbeds) window.bbProcessEmbeds(t);   // embed provider links in drained pages
         drain(t, tid, depth + 1);
       })
       .catch(function () {});
@@ -2499,7 +2505,14 @@
     op.appendChild(opacts);
     fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
-      .then(function (html) { if (html && html.trim()) body.innerHTML = html; })
+      .then(function (html) {
+        if (html && html.trim()) {
+          body.innerHTML = html;
+          // Embed provider URLs (YouTube/Vimeo/IG/X) in the OP body, same as the
+          // single-topic page does — ?body= ships raw content_html (Ian 2026-06-11).
+          if (window.bbProcessEmbeds) window.bbProcessEmbeds(body);
+        }
+      })
       .catch(function () {});
 
     // Thread: nested one-deep + reply reactions, straight off the shared endpoint.
@@ -2530,6 +2543,7 @@
           return;
         }
         fbRows(t, tid);
+        if (window.bbProcessEmbeds) window.bbProcessEmbeds(t);   // embed provider links in replies
         drain(t, tid, 0);
       })
       .catch(function () {

@@ -134,7 +134,7 @@ foreach ($page as $row) {
     bb_mirror_render_reply_stub(
         $node,
         $row['depth'] >= 1,                              // is_child (one indent tier)
-        true,                                            // defer image behind "Show image"
+        false,                                           // load image inline (Ian 2026-06-11: images just load, no click)
         true,                                            // per-reply Reply button
         $row['depth'] >= 2 ? $row['pa'] : null           // "↪ @author" for deep replies
     );
