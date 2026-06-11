@@ -190,7 +190,9 @@
       iframe.className = 'fc-video';
       iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1&rel=0&modestbranding=1';
       iframe.title = 'Video';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      // explicit `fullscreen` in allow: Safari/Firefox don't fold the legacy
+      // allowFullscreen attr into the permissions policy (Buck audit 6/11)
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       iframe.allowFullscreen = true;
       iframe.referrerPolicy = 'strict-origin-when-cross-origin';
       iframe.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; z-index:5;';
@@ -951,7 +953,7 @@
     ifr.src = src;
     ifr.setAttribute('frameborder', '0');
     ifr.setAttribute('allowfullscreen', '');
-    ifr.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+    ifr.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
     ifr.loading = 'lazy';
     wrap.appendChild(ifr);
     return wrap;
