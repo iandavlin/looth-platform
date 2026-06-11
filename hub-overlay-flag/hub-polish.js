@@ -2305,37 +2305,10 @@
       });
       host.addEventListener('mouseleave', function () { stopHover(host); });
     }
-    // Body-EMBEDDED YouTube iframes (server-rendered in the post body, not a
-    // cover) never hover-autoplayed (Buck 2026-06-11). First hover rewrites the
-    // src once to a muted autoplay w/ the JS API enabled (a quick reload);
-    // after that hover plays / leave pauses like the cover previews.
-    function wireEmbed(f) {
-      if (f.getAttribute('data-lg-hoverwired')) return;
-      if (f.closest('.fc-cover--video')) return;                  // cover system owns those
-      var card = f.closest('.feed-card'); if (!card) return;
-      f.setAttribute('data-lg-hoverwired', '1');
-      f.addEventListener('mouseenter', function () {
-        if (!/enablejsapi=1/.test(f.src)) {
-          try {
-            var u = new URL(f.src, location.href);
-            u.searchParams.set('enablejsapi', '1');
-            u.searchParams.set('autoplay', '1');
-            u.searchParams.set('mute', '1');
-            u.searchParams.set('playsinline', '1');
-            f.src = u.toString();
-          } catch (e) { return; }
-        } else {
-          ytPost(f, 'playVideo');
-        }
-        try { stopOtherVideos(f); } catch (e2) {}
-      });
-      f.addEventListener('mouseleave', function () {
-        if (/enablejsapi=1/.test(f.src)) ytPost(f, 'pauseVideo');
-      });
-    }
+    // (v170 body-embed hover-autoplay REMOVED 2026-06-11 — coord/Ian: intrusive
+    //  + collided with the desktop modal's embeds. Covers-only, as in v114.)
     function wireAll() {
       [].forEach.call(document.querySelectorAll('.fc-cover--video[data-yt-play]'), wireHost);
-      [].forEach.call(document.querySelectorAll('.feed-card iframe[src*="youtube.com/embed"], .feed-card iframe[src*="youtube-nocookie.com/embed"]'), wireEmbed);
     }
     wireAll();
     var root = document.getElementById('hub-feed-results') || document.querySelector('.feed') || document.body;

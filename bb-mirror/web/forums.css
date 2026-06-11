@@ -1722,6 +1722,14 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
    active so a second click exits the Saved view (Ian 2026-06-11). */
 .feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
 
+/* FB-bubble name wrap (absorbed from hub-polish lg-fbname-wrap-css 2026-06-11,
+   coord-approved): long author names must wrap INSIDE bubbles instead of
+   driving them to max-content past the viewport. Buck's client copy no-ops. */
+.feed-page .lg-fb-col, #looth-rep-sheet .lg-fb-col { max-width: 100%; }
+.feed-page .lg-fb-bubble .lg-fb-name, #looth-rep-sheet .lg-fb-bubble .lg-fb-name {
+  white-space: normal; overflow-wrap: anywhere; }
+.feed-page .lg-fb-bubble img, #looth-rep-sheet .lg-fb-bubble img { max-width: 100%; height: auto; }
+
 /* Close-filters button at the top of the sidebar (Ian 2026-06-11). Desktop
    only — mobile's filter drawer has its own close. Same state as the pill. */
 .bb-nav__close { display: none; }

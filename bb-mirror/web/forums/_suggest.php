@@ -60,14 +60,14 @@ if ($mode === 'author') {
     // Live search: topics (build /hub/<forum>/<topic>/) + content (url column).
     $base = LG_BB_MIRROR_PUBLIC_PATH;
     $sql = "
-        SELECT kind, title, forum_slug, topic_slug, content_url, ts FROM (
+        SELECT kind, title, forum_slug, topic_slug, content_url, ts, item_id FROM (
             SELECT 'discussion' AS kind, t.title, f.slug AS forum_slug, t.slug AS topic_slug,
-                   NULL::text AS content_url, t.last_active_at AS ts
+                   NULL::text AS content_url, t.last_active_at AS ts, t.id AS item_id
               FROM topic t JOIN forum f ON f.id = t.forum_id
              WHERE t.status = 'publish' AND f.visibility = 'public'
                AND t.forum_id NOT IN (3876) AND t.title ILIKE :like1
             UNION ALL
-            SELECT kind, title, NULL, NULL, url, COALESCE(last_activity, published_at)
+            SELECT kind, title, NULL, NULL, url, COALESCE(last_activity, published_at), id
               FROM discovery.content_item
              WHERE tier IN ($tin) AND title ILIKE :like2
         ) z
@@ -82,7 +82,12 @@ if ($mode === 'author') {
         $url = $r['kind'] === 'discussion'
             ? $base . '/' . $r['forum_slug'] . '/' . $r['topic_slug'] . '/'
             : (string)$r['content_url'];
-        $results[] = ['kind' => (string)$r['kind'], 'title' => (string)$r['title'], 'url' => $url];
+        // id/topic_id: lets the mobile open-in-place (hub-polish v169) skip its
+        // resolve fetch — topic id for discussions, content_item id otherwise
+        // (Buck ask 2026-06-11, coord-approved).
+        $results[] = ['kind' => (string)$r['kind'], 'title' => (string)$r['title'], 'url' => $url,
+                      'id' => (int)$r['item_id'],
+                      'topic_id' => $r['kind'] === 'discussion' ? (int)$r['item_id'] : null];
     }
 }
 
