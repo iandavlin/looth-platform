@@ -112,14 +112,33 @@
     if (!window.matchMedia('(min-width:961px)').matches) return;  // sidebar is persistent only >960
     if (document.body.getAttribute('data-lg-navinit')) return;
     document.body.setAttribute('data-lg-navinit', '1');
-    var saved = null; try { saved = localStorage.getItem('lg-nav-open'); } catch (e) {}
-    if (saved !== '1') {                                          // default: collapsed
-      document.body.classList.add('nav-closed');
-      var chip = document.querySelector('.lg-filters-chip'); if (chip) chip.classList.remove('is-on');
+    var saved = null, savedWide = null;
+    try { saved = localStorage.getItem('lg-nav-open'); savedWide = localStorage.getItem('lg-nav-open-wide'); } catch (e) {}
+    // ULTRAWIDE auto-open (Buck 2026-06-11: columns max at 4 — past that,
+    // "automatically open up the filter side bar if there is room"): from
+    // 2520px the rail (~240px measured, ≤300 max) fits beside the capped
+    // 2294px feed with at most a few invisible px of squeeze — Buck's own
+    // monitor is a 2560×1080 ultrawide, which the first cut's 2620 threshold
+    // missed. Wide mode keeps its OWN pref key (lg-nav-open-wide): open is
+    // the default there, and only an explicit close made WHILE wide vetoes
+    // it — the years of narrow-mode chip clicks stored in lg-nav-open (where
+    // closed is the default anyway) no longer suppress the wide auto-open.
+    var wide = window.matchMedia('(min-width:2520px)');
+    function applyNavDefault() {
+      var open = wide.matches ? savedWide !== '0' : saved === '1';
+      document.body.classList.toggle('nav-closed', !open);
+      var chip = document.querySelector('.lg-filters-chip');
+      if (chip) chip.classList.toggle('is-on', open);
     }
+    applyNavDefault();
+    if (wide.addEventListener) wide.addEventListener('change', applyNavDefault);
     var chip2 = document.querySelector('.lg-filters-chip');
     if (chip2) chip2.addEventListener('click', function () {
-      setTimeout(function () { try { localStorage.setItem('lg-nav-open', document.body.classList.contains('nav-closed') ? '0' : '1'); } catch (e) {} }, 60);
+      setTimeout(function () { try {
+        var val = document.body.classList.contains('nav-closed') ? '0' : '1';
+        if (wide.matches) { savedWide = val; localStorage.setItem('lg-nav-open-wide', val); }
+        else { saved = val; localStorage.setItem('lg-nav-open', val); }
+      } catch (e) {} }, 60);
     });
   }
 
@@ -1005,7 +1024,7 @@
           previewObserver.unobserve(entries[i].target);
         }
       }
-    }, { rootMargin: '250px 0px' });
+    }, { rootMargin: '3000px 0px' });
     observePreviewCards(document);
   }
 
@@ -1602,7 +1621,7 @@
       '<div class="lcs-panel">' +
         '<div class="lcs-grab" aria-hidden="true"></div>' +
         '<div class="lcs-bar"><button class="lcs-x" type="button" aria-label="Close">✕</button><span class="lcs-ttl"></span></div>' +
-        '<iframe class="lcs-frame" title="Post" referrerpolicy="same-origin" allow="fullscreen; clipboard-write; web-share"></iframe>' +
+        '<iframe class="lcs-frame" title="Post" referrerpolicy="same-origin" allow="fullscreen; clipboard-write; web-share" allowfullscreen></iframe>' +
       '</div>';
     (document.body || document.documentElement).appendChild(lgCs);
     lgCs.querySelector('.lcs-x').addEventListener('click', function () { closeContentSheet(); });
@@ -2209,7 +2228,7 @@
         if (!inf.getAttribute('data-lg-auto')) {         // first play → autoplay muted + enable JS API
           var iid = ytIdFrom(inf.src); if (!iid) return;
           inf.setAttribute('data-lg-auto', '1');
-          inf.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
+          inf.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen');
           inf.src = 'https://www.youtube.com/embed/' + iid + '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
           addUnmuteOverlay(host, inf);
         } else { ytPost(inf, 'playVideo'); }             // back in view → resume (don't re-mute)
@@ -2221,7 +2240,7 @@
       f.className = 'fc-video'; f.setAttribute('data-lg-auto', '1');
       f.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
       f.title = 'Video';
-      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:5;';
       host.appendChild(f);
@@ -2284,7 +2303,7 @@
       f.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) +
         '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
       f.title = 'Video';
-      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:5;';
       host.appendChild(f);
@@ -3260,10 +3279,13 @@
     // 3-col cap is 1520 (not the old 1716): the ~272px nav rail eats into the
     // viewport, and at Buck's 1920×1080 the available 1648px must still leave
     // VISIBLE side buffer (≈64px/side, ≈478px cards) — 1716 left zero.
+    // Round 4 (Buck 2026-06-11 night): "max on 4 columns" — the 5/6-col steps
+    // are gone. The 4-col rule also PINS 4 against forums.css's 5@3200 (overlay
+    // loads later → wins in cascade at every width above 2294). Width beyond
+    // the capped feed goes to side margins, and past ~2620px the filter
+    // sidebar auto-opens to spend it (see setupDesktopFilterNav).
     css += '\n@media (min-width:1101px){.feed-page .feed{max-width:1520px;margin-left:auto;margin-right:auto}}' +
-           '\n@media (min-width:2294px){.feed-page .feed{max-width:2294px;column-count:4}}' +
-           '\n@media (min-width:2872px){.feed-page .feed{max-width:2872px;column-count:5}}' +
-           '\n@media (min-width:3450px){.feed-page .feed{max-width:3450px;column-count:6}}';
+           '\n@media (min-width:2294px){.feed-page .feed{max-width:2294px;column-count:4}}';
     var s = document.createElement('style'); s.id = 'lg-desktop-css'; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
@@ -3497,6 +3519,10 @@
     (document.head || document.documentElement).appendChild(s);
   }
   function wireFilterDrawer() {
+    // Canonical centered filters modal (#hub-fmodal, Ian 2026-06-11) owns the
+    // Filters chip on ALL viewports — this drawer presented .bb-layout__nav,
+    // which the hub no longer renders. No-op when the modal exists.
+    if (document.getElementById('hub-fmodal')) return;
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (document.body.getAttribute('data-lg-hubf')) return;
     document.body.setAttribute('data-lg-hubf', '1');
@@ -3563,6 +3589,10 @@
       '.feed-page .lg-card-actions .lg-act-save .ico{fill:none;stroke:currentColor}',
       '.feed-page .lg-card-actions .lg-act-save.is-on{color:var(--lguser-ink,#1a1d1a)}',
       '.feed-page .lg-card-actions .lg-act-save.is-on .ico{fill:currentColor;stroke:currentColor}',
+      // Label the bookmark (Buck 2026-06-11: the bare icon read as MISSING on
+      // phones next to the labelled Like/replies/Share). is-on flips the text.
+      '.feed-page .lg-card-actions .lg-act-save::after{content:"Save";font:inherit}',
+      '.feed-page .lg-card-actions .lg-act-save.is-on::after{content:"Saved"}',
       // Category icon before the label text — inherits the label color (currentColor,
       // so dark-mode-safe), optical-center nudge.
       '.feed-page .fc-category.lg-card-cat .lg-cat-ico,.feed-page .lg-card-cat .lg-cat-ico{display:inline-block;vertical-align:-2px;margin-right:5px;flex:0 0 auto;opacity:.85}',
