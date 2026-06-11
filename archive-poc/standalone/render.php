@@ -449,6 +449,38 @@ body { margin: 0; background: #f0eee8; color: #323532;
   font-size: 22px; line-height: 1; cursor: pointer; color: #6b6b66; transition: background .15s, color .15s; }
 .lg-cmodal__close:hover { background: #ece7db; color: #1a1d1a; }
 .lg-cmodal__frame { width: 100%; border: 0; height: 320px; background: #fff; transition: height .2s ease; }
+/* ── Sticky bottom-left dock: Back-to-Hub + post React + Comments, together
+      (Ian 2026-06-11: "sticky with the comments"). Replaces the in-flow footer
+      bar on the standalone page. */
+.lg-standalone-dock { position: fixed; left: 18px; bottom: 18px; z-index: 50;
+  display: flex; align-items: center; gap: 8px; }
+.lg-dock__btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px;
+  background: #fff; color: #323532; border: 1px solid #d8d2c4; border-radius: 999px;
+  font-size: 14px; font-weight: 600; line-height: 1; text-decoration: none; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,.15); transition: background .15s, border-color .15s; }
+.lg-dock__btn:hover { background: #f4f1e8; }
+.lg-dock__back svg { width: 15px; height: 15px; }
+/* the dock's Comments button reuses .lg-dock__btn (drop the old standalone pos). */
+.lg-standalone-dock .lg-standalone-comments { position: static; left: auto; bottom: auto; box-shadow: none; }
+.lg-dock__react { position: relative; }
+.lg-pf-react__btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font: 600 14px/1 inherit; color: #323532; padding: 9px 14px; border-radius: 999px;
+  border: 1px solid #d8d2c4; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  transition: background .15s, border-color .15s; }
+.lg-pf-react__btn:hover { background: #f4f1e8; }
+.lg-pf-react__btn.is-on { border-color: #c08a2f; background: #fdf6e9; }
+.lg-pf-react__em { font-size: 16px; line-height: 1; }
+.lg-pf-react__btn img { display: block; }
+.lg-pf-react__n { font-weight: 700; color: #b8842b; }
+.lg-pf-react__pop { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 60;
+  display: flex; gap: 2px; padding: 6px 8px; background: #fff; border: 1px solid #d8d2c4;
+  border-radius: 999px; box-shadow: 0 8px 26px rgba(26,29,26,.18); }
+.lg-pf-react__opt { border: 0; background: none; cursor: pointer; padding: 4px 6px;
+  border-radius: 50%; font-size: 22px; line-height: 1; transition: transform .12s ease; }
+.lg-pf-react__opt:hover { transform: scale(1.3) translateY(-2px); }
+.lg-pf-react__opt img { width: 24px; height: 24px; display: block; }
+.lg-pf-react__opt.is-on { background: #fdf6e9; }
+@media (max-width: 640px) { .lg-dock__back span { display: none; } .lg-pf-react__lbl { display: none; } }
 </style>
 </head>
 <body<?= $embed ? ' class="lg-embed"' : '' ?>>
@@ -477,10 +509,30 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <?php if ($editUrl !== ''): ?>
 <a class="lg-standalone-edit" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">&#9998; Edit</a>
 <?php endif; ?>
+<?php
+    // Sticky dock: Back-to-Hub + post React + Comments float together, bottom-left
+    // (Ian 2026-06-11). React shares the Hub card's card_reactions store (same
+    // post_type:id key) so post + card jive. Use the RESOLVED post id from the blob
+    // context. Inside lg_standalone_page() the post context is the $pc param (the
+    // caller's $postContext/$postType/$postId are out of scope here).
+    $reactId = (int) ($pc['post_id'] ?? 0);
+    $reactPt = (string) ($pc['post_type'] ?? '');
+    if ($reactId > 0):
+?>
+<div class="lg-standalone-dock">
+  <a class="lg-dock__btn lg-dock__back" href="/hub/" data-lg-hub-back title="Back to the Hub">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Hub</span>
+  </a>
+<?php if ($reactPt !== ''): ?>
+  <div class="lg-dock__react" data-lg-react data-pt="<?= htmlspecialchars($reactPt, ENT_QUOTES, 'UTF-8') ?>" data-id="<?= $reactId ?>"></div>
+<?php endif; ?>
 <?php if ($commentsUrl !== ''): ?>
-<button type="button" class="lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
-  &#128172; <span><?= $commentsCount > 0 ? number_format($commentsCount) . ' comment' . ($commentsCount === 1 ? '' : 's') : 'Comments' ?></span>
-</button>
+  <button type="button" class="lg-dock__btn lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
+    &#128172; <span><?= $commentsCount > 0 ? number_format($commentsCount) . ' comment' . ($commentsCount === 1 ? '' : 's') : 'Comments' ?></span>
+  </button>
+<?php endif; ?>
+</div>
+<?php if ($commentsUrl !== ''): ?>
 <div class="lg-cmodal" id="lg-cmodal" role="dialog" aria-modal="true" aria-label="Comments" hidden>
   <div class="lg-cmodal__backdrop" data-lg-cmodal-close></div>
   <div class="lg-cmodal__panel">
@@ -513,7 +565,79 @@ body { margin: 0; background: #f0eee8; color: #323532;
   });
 })();
 </script>
-<?php endif; ?>
+<?php endif; /* commentsUrl modal */ ?>
+<script>
+(function(){
+  if (window.__lgPfBar) return; window.__lgPfBar = 1;
+  /* Back to the Hub: native back-nav restores the reader's prior hub scroll +
+     sort + filter when they arrived from the hub ("remember hub state"); else the
+     href="/hub/" sends them fresh (sort persists via lg_hub_sort). */
+  document.addEventListener('click', function(e){
+    var a = e.target.closest && e.target.closest('[data-lg-hub-back]');
+    if (!a) return;
+    try { var r = document.referrer;
+      if (r) { var u = new URL(r);
+        if (u.origin === location.origin && /^\/hub(\/|$)/.test(u.pathname)) { e.preventDefault(); history.back(); }
+      }
+    } catch(_){}
+  });
+  /* Post React — SAME /archive-api/v0/card-react store the Hub card uses
+     (post_type:id key), so post + card share one count ("should jive"). */
+  var EP = '/archive-api/v0/card-react', RBASE = '/archive-poc/reactions/';
+  var PALETTE = [
+    {slug:'like',label:'Like',char:'👍'}, {slug:'ouch',label:'Ouch',img:'ouch.png'},
+    {slug:'wow',label:'Wow',char:'😮'}, {slug:'lol',label:'LOL',char:'😂'},
+    {slug:'shop',label:'Shop',img:'shop.png'}, {slug:'take-my-money',label:'Take my money',img:'take-my-money.png'},
+    {slug:'brain',label:'Brain',char:'🧠'}
+  ];
+  function bySlug(s){ for (var i=0;i<PALETTE.length;i++) if (PALETTE[i].slug===s) return PALETTE[i]; return null; }
+  function glyph(p){ return p.img ? '<img src="'+RBASE+p.img+'" alt="" width="18" height="18">' : '<span class="lg-pf-react__em">'+p.char+'</span>'; }
+  document.querySelectorAll('[data-lg-react]').forEach(function(box){
+    var pt = box.getAttribute('data-pt'), id = parseInt(box.getAttribute('data-id'),10), key = pt+':'+id;
+    var st = { nonce:'', authed:false, mine:null, counts:{} };
+    function total(){ var t=0; for (var k in st.counts) t += st.counts[k]||0; return t; }
+    function render(){
+      var t = total(), m = st.mine ? bySlug(st.mine) : null;
+      box.innerHTML = '<button type="button" class="lg-pf-react__btn'+(m?' is-on':'')+'" aria-label="React">'
+        + (m ? glyph(m) : '<span class="lg-pf-react__em">🙂</span>')
+        + '<span class="lg-pf-react__lbl">'+(m?m.label:'React')+'</span>'
+        + (t ? '<span class="lg-pf-react__n">'+t+'</span>' : '') + '</button>';
+    }
+    function openPicker(){
+      if (box.querySelector('.lg-pf-react__pop')) return;
+      var pop = document.createElement('div'); pop.className='lg-pf-react__pop';
+      PALETTE.forEach(function(p){
+        var b = document.createElement('button'); b.type='button';
+        b.className='lg-pf-react__opt'+(st.mine===p.slug?' is-on':''); b.title=p.label; b.innerHTML=glyph(p);
+        b.addEventListener('click', function(ev){ ev.stopPropagation(); pop.remove(); pick(p.slug); });
+        pop.appendChild(b);
+      });
+      box.appendChild(pop);
+      setTimeout(function(){ document.addEventListener('click', function h(ev){ if(!box.contains(ev.target)){ pop.remove(); document.removeEventListener('click',h); } }); }, 0);
+    }
+    function pick(slug){
+      if (!st.authed){ location.href = '/wp-login.php?redirect_to='+encodeURIComponent(location.href); return; }
+      fetch(EP, { method:'POST', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-WP-Nonce': st.nonce },
+        body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: st.nonce }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if (d && d.ok){ st.counts = d.counts||{}; st.mine = d.mine||null; render(); } })
+        .catch(function(){});
+    }
+    box.addEventListener('click', function(e){ if (e.target.closest('.lg-pf-react__btn')) openPicker(); });
+    render();
+    fetch(EP+'?items='+encodeURIComponent(key), { credentials:'same-origin', headers:{ 'Accept':'application/json' } })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if (d){ st.authed = !!(d.authenticated && d.nonce); st.nonce = d.nonce||'';
+          st.mine = (d.my_reactions && d.my_reactions[key]) || null;
+          st.counts = (d.counts && d.counts[key]) || {}; }
+        render();
+      }).catch(function(){});
+  });
+})();
+</script>
+<?php endif; /* postId > 0 dock */ ?>
 <main class="lg-standalone-main" id="lg-main">
 <?= $articleHtml ?>
 </main>
