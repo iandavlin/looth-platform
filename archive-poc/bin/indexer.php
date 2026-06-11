@@ -31,7 +31,7 @@ function archive_poc_kind_map(): array {
         'loothcuts'       => 'loothcuts',
         'document'        => 'document',
         'member-benefit'  => 'benefit',
-        'sponsor-product' => 'benefit',
+        'sponsor-product' => 'misc',     // page component (featured-products carousel reads it by cpt) — NOT a member benefit; only sponsor-post is user-facing in feeds
         'sponsor-page'    => 'misc',
         'sponsor-post'    => 'sponsor-post',
         'sponsor'         => 'misc',
