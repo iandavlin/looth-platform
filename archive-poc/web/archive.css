@@ -3129,9 +3129,11 @@ body.view-discover.is-member .lg-fm__cta:hover { background: var(--fp-cta-hover-
 
 /* ── Bento pair: member-map tile + events ── */
 body.view-discover .lg-bento {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: stretch;
+  display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: stretch;
   margin: 26px 0;
 }
+body.view-discover .lg-bento__events { min-width: 0; }
+body.view-discover .lg-bento__events .rail { overflow-x: auto; }
 body.view-discover .lg-bento .row { margin: 0; }
 body.view-discover .lg-bento__map {
   position: relative; display: flex; flex-direction: column; justify-content: flex-end;
