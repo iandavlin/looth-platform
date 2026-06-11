@@ -79,9 +79,15 @@ function dir_visible_dropoffs(?array $do, array $r, int $viewerUserId, bool $isA
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 
-$viewer       = Auth::currentUser();
-$viewerUserId = $viewer ? (int)$viewer['id'] : 0;
-$role         = $viewer ? 'member' : 'public';
+// LOGIN REQUIRED (Ian 2026-06-11): anonymously, this endpoint handed out the
+// full member list — all UUIDs, names and coarse locations — which are also
+// the keys to /profile-media/ file URLs (enumeration risk, Buck paywall
+// audit). Members-only now; anon consumers (front-page map tile) fall back
+// to their static teaser. Per-user privacy filtering of the RESULTS stays
+// the profile-app lane's file-level enforcement work.
+$viewer       = Auth::requireUser();   // 401s anon
+$viewerUserId = (int)$viewer['id'];
+$role         = 'member';
 
 $lat    = isset($_GET['lat']) ? (float)$_GET['lat'] : null;
 $lng    = isset($_GET['lng']) ? (float)$_GET['lng'] : null;
