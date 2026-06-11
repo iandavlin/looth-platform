@@ -321,7 +321,7 @@ final class Profile
             'slug'          => $full['slug'],
             'avatar_url'    => $full['avatar_url'],
             'role'          => $role,
-            'location'     => self::renderLocation($full['location'], $canSeeLoc),
+            'location'     => self::renderLocation($full['location'], $canSeeLoc, $anon),
             'sections'     => $sections,
             'socials'      => $socials,
             'instruments'  => $instruments,
@@ -352,27 +352,47 @@ final class Profile
     }
 
     /**
-     * Emit a location block at stored precision if the viewer is permitted,
-     * else a hidden stub. No rounding. Privacy is the visibility gate, not
-     * a coordinate-fuzzing math problem — granularity lives in what the
-     * user typed into the picker.
+     * Emit a location block if the viewer is permitted, else a hidden stub.
+     * Privacy is the visibility gate, not a coordinate-fuzzing math problem —
+     * granularity lives in what the user typed into the picker — EXCEPT for
+     * anonymous viewers (F1 extension, mirrors coarsenLocationData): anon gets
+     * a ~1km pin (2-decimal lat/lng) and never street-level postcode, so a
+     * public-visibility profile can't leak a 7-decimal home pin to scrapers.
+     *
+     * NULL-component safety (cutover patch): text-only rows (the picker's
+     * "save as text only" escape hatch) have NULL city/region/country/lat/lng.
+     * Every component read is null-coalesced, and `display` composes
+     * "City, Region" falling back to the raw text — consumers render that and
+     * never build ", " garbage from NULLs.
      */
-    public static function renderLocation(array $loc, bool $canSee): array
+    public static function renderLocation(array $loc, bool $canSee, bool $anon = false): array
     {
         if (!$canSee || empty($loc['text'])) {
             return ['visibility' => $loc['visibility'] ?? 'private', 'hidden' => true];
         }
-        return [
+        $lat = isset($loc['lat']) && $loc['lat'] !== null ? (float)$loc['lat'] : null;
+        $lng = isset($loc['lng']) && $loc['lng'] !== null ? (float)$loc['lng'] : null;
+        if ($anon) {
+            if ($lat !== null) $lat = round($lat, 2);
+            if ($lng !== null) $lng = round($lng, 2);
+        }
+        $city   = $loc['city']   ?? null;
+        $region = $loc['region'] ?? null;
+        $out = [
             'visibility' => $loc['visibility'] ?? 'members',
             'text'       => $loc['text'],
+            'display'    => trim(implode(', ', array_filter([(string)$city, (string)$region])))
+                                ?: (string)$loc['text'],
             'place_id'   => $loc['place_id'] ?? null,
-            'lat'        => $loc['lat'] !== null ? (float)$loc['lat'] : null,
-            'lng'        => $loc['lng'] !== null ? (float)$loc['lng'] : null,
+            'lat'        => $lat,
+            'lng'        => $lng,
             'country'    => $loc['country'] ?? null,
-            'region'     => $loc['region'] ?? null,
-            'city'       => $loc['city']   ?? null,
-            'postcode'   => $loc['postcode'] ?? null,
+            'region'     => $region,
+            'city'       => $city,
+            'postcode'   => $anon ? null : ($loc['postcode'] ?? null),
         ];
+        if ($anon) $out['precision'] = 'coarse';   // consumer hint: pin is approximate
+        return $out;
     }
 
     /**
