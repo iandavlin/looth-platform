@@ -111,18 +111,19 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* The profile (with the View-as bar right above it) stays centered on the page; on wide screens
    the block sidebar floats off to the LEFT of that centered column (see the .lg-caddy rule). */
 
-/* View-as toggle (owner only) — spacing handled by .lg-shell's flex gap. */
-.lg-viewas{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lg-charcoal);color:#cfd3cb;
-  border-radius:12px;padding:10px 14px;margin:0;font:600 12.5px/1 var(--lg-font-sans)}
-.lg-viewas__label{font-weight:700}
+/* Owner control bar — one labeled row per control (View as / Profile visibility /
+   Discussion posts), label column aligned, explanation inline after each control.
+   Spacing from the page is handled by .lg-shell's flex gap. */
+.lg-viewas{display:flex;flex-direction:column;align-items:stretch;gap:9px;background:var(--lg-charcoal);color:#cfd3cb;
+  border-radius:12px;padding:12px 16px;margin:0;font:600 12.5px/1 var(--lg-font-sans)}
+.lg-viewas__row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lg-viewas__lbl{flex:0 0 122px;font:700 12px/1.3 var(--lg-font-sans)}
 .lg-viewas__seg{display:flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
 .lg-viewas__seg a{padding:6px 14px;color:#cfd3cb;text-decoration:none;font:700 12px/1 var(--lg-font-sans)}
 .lg-viewas__seg a[aria-current="true"]{background:var(--lg-sage);color:#fff}
-.lg-viewas__hint{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);color:#9aa091}
-.lg-viewas__vis{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:6px;padding-left:12px;border-left:1px solid rgba(255,255,255,.18)}
-.lg-viewas__vis-lbl{font:700 12px/1 var(--lg-font-sans)}
-.lg-viewas__vis .lg-vchip{font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer}
-.lg-viewas__vis-note{flex-basis:100%;font:500 11px/1.4 var(--lg-font-sans);opacity:.8}
+.lg-viewas .lg-vchip{font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer}
+.lg-viewas__note{flex:1 1 240px;min-width:200px;font:500 11px/1.45 var(--lg-font-sans);opacity:.8}
+.lg-viewas__hint{font:500 11px/1.45 var(--lg-font-sans);color:#9aa091;border-top:1px solid rgba(255,255,255,.14);padding-top:9px}
 /* discussion-author posting visibility toggle (owner) — sits beside Profile visibility */
 .lg-disc-seg{display:inline-flex;border:1px solid rgba(255,255,255,.18);border-radius:999px;overflow:hidden}
 .lg-disc-seg button{border:0;background:none;color:#cfd3cb;cursor:pointer;padding:6px 13px;font:700 12px/1 var(--lg-font-sans)}
@@ -225,7 +226,7 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
 /* Sections toggle in the View-as bar */
-.lg-viewas__caddy{background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:6px 14px;font:800 12px/1 var(--lg-font-sans);cursor:pointer}
+.lg-viewas__caddy{margin-left:auto;background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:6px 14px;font:800 12px/1 var(--lg-font-sans);cursor:pointer}
 .lg-viewas__caddy:hover{filter:brightness(1.06)}
 /* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
 .lg-caddy{position:fixed;top:0;right:0;height:100vh;width:300px;max-width:86vw;background:var(--lg-card-bg,#fff);border-left:1px solid var(--lg-line);
@@ -502,44 +503,50 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
   <div class="lg-shell<?= $editing ? ' lg-shell--owner' : '' ?>">
 
     <?php if ($isOwner): ?>
-      <div class="lg-viewas" role="group" aria-label="Preview your profile as">
-        <span class="lg-viewas__label">View as</span>
-        <span class="lg-viewas__seg">
-          <a href="<?= looth_h($viewLink('public')) ?>" <?= $role==='public'?'aria-current="true"':'' ?>>Public</a>
-          <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
-          <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
-        </span>
+      <div class="lg-viewas" role="group" aria-label="Profile controls">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">View as</span>
+          <span class="lg-viewas__seg">
+            <a href="<?= looth_h($viewLink('public')) ?>" <?= $role==='public'?'aria-current="true"':'' ?>>Public</a>
+            <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
+            <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
+          </span>
+          <?php if ($editing): ?>
+          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
+          <?php endif; ?>
+        </div>
         <?php
+          // Profile visibility = the whole-profile DEFAULT; each section's own chip can
+          // override it downward (Members-only / Private). Say so right here (Ian 6/11).
           $hVis  = Block::normalizeVis(Block::headerCeiling($subjectId));
-          $hNote = $hVis === 'public'  ? 'Anyone can view your profile.'
-                 : ($hVis === 'private' ? 'Only you can see your profile.'
-                 : 'Members-only. Set Public to let anyone view it.');
+          $hNote = $hVis === 'public'  ? 'Public is the default for your whole profile — each section can override this to Members-only or Private with its own chip.'
+                 : ($hVis === 'private' ? 'Only you can see your profile, regardless of section settings.'
+                 : 'Members-only is the default for your whole profile — each section can override this to Private with its own chip. Set Public to let anyone view it.');
         ?>
-        <span class="lg-viewas__vis">
-          <span class="lg-viewas__vis-lbl">Profile visibility</span>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Profile visibility</span>
           <?= looth_pmp_control('header', $hVis, '') ?>
-          <span class="lg-viewas__vis-note"><?= looth_h($hNote) ?></span>
-        </span>
+          <span class="lg-viewas__note"><?= looth_h($hNote) ?></span>
+        </div>
         <?php
           // Discussion-author posting visibility — a 2-state Public / Member-only toggle.
-          // Distinct from Profile visibility (whole-profile gate): this only controls whether
+          // Distinct from Profile visibility (whole-profile default): this only controls whether
           // logged-out viewers see the owner's real identity on their DISCUSSION posts.
           $dvNote = $discussionVis === 'public'
             ? 'Your name & avatar show on your discussion posts to everyone.'
             : 'Logged-out visitors see "private member" on your discussion posts; signed-in members see you.';
         ?>
-        <span class="lg-viewas__vis lg-viewas__disc">
-          <span class="lg-viewas__vis-lbl">Discussion posts</span>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl">Discussion posts</span>
           <span class="lg-disc-seg" role="radiogroup" aria-label="Who sees your identity on discussion posts" data-disc-current="<?= looth_h($discussionVis) ?>">
             <button type="button" role="radio" data-disc="public" aria-checked="<?= $discussionVis==='public'?'true':'false' ?>">Public</button>
             <button type="button" role="radio" data-disc="member" aria-checked="<?= $discussionVis==='member'?'true':'false' ?>">Member-only</button>
           </span>
-          <span class="lg-viewas__vis-note" id="lg-disc-note"><?= looth_h($dvNote) ?></span>
-        </span>
+          <span class="lg-viewas__note" id="lg-disc-note"><?= looth_h($dvNote) ?></span>
+        </div>
         <?php if ($editing): ?>
-        <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
-        <span class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the side panel adds or removes blocks.</span>
-        <?php endif; /* /editing: Sections toggle + hint */ ?>
+        <div class="lg-viewas__hint">This IS your editor — click any field (name, tagline, the photo, the privacy chips) to edit it in place. Drag the grip on a block to reorder; the Sections panel adds or removes blocks.</div>
+        <?php endif; /* /editing: hint */ ?>
       </div>
     <?php endif; /* /isOwner: View-as switcher */ ?>
     <?php if ($editing): ?>
