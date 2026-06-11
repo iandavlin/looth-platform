@@ -1716,6 +1716,23 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   pointer-events: none;
 }
 
+/* The Saved pill is a VIEW TOGGLE — unlike sort pills it stays clickable when
+   active so a second click exits the Saved view (Ian 2026-06-11). */
+.feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
+
+/* Desktop: the sort/search/filters CONTROL SURFACE sticks to the top while the
+   page (incl. the now-static site header) scrolls away (Ian 2026-06-11).
+   Solid themed bg so cards slide under cleanly; z above card content but far
+   below the modal (8800) / composer (9000). Mobile untouched (Buck lane). */
+@media (min-width: 641px) {
+  .feed-page .feed-sort-bar {
+    position: sticky; top: 0; z-index: 80;
+    background: var(--lguser-bg, #e9eedd);
+    padding: 10px 0;
+    box-shadow: 0 8px 14px -12px rgba(26, 29, 26, .35);
+  }
+}
+
 /* ══════════════════════════════════════════════════════════
    CARD v2 — OP EXCERPT + THREADED REPLIES (Features 2 + 3)
    ══════════════════════════════════════════════════════════ */

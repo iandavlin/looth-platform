@@ -1127,6 +1127,17 @@ $header_cat = $scoped_forum
     ?>
     <a href="<?= feed_sort_url($lg_sid, $forum_slug) ?>"<?= $lg_cls !== '' ? ' class="' . $lg_cls . '"' : '' ?>><?= $lg_slabel ?></a>
     <?php endforeach; ?>
+    <?php if ($viewer_logged_in):
+      // Saved pill (Ian 2026-06-11) — a VIEW toggle, not a sort: ?saved=1
+      // constrains the union to the viewer's ☆ saves (canonical view). Active
+      // = clickable to exit (CSS re-enables pointer-events). The lg-saved-pill
+      // class also tells the mobile overlay's ensureSavedPill not to insert
+      // its own copy. Logged-in only — anon has no saves.
+      $lg_on_saved   = !empty($hub_filters['saved']);
+      $lg_saved_href = feed_sort_url($sort_param, $forum_slug) . ($lg_on_saved ? '' : '&amp;saved=1');
+    ?>
+    <a href="<?= $lg_saved_href ?>" class="lg-saved-pill<?= $lg_on_saved ? ' active' : '' ?>">Saved</a>
+    <?php endif; ?>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
       <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
     <?php endif; ?>
