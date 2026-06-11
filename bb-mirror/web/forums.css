@@ -4091,3 +4091,15 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   }
   .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
 }
+
+/* ── Modal image lightbox (forums.js §10, Ian 2026-06-11) ── */
+#lg-imglb { position: fixed; inset: 0; z-index: 9100; /* above #lg-dmodal (8800) */
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 8, .88); cursor: zoom-out; }
+#lg-imglb[hidden] { display: none; }
+#lg-imglb .lg-imglb__img { max-width: 94vw; max-height: 92vh; width: auto; height: auto;
+  border-radius: 6px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55); }
+#lg-imglb .lg-imglb__x { position: absolute; top: 14px; right: 18px; border: 0;
+  background: none; color: #fff; font: 400 34px/1 var(--lg-font-sans, system-ui, sans-serif);
+  cursor: pointer; opacity: .8; padding: 4px 10px; }
+#lg-imglb .lg-imglb__x:hover { opacity: 1; }

@@ -2248,7 +2248,16 @@
       body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: nonce })
     })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok) renderChips(bar, j.counts || {}, j.mine); })
+      .then(function (j) {
+        if (!j || !j.ok) return;
+        // Update EVERY bar for this target, not just the clicked one — the
+        // discussion modal clones the card's topic bar (§4e), and the card
+        // and modal must always show the same numbers (Ian 2026-06-11).
+        var sel = '.fcr[data-post-type="' + pt + '"][data-item-id="' + id + '"]';
+        [].forEach.call(document.querySelectorAll(sel), function (b) {
+          renderChips(b, j.counts || {}, j.mine);
+        });
+      })
       .catch(function () {});
   }
 
@@ -2566,14 +2575,14 @@
   function drain(t, tid, depth) {
     if (depth > 20) return;
     var btn = t.querySelector('.replies-loadmore');
-    if (!btn) return;
+    if (!btn) { reconcileCount(t, tid); return; }
     var off = btn.getAttribute('data-offset') || '';
     var srt = btn.getAttribute('data-sort') || '';
     btn.remove();
     fetch(BASE + '/?replies=' + encodeURIComponent(tid) + '&offset=' + encodeURIComponent(off) + (srt ? '&sort=' + encodeURIComponent(srt) : ''), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
-        if (!html) return;
+        if (!html) { reconcileCount(t, tid); return; }
         var tmp = document.createElement('div');
         tmp.innerHTML = html;
         while (tmp.firstChild) t.appendChild(tmp.firstChild);
@@ -2582,6 +2591,28 @@
         drain(t, tid, depth + 1);
       })
       .catch(function () {});
+  }
+
+  // The modal shows the WHOLE rendered thread — that count is the truth the
+  // user can see. Push it back onto the card's reply-count displays so the
+  // two never disagree (Ian 2026-06-11: "numbers must jive"); covers stale
+  // mirrored reply_count AND replies posted from inside the modal (the
+  // in-feed optimistic path can't see the modal composer).
+  function reconcileCount(t, tid) {
+    var n = t.querySelectorAll('.reply-stub').length;
+    if (!n) return;
+    var ctl = document.querySelector('.fc-facepile[data-topic-id="' + tid + '"]');
+    var card = ctl && ctl.closest('.feed-card');
+    if (!card) {
+      var exp0 = document.querySelector('.feed-card__expand[data-topic-id="' + tid + '"]');
+      card = exp0 && exp0.closest('.feed-card');
+    }
+    if (!card) return;
+    var word = n === 1 ? 'reply' : 'replies';
+    var fc = card.querySelector('.fc-facepile__count');
+    if (fc) fc.textContent = n + ' ' + word;
+    var exp = card.querySelector('.feed-card__expand');
+    if (exp) exp.innerHTML = 'View ' + n + ' ' + word + ' ▼';
   }
 
   // Social-style comment rows (Ian): each reply's reactions + Reply button sit
@@ -2642,6 +2673,17 @@
     opacts.className = 'lg-dmodal__opacts';
     opacts.innerHTML = '<button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open' +
       ' data-topic-id="' + tid + '" data-forum-id="' + fid + '">&#8617; Reply</button>';
+    // React to the OP itself (Ian 2026-06-11): clone the card's topic reaction
+    // bar — same target, same store; §4d's delegated handlers work on the
+    // clone and doReact mirrors counts to every bar for the target, so the
+    // card and the modal can never disagree.
+    var cardBar = card.querySelector('.fc-actions .fcr');
+    if (cardBar) {
+      var opBar = cardBar.cloneNode(true);
+      var opPal = opBar.querySelector('.fcr-palette');
+      if (opPal) opPal.hidden = true;
+      opacts.insertBefore(opBar, opacts.firstChild);
+    }
     op.appendChild(opacts);
     fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
@@ -2882,4 +2924,53 @@
   } else {
     boot();
   }
+})();
+
+/* ── §10 Modal image lightbox (Ian 2026-06-11) ──────────────────────────────
+ * Any CONTENT image inside the discussion modal (OP body, reply photos)
+ * opens a full-screen lightbox — avatars, facepiles, reaction glyphs and
+ * emoji are excluded. img.php-resized images upgrade their w= param so the
+ * lightbox shows a sharper rendition than the modal's inline copy.
+ * Backdrop / × / Esc close the lightbox only (the modal stays open). */
+(function () {
+  'use strict';
+  var lb = null;
+
+  function ensure() {
+    if (lb) return lb;
+    lb = document.createElement('div');
+    lb.id = 'lg-imglb';
+    lb.hidden = true;
+    lb.innerHTML =
+      '<button type="button" class="lg-imglb__x" aria-label="Close image">&times;</button>' +
+      '<img class="lg-imglb__img" alt="">';
+    document.body.appendChild(lb);
+    lb.addEventListener('click', function () { lb.hidden = true; });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lb && !lb.hidden) {
+        e.stopImmediatePropagation();   // eat the Esc — don't also close the modal
+        lb.hidden = true;
+      }
+    }, true);
+    return lb;
+  }
+
+  function fullSrc(img) {
+    var src = img.currentSrc || img.src || '';
+    // img.php proxy carries an explicit width — ask for a lightbox-size one
+    return src.replace(/([?&]w=)\d+/, '$11600');
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+    var img = e.target.closest('#lg-dmodal img');
+    if (!img) return;
+    if (img.closest('.fc-avatar, .avatar-init, .fcr, .fc-facepile, .lg-dmodal__meta')) return;
+    if (img.classList.contains('emoji') || (img.width && img.width < 48)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var box = ensure();
+    box.querySelector('.lg-imglb__img').src = fullSrc(img);
+    box.hidden = false;
+  }, true);
 })();
