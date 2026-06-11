@@ -3315,3 +3315,11 @@ body.view-discover:not(.is-member) .lg-hubt__more:hover { background: var(--lg-s
 @media (max-width: 640px) {
   body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr; }
 }
+
+/* Inside the bento cell the events list stacks vertically (deck style),
+   instead of the row's default horizontal scroll rail. Both audiences. */
+body.view-discover .lg-bento__events .row--events .rail {
+  display: flex; flex-direction: column; gap: 12px;
+  overflow: visible; margin: 0; padding: 0;
+}
+body.view-discover .lg-bento__events .row--events .ecard { width: 100%; }
