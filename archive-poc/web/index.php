@@ -409,7 +409,11 @@ $client_state = [
 <!-- Front-page redesign fonts (Classic Landing pick, 2026-06-11) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap">
+<?php /* DM fonts CSS INLINED (perf lane 2026-06-11): the css2 <link> was ~795ms of
+         render-blocking CDN round trip for <5KB of @font-face rules (cascade-
+         position-independent => visual no-op). Binaries still stream from
+         fonts.gstatic.com (preconnect above). See _fonts-inline.css for refresh. */ ?>
+<style><?php @readfile(__DIR__ . '/_fonts-inline.css'); ?></style>
 <link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
