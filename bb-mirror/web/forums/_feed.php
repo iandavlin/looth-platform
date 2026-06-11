@@ -52,6 +52,25 @@ if (!function_exists('lg_cover_src')) {
     }
 }
 
+if (!function_exists('lg_cover_loading_attrs')) {
+    /**
+     * Lazy-loading the FIRST feed cover delays the page's LCP element behind
+     * the lazy-load machinery (Lighthouse flagged it; LCP 5-9s on mobile).
+     * First cover paints with high priority, the next two (desktop shows ~3
+     * columns above the fold) load eagerly, everything below stays lazy.
+     * Infinite-scroll batches restart the counter — harmless, those covers
+     * are being inserted into view anyway. Perf lane 2026-06-11.
+     */
+    function lg_cover_loading_attrs(): string
+    {
+        static $n = 0;
+        $n++;
+        if ($n === 1) return 'loading="eager" fetchpriority="high"';
+        if ($n <= 3) return 'loading="eager"';
+        return 'loading="lazy"';
+    }
+}
+
 // ?fid=<id> disambiguates duplicate-slug forums (e.g. two 'finish' forums).
 $fid = 0;
 if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
@@ -1223,13 +1242,13 @@ $header_cat = $scoped_forum
       <time class="fc-time lg-card-time"><?= $c_time ?></time>
       <?php if ($c_yt): /* NON-gated video → facade: thumb + play; forums.js swaps iframe on click (no embed up front) */ ?>
         <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($c_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
           <?php if ($c_dur > 0): ?><span class="fc-dur"><?= (int)$c_dur ?> min</span><?php endif; ?>
         </div>
       <?php elseif ($c_is_gated): /* GATED → locked teaser: dimmed thumb + lock overlay; links to the standalone page which carries its own paywall. NO inline play, no excerpt, no engagement. */ ?>
         <a class="fc-cover feed-card__cover fc-cover--gated" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= htmlspecialchars($c_tier_lbl) ?> members only">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <span class="fc-gate">
             <span class="fc-gate__lock" aria-hidden="true">&#128274;</span>
             <span class="fc-gate__t"><?= htmlspecialchars($c_tier_lbl) ?> members only</span>
@@ -1238,7 +1257,7 @@ $header_cat = $scoped_forum
         </a>
       <?php elseif (!empty($c_img)): ?>
         <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
@@ -1342,7 +1361,7 @@ $header_cat = $scoped_forum
                but now unused. */ ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" loading="lazy">
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
