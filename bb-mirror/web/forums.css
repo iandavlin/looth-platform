@@ -2934,6 +2934,21 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   .feed-page .feed { column-count: 2; }
 }
 
+/* CONTENT MEETS THE BANNER (Ian 2026-06-11: "content box expands to meet the
+   header, not vice versa") — no width caps anywhere in the Hub strip; the feed
+   fills the same width as the banner at every desktop size, and the column
+   count scales so cards stay readable instead of ballooning. (Supersedes the
+   overlay's 1716/2294/2872 caps — removed from hub-polish in the same change.) */
+@media (min-width: 1101px) and (max-width: 2399px) {
+  .feed-page .feed { column-count: 3; }
+}
+@media (min-width: 2400px) {
+  .feed-page .feed { column-count: 4; }
+}
+@media (min-width: 3200px) {
+  .feed-page .feed { column-count: 5; }
+}
+
 /* ── STREAM layout variant — one centered reading column. The default is the
    mosaic/masonry geometry above; layouts pulled back to these TWO (Ian
    2026-06-10, bespoke-cutover). html[data-lg-hublayout] is set PRE-PAINT by

@@ -3273,9 +3273,7 @@
     // width Buck pointed at, covers edge-to-edge) and center it. The full 5-col
     // ultrawide layout stays parked post-launch per the 6/10 call.
     css += '\n@media (min-width:1780px){\n' +
-      '.feed-page .feed{max-width:1716px;margin-left:auto;margin-right:auto}\n' +
-      '.feed-page .feed-sort-bar{max-width:1716px;margin-left:auto;margin-right:auto}\n' +
-      '}';
+                  '}';
     // ULTRAWIDE columns (Buck 2026-06-11): same Mosaic mode — when the empty
     // margin on EITHER side of the capped 3-col feed passes a full card width
     // (~560px + gap), spend that space on another column instead of margins.
@@ -3285,13 +3283,9 @@
     // column-count wins in cascade order. (Supersedes the 6/10 "park
     // ultrawide" note — Buck asked for this explicitly today.)
     css += '\n@media (min-width:2872px){\n' +
-      '.feed-page .feed{column-count:4;max-width:2294px}\n' +
-      '.feed-page .feed-sort-bar{max-width:2294px}\n' +
-      '}';
+                  '}';
     css += '\n@media (min-width:3414px){\n' +
-      '.feed-page .feed{column-count:5;max-width:2872px}\n' +
-      '.feed-page .feed-sort-bar{max-width:2872px}\n' +
-      '}';
+                  '}';
     var s = document.createElement('style'); s.id = 'lg-desktop-css'; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
