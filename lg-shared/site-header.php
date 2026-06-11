@@ -207,7 +207,10 @@ function lg_shared_render_site_header(array $ctx): void
             ?>
         <li><a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a></li>
         <?php endforeach; ?>
-        <li><a href="https://loothtool.com/">Loothtool</a></li>
+        <?php /* Loothtool nav item removed for now (Ian 2026-06-11) — restore by
+                 un-commenting. Buck's desktop shop-modal interceptor hung off this
+                 link; the shop FAB + mobile Shop tab remain its entry points.
+        <li><a href="https://loothtool.com/">Loothtool</a></li> */ ?>
       </ul>
     </nav>
 
