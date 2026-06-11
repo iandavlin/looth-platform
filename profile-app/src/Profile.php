@@ -286,8 +286,12 @@ final class Profile
             $sections[$key] = ['visibility' => $s['visibility'], 'data' => $s['data']];
         }
 
+        // Contact links require LOGIN (Ian 2026-06-11: "must be scrape proof") —
+        // never to anonymous viewers even when the socials block is 'public', so a
+        // scraper can't harvest emails/handles per-uuid after harvesting uuids from
+        // the directory. Logged-in viewers still honor the block's own visibility.
         $socialsVis = $full['sections']['socials']['visibility'] ?? 'public';
-        $socials = self::canSee($role, $socialsVis) ? ($full['socials'] ?? []) : [];
+        $socials = ($role !== 'public' && self::canSee($role, $socialsVis)) ? ($full['socials'] ?? []) : [];
 
         // Slice 2 sections: instruments, skills, scenes are 'public' by default
         // (no per-row visibility). Credentials have per-row visibility.

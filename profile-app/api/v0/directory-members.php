@@ -308,7 +308,13 @@ if ($rows) {
     while ($so = $soStmt->fetch()) {
         $suid = (int)$so['user_id'];
         $svis = (isset($socVis[$suid]) && in_array($socVis[$suid], ['public', 'members', 'private'], true)) ? $socVis[$suid] : 'members';
-        $canSee = ($suid === $viewerUserId) || $isAdmin || $svis === 'public' || ($svis === 'members' && $audience === 'members');
+        // Contact links require LOGIN — never to anonymous viewers, even when the
+        // socials block is 'public' (Ian 2026-06-11: "must be scrape proof"). Anon
+        // gets zero links so emails/handles can't be bulk-harvested off the 667-row
+        // directory once the go-live gate comes off. Owner/admin always; logged-in
+        // members see public + members-visibility links.
+        $canSee = ($suid === $viewerUserId) || $isAdmin
+            || ($audience === 'members' && in_array($svis, ['public', 'members'], true));
         if (!$canSee) continue;
         $val = trim((string)$so['value']);
         if ($val === '') continue;
