@@ -8,6 +8,13 @@ let PHRASE_LETTERS = '';
 let PHRASE_ID     = 0;
 let siteConfig    = {};
 
+// Hardcore mode (opt-in toggle, persisted): reveals are capped by the
+// puzzle's own difficulty. Default mode has NO cap — casual players can
+// never run out (Ian 6/11: no new lose state). MOVE_CAP is computed per
+// phrase in loadPhrase(); it only bites while HARDCORE is on.
+let HARDCORE = false;
+let MOVE_CAP = 0;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  LOOTH GROUP INTEGRATION (front-page embed + member score recording)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,6 +146,57 @@ async function loadPhrase() {
     PHRASE        = phraseMap.get(phraseId).toUpperCase();
     PHRASE_LETTERS = PHRASE.replace(/[-\s]/g, '');
     PHRASE_ID     = phraseId;
+
+    // Hardcore reveal budget, scaled to the puzzle's own difficulty: the
+    // full-reveal cost (1/distinct consonant, 2/distinct vowel) minus 3,
+    // floor 5 — generous, but the whole phrase can never be revealed, so the
+    // one guess is always a genuine guess. Hitting the cap only ends REVEALS;
+    // the guess stays live (losing = wrong guess or forfeit, same as ever).
+    const distinct = new Set(PHRASE_LETTERS);
+    let revealCost = 0;
+    distinct.forEach(L => { revealCost += VOWELS.has(L) ? 2 : 1; });
+    MOVE_CAP = Math.max(revealCost - 3, 5);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  HARDCORE MODE
+// ─────────────────────────────────────────────────────────────────────────────
+function capActive() {
+    return HARDCORE && MOVE_CAP > 0;
+}
+
+function outOfReveals() {
+    return capActive() && state.moves >= MOVE_CAP;
+}
+
+// Counter shows the budget only in hardcore ("3/13"); plain count otherwise.
+function renderMoves() {
+    moveCountEl.textContent = capActive() ? `${state.moves}/${MOVE_CAP}` : String(state.moves);
+}
+
+function refreshCapState() {
+    const notice = document.getElementById('cap-notice');
+    const capped = outOfReveals() && !state.gameOver;
+    keyboardEl.classList.toggle('capped', capped);
+    notice.style.display = capped ? '' : 'none';
+}
+
+function initHardcoreToggle() {
+    HARDCORE = localStorage.getItem('guitardle_hardcore') === '1';
+    const box = document.getElementById('hardcore-toggle');
+    box.checked = HARDCORE;
+    box.addEventListener('change', () => {
+        // No mid-game switching (either direction — flipping it off would be
+        // a cap escape hatch, flipping it on could instantly starve a game).
+        if (state.moves > 0 && !state.gameOver) {
+            box.checked = HARDCORE;
+            return;
+        }
+        HARDCORE = box.checked;
+        localStorage.setItem('guitardle_hardcore', HARDCORE ? '1' : '0');
+        renderMoves();
+        refreshCapState();
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -254,8 +312,9 @@ function updateScoreBox(moves) {
 
 function incrementMoves() {
     state.moves++;
-    moveCountEl.textContent = state.moves;
+    renderMoves();
     updateScoreBox(state.moves);
+    refreshCapState();
     // Refresh-forfeit marker: from the first move on, bailing out of the page
     // before an end state counts as a loss (cleared in the end-state handlers).
     localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: todayString(), moves: state.moves }));
@@ -273,6 +332,7 @@ function revealTiles(letter) {
 }
 
 function handleConsonant(letter, keyEl) {
+    if (outOfReveals()) return;
     if (state.revealedLetters.has(letter)) return;
     state.revealedLetters.add(letter);
     revealTiles(letter);
@@ -282,6 +342,7 @@ function handleConsonant(letter, keyEl) {
 }
 
 function handleVowel(letter, keyEl) {
+    if (outOfReveals()) return;
     if (state.revealedLetters.has(letter)) return;
 
     if (!state.purchasedVowels.has(letter)) {
@@ -333,11 +394,13 @@ function enterGuessMode() {
     btnBackspace.style.display   = '';
 
     guessState.active = true;
+    keyboardEl.classList.add('guessing');   // lift the hardcore key-dim while typing
     checkConfirmButton();
 }
 
 function exitGuessMode(cancelled) {
     guessState.active = false;
+    keyboardEl.classList.remove('guessing');
 
     if (cancelled) {
         guessState.blankTiles.forEach(t => {
@@ -547,7 +610,7 @@ function showEndState(won, streak) {
 function handleForfeit(movesMade) {
     state.gameOver = true;
     state.moves = Math.max(1, movesMade);
-    moveCountEl.textContent = state.moves;
+    renderMoves();
     updateScoreBox(state.moves);
     localStorage.removeItem(ACTIVE_KEY);
 
@@ -895,7 +958,9 @@ async function init() {
     initBoardOverlay();
     initStats();
     initInstructions();
+    initHardcoreToggle();
     updateScoreBox(0);
+    renderMoves();
 
     // Already finished today → locked recap. Otherwise, an in-progress marker
     // from today means the player refreshed mid-game — forfeit (a loss).

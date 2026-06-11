@@ -1105,3 +1105,37 @@ body.is-embed {
 
 /* Ouch, upside down, for the loss card */
 .result-emoji-img--flip { transform: rotate(180deg); }
+
+/* ── Hardcore mode (opt-in reveal cap) ──────────────────────── */
+.hardcore-row {
+    margin: 14px 0 16px;
+    padding: 10px 12px;
+    background: #FBF3DF;
+    border-radius: 10px;
+}
+.hardcore-label {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.hardcore-label input {
+    margin-top: 3px;
+    accent-color: #ECB351;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+/* Out of reveals: dim the letter keys (lifted while typing a guess) */
+.keyboard.capped:not(.guessing) .key { opacity: 0.4; }
+.cap-notice {
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #DD8F33;
+    margin: 6px 16px 2px;
+}
+.game-main.game-over .cap-notice { display: none !important; }

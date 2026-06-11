@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260612f">
+    <link rel="stylesheet" href="style.css?v=20260612g">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -80,6 +80,12 @@
             <h3 class="overlay-subheading">About the Phrases</h3>
             <p class="overlay-body">Phrases cover a wide range of guitar world topics — models, brands, parts, tonewoods, hardware, finishes, and accessories. You may also find some well-known players (but only those associated with specific instruments), as well as luthier tools and processes. Most are accessible even if you're not a builder.</p>
             <p class="overlay-note">Where British and US spelling differs, we use US spelling.</p>
+            <div class="hardcore-row">
+                <label class="hardcore-label" for="hardcore-toggle">
+                    <input type="checkbox" id="hardcore-toggle">
+                    <span><strong>&#128293; Hardcore mode</strong> &mdash; reveals are capped by puzzle difficulty (the counter shows your budget). You can never uncover the whole phrase, so the guess is always a real guess. Switch it before you start &mdash; not mid-game.</span>
+                </label>
+            </div>
             <button class="btn-overlay-close" type="button" id="btn-overlay-close">Got it</button>
         </div>
     </div>
@@ -200,6 +206,8 @@
 
             <p class="vowel-instruction" id="vowel-instruction">Vowels cost 2 moves — unlock first, then place.</p>
 
+            <p class="cap-notice" id="cap-notice" style="display:none">&#128293; Out of reveals &mdash; guess the phrase!</p>
+
             <p class="refresh-warning" id="refresh-warning">&#9888;&#65039; One game per day &mdash; leaving or refreshing mid-game counts as a loss.</p>
 
             <section class="keyboard" id="keyboard" aria-label="Letter keyboard">
@@ -304,6 +312,6 @@
         </main>
     </div>
 
-    <script src="game.js?v=20260612f"></script>
+    <script src="game.js?v=20260612g"></script>
 </body>
 </html>
