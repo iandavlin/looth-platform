@@ -2079,6 +2079,13 @@
         });
         // No "Open the full loothprint" link here — that full listing view is for
         // desktop only (Buck 2026-06-08). The mobile sheet is download + share.
+        // Tier-gated viewer: the page renders a gate CTA instead of the file link,
+        // so zero extracted files means "your tier can't see it", not "no file".
+        // Say so honestly instead of the misleading "no downloadable file".
+        if (!files.length && doc.querySelector('.lg-gate-cta--download,[data-lg-gate="download"]')) {
+          acts.innerHTML = '<div class="llp-note">The print file is for higher-tier members. Upgrade your membership to download it.</div>';
+          return;
+        }
         if (!files.length) { acts.innerHTML = '<div class="llp-note">No downloadable file found for this print.</div>'; return; }
         // Pre-fetch the file blob NOW so the share button can attach the real file
         // synchronously within its click gesture (see lpShare). Non-blocking.
