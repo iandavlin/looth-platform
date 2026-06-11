@@ -24,8 +24,11 @@
    retire the chip rows in the same change. Coordinate with buck-COORD over
    `msg` — his mobile injection (profile-sheet.js) retires once canonical lands,
    and his layer duplicates the endpoint table (announce any shape change).
-6. **QA owner-view account:** a claimed-profile QA user now exists (see report
-   2026-06-11) — use it to machine-verify OWNER view at 390 + 1440 every change.
+6. **QA owner-view account:** `/u/claude-admin-qa` (profile-app user 1851,
+   claimed, WP login claude_admin/1912) renders. REMAINING: owner-mode needs the
+   looth_id JWT minted alongside the WP cookies in headless runs (whoami→anon
+   unbridged = role stays public). Extend the chrome-dev-login mint to add it,
+   then machine-verify OWNER view at 390 + 1440 every change.
 
 ## Cross-lane tripwires
 - Buck's mobile **privacy pull-up** (`profile-sheet.js`, buck-lane) duplicates your `u.php` pmp endpoint table verbatim. **If you change any pmp endpoint shape, msg buck-COORD before shipping.**
