@@ -244,6 +244,7 @@ define('LG_LOCAL_LOOTHS', is_array($_lg_overlay['local_looths'] ?? null) ? $_lg_
 define('LG_CTA_MEMBER',   is_array($_lg_overlay['cta_member']   ?? null) ? $_lg_overlay['cta_member']   : $_lg_defaults['cta_member']);
 define('LG_CTA_PUBLIC',   is_array($_lg_overlay['cta_public']   ?? null) ? $_lg_overlay['cta_public']   : $_lg_defaults['cta_public']);
 define('LG_FEATURED_MEMBER', is_array($_lg_overlay['featured_member'] ?? null) ? $_lg_overlay['featured_member'] : ($_lg_defaults['featured_member'] ?? []));
+define('LG_HUB_TEASER', is_array($_lg_overlay['hub_teaser'] ?? null) ? $_lg_overlay['hub_teaser'] : ($_lg_defaults['hub_teaser'] ?? []));
 unset($_lg_defaults, $_lg_overlay, $_lg_raw, $_lg_parsed);
 
 function thumb_url(array $it): string {
@@ -681,7 +682,7 @@ foreach ($main_rows as $row):
     $row_id = $row['id'] ?? '';
 ?>
 
-<?php if ($is_member && $row_id === 'upcoming-events'): ?>
+<?php if ($row_id === 'upcoming-events'): ?>
       <div class="lg-bento">
         <section class="lg-bento__map" aria-label="Member map">
           <img class="lg-bento__map-img" src="/archive-poc/member-map-teaser.webp" alt="" loading="lazy">
@@ -692,14 +693,39 @@ foreach ($main_rows as $row):
           </div>
         </section>
         <div class="lg-bento__events">
+          <?php if ($is_member): ?>
           <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/lal-link/">
             <span class="lg-loothalong__live"><span class="lg-loothalong__dot"></span><?= $happening_now ? 'Live' : 'LAL' ?></span>
             <span class="lg-loothalong__txt"><?= $happening_now ? 'Loothalong is on now' : 'Loothalong' ?><small><?= $happening_now ? 'Build along with the shop - live video room' : 'The live build-along video room' ?></small></span>
             <span class="lg-loothalong__go">Join the Loothalong &rarr;</span>
           </a>
+          <?php endif; ?>
           <?php include __DIR__ . "/_render-main-row.php"; ?>
         </div>
       </div>
+<?php if (!$is_member && defined('LG_HUB_TEASER') && !empty(LG_HUB_TEASER['enabled']) && !empty(LG_HUB_TEASER['items'])): ?>
+      <section class="row row--hub-teaser" data-row-id="hub-teaser">
+        <div class="lg-hubt__head">
+          <p class="lg-hubt__eyebrow">The Hub</p>
+          <h2 class="lg-hubt__title">What members are talking about</h2>
+          <p class="lg-hubt__sub">Real bench problems, candid answers. Join to reply and see who you&rsquo;re talking to.</p>
+        </div>
+        <div class="lg-hubt__grid">
+          <?php foreach (array_slice(LG_HUB_TEASER['items'], 0, 6) as $lg_ht): ?>
+          <article class="lg-hubt__card">
+            <div class="lg-hubt__top">
+              <span class="lg-hubt__chip">Discussion</span>
+              <?php if (!empty($lg_ht['replies'])): ?><span class="lg-hubt__replies"><?= (int)$lg_ht['replies'] ?> replies</span><?php endif; ?>
+            </div>
+            <h3 class="lg-hubt__t"><?= h((string)($lg_ht['title'] ?? '')) ?></h3>
+            <p class="lg-hubt__ex"><?= h((string)($lg_ht['excerpt'] ?? '')) ?></p>
+            <div class="lg-hubt__by">Private member &middot; join to see who</div>
+          </article>
+          <?php endforeach; ?>
+        </div>
+        <div class="lg-hubt__cta"><a class="lg-hubt__more" href="/hub/">See the full Hub &rarr;</a></div>
+      </section>
+<?php endif; ?>
 <?php else: ?>
 <?php include __DIR__ . "/_render-main-row.php"; ?>
 <?php endif; ?>

@@ -3211,3 +3211,105 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__go { backgroun
     margin-right: auto;
   }
 }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   PUBLIC front page → Buck's deck style (2026-06-11): split welcome hero
+   (copy left / video right, checkmark bullets), events+map bento (events
+   left, map right, no Loothalong), Hub teaser section, contained column.
+   Scope: body.view-discover:not(.is-member). Appended AFTER the Classic
+   Landing block so same-specificity overrides win in cascade order.
+   Tokens only — the dark counterpart flows through untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* contain the public column too (twin of the member cap) */
+@media (min-width: 641px) {
+  body.view-discover:not(.is-member) .topbar--standalone,
+  body.view-discover:not(.is-member) .rows {
+    max-width: 1200px; margin-left: auto; margin-right: auto;
+  }
+}
+
+/* ── split hero ── */
+body.view-discover:not(.is-member) .row--video-promo[data-row-id="video-promo-public"] { padding: 34px 0 30px; }
+body.view-discover:not(.is-member) .row--video-promo[data-row-id="video-promo-public"] .row__head { display: none; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo {
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+  max-width: none; gap: 44px; align-items: center;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy {
+  order: 0; text-align: left; align-items: flex-start; font-size: 1.02rem;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__video { order: 1; max-width: none; margin: 0; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__label { text-align: left; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy .vp-eyebrow {
+  font: 700 11px/1 var(--lg-font-sans); letter-spacing: .15em; text-transform: uppercase;
+  color: var(--lg-sage-d, #6f7c54); margin: 0 0 12px;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy h3 {
+  font: 400 40px/1.12 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a);
+  letter-spacing: -.01em; margin: 0 0 14px;
+}
+/* checkmark bullets back (Classic Landing hid them) */
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul {
+  display: block; list-style: none; margin: 0 0 18px; padding: 0;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul li {
+  position: relative; padding-left: 24px; margin: 0 0 8px;
+  font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-ink, #323532);
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul li::before {
+  content: ""; position: absolute; left: 2px; top: .42em; width: 10px; height: 6px;
+  border-left: 2.5px solid var(--lg-sage-d, #6f7c54); border-bottom: 2.5px solid var(--lg-sage-d, #6f7c54);
+  transform: rotate(-45deg);
+}
+
+/* ── bento order for public: events left, map right ── */
+body.view-discover:not(.is-member) .lg-bento__map { order: 2; }
+body.view-discover:not(.is-member) .lg-bento__events { order: 1; }
+
+/* ── Hub teaser ── */
+body.view-discover:not(.is-member) .row--hub-teaser { margin: 34px 0 10px; }
+body.view-discover:not(.is-member) .lg-hubt__eyebrow {
+  font: 700 11px/1 var(--lg-font-sans); letter-spacing: .15em; text-transform: uppercase;
+  color: var(--lg-sage-d, #6f7c54); margin: 0 0 8px;
+}
+body.view-discover:not(.is-member) .lg-hubt__title { margin: 0 0 4px; font: 400 26px/1.15 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover:not(.is-member) .lg-hubt__sub { margin: 0 0 18px; font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); max-width: 560px; }
+body.view-discover:not(.is-member) .lg-hubt__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+body.view-discover:not(.is-member) .lg-hubt__card {
+  display: flex; flex-direction: column;
+  background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #ebe9e2);
+  border-radius: 10px; padding: 15px 16px 13px;
+}
+body.view-discover:not(.is-member) .lg-hubt__top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+body.view-discover:not(.is-member) .lg-hubt__chip {
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 999px;
+  background: var(--lg-sage-tint, #f0f2e9); color: var(--lg-sage-d, #6f7c54);
+}
+body.view-discover:not(.is-member) .lg-hubt__replies { margin-left: auto; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); }
+body.view-discover:not(.is-member) .lg-hubt__t { margin: 0 0 7px; font: 600 15.5px/1.3 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover:not(.is-member) .lg-hubt__ex {
+  margin: 0 0 12px; font: 400 13.5px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1 1 auto;
+}
+body.view-discover:not(.is-member) .lg-hubt__by {
+  font: 500 12px/1.2 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b);
+  border-top: 1px solid var(--lg-line, #ebe9e2); padding-top: 10px;
+}
+body.view-discover:not(.is-member) .lg-hubt__cta { display: flex; justify-content: center; margin-top: 20px; }
+body.view-discover:not(.is-member) .lg-hubt__more {
+  display: inline-block; font: 700 13px/1 var(--lg-font-sans); text-decoration: none;
+  color: var(--lg-sage-d, #6f7c54); border: 1.5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 999px; padding: 11px 20px;
+}
+body.view-discover:not(.is-member) .lg-hubt__more:hover { background: var(--lg-sage-tint, #f0f2e9); }
+
+@media (max-width: 1080px) {
+  body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo { grid-template-columns: 1fr; }
+  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr; }
+}
