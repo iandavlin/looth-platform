@@ -527,7 +527,11 @@
     fetch('/profile-api/v0/me/notifications/', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        var all = (d && d.items) || [];
+        // Cleared = gone for good (Buck 2026-06-10): the feed shows UNREAD only.
+        // Once a notification is marked read it must never reappear; the backend
+        // listFor() returns read rows too (until its own unread-only fix lands),
+        // so filter them out client-side here as well.
+        var all = ((d && d.items) || []).filter(function (n) { return !n.is_read; });
         var items = showAll ? all : all.slice(0, 8);
         if (!items.length) { box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>'; return; }
         box.innerHTML = items.map(notifRow).join('') +

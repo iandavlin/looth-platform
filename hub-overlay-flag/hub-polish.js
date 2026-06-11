@@ -104,8 +104,11 @@
   // drawer. The pill already toggles body.nav-closed.
   function setupDesktopFilterNav() {
     if (window.matchMedia('(max-width:640px)').matches) return;   // desktop only
+    // Buck 2026-06-10: the rail no longer holds settings (Ian: the gear is the
+    // ONLY page-state control zone), so the pill says just "Filters" again —
+    // "Filter and settings" promised a panel that isn't there anymore.
     var tx = document.querySelector('.feed-sort-bar .lg-filters-chip .lg-filters-chip__tx');
-    if (tx && tx.textContent !== 'Filter and settings') tx.textContent = 'Filter and settings';
+    if (tx && tx.textContent !== 'Filters') tx.textContent = 'Filters';
     if (!window.matchMedia('(min-width:961px)').matches) return;  // sidebar is persistent only >960
     if (document.body.getAttribute('data-lg-navinit')) return;
     document.body.setAttribute('data-lg-navinit', '1');
@@ -708,6 +711,11 @@
       actions.appendChild(like);
       actions.appendChild(reply);
       if (time) { time.classList.add('lg-fb-time'); actions.appendChild(time); }
+      // Keep the server-rendered moderation controls (pencil/trash, revealed under
+      // .feed--can-moderate + wired by wireModalModeration) — they live in the head
+      // we are about to drop, so move them into the actions row (Buck 2026-06-10).
+      var modBtns = head.querySelectorAll('.reply-stub__edit, .reply-stub__trash');
+      for (var mb = 0; mb < modBtns.length; mb++) actions.appendChild(modBtns[mb]);
       col.appendChild(actions);
 
       stub.insertBefore(col, head);
@@ -765,8 +773,11 @@
 
     var card = stub.closest('.feed-card');
     var cta = card && card.querySelector('.feed-card__reply-cta[data-frm-open]');
-    var topicId = parseInt((cta && cta.dataset.topicId) || (card && card.dataset.topicId) || '', 10);
-    var forumId = parseInt((cta && cta.dataset.forumId) || '', 10);
+    // Inside #looth-rep-sheet (the mobile discussion modal) the thread is fetched
+    // fresh — no .feed-card ancestor — so source the ids off the sheet itself.
+    var sheet = !card && stub.closest('#looth-rep-sheet');
+    var topicId = parseInt((cta && cta.dataset.topicId) || (card && card.dataset.topicId) || (sheet && sheet.getAttribute('data-tid')) || '', 10);
+    var forumId = parseInt((cta && cta.dataset.forumId) || (sheet && sheet.getAttribute('data-fid')) || '', 10);
     var replyTo = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
     var myName = 'You';
 
@@ -1376,94 +1387,11 @@
   // image lightbox) instead of navigating the PWA away. Mobile only.
   var lgCs = null, lgCsHist = false, lgCsScroll = '';
 
-  // ── Quick-view theming + Editorial polish (Buck 2026-06-09) — DESKTOP ONLY ──
-  // The DESKTOP quick-view (#lg-qv) frames the real post via ?embed=1, but /pwa.js
-  // self-suppresses inside frames (window.top!==self) so app-settings.js never runs
-  // there — the framed post would always paint the DEFAULT light theme, even for a
-  // Sage/Amber/Rust/custom/DARK user. (1) lgMirrorTheme copies the parent's active
-  // theme — the inline --lg* vars + data-lguser-* attributes app-settings set on
-  // <html> — into the frame (same-origin, so we can write its contentDocument) so the
-  // quick-view follows the viewer's theme. (2) lgPostPolish injects a DARK-mode pass
-  // the embed CSS doesn't cover: several post surfaces (meta strip, wysiwyg body,
-  // callouts, author card, comments, image figures, related carousel) hardcode a
-  // cream fill and ignore the --lg* tokens, so in dark mode the body stayed light
-  // with washed-out text; we recolor them to the dark card token. Injected into the
-  // FRAME only, so direct ?embed=1 loads and full post pages are untouched. These run
-  // ONLY from the desktop quick-view load handler — the MOBILE content sheet is left
-  // exactly as it was (Buck: the pop-up change is desktop-only; mobile was already good).
-  function lgMirrorTheme(doc) {
-    if (!doc || !doc.documentElement) return;
-    try {
-      var src = document.documentElement, s = src.style, dst = doc.documentElement;
-      for (var i = 0; i < s.length; i++) {
-        var p = s[i];
-        if (p.lastIndexOf('--lg', 0) === 0) dst.style.setProperty(p, s.getPropertyValue(p));
-      }
-      ['data-lguser-theme', 'data-lguser-dark', 'data-lguser-feed'].forEach(function (a) {
-        var v = src.getAttribute(a); if (v != null) dst.setAttribute(a, v);
-      });
-    } catch (e) {}
-  }
-  function lgPostPolish(doc) {
-    if (!doc || !doc.documentElement || doc.getElementById('lg-post-polish')) return;
-    try {
-      var st = doc.createElement('style'); st.id = 'lg-post-polish';
-      st.textContent =
-        // (1) DARK MODE — recolor the surfaces that hardcode a light cream fill so
-        // the post body is readable. Text already follows --lg-ink/--lg-charcoal.
-        'html[data-lguser-dark="1"] body,html[data-lguser-dark="1"] .lg-standalone-main{background:#15171a!important}' +
-        'html[data-lguser-dark="1"] .lg-post-header__meta-strip,' +
-        'html[data-lguser-dark="1"] .lg-callout--links,' +
-        'html[data-lguser-dark="1"] .lg-callout--note,' +
-        'html[data-lguser-dark="1"] .lg-post-footer__author,' +
-        'html[data-lguser-dark="1"] .lg-standalone-comments,' +
-        'html[data-lguser-dark="1"] .lg-cmodal__panel,' +
-        'html[data-lguser-dark="1"] .lg-cmodal__head{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}' +
-        // wysiwyg body: dark fill but KEEP its amber accent border.
-        'html[data-lguser-dark="1"] .lg-wysiwyg{background:#1e2124!important;color:#e5e7e1!important}' +
-        'html[data-lguser-dark="1"] .lg-wysiwyg p,html[data-lguser-dark="1"] .lg-callout--note p,' +
-        'html[data-lguser-dark="1"] .lg-post-footer__author *{color:#e5e7e1!important}' +
-        'html[data-lguser-dark="1"] .lg-cmodal__backdrop{background:rgba(0,0,0,.6)!important}' +
-        // image figures + the related-posts carousel cards also hardcode a light fill.
-        'html[data-lguser-dark="1"] figure.lg-image,html[data-lguser-dark="1"] .lg-image__frame,' +
-        'html[data-lguser-dark="1"] .lg-post-footer__card,html[data-lguser-dark="1"] .lg-post-footer__carousel-btn,' +
-        'html[data-lguser-dark="1"] .lg-post-footer__card *{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}' +
-        // DISCUSSION topics: the forum post/reply cards (.post) hardcode white and the
-        // embed's own dark theme doesn't cover them. Fix here too so it's consistent
-        // across both pop-ups (Buck: "fix across the board").
-        'html[data-lguser-dark="1"] .post,html[data-lguser-dark="1"] .bbp-reply,html[data-lguser-dark="1"] .bbp-topic{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}' +
-        'html[data-lguser-dark="1"] .search-form__input{background:#1e2124!important;color:#e5e7e1!important;border-color:#2c312d!important}' +
-        // POLISH forum post/reply cards — brand card shape (drop the 4px left strip + 6px radius).
-        '.post,.bbp-reply,.bbp-topic{border-width:1px!important;border-style:solid!important;' +
-        'border-radius:16px!important;box-shadow:0 1px 4px rgba(0,0,0,.05)!important;padding:16px!important;margin-bottom:14px!important}' +
-        'html:not([data-lguser-dark="1"]) .post,html:not([data-lguser-dark="1"]) .bbp-reply,html:not([data-lguser-dark="1"]) .bbp-topic{border-color:var(--lg-line,#e3ddd0)!important}' +
-        // CLEANUP legacy forum chrome (Buck 2026-06-09) — match the mobile sheet.
-        '.corner-hamburger{display:none!important}' +
-        '.forum-header,.forum-header--post{background:none!important;background-image:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:4px 2px 8px!important;overflow:visible!important}' +
-        '.forum-header__label{display:none!important}' +
-        '.forum-header__title,.forum-header__title--link{font-family:var(--lg-font-serif,Georgia,serif)!important;font-size:22px!important;line-height:1.2!important;color:var(--lg-charcoal,#1a1d1a)!important}' +
-        '.forum-header__home,.forum-header__parent{color:var(--lg-sage-d,#6b7c52)!important;font-size:12px!important;font-weight:600!important}' +
-        '.post__author{font-family:var(--lg-font-serif,Georgia,serif)!important}' +
-        'html[data-lguser-dark="1"] .post__author{color:#e5e7e1!important}' +
-        '.ntm-quicktags,.quicktags-toolbar,.wp-editor-tools,.bbp-the-content-wrapper .wp-editor-tabs{display:none!important}' +
-        // REPLIES as Facebook-style comments (Buck 2026-06-09) — match the mobile sheet.
-        '.post:not(.post--op){display:grid!important;grid-template-columns:34px 1fr!important;column-gap:8px!important;align-items:start!important;background:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:5px 0!important;margin:0 0 2px!important}' +
-        'html[data-lguser-dark="1"] .post:not(.post--op){background:none!important}' +
-        '.post:not(.post--op) .post__avatar-wrap{width:34px!important;height:34px!important;margin:0!important}' +
-        '.post:not(.post--op) .post__avatar-wrap img{border-radius:50%!important;width:100%!important;height:100%!important;object-fit:cover!important}' +
-        '.post:not(.post--op) .post__content{display:block!important;min-width:0!important;padding:0!important}' +
-        '.post:not(.post--op) .post__head{display:flex!important;align-items:baseline!important;flex-wrap:wrap!important;gap:7px!important;background:var(--lguser-bubble,var(--lg-sage-tint,#eef2e3))!important;border-radius:16px 16px 0 0!important;padding:8px 13px 2px!important;margin:0!important}' +
-        '.post:not(.post--op) .post__author{font:700 13.5px/1.3 var(--lg-font-serif,Georgia,serif)!important;color:var(--lg-charcoal,#1a1d1a)!important}' +
-        '.post:not(.post--op) .post__time{font:500 11.5px/1.2 var(--lg-font-sans,system-ui,sans-serif)!important;color:var(--lg-mute,#6b6f6b)!important}' +
-        '.post:not(.post--op) .post__body{background:var(--lguser-bubble,var(--lg-sage-tint,#eef2e3))!important;border-radius:0 0 16px 16px!important;padding:2px 13px 9px!important;margin:0!important;color:var(--lg-ink,#1a1d1a)!important}' +
-        '.post:not(.post--op) .post__body p{margin:0 0 6px!important;font-size:14.5px!important;line-height:1.45!important}' +
-        '.post:not(.post--op) .post__body p:last-child{margin-bottom:0!important}' +
-        '.post:not(.post--op) .post__actions{display:flex!important;gap:16px!important;margin:5px 0 0 13px!important;padding:0!important;background:none!important;border:0!important}' +
-        '.post:not(.post--op) .post__actions button{font:700 12.5px/1 var(--lg-font-sans,system-ui,sans-serif)!important;color:var(--lg-mute,#6b6f6b)!important;background:none!important;border:0!important;padding:0!important}';
-      (doc.head || doc.documentElement).appendChild(st);
-    } catch (e) {}
-  }
-
+  // (lgMirrorTheme + lgPostPolish removed 2026-06-10 — they only ran from the
+  // desktop quick-view, retired by Ian. The embed self-themes (app-settings.js
+  // is enqueued in the embed <head>); lgPostPolish's content dark-surface rules
+  // now live in the content sheet's lg-cs-embed-css inject below, where the
+  // mobile sheet — the only consumer left — actually needs them.)
   function lgCsEnsure() {
     if (lgCs) return;
     if (!document.getElementById('lg-cs-css')) {
@@ -1583,7 +1511,36 @@
             '.post:not(.post--op) .post__body p{margin:0 0 6px!important;font-size:14px!important;line-height:1.42!important}' +
             '.post:not(.post--op) .post__body p:last-child{margin-bottom:0!important}' +
             '.post:not(.post--op) .post__actions{display:flex!important;gap:16px!important;margin:5px 0 0 13px!important;padding:0!important;background:none!important;border:0!important}' +
-            '.post:not(.post--op) .post__actions button{font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif)!important;color:var(--lg-mute,#6b6f6b)!important;background:none!important;border:0!important;padding:0!important}';
+            '.post:not(.post--op) .post__actions button{font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif)!important;color:var(--lg-mute,#6b6f6b)!important;background:none!important;border:0!important;padding:0!important}' +
+            // ── CONTENT post (article/video/imgcap/sponsor/event) polish — merged from
+            // the retired desktop quick-view's lgPostPolish (Buck 2026-06-10: those
+            // dark fixes only ran on desktop; the sheet is the only consumer now).
+            // Several .lg-* surfaces hardcode a cream fill and ignore the tokens.
+            'html[data-lguser-dark="1"] body,html[data-lguser-dark="1"] .lg-standalone-main{background:#15171a!important}' +
+            'html[data-lguser-dark="1"] .lg-post-header__meta-strip,' +
+            'html[data-lguser-dark="1"] .lg-callout--links,' +
+            'html[data-lguser-dark="1"] .lg-callout--note,' +
+            'html[data-lguser-dark="1"] .lg-post-footer__author,' +
+            'html[data-lguser-dark="1"] .lg-standalone-comments,' +
+            'html[data-lguser-dark="1"] .lg-cmodal__panel,' +
+            'html[data-lguser-dark="1"] .lg-cmodal__head{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}' +
+            'html[data-lguser-dark="1"] .lg-wysiwyg{background:#1e2124!important;color:#e5e7e1!important}' +     // keep its amber accent border
+            'html[data-lguser-dark="1"] .lg-wysiwyg p,html[data-lguser-dark="1"] .lg-callout--note p,' +
+            'html[data-lguser-dark="1"] .lg-post-footer__author *{color:#e5e7e1!important}' +
+            'html[data-lguser-dark="1"] .lg-cmodal__backdrop{background:rgba(0,0,0,.6)!important}' +
+            'html[data-lguser-dark="1"] figure.lg-image,html[data-lguser-dark="1"] .lg-image__frame,' +
+            'html[data-lguser-dark="1"] .lg-post-footer__card,html[data-lguser-dark="1"] .lg-post-footer__carousel-btn,' +
+            'html[data-lguser-dark="1"] .lg-post-footer__card *{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}' +
+            // MOBILE stacked hero title band (scoped ≤640 so desktop overlay heroes are untouched)
+            '@media (max-width:640px){html[data-lguser-dark="1"] .lg-post-header__body{background:#1e2124!important;color:#e5e7e1!important}}' +
+            // ── Per-type media pass (Buck 2026-06-10: "articles look ok, most other
+            // things don't"): video embeds + inline images fill the sheet width cleanly.
+            '.lg-wysiwyg iframe,.lg-post-body iframe,.post__body iframe,.lg-embed-video iframe{width:100%!important;max-width:100%!important;aspect-ratio:16/9;height:auto!important;border:0;border-radius:12px}' +
+            '.lg-wysiwyg img,.lg-post-body img,.post__body img,figure.lg-image img{max-width:100%!important;height:auto!important;border-radius:12px}' +
+            '.lg-wysiwyg video,.post__body video{width:100%!important;max-width:100%!important;height:auto!important;border-radius:12px;background:#000}' +
+            'figure{margin:14px 0!important;max-width:100%!important}' +
+            'figcaption{font-size:12.5px;color:var(--lg-mute,#6b6f6b);padding-top:6px}' +
+            'html[data-lguser-dark="1"] figcaption{color:#9aa097!important}';
           (d.head || d.documentElement).appendChild(st);
         }
         // Overscroll-to-dismiss (Buck 2026-06-09): when the post is scrolled to the
@@ -1616,11 +1573,12 @@
       return u.pathname + u.search + u.hash;
     } catch (e) { return href + (href.indexOf('?') === -1 ? '?' : '&') + 'embed=1'; }
   }
-  function openContentSheet(href) {
+  function openContentSheet(href, title) {
     if (!href) return;
     var url = lgCsEmbedUrl(href);
     if (!url) { location.href = href; return; }               // off-origin → just navigate
     lgCsEnsure();
+    var t = lgCs.querySelector('.lcs-ttl'); if (t) t.textContent = title || '';
     var frame = lgCs.querySelector('.lcs-frame');
     frame.src = url;
     lgCs.classList.add('is-open');                              // display:block (panel still translated down)
@@ -1643,32 +1601,8 @@
   window.addEventListener('popstate', function () { if (lgCs && lgCs.classList.contains('is-open')) closeContentSheet(true); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && lgCs && lgCs.classList.contains('is-open')) closeContentSheet(); });
 
-  // ── When to pop up vs expand inline (Buck 2026-06-09) ───────────────────────
-  // The pop-up is only for listings with a lot MORE than the card shows. Rule (the
-  // "simple by type" path Buck picked, no fetch): DISCUSSIONS with replies → pop up
-  // (the thread is the extra content); CONTENT with photos OR a long/clamped body →
-  // pop up (so article photos land in the pop-up); short text that just overflows a
-  // little → expand the card inline; everything already visible → do nothing.
-  function lgShouldPopup(card) {
-    if (!card) return false;
-    if (card.classList.contains('feed-card--topic')) return replyCount(card) > 0;
-    // content card: a real cover/inline photo, or a long body (native read-more or clamped excerpt)
-    if (card.querySelector('.feed-card__cover-img, .feed-card__cover img, .feed-card__body img')) return true;
-    if (card.querySelector('.feed-card__read-more:not(.lg-rm-syn)')) return true;
-    var ex = card.querySelector('.feed-card__op-excerpt');
-    if (ex && !ex.classList.contains('lg-unclamp') && ex.scrollHeight > ex.clientHeight + 8) return true;
-    return false;
-  }
-  // Expand the card in place: trigger a read-more if present, else unclamp the excerpt.
-  // Returns true if it actually expanded something (else the card already fully fits).
-  function lgInlineExpand(card) {
-    if (!card) return false;
-    var rm = card.querySelector('.feed-card__read-more');
-    if (rm) { rm.click(); return true; }
-    var ex = card.querySelector('.feed-card__op-excerpt');
-    if (ex && ex.scrollHeight > ex.clientHeight + 4) { ensureUnclampCss(); ex.classList.toggle('lg-unclamp'); return true; }
-    return false;
-  }
+  // (lgShouldPopup / lgInlineExpand retired 2026-06-10 — "the modal is king":
+  // every discussion tap opens the modal, no expand-inline-if-small heuristic.)
 
   // ── Polish the Facebook-style comments composer (Buck 2026-06-09) ───────────
   // The comments live in a same-origin iframe (/archive-api/v0/comments) the
@@ -1690,7 +1624,29 @@
       '.lgc-err{order:-1!important;flex-basis:100%!important;margin:0 0 4px!important;color:var(--lg-rust,#c66845)!important}.lgc-err:empty{display:none!important}' +
       '.lgc-submit{background:var(--lg-sage-d,#6b7c52)!important;color:#fff!important;border:0!important;border-radius:999px!important;' +
       'padding:0 18px!important;height:40px!important;font:700 13px/40px var(--lg-font-sans,system-ui,sans-serif)!important;white-space:nowrap!important}' +
-      'html[data-lguser-dark="1"] .lgc-compose{background:#15171a!important;border-top-color:#2c312d!important}';
+      'html[data-lguser-dark="1"] .lgc-compose{background:#15171a!important;border-top-color:#2c312d!important}' +
+      // DARK pass for the THREAD (Buck 2026-06-10 "miscoloration on the comment text
+      // bubble"): comments.php is self-contained LIGHT (body #fff, ink #1a1d1a) with
+      // zero dark rules, while the pre-paint boot darkens the frame's canvas — so
+      // names/text painted near-black on dark. data-lguser-dark is mirrored onto the
+      // frame's <html> by inject() below, so these own the dark render. The composer
+      // textarea deliberately STAYS the white-box/black-text look (Buck's pick).
+      'html[data-lguser-dark="1"] body{background:#1b1e21!important;color:#e5e7e1!important}' +
+      'html[data-lguser-dark="1"] .lgc-name,html[data-lguser-dark="1"] .lgc-name a{color:#f2f4ee!important}' +
+      'html[data-lguser-dark="1"] .lgc-text{color:#e5e7e1!important}' +
+      'html[data-lguser-dark="1"] .lgc-time{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-body{border-top-color:#2c312d!important}' +
+      'html[data-lguser-dark="1"] .lgc-children{border-left-color:#2c312d!important}' +
+      'html[data-lguser-dark="1"] .lgc-reply,html[data-lguser-dark="1"] .lgc-edit{color:#9cb37d!important}' +
+      'html[data-lguser-dark="1"] .lgc-del{color:#d98a6c!important}' +
+      'html[data-lguser-dark="1"] .lgc-edited{color:#80867d!important}' +
+      'html[data-lguser-dark="1"] .lgc-empty,html[data-lguser-dark="1"] .lgc-login,html[data-lguser-dark="1"] .lgc-replyto{color:#9aa097!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx{background:#222629!important;border-color:#333833!important;color:#cdd0ca!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx.is-mine{background:#2a341f!important;border-color:#3d5233!important;color:#b0c693!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx-add{background:#222629!important;border-color:#333833!important;color:#9aa097!important}' +
+      'html[data-lguser-dark="1"] .lgc-rx-palette{background:#2a2e31!important;border-color:#3a3f3a!important}' +
+      'html[data-lguser-dark="1"] .lgc-av{background:#2c312d!important}' +
+      'html[data-lguser-dark="1"] .lgc-editbox textarea{background:#fff!important;color:#111!important}';
     function inject(f) {
       try {
         var d = f.contentDocument; if (!d || !d.documentElement) return;
@@ -1739,19 +1695,18 @@
         // reply / author links / the expand caret still self-handle (inline).
         var topic = e.target.closest('.feed-card--topic');
         if (topic && !e.target.closest('.feed-card--content')) {
+          // MODAL IS KING (Buck+Ian call 2026-06-10, finalized 2026-06-10 session 2):
+          // EVERY discussion tap opens the mobile discussion modal — the upgraded
+          // #looth-rep-sheet (OP via /?body= + Facebook-style replies + composer),
+          // our buck-lane clone of the desktop §4e modal. No inline-expand heuristic.
+          // If the fork's §4e ever un-gates for mobile, it claims the tap first
+          // (earlier-registered capture listener calls preventDefault) — defer to it.
+          if (e.defaultPrevented) return;
           if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-act-replies, .lg-card-actions, .fcr, .fcr-palette, [data-comments], .fc-cover--video, video, iframe, .feed-card__read-more, .feed-card__expand, .fc-readmore, .reply-stub, .fc-reply')) return;
-          var tOnText = e.target.closest('.feed-card__title a, .fc-title a, .feed-card__title, .fc-title, .feed-card__op-excerpt, .fc-excerpt, .feed-card__op, .feed-card__full-body, .fc-full-body');
+          var tOnText = e.target.closest('.feed-card__title a, .fc-title a, .feed-card__title, .fc-title, .feed-card__op-excerpt, .fc-excerpt, .feed-card__op, .feed-card__full-body, .fc-full-body, .fc-cover, .feed-card__cover');
           if (!tOnText) return;
           e.preventDefault(); e.stopPropagation();              // beat forums.js inline expand
-          // Tapping a discussion opens the SAME Facebook-style comments the "N replies"
-          // button does (archive-api, via [data-comments]) — NOT the legacy forum-thread
-          // sheet. One comments view only (Buck 2026-06-09). No replies → just expand the OP.
-          if (lgShouldPopup(topic)) {
-            var tdc = topic.querySelector('[data-comments], .feed-card__comments-btn');
-            if (tdc) tdc.click(); else lgInlineExpand(topic);
-          } else {
-            lgInlineExpand(topic);
-          }
+          openRepliesSheet(topic);
           return;
         }
 
@@ -1767,12 +1722,20 @@
           return;
         }
 
-        // (B) RETIRED 2026-06-10 (Ian: "all cpts click through to post. No
-        // modals for cpts — only discussions"). Content/loothprint cards no
-        // longer open sheets: the server markup already carries real anchors
-        // (cover + title + gated teaser), so taps navigate natively. The
-        // discussion branch above keeps its thread modal; the explicit
-        // Reply/Comment button keeps the comments modal (A).
+        // (B) RESTORED + UNGATED (Buck+Ian call 2026-06-10: "pop-ups only -- the
+        // modal is king"; supersedes the same-day retirement): ANY other tap on a
+        // content card (title / cover / excerpt / body) opens the full-post
+        // pull-up sheet (?embed=1). Off-origin links still navigate (lgCsEmbedUrl
+        // returns null). Mobile only -- this handler is 640-gated above.
+        if (e.defaultPrevented) return;
+        if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-card-actions, .fcr, .fcr-palette, [data-comments], .fc-cover--video, video, iframe, .reply-stub, .fc-save')) return;
+        var ca = e.target.closest('a[href]');
+        var clink = card.querySelector('.fc-title a[href], .feed-card__title a[href], .fc-cover a[href], .feed-card__cover a[href]');
+        var chref = (ca && ca.href) || (clink && clink.href);
+        if (!chref) return;
+        e.preventDefault(); e.stopPropagation();
+        var cttl = card.querySelector('.fc-title, .feed-card__title');
+        openContentSheet(chref, cttl ? (cttl.textContent || '').trim() : '');
       } catch (err) {}
     }, true);                                                 // capture: run before forums.js
   }
@@ -2278,15 +2241,43 @@
       '#looth-rep-sheet{position:fixed;inset:0;z-index:2147483520;display:none}',
       '#looth-rep-sheet.is-open{display:block}',
       '#looth-rep-sheet .lrs-back{position:absolute;inset:0;background:rgba(26,29,26,.55)}',
-      '#looth-rep-sheet .lrs-card{position:absolute;left:0;right:0;bottom:0;top:12%;display:flex;flex-direction:column;' +
-        'background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(26,29,26,.32);animation:looth-pwa-up .26s ease}',
-      '#looth-rep-sheet .lrs-hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:13px 14px 11px;border-bottom:1px solid var(--lg-line,#e3ddd0)}',
+      '#looth-rep-sheet .lrs-card{position:absolute;left:0;right:0;bottom:0;top:max(6vh,env(safe-area-inset-top,0px));display:flex;flex-direction:column;' +
+        'background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0;box-shadow:0 -8px 30px rgba(26,29,26,.32);animation:looth-pwa-up .26s ease;will-change:transform}',
+      // Design-system grab handle (same as the content sheet) — drag down to dismiss.
+      '#looth-rep-sheet .lrs-grab{flex:0 0 auto;height:20px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}',
+      '#looth-rep-sheet .lrs-grab::before{content:"";width:40px;height:5px;border-radius:3px;background:var(--lg-line,#d8d2c4)}',
+      '#looth-rep-sheet .lrs-hd{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:2px 14px 11px;border-bottom:1px solid var(--lg-line,#e3ddd0);touch-action:none}',
       '#looth-rep-sheet .lrs-t{flex:1 1 auto;min-width:0;font:700 16px/1.25 var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a);' +
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '#looth-rep-sheet .lrs-x{flex:0 0 auto;width:32px;height:32px;border:0;border-radius:50%;background:var(--lg-sage-tint,#eef2e3);' +
         'color:var(--lg-sage-d,#6b7c52);font-size:20px;line-height:1;cursor:pointer}',
       '#looth-rep-sheet .lrs-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 24px}',
       '#looth-rep-sheet .lrs-note{padding:20px 6px;color:var(--lg-mute,#6b6f6b);font:14px/1.5 var(--lg-font-sans,system-ui)}',
+      // ── OP at the top of the sheet (Buck 2026-06-10: clone the desktop discussion
+      // modal, "similar but better" — the modal shows the POST + thread, like desktop
+      // §4e, with the FB comments + composer this sheet already had). ──
+      '#looth-rep-sheet .lrs-op{padding:2px 0 12px;border-bottom:1px solid var(--lg-line,#e3ddd0);margin:0 0 14px}',
+      '#looth-rep-sheet .lrs-op[hidden]{display:none}',
+      '#looth-rep-sheet .lrs-op__meta{display:flex;align-items:center;gap:10px;margin-bottom:9px}',
+      '#looth-rep-sheet .lrs-op__meta .fc-avatar img,#looth-rep-sheet .lrs-op__meta .avatar-init{width:38px;height:38px;border-radius:50%;object-fit:cover;font-size:15px}',
+      '#looth-rep-sheet .lrs-op__id{display:flex;flex-direction:column;gap:2px;min-width:0}',
+      '#looth-rep-sheet .lrs-op__id .fc-author,#looth-rep-sheet .lrs-op__id .fc-author__name{font-weight:700;font-family:var(--lg-font-serif,Georgia,serif);color:var(--lg-charcoal,#1a1d1a);text-decoration:none}',
+      '#looth-rep-sheet .lrs-op__id .fc-time{font-size:12.5px;color:var(--lg-mute,#6b6f6b)}',
+      '#looth-rep-sheet .lrs-op__body{font-size:15.5px;line-height:1.6;color:var(--lg-ink,#1a1d1a);overflow-wrap:break-word}',
+      '#looth-rep-sheet .lrs-op__body p{margin:0 0 8px}',
+      '#looth-rep-sheet .lrs-op__body img{max-width:100%;height:auto;border-radius:12px}',
+      '#looth-rep-sheet .lrs-op__body a{color:var(--lg-sage-d,#6b7c52)}',
+      // dark pass for the new pieces (the shell/bubbles/actions are already covered
+      // by app-settings' dark style + the rules below)
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-grab::before{background:#3a403a}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-hd{border-bottom-color:#2c312d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-x{background:#262b30;color:#9cb37d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op{border-bottom-color:#2c312d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-author__name{color:#f2f4ee}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__id .fc-time{color:#80867d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body{color:#e5e7e1}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__body a{color:#9cb37d}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-note{color:#9aa097}',
       '#looth-rep-sheet .feed-card__replies-full{display:block!important}',
       '#looth-rep-sheet .feed-card__replies-full *{visibility:visible!important}',
       // ── Facebook-style comments in the sheet (the .lg-fb-* styling is .feed-page-
@@ -2324,6 +2315,13 @@
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__wrap,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__wrap{background:#fff!important}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__input,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__input{color:#111!important}',
       '#looth-rep-sheet .lrs-comp__send{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);font:700 14px/1 var(--lg-font-sans,system-ui,sans-serif);padding:7px 9px}',
+      '#looth-rep-sheet .lrs-comp__photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);padding:5px 4px;line-height:0}',
+      '#looth-rep-sheet .lrs-comp__photo svg{width:21px;height:21px}',
+      '#looth-rep-sheet .lrs-comp__previews{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;order:5}',
+      '#looth-rep-sheet .lrs-comp__previews:empty{display:none}',
+      '#looth-rep-sheet .lrs-comp__pv{position:relative;display:inline-block;margin-top:8px}',
+      '#looth-rep-sheet .lrs-comp__pv img{width:56px;height:56px;object-fit:cover;border-radius:10px;display:block;border:1px solid var(--lg-line,#e3ddd0)}',
+      '#looth-rep-sheet .lrs-comp__pv-x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 13px/20px sans-serif;cursor:pointer;padding:0}',
       '#looth-rep-sheet .lrs-comp__send:disabled{color:#b0b3b8;cursor:default}',
       '#looth-rep-sheet .lrs-comp__status{flex-basis:100%;font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91;padding:2px 0 0 41px}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp{background:#1b1e21;border-color:#2c312d}'
@@ -2332,6 +2330,7 @@
   }
   // Canonical reply post: auth.php → nonce, then POST REPLY_BASE/reply {topic_id,content}.
   var LRS_REPLY_BASE = ((document.getElementById('frm-form') || { dataset: {} }).dataset.restBase) || '/wp-json/buddyboss/v1';
+  var lrsMediaIds = [];   // pending bbp_media upload_ids for the quick-comment composer
   var lrsAuth = null;
   function lrsGetAuth(cb) {
     if (lrsAuth) { cb(lrsAuth); return; }
@@ -2346,13 +2345,22 @@
     for (var i = 0; i < sels.length; i++) { var el = document.querySelector(sels[i]); if (el && el.src && !/logo/i.test(el.src)) return el.src; }
     return null;
   }
-  function lrsClose() {
+  var lrsHist = false;
+  function lrsClose(fromPop) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     sh.classList.remove('is-open');
     document.body.style.overflow = lrsScroll || '';
     var comp = sh.querySelector('.lrs-comp'); if (comp) comp.style.transform = '';   // reset keyboard lift
-    var b = sh.querySelector('#lrs-body'); if (b) b.innerHTML = '';
+    var t = sh.querySelector('#lrs-thread'); if (t) t.innerHTML = '';
+    var op = sh.querySelector('#lrs-op'); if (op) { op.innerHTML = ''; op.hidden = true; }
+    // Phone back-gesture support (same pattern as the content sheet's lgCsHist).
+    if (lrsHist && !fromPop) { lrsHist = false; try { history.back(); } catch (e) {} }
+    else { lrsHist = false; }
   }
+  window.addEventListener('popstate', function () {
+    var sh = document.getElementById('looth-rep-sheet');
+    if (sh && sh.classList.contains('is-open')) lrsClose(true);
+  });
   function lrsEnhance(full) { try { revealReplyImages(full); enhanceReplyReactions(full); } catch (e) {} }
   // Walk the canonical .replies-loadmore (forums.js's delegated handler fetches the
   // next page + inserts it) until every reply is in the sheet.
@@ -2374,7 +2382,8 @@
   // Fetch the thread into the sheet body (reused on open AND after posting a reply).
   function lrsLoadThread(tid) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
-    var body = sh.querySelector('#lrs-body'); if (!body) return;
+    // Replies land in #lrs-thread so reloading after a post keeps the OP above intact.
+    var body = sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body'); if (!body) return;
     body.innerHTML = '<div class="lrs-note">Loading replies…</div>';
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
@@ -2398,6 +2407,42 @@
     var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
     comp.style.transform = kb > 1 ? ('translateY(-' + kb + 'px)') : '';
   }
+  // OP at the top of the sheet (Buck 2026-06-10: clone the desktop discussion modal
+  // "similar but better"). Meta is cloned off the card for instant paint; the full
+  // resolved body (mentions, links, attachments) comes from the fork's /?body=
+  // endpoint — the same data path desktop §4e uses.
+  function lrsLoadOp(sh, card, tid) {
+    var op = sh.querySelector('#lrs-op');
+    if (!op) return;
+    op.innerHTML = ''; op.hidden = false;
+    var meta = document.createElement('div'); meta.className = 'lrs-op__meta';
+    var av = card.querySelector('.fc-avatar, .feed-card__avatar');
+    if (av) meta.appendChild(av.cloneNode(true));
+    var mw = document.createElement('div'); mw.className = 'lrs-op__id';
+    var au = card.querySelector('.fc-author, .feed-card__op-author');
+    if (au) {
+      au = au.cloneNode(true);
+      // drop category/kind chips that ride inside the card's author block — the
+      // modal header is about WHO posted, the badge noise stays on the card
+      var chips = au.querySelectorAll('.fc-category, .fc-cat, .lg-card-cat, .fc-kind, .fc-kindpill, .fc-badge, .feed-card__cat, .feed-card__kind, .fc-breadcrumb');
+      for (var ci = 0; ci < chips.length; ci++) chips[ci].remove();
+      mw.appendChild(au);
+    }
+    var tm = card.querySelector('.fc-time, .feed-card__time');
+    if (tm) mw.appendChild(tm.cloneNode(true));
+    meta.appendChild(mw);
+    op.appendChild(meta);
+    var body = document.createElement('div'); body.className = 'lrs-op__body';
+    var ex = card.querySelector('.feed-card__full-body, .fc-full-body, .feed-card__op-excerpt, .fc-excerpt');
+    body.innerHTML = ex ? ex.innerHTML : '';
+    op.appendChild(body);
+    if (!tid) return;
+    var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
+    fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) { if (html && html.trim()) body.innerHTML = html; })
+      .catch(function () {});
+  }
   function openRepliesSheet(card, opts) {
     if (!card) return;
     ensureRepStyles();
@@ -2410,21 +2455,98 @@
     if (!sh) {
       sh = document.createElement('div'); sh.id = 'looth-rep-sheet';
       sh.innerHTML = '<div class="lrs-back" data-lrs-close></div><div class="lrs-card">' +
+        '<div class="lrs-grab" aria-hidden="true"></div>' +
         '<div class="lrs-hd"><span class="lrs-t"></span><button class="lrs-x" type="button" data-lrs-close aria-label="Close">&times;</button></div>' +
-        '<div class="lrs-body" id="lrs-body"></div>' +
+        '<div class="lrs-body" id="lrs-body"><div class="lrs-op" id="lrs-op" hidden></div><div id="lrs-thread"></div></div>' +
         '<div class="lrs-comp"><span class="lrs-comp__av" id="lrs-comp-av"></span>' +
           '<div class="lrs-comp__wrap"><textarea class="lrs-comp__input" id="lrs-comp-input" rows="1" placeholder="Write a comment…"></textarea>' +
+          '<button class="lrs-comp__photo" id="lrs-comp-photo" type="button" aria-label="Add photo" title="Add photo">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
           '<button class="lrs-comp__send" id="lrs-comp-send" type="button" disabled>Post</button></div>' +
+          '<input type="file" id="lrs-comp-file" accept="image/*" style="display:none">' +
+          '<div class="lrs-comp__previews" id="lrs-comp-previews"></div>' +
           '<span class="lrs-comp__status" id="lrs-comp-status"></span></div>';
       document.body.appendChild(sh);
       sh.addEventListener('click', function (e) { if (e.target.closest('[data-lrs-close]')) lrsClose(); });
+      // Drag-to-dismiss (design-system gesture, same as the content sheet): drag the
+      // grab/header down anytime, or overscroll-pull from the body when at the top.
+      (function () {
+        var cardEl = sh.querySelector('.lrs-card');
+        function dragTo(dy) { cardEl.style.transition = 'none'; cardEl.style.transform = 'translateY(' + Math.max(0, dy) + 'px)'; }
+        function dragReset() { cardEl.style.transition = ''; cardEl.style.transform = ''; }
+        function dragEnd(dy) { dragReset(); if (dy > 110) lrsClose(); }
+        function attach(el, atTopGuard) {
+          if (!el) return;
+          var sy = 0, dy = 0, on = false;
+          el.addEventListener('touchstart', function (e) {
+            if (atTopGuard && !atTopGuard()) { on = false; return; }
+            sy = e.touches[0].clientY; dy = 0; on = true;
+          }, { passive: true });
+          el.addEventListener('touchmove', function (e) {
+            if (!on) return;
+            dy = e.touches[0].clientY - sy;
+            if (dy <= 0) { if (atTopGuard) { on = false; dragReset(); } return; }   // pulled up → let the body scroll
+            if (atTopGuard && !atTopGuard()) { on = false; dragReset(); return; }
+            dragTo(dy);
+            if (e.cancelable) e.preventDefault();
+          }, { passive: false });
+          el.addEventListener('touchend', function () { if (!on) return; on = false; dragEnd(Math.max(0, dy)); });
+        }
+        attach(sh.querySelector('.lrs-grab'), null);
+        attach(sh.querySelector('.lrs-hd'), null);
+        var bodyEl = sh.querySelector('#lrs-body');
+        attach(bodyEl, function () { return bodyEl.scrollTop <= 0; });
+      })();
       // composer wiring (once): enable Post on input; auto-grow; submit
       var inp = sh.querySelector('#lrs-comp-input'), send = sh.querySelector('#lrs-comp-send');
       inp.addEventListener('input', function () {
-        send.disabled = !inp.value.trim();
+        send.disabled = !inp.value.trim() && !lrsMediaIds.length;
         inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
       });
       send.addEventListener('click', function () { lrsSubmit(sh); });
+      // Photo attach (Buck 2026-06-10: "when adding a quick comment we also need to
+      // be able to add photos"). Same contract as the canonical composers: POST
+      // {restBase}/media/upload (FormData 'file', X-WP-Nonce) -> {upload_id,
+      // upload_thumb}; the reply POST then carries bbp_media:[ids] and the mirror
+      // renders the images natively.
+      var photoBtn = sh.querySelector('#lrs-comp-photo'), fileIn = sh.querySelector('#lrs-comp-file');
+      photoBtn.addEventListener('click', function () { fileIn.click(); });
+      fileIn.addEventListener('change', function () {
+        var file = fileIn.files && fileIn.files[0];
+        fileIn.value = '';
+        if (!file) return;
+        var status = sh.querySelector('#lrs-comp-status');
+        status.textContent = 'Uploading photo…';
+        lrsGetAuth(function (a) {
+          if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }
+          var fd = new FormData(); fd.append('file', file);
+          fetch(LRS_REPLY_BASE + '/media/upload', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': a.nonce }, body: fd
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+              if (!res.ok || !res.j.upload_id) { status.textContent = 'Photo upload failed: ' + ((res.j && res.j.message) || 'error'); return; }
+              lrsMediaIds.push(res.j.upload_id);
+              status.textContent = '';
+              var pv = sh.querySelector('#lrs-comp-previews');
+              var chip = document.createElement('span');
+              chip.className = 'lrs-comp__pv';
+              chip.setAttribute('data-upload-id', res.j.upload_id);
+              chip.innerHTML = '<img src="' + String(res.j.upload_thumb || res.j.upload).replace(/"/g, '&quot;') + '" alt="">' +
+                '<button type="button" class="lrs-comp__pv-x" aria-label="Remove photo">&times;</button>';
+              chip.querySelector('.lrs-comp__pv-x').addEventListener('click', function () {
+                var ix = lrsMediaIds.indexOf(res.j.upload_id);
+                if (ix > -1) lrsMediaIds.splice(ix, 1);
+                chip.remove();
+                send.disabled = !inp.value.trim() && !lrsMediaIds.length;
+              });
+              pv.appendChild(chip);
+              send.disabled = false;
+            })
+            .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
+        });
+      });
       // Keyboard-aware composer: pin the text box just above the on-screen keyboard
       // so it's visible the instant you focus it (Buck: "I can't see the text box
       // off the bat"). visualViewport shrinks when the keyboard opens → lift by the delta.
@@ -2437,31 +2559,40 @@
     }
     // per-open setup
     sh.setAttribute('data-tid', tid || ''); sh.setAttribute('data-fid', fid);
-    sh.querySelector('.lrs-t').textContent = n ? (n + ' replies') : 'Replies';
+    // Title = the post's title (this is the discussion modal now, not just a reply list).
+    var ttlEl = card.querySelector('.fc-title, .feed-card__title');
+    var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
+    sh.querySelector('.lrs-t').textContent = ttl || (n ? (n + ' replies') : 'Replies');
+    var bd0 = sh.querySelector('#lrs-body'); if (bd0) bd0.scrollTop = 0;
     var av = sh.querySelector('#lrs-comp-av'); var avs = lrsViewerAvatar();
     av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
     var inp2 = sh.querySelector('#lrs-comp-input'); inp2.value = ''; inp2.style.height = 'auto';
     sh.querySelector('#lrs-comp-send').disabled = true;
     sh.querySelector('#lrs-comp-status').textContent = '';
+    lrsMediaIds.length = 0;
+    var pv0 = sh.querySelector('#lrs-comp-previews'); if (pv0) pv0.innerHTML = '';
     lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
     sh.classList.add('is-open');
+    if (!lrsHist) { try { history.pushState({ lgRs: 1 }, ''); lrsHist = true; } catch (e) {} }
     // Focus the composer (opens the keyboard) when opened via the Reply intent.
     // MUST be synchronous within the originating tap so iOS honors the focus.
     if (opts && opts.focus) { try { inp2.focus({ preventScroll: true }); } catch (e) { try { inp2.focus(); } catch (e2) {} } }
-    if (!tid) { sh.querySelector('#lrs-body').innerHTML = '<div class="lrs-note">Couldn’t load replies.</div>'; return; }
+    lrsLoadOp(sh, card, tid);
+    if (!tid) { (sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body')).innerHTML = '<div class="lrs-note">Couldn’t load replies.</div>'; return; }
     lrsLoadThread(tid);
   }
   // Post a top-level reply to the topic, then reload the thread to show it.
   function lrsSubmit(sh) {
     var inp = sh.querySelector('#lrs-comp-input'), send = sh.querySelector('#lrs-comp-send'), status = sh.querySelector('#lrs-comp-status');
-    var text = (inp.value || '').trim(); if (!text) return;
+    var text = (inp.value || '').trim(); if (!text && !lrsMediaIds.length) return;
     var tid = parseInt(sh.getAttribute('data-tid'), 10); if (!tid) return;
     var fid = parseInt(sh.getAttribute('data-fid'), 10);
     send.disabled = true; status.textContent = 'Posting…';
     lrsGetAuth(function (a) {
       if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; send.disabled = false; return; }
-      var payload = { topic_id: tid, content: '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' };
+      var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
       if (fid) payload.forum_id = fid;
+      if (lrsMediaIds.length) payload.bbp_media = lrsMediaIds.slice();
       fetch(LRS_REPLY_BASE + '/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
@@ -2471,6 +2602,8 @@
         .then(function (res) {
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; send.disabled = false; return; }
           inp.value = ''; inp.style.height = 'auto'; status.textContent = '';
+          lrsMediaIds.length = 0;
+          var pv = sh.querySelector('#lrs-comp-previews'); if (pv) pv.innerHTML = '';
           lrsLoadThread(tid);                                  // reload so the new reply shows
           var b = sh.querySelector('#lrs-body'); if (b) setTimeout(function () { b.scrollTop = b.scrollHeight; }, 600);
         })
@@ -2912,6 +3045,11 @@
       // forums.css caps covers at aspect-ratio 3/2 + object-fit:cover; let them flow
       // at natural ratio so nothing is cut off (trade: some CLS as images load).
       '.feed-page .feed-card__cover-img,.feed-page .fc-cover img{aspect-ratio:auto!important;height:auto!important;max-height:none!important;object-fit:contain!important}',
+      // Buck 2026-06-10: ONE save control on mobile — the Instagram bookmark
+      // (.lg-act-save). Hide the canonical ☆ star (server-rendered by _feed.php
+      // feed_save_btn; same /archive-api/v0/save-post store, so nothing is lost).
+      // Desktop keeps the star — its .fc-actions row has no bookmark.
+      '.feed-page .fc-save{display:none!important}',
       // Buck 2026-06-08: like button sits too far from the edge — pull the action
       // row closer to the screen edge (FB-style), keep the save bookmark flush right.
       '.feed-page .lg-card-actions{padding-left:7px!important;padding-right:10px!important;gap:20px!important}',
@@ -2927,6 +3065,228 @@
       '}'
     ].join('');
     (document.head || document.documentElement).appendChild(s);
+  }
+
+  // ── Ian 2026-06-10: keep the author filter in the drawer, just relabel it.
+  // (Placeholder lives in canonical _filter-rail.php — client relabel, zero risk;
+  // a one-line canonical copy change would make this redundant.)
+  function relabelAuthorFilter() {
+    try {
+      var ins = document.querySelectorAll('input.hub-tsearch__in[name="author"]');
+      for (var i = 0; i < ins.length; i++) ins[i].placeholder = 'Search by author…';
+    } catch (e) {}
+  }
+
+  // ── DARK-theme polish for the comments modal shell + the New-post composer
+  // (Buck 2026-06-10). The composer overlay PINS a light palette in forums.css
+  // (.ntm-overlay token block, a deliberate canonical call for the legacy hub
+  // themes) — under the app's picked-Dark we re-point those same tokens dark so
+  // the dialog, inputs, forum list and Quill all flip coherently. The lgc-modal
+  // head/panel hardcode cream/white with no dark rules at all.
+  function ensurePunchDarkCss() {
+    if (document.getElementById('lg-punch-dark-css')) return;
+    var D = 'html[data-lguser-theme="dark"]';
+    var st = document.createElement('style'); st.id = 'lg-punch-dark-css';
+    st.textContent =
+      // comments modal shell (parent doc; the frame's inside is handled in
+      // lgPolishCommentsFrame)
+      D + ' .lgc-modal__panel{background:#1b1e21!important}' +
+      D + ' .lgc-modal__head{background:#15171a!important;border-bottom-color:#2c312d!important}' +
+      D + ' .lgc-modal__title{color:#f2f4ee!important}' +
+      D + ' .lgc-modal__close{color:#cdd0ca!important}' +
+      D + ' .lgc-modal__close:hover{background:#2c312d!important;color:#f2f4ee!important}' +
+      D + ' .lgc-modal__frame{background:#1b1e21!important}' +
+      // New-post composer: re-point the pinned-light tokens dark
+      D + ' .ntm-overlay{--bg:#222629;--bg-card:#1b1e21;--fg:#e5e7e1;--fg-muted:#9aa097;' +
+        '--fg-soft:#7e857c;--border:#333833;--lg-sage-tint:#2a341f}' +
+      D + ' .ntm-overlay .ql-container.ql-snow{background:#222629!important;border-color:#333833!important;color:#e5e7e1!important}' +
+      D + ' .ntm-overlay .ql-editor{color:#e5e7e1!important}' +
+      D + ' .ntm-overlay .ql-editor.ql-blank::before{color:#7e857c!important}' +
+      D + ' .ntm-overlay .ntm-anon__tx{color:#cdd0ca!important}' +
+      D + ' .ntm-overlay input[type="checkbox"]{accent-color:#87986a}' +
+      D + ' .ntm-overlay .ntm-cancel{background:#222629!important;border-color:#333833!important;color:#cdd0ca!important}' +
+      D + ' .lg-fbc-head .lg-fbc-name{color:#f2f4ee!important}' +
+      // mobile forum picker (hidden by default, kept consistent if shown)
+      D + ' .lg-fbc #ntm-forum.ntm-forumlist,' + D + ' .lg-fbc #ntm-forum .ntm-fl__cat{background:#1b1e21!important;border-color:#333833!important}' +
+      D + ' .lg-fbc #ntm-forum .ntm-fl__cat{color:#9cb37d!important}' +
+      D + ' .lg-fbc #ntm-forum .ntm-fl__leaf{color:#e5e7e1!important}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  // -- §4e discussion modal -- MOBILE styling (Buck+Ian call 2026-06-10: "copy the
+  // current state of the modal over to mobile"). The fork's forums.css styles
+  // #lg-dmodal only at >=641; this is the <=640 pass: same token-driven look,
+  // full-screen bottom-sheet shape (matches the content sheet / replies sheet).
+  // Inert until the fork's click handler is un-gated for mobile.
+  function ensureDmodalMobileCss() {
+    if (document.getElementById('lg-dmodal-mobile-css')) return;
+    var st = document.createElement('style'); st.id = 'lg-dmodal-mobile-css';
+    st.textContent =
+      '@media (max-width:640px){' +
+      '#lg-dmodal{position:fixed;inset:0;z-index:8800}' +
+      '#lg-dmodal[hidden]{display:none}' +
+      '#lg-dmodal .lg-dmodal__back{position:absolute;inset:0;background:rgba(10,12,10,.58)}' +
+      '#lg-dmodal .lg-dmodal__panel{position:absolute;left:0;right:0;bottom:0;top:max(4vh,env(safe-area-inset-top,0px));' +
+        'width:auto;max-width:none;max-height:none;margin:0;display:flex;flex-direction:column;overflow:hidden;' +
+        'background:var(--bg-card,#fff);color:var(--fg,#1f231e);border:0;border-radius:18px 18px 0 0;' +
+        'box-shadow:0 -10px 36px rgba(0,0,0,.28);animation:looth-pwa-up .26s ease}' +
+      '#lg-dmodal .lg-dmodal__head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border,#e3ddd0)}' +
+      '#lg-dmodal .lg-dmodal__title{flex:1;min-width:0;margin:0;font:700 16px/1.25 var(--font-head,var(--lg-font-serif,Georgia,serif));' +
+        'color:var(--fg,#1a1d1a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '#lg-dmodal .lg-dmodal__size{display:none}' +
+      '#lg-dmodal .lg-dmodal__x{flex:none;width:34px;height:34px;border:0;border-radius:50%;cursor:pointer;' +
+        'background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);font:400 20px/1 var(--font-body,system-ui)}' +
+      '#lg-dmodal .lg-dmodal__scroll{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 28px;background:transparent;max-width:none}' +
+      '#lg-dmodal .lg-dmodal__meta{display:flex;align-items:center;gap:10px;margin-bottom:10px}' +
+      '#lg-dmodal .lg-dmodal__meta .fc-avatar img,#lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init{width:38px;height:38px;border-radius:50%;object-fit:cover}' +
+      '#lg-dmodal .lg-dmodal__meta-id{display:flex;flex-direction:column;gap:2px;min-width:0}' +
+      '#lg-dmodal .lg-dmodal__meta .fc-author__name{font-weight:700;color:var(--fg,#1a1d1a)}' +
+      '#lg-dmodal .lg-dmodal__meta .fc-time{font-size:12.5px;color:var(--fg-muted,#6b6f6b)}' +
+      '#lg-dmodal .lg-dmodal__body{font-size:15.5px;line-height:1.6;color:var(--fg,#1a1d1a);margin-bottom:4px}' +
+      '#lg-dmodal .lg-dmodal__body img{max-width:100%;height:auto;border-radius:10px}' +
+      '#lg-dmodal .lg-dmodal__thread{border-top:1px solid var(--border,#e3ddd0);padding-top:6px}' +
+      '#lg-dmodal .lg-dmodal__note{padding:18px 4px;color:var(--fg-muted,#6b6f6b);font:14px/1.5 var(--font-body,system-ui)}' +
+      '#lg-dmodal .lg-dmodal__opacts{display:flex;align-items:center;gap:16px;padding:10px 0;margin-bottom:12px;border-bottom:1px solid var(--border,#e3ddd0)}' +
+      '#lg-dmodal .lg-dmodal__act,#lg-dmodal .reply-stub__reply{display:inline-flex;align-items:center;gap:5px;cursor:pointer;' +
+        'background:none;border:0;padding:2px 4px;box-shadow:none;color:var(--lg-sage-d,#586b3f);font:700 13px/1 var(--font-body,system-ui)}' +
+      '#lg-dmodal .lg-dmodal__acts{display:flex;align-items:center;gap:14px;padding:6px 0 0;width:100%}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub{padding:12px 0;margin:0;border-top:1px solid var(--border-soft,var(--border,#eee7da));background:none!important;border-radius:0}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub:first-child{border-top:0}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub--child{margin-left:34px;border-top:0;padding-top:4px}' +
+      '#lg-dmodal .lg-dmodal__thread .avatar-init,#lg-dmodal .lg-dmodal__thread .reply-stub img.avatar{width:32px;height:32px;font-size:13px}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub__author{font-size:13.5px;font-weight:700}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub__excerpt,#lg-dmodal .lg-dmodal__thread .reply-stub__body{font-size:14.5px;line-height:1.55}' +
+      '#lg-dmodal .lg-dmodal__thread .reply-stub__head .reply-stub__reply{display:none}' +
+      '#lg-dmodal .lg-dmodal__thread .replies-loadmore{display:none}' +
+      '}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  // Phone back-gesture closes the discussion modal instead of leaving the Hub
+  // (same pattern as the content sheet's lgCsHist). Mobile only.
+  function wireDmodalMobileHistory() {
+    if (!window.matchMedia('(max-width:640px)').matches) return;
+    if (document.body.getAttribute('data-lg-dmhist')) return;
+    document.body.setAttribute('data-lg-dmhist', '1');
+    var hist = false, watched = null;
+    function el() { return document.getElementById('lg-dmodal'); }
+    function onTog() {
+      var m = el(); if (!m) return;
+      if (!m.hidden && !hist) { hist = true; try { history.pushState({ lgDm: 1 }, ''); } catch (e) {} }
+      else if (m.hidden && hist) { hist = false; try { history.back(); } catch (e) {} }
+    }
+    try {
+      var mo = new MutationObserver(function () {
+        var m = el(); if (!m || watched === m) return;
+        watched = m;
+        new MutationObserver(onTog).observe(m, { attributes: true, attributeFilter: ['hidden'] });
+        onTog();
+      });
+      mo.observe(document.body || document.documentElement, { childList: true });
+    } catch (e) {}
+    window.addEventListener('popstate', function () {
+      var m = el();
+      if (m && !m.hidden) { hist = false; var x = m.querySelector('[data-dm-close]'); if (x) x.click(); }
+    });
+  }
+
+  // -- D2: edit/delete inside the modal surfaces (Buck+Ian call 2026-06-10:
+  // admins edit/delete ANYTHING; users their own). The fork server-renders
+  // (pencil) .reply-stub__edit + (trash) .reply-stub__trash on every reply row,
+  // revealed by an ancestor .feed--can-moderate -- which forums.js sets on the
+  // in-page FEED only -- and wired by feed-scoped listeners. Inside #lg-dmodal /
+  // #looth-rep-sheet (body-appended) the buttons were invisible AND dead.
+  // Reveal + wire them here. The PUT/DELETE endpoints re-check caps server-side
+  // regardless of any client gating. Own-reply (non-moderator) reveal needs the
+  // author id on the row -- server change, queued for the coordinator.
+  function wireModalModeration() {
+    if (document.body.getAttribute('data-lg-modmod')) return;
+    document.body.setAttribute('data-lg-modmod', '1');
+    lrsGetAuth(function (a) {
+      if (!a || !a.authenticated || !a.can_edit_others) return;
+      function mark() {
+        ['lg-dmodal', 'looth-rep-sheet'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && !el.classList.contains('feed--can-moderate')) el.classList.add('feed--can-moderate');
+        });
+      }
+      mark();
+      try { new MutationObserver(mark).observe(document.body, { childList: true }); } catch (e) {}
+    });
+    document.addEventListener('click', function (ev) {
+      if (!ev.target.closest) return;
+      var host = ev.target.closest('#lg-dmodal') || ev.target.closest('#looth-rep-sheet');
+      if (!host) return;
+      var tr = ev.target.closest('.reply-stub__trash');
+      var ed = ev.target.closest('.reply-stub__edit');
+      if (!tr && !ed) return;
+      ev.preventDefault(); ev.stopPropagation();
+      var btn = tr || ed;
+      var rid = parseInt(btn.getAttribute('data-reply-id'), 10);
+      if (!rid) return;
+      if (tr) {
+        if (!window.confirm('Trash this reply? This can\u2019t be undone.')) return;
+        lrsGetAuth(function (a) {
+          if (!a || !a.nonce) { alert('Not signed in.'); return; }
+          tr.disabled = true;
+          fetch(LRS_REPLY_BASE + '/reply/' + rid, { method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce } })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+            .then(function (res) {
+              if (!res.ok) { tr.disabled = false; alert('Could not trash: ' + ((res.j && (res.j.message || res.j.code)) || 'failed')); return; }
+              var stub = tr.closest('.reply-stub'); if (stub) stub.remove();
+            })
+            .catch(function (err) { tr.disabled = false; alert('Network error: ' + err.message); });
+        });
+        return;
+      }
+      // EDIT: inline plain-text box (the .reply-stub__editbox CSS already exists).
+      // data-reply-raw carries the full stored HTML; we edit the text and re-append
+      // any <img> tags on save so photos round-trip instead of being destroyed.
+      var stub = ed.closest('.reply-stub');
+      if (!stub || stub.querySelector('.reply-stub__editbox')) return;
+      var bodyDiv = stub.querySelector('.reply-stub__body');
+      var excerpt = stub.querySelector('.reply-stub__excerpt');
+      var raw = ed.getAttribute('data-reply-raw') || '';
+      var imgs = raw.match(/<img[^>]*>/gi) || [];
+      var cur = raw
+        ? raw.replace(/<img[^>]*>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>\s*<p[^>]*>/gi, '\n\n').replace(/<[^>]+>/g, '').trim()
+        : (excerpt ? (excerpt.innerText || excerpt.textContent || '').trim() : '');
+      var tid = parseInt(host.dataset && host.dataset.topicId ? host.dataset.topicId : (host.getAttribute('data-tid') || '0'), 10);
+      var box = document.createElement('div');
+      box.className = 'reply-stub__editbox';
+      box.innerHTML =
+        '<textarea class="rse-input"></textarea>' +
+        '<div class="rse-row"><button type="button" class="rse-save">Save</button>' +
+        '<button type="button" class="rse-cancel">Cancel</button><span class="rse-status"></span></div>';
+      box.querySelector('.rse-input').value = cur;
+      if (bodyDiv) bodyDiv.style.display = 'none';
+      stub.appendChild(box);
+      var ta = box.querySelector('.rse-input'), status = box.querySelector('.rse-status');
+      ta.focus();
+      box.querySelector('.rse-cancel').addEventListener('click', function () { box.remove(); if (bodyDiv) bodyDiv.style.display = ''; });
+      box.querySelector('.rse-save').addEventListener('click', function () {
+        var text = (ta.value || '').trim();
+        if (!text && !imgs.length) { status.textContent = 'Can\u2019t be empty.'; return; }
+        var html = (text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '') + imgs.join('');
+        status.textContent = 'Saving\u2026';
+        lrsGetAuth(function (a) {
+          if (!a || !a.nonce) { status.textContent = 'Not signed in.'; return; }
+          fetch(LRS_REPLY_BASE + '/reply/' + rid, {
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+            body: JSON.stringify({ id: rid, topic_id: tid || undefined, content: html })
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+            .then(function (res) {
+              if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not save.'; return; }
+              if (excerpt) excerpt.innerHTML = html;
+              ed.setAttribute('data-reply-raw', html);
+              box.remove(); if (bodyDiv) bodyDiv.style.display = '';
+            })
+            .catch(function (err) { status.textContent = 'Network error: ' + err.message; });
+        });
+      });
+    });
   }
 
   function run() {
@@ -2951,6 +3311,11 @@
     restyleSortBar();
     setupDesktopFilterNav();
     lgSyncSaved();
+    relabelAuthorFilter();
+    ensurePunchDarkCss();
+    ensureDmodalMobileCss();
+    wireDmodalMobileHistory();
+    wireModalModeration();
     wireFreshPill();
     buildTopSearch();
     wireHeaderAutoHide();

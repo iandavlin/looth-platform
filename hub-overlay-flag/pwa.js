@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=147";
+    s.src = "/hub-polish.js?v=155";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -150,7 +150,7 @@
     if (document.getElementById("looth-events-mobile-js")) return;
     var s = document.createElement("script");
     s.id = "looth-events-mobile-js";
-    s.src = "/events-mobile.js?v=6";
+    s.src = "/events-mobile.js?v=7";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
