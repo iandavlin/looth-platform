@@ -281,9 +281,21 @@ final class Profile
             : self::canSeeLocation($viewerUserId, $subjectUserId, $visibility);
 
         $sections = [];
+        // Anonymous viewers never get a section-location's EXACT street + precise
+        // pin (F1, Ian 2026-06-11). The main location block coarsens by audience via
+        // its precision picker; these section blocks (location:p4 …) had no picker
+        // and dumped data verbatim, leaking e.g. a home address + 7-decimal coords to
+        // anyone. Safe default: public sees approximate (street dropped, pin rounded
+        // ~1km); logged-in members see exact. A per-section picker (so a storefront
+        // can opt back into public-exact) is the follow-up.
+        $anon = ($role === 'public');
         foreach ($full['sections'] as $key => $s) {
             if (!self::canSee($role, $s['visibility'])) continue;
-            $sections[$key] = ['visibility' => $s['visibility'], 'data' => $s['data']];
+            $data = $s['data'];
+            if ($anon && is_array($data) && strncmp((string)$key, 'location', 8) === 0) {
+                $data = self::coarsenLocationData($data);
+            }
+            $sections[$key] = ['visibility' => $s['visibility'], 'data' => $data];
         }
 
         // Contact links require LOGIN (Ian 2026-06-11: "must be scrape proof") —
@@ -319,6 +331,24 @@ final class Profile
             'highlights'   => $highlights,
             'member_since' => $full['member_since'],
         ];
+    }
+
+    /**
+     * Coarsen a section-location's data for anonymous viewers (F1): drop the
+     * exact typed street address, round the pin to ~1km (2 decimals) so a home
+     * address can't be read off a public profile. Business hours / notes stay.
+     * Logged-in members are never passed through here (they see exact).
+     */
+    public static function coarsenLocationData(array $data): array
+    {
+        unset($data['address'], $data['street_number'], $data['route'], $data['postcode']);
+        foreach (['lat', 'lng'] as $k) {
+            if (isset($data[$k]) && is_numeric($data[$k])) {
+                $data[$k] = round((float) $data[$k], 2);
+            }
+        }
+        $data['precision'] = 'coarse';   // consumer hint: pin is approximate
+        return $data;
     }
 
     /**
