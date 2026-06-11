@@ -50,6 +50,12 @@
 }
 .skip-link:focus { left: 0; }
 
+/* Reserve the scrollbar gutter permanently — the scrollbar popping in after
+   first paint narrowed the viewport ~15px and re-centered EVERY element: the
+   site-wide "shift/flash" Ian chased on 2026-06-11 (events page CLS 0.116 -> 0
+   with this). Root scroller only; no visual track until needed. */
+html { scrollbar-gutter: stable; }
+
 /* ---------- Sticky header shell ---------- */
 .lg-chrome {
   background: rgba(255,255,255,0.96);
