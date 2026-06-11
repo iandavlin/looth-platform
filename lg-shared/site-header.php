@@ -493,8 +493,11 @@ function lg_shared_render_site_header(array $ctx): void
     <div class="lg-social-pane" data-lg-pane="messages" role="tabpanel">
       <!-- Thread list view -->
       <div class="lg-social-modal__body" id="lg-msg-list"></div>
-      <!-- Thread detail view -->
-      <div id="lg-msg-detail" hidden style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <!-- Thread detail view. Layout via the .lg-msg-detail class, NOT an
+           inline style — inline display:flex beat the UA [hidden] rule, so
+           the pane never hid again after opening a thread (Buck 6/11; the
+           css keeps a defensive [hidden] counter-rule either way). -->
+      <div id="lg-msg-detail" class="lg-msg-detail" hidden>
         <div class="lg-msg__messages" id="lg-msg-messages"></div>
         <div class="lg-msg__compose" id="lg-msg-compose">
           <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"

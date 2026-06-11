@@ -666,3 +666,10 @@ body.lg-sm-open { overflow: hidden; }
 @media (max-width: 380px) {
   .lg-chrome-foot__cols  { grid-template-columns: 1fr; }
 }
+
+/* Thread-detail pane layout — was an inline display:flex on the markup, which
+   beat the UA [hidden] rule so the last-opened thread bled through under the
+   Messages list (Buck 2026-06-11). Class + defensive [hidden] counter-rule,
+   same pattern as .lg-social-pane[hidden]. */
+.lg-msg-detail{display:flex;flex-direction:column;flex:1;min-height:0}
+#lg-msg-detail[hidden]{display:none!important}
