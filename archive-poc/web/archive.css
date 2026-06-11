@@ -2930,45 +2930,45 @@ body.view-discover {
 }
 
 /* ── Hero: Classic Landing — centered copy, video beneath, open (no card box) ── */
-body.view-discover .row--video-promo[data-row-id="video-promo-public"] {
+body.view-discover .row--video-promo:is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) {
   background: transparent;
   border: 0;
   border-radius: 0;
   padding: 44px 24px 36px;
   margin: 0 0 8px;
 }
-body.view-discover .row--video-promo[data-row-id="video-promo-public"] .row__head { text-align: center; }
-body.view-discover .row--video-promo[data-row-id="video-promo-public"] .row__title {
+body.view-discover .row--video-promo:is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .row__head { text-align: center; }
+body.view-discover .row--video-promo:is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .row__title {
   font: 400 44px/1.1 var(--lg-font-serif);
   letter-spacing: -0.01em;
 }
-body.view-discover [data-row-id="video-promo-public"] .vpromo {
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo {
   grid-template-columns: minmax(0, 1fr);
   max-width: 820px;
   margin: 0 auto;
   gap: 26px;
 }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy { order: 0; }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__video { order: 1; }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy {
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy { order: 0; }
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__video { order: 1; }
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy {
   text-align: center;
   align-items: center;
   font-size: 1.06rem;
 }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy h2,
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy h3 {
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy h2,
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy h3 {
   font: 400 26px/1.25 var(--lg-font-serif);
 }
 /* Classic Landing hides the bullet checklist (kept in DOM — content call
    flagged to Buck/Ian; delete this rule to bring the bullets back). */
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy ul { display: none; }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__copy > :last-child { margin-top: 0; padding-top: 4px; }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__video {
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy ul { display: none; }
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy > :last-child { margin-top: 0; padding-top: 4px; }
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__video {
   max-width: 720px;
   width: 100%;
   margin: 0 auto;
 }
-body.view-discover [data-row-id="video-promo-public"] .vpromo__label { text-align: center; }
+body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__label { text-align: center; }
 body.view-discover .vpromo__embed {
   border-radius: 12px;
   border: 1px solid var(--lg-line);
@@ -2989,7 +2989,7 @@ body.view-discover .ecard {
   border: 1px solid var(--lg-line);
   box-shadow: none;
 }
-body.view-discover .row--video-promo[data-row-id="video-promo-public"] + .row { margin-top: 12px; }
+body.view-discover .row--video-promo:is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) + .row { margin-top: 12px; }
 
 /* ── Token-aware surfaces: hardcoded light colors re-routed through the
    --fp-* tokens above so the dark counterpart below can re-point them.
@@ -3076,3 +3076,12 @@ html[data-lguser-theme="dark"] body.view-discover {
   /* overscroll behind the dark page (html bg is otherwise light) */
   html:not([data-lguser-theme]):has(body.view-discover) { background: #15171a; }
 }
+
+/* ── Ghost CTA readability (Buck 2026-06-11): the redesign's .vp-cta ink repoint
+   (--fp-cta-ink, archive.css "discover" block) out-specifies the secondary's own
+   color rule, so the transparent ghost button inherited the FILLED button ink —
+   #fff-on-light in light, near-black-on-dark in dark. Token-driven fix: --lg-sage-d
+   is dark sage in light mode and re-pointed to light sage by the dark gates, so one
+   rule reads correctly in both. Last-in-file so source order wins at equal specificity. */
+body.view-discover .vpromo__copy .vp-cta--secondary { color: var(--lg-sage-d, #4a5a4a) !important; }
+body.view-discover .vpromo__copy .vp-cta--secondary:hover { background: rgba(135, 152, 106, 0.14); }
