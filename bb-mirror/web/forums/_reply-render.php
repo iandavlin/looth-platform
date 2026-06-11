@@ -10,6 +10,25 @@
 
 declare(strict_types=1);
 
+if (!function_exists('lg_cover_src')) {
+    /**
+     * Same resizer-routing helper as _feed.php (function_exists-guarded twin —
+     * _topic-replies.php includes this file without _feed.php). Reply-stub
+     * images were the last feed images bypassing /img.php: raw ~100KB originals
+     * for a 240px-max thumbnail (perf lane 2026-06-11).
+     */
+    function lg_cover_src(?string $url, int $w = 800): ?string
+    {
+        if (!$url) {
+            return $url;
+        }
+        if (preg_match('#/wp-content/uploads/(.+)$#', $url, $m)) {
+            return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
+        }
+        return $url;
+    }
+}
+
 // Whether the current viewer may post (create topics/replies). Posting is
 // authenticated-only and the BuddyBoss REST API rejects anonymous writes (401) —
 // that 401 is the real, inspector-proof backstop. This is the SERVER-rendered UI
@@ -339,7 +358,7 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             echo '</span>';
         }
         if (!empty($r['reply_image_url'])) {
-            $iu = htmlspecialchars($r['reply_image_url']);
+            $iu = htmlspecialchars(lg_cover_src((string)$r['reply_image_url']) ?? '');
             if ($collapse_image) {
                 // Teaser context: keep the image hidden AND unloaded (data-src, no
                 // src) until the reader opens the reply — keeps the feed card compact.
