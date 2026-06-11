@@ -316,7 +316,7 @@ if ($can_edit && $author_id) {
     {slug:'ouch',label:'Ouch',img:'ouch.png'},
     {slug:'wow',label:'Wow',char:'😮'},
     {slug:'lol',label:'LOL',char:'😂'},
-    {slug:'shop',label:'Shop',img:'shop.png'},
+    {slug:'shop',label:'Optimum',img:'shop.png'},
     {slug:'take-my-money',label:'Take my money',img:'take-my-money.png'},
     {slug:'brain',label:'Brain',char:'🧠'}
   ];

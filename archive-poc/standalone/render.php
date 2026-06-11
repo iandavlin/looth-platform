@@ -587,7 +587,7 @@ body { margin: 0; background: #f0eee8; color: #323532;
   var PALETTE = [
     {slug:'like',label:'Like',char:'👍'}, {slug:'ouch',label:'Ouch',img:'ouch.png'},
     {slug:'wow',label:'Wow',char:'😮'}, {slug:'lol',label:'LOL',char:'😂'},
-    {slug:'shop',label:'Shop',img:'shop.png'}, {slug:'take-my-money',label:'Take my money',img:'take-my-money.png'},
+    {slug:'shop',label:'Optimum',img:'shop.png'}, {slug:'take-my-money',label:'Take my money',img:'take-my-money.png'},
     {slug:'brain',label:'Brain',char:'🧠'}
   ];
   function bySlug(s){ for (var i=0;i<PALETTE.length;i++) if (PALETTE[i].slug===s) return PALETTE[i]; return null; }
