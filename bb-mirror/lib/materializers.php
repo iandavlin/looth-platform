@@ -233,6 +233,19 @@ function bb_mirror_upsert_forum(int $id, PDO $db): void {
     bb_mirror_refresh_effective_group($db, $id);
 }
 
+// An attachment row whose file is gone becomes a BROKEN CARD COVER (the feed
+// promotes attachments to covers — Buck audit 6/11 found 36 dead rows, mostly
+// test uploads). Stat local uploads before writing the row; URLs outside the
+// uploads tree can't be verified and pass through. Runs under WP (www-data),
+// which CAN traverse the uploads dirs (the ubuntu user cannot).
+function bb_mirror_attachment_file_exists(string $url): bool {
+    $up    = wp_get_upload_dir();
+    $upath = parse_url($url, PHP_URL_PATH) ?: '';
+    $bpath = parse_url((string)$up['baseurl'], PHP_URL_PATH) ?: '';
+    if ($bpath === '' || strpos($upath, $bpath) !== 0) return true; // not a local upload
+    return file_exists($up['basedir'] . substr($upath, strlen($bpath)));
+}
+
 // Harvest BB media attachments + inline <img> URLs for a topic/reply.
 // Source priority:
 //   1. wp_postmeta.bp_media_ids (CSV of wp_bp_media.id) — BB Platform media uploads
@@ -298,12 +311,14 @@ function bb_mirror_sync_attachments(int $parent_id, string $kind, PDO $db, strin
         "INSERT INTO attachment (parent_kind, parent_id, url, alt, mime, width, height, position, sync_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
-    foreach ($rows as $i => $row) {
+    $pos = 0;
+    foreach ($rows as $row) {
+        if (!bb_mirror_attachment_file_exists($row['url'])) continue; // dead file = broken cover
         $stmt->execute([
             $kind, $parent_id,
             $row['url'], $row['alt'] ?: null,
             $row['mime'], $row['width'], $row['height'],
-            $i, bb_mirror_ts(time())
+            $pos++, bb_mirror_ts(time())
         ]);
     }
 }
