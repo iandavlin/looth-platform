@@ -96,60 +96,11 @@
     bar.insertBefore(ham, bar.firstChild);
   }
 
-  // ── Desktop filter/settings rail (Buck 2026-06-09) ──────────────────────────
-  // The left rail now holds the category filters AND the Hub-style/theme settings
-  // panel, so on desktop: (1) rename the sort-bar pill "Filters" → "Filter and
-  // settings"; (2) default the persistent sidebar (>960) to COLLAPSED, remembering
-  // if the user opens it (localStorage 'lg-nav-open'). Mobile keeps "Filters" + its
-  // drawer. The pill already toggles body.nav-closed.
-  function setupDesktopFilterNav() {
-    if (window.matchMedia('(max-width:640px)').matches) return;   // desktop only
-    // Buck 2026-06-10: the rail no longer holds settings (Ian: the gear is the
-    // ONLY page-state control zone), so the pill says just "Filters" again —
-    // "Filter and settings" promised a panel that isn't there anymore.
-    var tx = document.querySelector('.feed-sort-bar .lg-filters-chip .lg-filters-chip__tx');
-    if (tx && tx.textContent !== 'Filters') tx.textContent = 'Filters';
-    if (!window.matchMedia('(min-width:961px)').matches) return;  // sidebar is persistent only >960
-    if (document.body.getAttribute('data-lg-navinit')) return;
-    document.body.setAttribute('data-lg-navinit', '1');
-    var saved = null, savedWide = null;
-    try { saved = localStorage.getItem('lg-nav-open'); savedWide = localStorage.getItem('lg-nav-open-wide'); } catch (e) {}
-    // ULTRAWIDE auto-open (Buck 2026-06-11: columns max at 4 — past that,
-    // "automatically open up the filter side bar if there is room"): from
-    // 2520px the rail (~240px measured, ≤300 max) fits beside the capped
-    // 2294px feed with at most a few invisible px of squeeze — Buck's own
-    // monitor is a 2560×1080 ultrawide, which the first cut's 2620 threshold
-    // missed. Wide mode keeps its OWN pref key (lg-nav-open-wide): open is
-    // the default there, and only an explicit close made WHILE wide vetoes
-    // it — the years of narrow-mode chip clicks stored in lg-nav-open (where
-    // closed is the default anyway) no longer suppress the wide auto-open.
-    var wide = window.matchMedia('(min-width:2520px)');
-    function applyNavDefault() {
-      // Fullscreen video resizes the viewport to monitor size — crossing the
-      // 2520 band mid-fullscreen would auto-open the rail, reflow the feed and
-      // KILL the fullscreen (card DOM moves reload the player iframe). A
-      // fullscreen resize is not a real window change: wait it out, re-apply
-      // on exit (listener below).
-      if (document.fullscreenElement || document.webkitFullscreenElement) return;
-      var open = wide.matches ? savedWide !== '0' : saved === '1';
-      document.body.classList.toggle('nav-closed', !open);
-      var chip = document.querySelector('.lg-filters-chip');
-      if (chip) chip.classList.toggle('is-on', open);
-    }
-    applyNavDefault();
-    if (wide.addEventListener) wide.addEventListener('change', applyNavDefault);
-    document.addEventListener('fullscreenchange', function () {
-      if (!document.fullscreenElement) setTimeout(applyNavDefault, 150);
-    });
-    var chip2 = document.querySelector('.lg-filters-chip');
-    if (chip2) chip2.addEventListener('click', function () {
-      setTimeout(function () { try {
-        var val = document.body.classList.contains('nav-closed') ? '0' : '1';
-        if (wide.matches) { savedWide = val; localStorage.setItem('lg-nav-open-wide', val); }
-        else { saved = val; localStorage.setItem('lg-nav-open', val); }
-      } catch (e) {} }, 60);
-    });
-  }
+  // ── Desktop filter rail (RETIRED 2026-06-11) ────────────────────────────────
+  // setupDesktopFilterNav + the ultrawide auto-open (lg-nav-open / lg-nav-open-wide)
+  // targeted the left nav aside, which the hub no longer renders — filters are the
+  // canonical centered #hub-fmodal on ALL viewports (Ian 2026-06-11). Retired per
+  // coordinator ask; the pref keys are dead.
 
   // (Popular-tags search dropdown REMOVED 2026-06-10 — Ian: "popular tags
   // removed". ensureTagSugCss + wireDesktopSearchTags retired.)
@@ -2511,6 +2462,7 @@
       '#looth-rep-sheet .lrs-op__body p{margin:0 0 8px}',
       '#looth-rep-sheet .lrs-op__body img{max-width:100%;height:auto;border-radius:12px}',
       '#looth-rep-sheet .lrs-op__body a{color:var(--lg-sage-d,#6b7c52)}',
+      '#looth-rep-sheet .lrs-op__acts{display:flex;align-items:center;gap:10px;padding:10px 0 2px;position:relative}',
       // dark pass for the new pieces (the shell/bubbles/actions are already covered
       // by app-settings' dark style + the rules below)
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-grab::before{background:#3a403a}',
@@ -2608,6 +2560,12 @@
     else { lrsHist = false; }
   }
   window.addEventListener('popstate', function () {
+    // The image lightbox stacks ABOVE the sheets and pushes its OWN history
+    // entry — while it's up (back gesture) or just closed (tap-close pops its
+    // entry via history.back), this pop belongs to IT: don't also close a sheet.
+    var lb0 = document.getElementById('lg-lb');
+    if (lb0 && lb0.classList.contains('is-on')) return;
+    if (window.__lgLbPop && Date.now() - window.__lgLbPop < 600) return;
     // Composer sheet stacks on top of the modal — phone back closes IT first and
     // re-pushes the modal's history entry so a second back closes the modal.
     var cs = document.getElementById('looth-comp-sheet');
@@ -2621,15 +2579,33 @@
     if (sh && sh.classList.contains('is-open')) lrsClose(true);
   });
   function lrsEnhance(full) { try { revealReplyImages(full); enhanceReplyReactions(full); } catch (e) {} }
+  // The sheet shows the WHOLE drained thread — that rendered count is the truth
+  // the user can see. Push it back onto the card's reply-count displays (same
+  // trick as the desktop dmodal's reconcileCount; Ian 2026-06-11 "numbers must
+  // jive"). Covers stale mirrored reply_count AND replies posted from the sheet.
+  function lrsReconcileCount(full, tid) {
+    if (!tid) return;
+    var n = full.querySelectorAll('.reply-stub').length;
+    if (!n) return;
+    var ctl = document.querySelector('.fc-facepile[data-topic-id="' + tid + '"]') ||
+              document.querySelector('.feed-card__expand[data-topic-id="' + tid + '"]');
+    var card = ctl && ctl.closest('.feed-card');
+    if (!card) return;
+    var word = n === 1 ? 'reply' : 'replies';
+    var fc = card.querySelector('.fc-facepile__count');
+    if (fc) fc.textContent = n + ' ' + word;
+    var exp = card.querySelector('.feed-card__expand');
+    if (exp) exp.innerHTML = 'View ' + n + ' ' + word + ' ▼';
+  }
   // Walk the canonical .replies-loadmore (forums.js's delegated handler fetches the
   // next page + inserts it) until every reply is in the sheet.
-  function lrsLoadAll(full) {
+  function lrsLoadAll(full, tid) {
     lrsEnhance(full);
     var tries = 0;
     (function step() {
-      if (++tries > 160) { lrsEnhance(full); return; }
+      if (++tries > 160) { lrsEnhance(full); lrsReconcileCount(full, tid); return; }
       var btn = full.querySelector('.replies-loadmore');
-      if (!btn) { lrsEnhance(full); return; }                 // all batches in
+      if (!btn) { lrsEnhance(full); lrsReconcileCount(full, tid); return; }   // all batches in
       // forums.js sets disabled + "Loading…" synchronously on click and removes the
       // button when the page lands — so poll fast and only click an idle button.
       if (btn.disabled || /loading/i.test(btn.textContent || '')) { setTimeout(step, 80); return; }
@@ -2662,7 +2638,7 @@
         var full = body.querySelector('.feed-card__replies-full');
         full.innerHTML = html;
         if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; if (sh) sh.__lgToReplies = 0; return; }
-        lrsLoadAll(full);
+        lrsLoadAll(full, tid);
         lrsScrollToReplies();
       })
       .catch(function () { body.innerHTML = '<div class="lrs-note">Couldn’t load replies right now.</div>'; });
@@ -2706,6 +2682,27 @@
     var ex = card.querySelector('.feed-card__full-body, .fc-full-body, .feed-card__op-excerpt, .fc-excerpt');
     body.innerHTML = ex ? ex.innerHTML : '';
     op.appendChild(body);
+    // React to the OP itself (dmodal parity, Ian 2026-06-11): clone the card's
+    // TOPIC reaction bar into the sheet. Canonical forums.js delegates .fcr
+    // clicks on document (they work on the clone) and doReact re-renders EVERY
+    // .fcr with the same data-post-type+item-id — so the card and the sheet
+    // can never disagree. Skip reply-level bars when picking the card's.
+    var cardBar = card.querySelector('.fc-actions .fcr');
+    if (!cardBar) {
+      var bars0 = card.querySelectorAll('.fcr');
+      for (var bi = 0; bi < bars0.length; bi++) {
+        if (!bars0[bi].closest('.reply-stub')) { cardBar = bars0[bi]; break; }
+      }
+    }
+    if (cardBar) {
+      var acts = document.createElement('div');
+      acts.className = 'lrs-op__acts';
+      var opBar = cardBar.cloneNode(true);
+      var opPal = opBar.querySelector('.fcr-palette');
+      if (opPal) opPal.hidden = true;
+      acts.appendChild(opBar);
+      op.appendChild(acts);
+    }
     if (!tid) return;
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
@@ -3448,6 +3445,9 @@
   }
   function lgCloseLb(fromPop) {
     if (!lgLb) return;
+    // Stamp every close so the sheets' popstate handlers can tell "this pop
+    // belongs to the lightbox" (its pushed entry) from a real back-out.
+    window.__lgLbPop = Date.now();
     lgLb.classList.remove('is-on'); lgImg.removeAttribute('src');
     document.body.style.overflow = lgScrollY || '';
     // If we pushed a history entry and this close came from a tap/✕/Esc (not the
@@ -3506,7 +3506,7 @@
         var cimg = cover.querySelector('.feed-card__cover-img, img');
         src = cimg && (cimg.currentSrc || cimg.getAttribute('src'));
       } else {
-        var img = e.target.closest('.reply-stub__img, .feed-card__full-body img, .post__body img, .lg-fb-bubble img, .feed-card__op img');
+        var img = e.target.closest('.reply-stub__img, .feed-card__full-body img, .post__body img, .lg-fb-bubble img, .feed-card__op img, .lrs-op__body img');
         if (img && img.tagName === 'IMG') {
           var wrap = img.closest('a[href]');
           var href = (wrap && /\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i.test(wrap.getAttribute('href') || '')) ? wrap.getAttribute('href') : null;
@@ -3515,62 +3515,19 @@
       }
       if (!src) return;
       e.preventDefault(); e.stopPropagation();
-      lgOpenLb(src);
+      // img.php-resized images carry an explicit width — ask for a lightbox-
+      // size rendition, sharper than the inline copy (dmodal parity, Ian 6/11).
+      lgOpenLb(src.replace(/([?&]w=)\d+/, '$11600'));
     }, true);   // capture: beat keepContentOnHub + forums.js
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lgCloseLb(); });
     // Back gesture / button → close the lightbox (our pushed entry is being popped).
     window.addEventListener('popstate', function () { if (lgLb && lgLb.classList.contains('is-on')) lgCloseLb(true); });
   }
 
-  // ── Hub filter drawer (Buck 2026-06-08: "filter button does nothing") ───────
-  // The Filters chip was wired to #bb-ham, which only toggles a desktop class —
-  // nothing showed on mobile. Present the real filter rail (.bb-layout__nav, the
-  // hub-rail switches) as a slide-in drawer instead. Mobile only.
-  function ensureFilterDrawerCss() {
-    if (document.getElementById('lg-hubf-css')) return;
-    var s = document.createElement('style'); s.id = 'lg-hubf-css';
-    s.textContent = [
-      '@media (max-width:640px){',
-      '.bb-layout__nav{position:fixed!important;top:0!important;bottom:0!important;left:0!important;width:88%!important;max-width:340px!important;',
-      'z-index:2147482300!important;transform:translateX(-105%);transition:transform .26s cubic-bezier(.4,0,.2,1);',
-      'overflow:auto;-webkit-overflow-scrolling:touch;background:var(--lg-cream,#fbfbf8)!important;box-shadow:0 0 40px rgba(20,30,15,.4);',
-      'margin:0!important;padding:14px 12px calc(22px + env(safe-area-inset-bottom,0px))!important}',
-      'html.lg-hubf-open .bb-layout__nav{transform:translateX(0)}',
-      '.lg-hubf-bd{position:fixed;inset:0;z-index:2147482200;background:rgba(26,29,26,.45);opacity:0;visibility:hidden;transition:opacity .22s,visibility .22s}',
-      'html.lg-hubf-open .lg-hubf-bd{opacity:1;visibility:visible}',
-      '.lg-hubf-x{display:flex;align-items:center;justify-content:center;width:34px;height:34px;margin:0 0 8px auto;border:0;',
-      'border-radius:50%;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);font-size:22px;line-height:1;cursor:pointer}',
-      '}'
-    ].join('');
-    (document.head || document.documentElement).appendChild(s);
-  }
-  function wireFilterDrawer() {
-    // Canonical centered filters modal (#hub-fmodal, Ian 2026-06-11) owns the
-    // Filters chip on ALL viewports — this drawer presented .bb-layout__nav,
-    // which the hub no longer renders. No-op when the modal exists.
-    if (document.getElementById('hub-fmodal')) return;
-    if (!window.matchMedia('(max-width:640px)').matches) return;
-    if (document.body.getAttribute('data-lg-hubf')) return;
-    document.body.setAttribute('data-lg-hubf', '1');
-    ensureFilterDrawerCss();
-    var bd = document.createElement('div'); bd.className = 'lg-hubf-bd'; document.body.appendChild(bd);
-    function close() { document.documentElement.classList.remove('lg-hubf-open'); }
-    function open() {
-      var nav = document.querySelector('.bb-layout__nav');
-      if (nav && !nav.querySelector('.lg-hubf-x')) {
-        var x = document.createElement('button'); x.type = 'button'; x.className = 'lg-hubf-x'; x.setAttribute('aria-label', 'Close filters'); x.innerHTML = '&times;';
-        x.addEventListener('click', close); nav.insertBefore(x, nav.firstChild);
-      }
-      document.documentElement.classList.add('lg-hubf-open');
-    }
-    bd.addEventListener('click', close);
-    document.addEventListener('click', function (e) {
-      var chip = e.target.closest && e.target.closest('.lg-filters-chip');
-      if (!chip) return;
-      e.preventDefault(); e.stopPropagation();                  // own the tap (skip the #bb-ham wiring)
-      if (document.documentElement.classList.contains('lg-hubf-open')) close(); else open();
-    }, true);
-  }
+  // ── Hub filter drawer (RETIRED 2026-06-11) ──────────────────────────────────
+  // wireFilterDrawer/ensureFilterDrawerCss slid .bb-layout__nav in as a mobile
+  // drawer; the hub no longer renders that aside — the canonical centered filters
+  // modal (#hub-fmodal) owns the Filters chip on ALL viewports (Ian 2026-06-11).
 
   // ── Facebook-style reaction picker (Buck 2026-06-08: "match the format Facebook
   // uses"). Restyle the .fcr-palette popup into FB's rounded pill of big circular
@@ -3904,7 +3861,6 @@
     if (!document.querySelector('.feed-page')) return; // listing pages only
     ensureFbReactionsCss();
     wireImageLightbox();
-    wireFilterDrawer();
     ensureImmersiveCss();
     ensureDesktopCss();
     wireLoothprintTap();
@@ -3922,7 +3878,6 @@
     restyleSortBar();
     ensureSavedPill();
     setTimeout(ensureSavedPill, 1500); setTimeout(ensureSavedPill, 4000);
-    setupDesktopFilterNav();
     lgSyncSaved();
     relabelAuthorFilter();
     ensurePunchDarkCss();
@@ -3969,134 +3924,8 @@
     requestAnimationFrame(function () { de.classList.remove('lg-feed-booting'); });
   }
 
-  // ── No free video in the Hub (Buck 2026-06-11) ──────────────────────────────
-  // Members paste YouTube/Vimeo links into discussion posts; canonical forums.js
-  // auto-builds a PLAYABLE inline iframe (.bb-embed--video) AND leaves the raw URL
-  // text in the body. Buck's rule: nothing plays for free inside the Hub. Convert
-  // every such embed into a non-playing thumbnail that LOOKS playable (poster +
-  // play glyph) but, on tap, routes to the join/paywall page instead of playing,
-  // and strip the raw youtube/vimeo URL text ("i dont want to see youtube links").
-  // Scope: discussion/reply BODIES only — Looth's own content-video covers
-  // (.fc-cover--video) are already server-gated (public tier plays, gated shows a
-  // lock → its paywall page), so they're untouched. Client-side; the canonical
-  // forums.js embed builder is coordinator-owned, so we transform after the fact.
-  var LG_JOIN_URL = '/join/';
-
-  function ensureVidwallCss() {
-    if (document.getElementById('lg-vidwall-css')) return;
-    var css = [
-      '.lg-vidwall{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;',
-        'overflow:hidden;background:#0d0f0c;text-decoration:none;margin:10px 0;',
-        'border:1px solid var(--lguser-line,var(--lg-line,#e3ddd0));cursor:pointer}',
-      '.lg-vidwall__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.82)}',
-      '.lg-vidwall__img--blank{background:linear-gradient(135deg,#2a2f26,#11130f)}',
-      '.lg-vidwall__play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;',
-        'border-radius:50%;background:rgba(20,22,17,.62);display:flex;align-items:center;justify-content:center;',
-        'color:#fff;transition:background .15s ease}',
-      '.lg-vidwall__play svg{width:30px;height:30px;margin-left:3px}',
-      '.lg-vidwall__tag{position:absolute;left:10px;bottom:10px;display:inline-flex;align-items:center;',
-        'padding:5px 11px;border-radius:999px;background:var(--lg-sage-d,#6b7c52);color:#fff;',
-        'font:600 12px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.01em}',
-      '.lg-vidwall:hover .lg-vidwall__play,.lg-vidwall:focus .lg-vidwall__play{background:var(--lg-sage-d,#6b7c52)}'
-    ].join('');
-    var s = document.createElement('style'); s.id = 'lg-vidwall-css'; s.textContent = css;
-    (document.head || document.documentElement).appendChild(s);
-  }
-
-  function lgYtId(url) {
-    if (!url) return '';
-    var m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
-    return m ? m[1] : '';
-  }
-  function lgIsVideoUrl(url) {
-    return /(?:youtube\.com|youtu\.be|player\.vimeo\.com|vimeo\.com)\//i.test(url || '');
-  }
-
-  function lgBuildVidwall(ytId) {
-    var a = document.createElement('a');
-    a.className = 'lg-vidwall';
-    a.href = LG_JOIN_URL;
-    a.setAttribute('data-lg-vidwall', '1');
-    a.setAttribute('aria-label', 'Join Looth to watch this video');
-    var poster = ytId
-      ? '<img class="lg-vidwall__img" src="https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer">'
-      : '<span class="lg-vidwall__img lg-vidwall__img--blank"></span>';
-    a.innerHTML = poster +
-      '<span class="lg-vidwall__play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>' +
-      '<span class="lg-vidwall__tag">Join to watch</span>';
-    return a;
-  }
-
-  function paywallDiscussionVideos(root) {
-    // DISABLED — Ian 2026-06-11 (overrules the v190 rule): "don't gate
-    // youtube videos in discussions." Member-pasted YT/Vimeo plays free for
-    // everyone; Looth's own paywalled content stays locked server-side.
-    if (true) return;
-    var scope = (root && root.querySelectorAll) ? root : document;
-    // 1) Playable embeds → non-playing thumbnail facade (skip content-card covers)
-    var embeds = scope.querySelectorAll('.bb-embed--video');
-    for (var i = 0; i < embeds.length; i++) {
-      var wrap = embeds[i];
-      if (wrap.getAttribute('data-lg-vidwall')) continue;
-      if (wrap.closest('.fc-cover--video')) continue;
-      var ifr = wrap.querySelector('iframe');
-      var src = ifr ? (ifr.getAttribute('src') || ifr.getAttribute('data-src') || '') : '';
-      var wall = lgBuildVidwall(lgYtId(src));
-      if (wrap.parentNode) wrap.parentNode.replaceChild(wall, wrap);
-    }
-    // 2) Raw youtube/vimeo links (auto-linkified URL text). If the body already has
-    //    a facade, drop the bare link; otherwise convert the bare link into one.
-    var bodies = scope.querySelectorAll('.post__body, .feed-card__full-body, .feed-card__excerpt, .reply-stub__body, .fc-reply__body');
-    for (var b = 0; b < bodies.length; b++) {
-      var anchors = bodies[b].querySelectorAll('a[href]');
-      for (var k = 0; k < anchors.length; k++) {
-        var an = anchors[k];
-        if (an.getAttribute('data-lg-vidwall')) continue;
-        var href = an.getAttribute('href') || '';
-        if (!lgIsVideoUrl(href)) continue;
-        if (bodies[b].querySelector('.lg-vidwall')) { an.remove(); continue; }
-        var wall2 = lgBuildVidwall(lgYtId(href));
-        if (an.parentNode) an.parentNode.replaceChild(wall2, an);
-      }
-    }
-  }
-
-  // A vidwall tap goes to /join/ in capture phase, so it never bubbles to the
-  // card's inline-expand / content-sheet tap handlers.
-  function wireVidwallClick() {
-    if (window.__lgVidwallClick) return;
-    window.__lgVidwallClick = true;
-    document.addEventListener('click', function (e) {
-      var w = e.target.closest && e.target.closest('.lg-vidwall');
-      if (!w) return;
-      e.preventDefault(); e.stopPropagation();
-      window.location.href = LG_JOIN_URL;
-    }, true);
-  }
-
-  var lgVidwallMo = null;
-  function startVidwall() {
-    if (!onHubPath()) return;
-    ensureVidwallCss();
-    wireVidwallClick();
-    var pass = function () { try { paywallDiscussionVideos(document); } catch (e) {} };
-    pass();
-    setTimeout(pass, 500); setTimeout(pass, 1500); setTimeout(pass, 3500);
-    // forums.js builds embeds async + on infinite scroll → debounced re-run.
-    if (!lgVidwallMo && 'MutationObserver' in window) {
-      var t = null;
-      lgVidwallMo = new MutationObserver(function () {
-        if (t) return;
-        t = setTimeout(function () { t = null; pass(); }, 250);
-      });
-      var obsHost = document.body || document.documentElement;
-      if (obsHost) lgVidwallMo.observe(obsHost, { childList: true, subtree: true });
-    }
-  }
-
   function start() {
     if (!onHubPath()) return;
-    startVidwall();
     if (document.body) run();
     else document.addEventListener('DOMContentLoaded', run);
   }

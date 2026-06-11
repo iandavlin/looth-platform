@@ -66,7 +66,7 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=191', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=193', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
@@ -94,7 +94,7 @@
     idle('looth-prof-sheet-js', '/profile-sheet.js?v=7');      // /u/ profile sheet
     idle('looth-msgr-js', '/messenger-sheet.js?v=1');          // DM pull-up
     idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=2');      // sponsors sheet
-    idle('looth-push-js', '/push.js?v=1');                     // self-gates mobile-coarse
+    idle('looth-push-js', '/push.js?v=2');                     // self-gates mobile-coarse
   }
 
   if (onEvents) {
