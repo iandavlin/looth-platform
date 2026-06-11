@@ -1659,3 +1659,15 @@ edits staged for the generalization pass:
 2. Apply the BB/Elementor dequeue + the `lg_member_nav` cleanup above.
 3. CDP pass on the JS-heavy pages (use `requestSubmit()`/click — never `form.submit()`).
 4. P8 (poller dormant-mode dev smoke) — still not started.
+
+## OPEN BUG — header nav horizontal shift (~83px), all surfaces (2026-06-11)
+Flaky CLS ~0.116 on page load (events repro, likely site-wide): the header nav
+LIs slide LEFT ~83px shortly after first paint (LayoutShift sources captured:
+LI rects y=23.5 move x-83). No DOM mutation within ±120ms (MutationObserver
+proven) -> resource/font-metrics race in the logo/wordmark cluster left of the
+nav. Wordmark settles at 92px Georgia (Lora declared but no face ever loads).
+Scrollbar component already fixed (scrollbar-gutter: stable in site-header.css).
+Repro harness: CDP PerformanceObserver layout-shift script in session log /
+tools/cdp-drive.py; flaky ~50% of cold loads at 1440px.
+Next: bisect what the logo cluster renders as on a SHIFTING frame (screenshot
+at ~150ms), or pin the cluster width. Small, well-specified; lane-sized.
