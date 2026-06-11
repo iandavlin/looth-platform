@@ -235,6 +235,26 @@
         '--lg-ink:#e5e7e1!important;--lg-mute:#a6ac9f!important;--lg-line:#2c312d!important}',
       D + ' .lg-chrome-foot a{color:#cdd0ca!important}',
       D + ' .lg-chrome-foot a:hover{color:#e5e7e1!important}',
+      // ── Messenger / Connections / Notifications drawer (lg-shell social modal,
+      // Buck 2026-06-11): the panel is hardcoded #fff in site-header.css while its
+      // text rides --lg-ink — dark mode flipped the ink light but left the slab
+      // white, washing the names out (only the sage-tint pending rows went dark).
+      // Full dark pass, same palette as the rest of this block. All widths.
+      D + ' .lg-social-modal__panel{background:#1a1d20!important}',
+      D + ' .lg-social-modal__head{border-color:#2c312d!important}',
+      D + ' .lg-social-modal__title{color:#e5e7e1!important}',
+      D + ' .lg-social-modal__close,' + D + ' .lg-social-modal__back-btn{color:#9aa097!important}',
+      D + ' .lg-social-modal__close:hover,' + D + ' .lg-social-modal__back-btn:hover{background:#243024!important;color:#e5e7e1!important}',
+      D + ' .lg-social-tab{color:#9aa097!important}',
+      D + ' .lg-social-tab:hover{color:#e5e7e1!important}',
+      D + ' .lg-social-tab.is-active{color:#b0c693!important;background:#243024!important}',
+      D + ' .lg-conn__item,' + D + ' .lg-msg__thread,' + D + ' .lg-notif__item{border-bottom-color:#2c312d!important}',
+      D + ' .lg-conn__item--pending{background:#243024!important}',
+      D + ' .lg-conn__name,' + D + ' .lg-msg__name,' + D + ' .lg-notif__text,' + D + ' .lg-msg__msg-text{color:#e5e7e1!important}',
+      D + ' .lg-conn__section-h,' + D + ' .lg-msg__preview,' + D + ' .lg-msg__meta,' + D + ' .lg-msg__msg-time,' + D + ' .lg-notif__time,' + D + ' .lg-sm__status,' + D + ' .lg-sm__empty{color:#9aa097!important}',
+      D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      D + ' .lg-msg__thread--unread,' + D + ' .lg-msg__msg,' + D + ' .lg-notif__item--unread{background:#22262a!important}',
+      D + ' .lg-msg__msg--mine{background:#2a341f!important}',
       // (OS-dark default-theme header block REMOVED 2026-06-10 pare-back: it
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two
