@@ -179,22 +179,10 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
     // active selection; Categories (the primary nav) otherwise.
     $type_active = !empty($filters['types']) || !empty($muted['types']);
     $open_sec    = $type_active ? 'type' : 'cat';
-    // Saved view toggle — a dedicated rail entry (NOT a Type/Category facet).
-    // Logged-in only (cookie-gated, same door as the ☆ save control); anon viewers
-    // get no Saved affordance — canonical owner of the desktop Saved filter (this
-    // supersedes Buck's hub-polish.js overlay pill).
-    $saved_on   = !empty($filters['saved']);
-    $can_save   = function_exists('lg_bb_mirror_can_post') && lg_bb_mirror_can_post();
+    // (Rail "Saved posts" entry removed 2026-06-11, Ian — the Saved pill in the
+    // sort bar is now the one Saved affordance. hub_saved_url() stays for the pill.)
     ?>
     <div class="hub-rail">
-      <?php if ($can_save): ?>
-        <a class="hub-rail__saved<?= $saved_on ? ' is-on' : '' ?>" href="<?= hub_saved_url($filters, $sort) ?>"
-           aria-pressed="<?= $saved_on ? 'true' : 'false' ?>">
-          <span class="hub-rail__saved-ico" aria-hidden="true"><?= $saved_on ? '&#9733;' : '&#9734;' ?></span>
-          <span class="hub-rail__saved-nm">Saved posts</span>
-          <?php if ($saved_on): ?><span class="hub-rail__saved-x" aria-hidden="true">&times;</span><?php endif; ?>
-        </a>
-      <?php endif; ?>
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
