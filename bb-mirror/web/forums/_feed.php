@@ -27,7 +27,9 @@ $_cat_map_rows = $db->query("
 $_forum_cat_map = bb_mirror_build_cat_map($_cat_map_rows);
 $forum_slug = (string)($_GET['forum_slug'] ?? '');
 $raw_offset = max(0, (int)($_GET['offset'] ?? 0));
-$card_limit = 50;
+$card_limit = 18;   // Smaller first page (Ian 2026-06-11 "load on button push"): fewer
+                    // cards upfront cuts DOM/Style-Layout/TBT; infinite-scroll loads the
+                    // rest in 18-card batches ($has_next/$next_offset below, unchanged).
 $fetch_size = 300; // fetch extra to cover collapse loss
 
 // ?fid=<id> disambiguates duplicate-slug forums (e.g. two 'finish' forums).
