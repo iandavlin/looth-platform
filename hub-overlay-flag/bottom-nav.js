@@ -326,8 +326,9 @@
     if (menu) {
       [].slice.call(menu.querySelectorAll('a[href]')).forEach(function (a) {
         var t = (a.textContent || '').replace(/\s+/g, ' ').trim();
-        // Archive is merged into the Hub now — drop it from the sheet.
-        if (t && !/^archive$/i.test(t)) out.push({ text: t, href: a.getAttribute('href') });
+        // Archive is merged into the Hub now — drop it from the sheet. Loothtool
+        // too (Buck 2026-06-11): the bottom bar's Shop tab already covers it.
+        if (t && !/^(archive|loothtool)$/i.test(t)) out.push({ text: t, href: a.getAttribute('href') });
       });
     }
     if (opened && acct) acct.click(); // restore closed state
@@ -422,6 +423,17 @@
     nH.querySelector('[data-notif-clearall]').addEventListener('click', function () { markAllNotifsRead(true); });
     var nBox = document.createElement('div'); nBox.className = 'lt-notifs'; nBox.id = 'lt-notifs';
     sheet.appendChild(nBox);
+
+    // Messages (Vanessa 2026-06-11): opens the Messenger-style chats pull-up
+    // (messenger-sheet.js); unread count fed by social-counts on badge refresh.
+    var msgRow = document.createElement('button');
+    msgRow.type = 'button';
+    msgRow.className = 'lt-sheet__row lt-sheet__row--msgs';
+    msgRow.style.cssText = 'display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;cursor:pointer';
+    msgRow.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9 9 0 0 1-3.2-.6L4 21l1.9-4.4a8 8 0 0 1-1.4-4.6A8.4 8.4 0 0 1 13 3.7a8.4 8.4 0 0 1 8 7.8z"/></svg><span>Messages</span>' +
+      '<span class="lt-msg-badge" hidden style="margin-left:auto;background:#e23b3b;color:#fff;border-radius:999px;font:700 11px/1 var(--lg-font-sans,system-ui,sans-serif);padding:3px 7px"></span>';
+    msgRow.addEventListener('click', function () { closeSheet(); if (window.openMessenger) window.openMessenger(); });
+    sheet.appendChild(msgRow);
 
     // Saved posts (Buck 2026-06-08): NOT a list here (too busy) — just a button
     // that warps to the Hub with the saved filter on (Instagram-style). The full
@@ -527,11 +539,21 @@
     fetch('/profile-api/v0/me/notifications/', { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        // Cleared = gone for good (Buck 2026-06-10): the feed shows UNREAD only.
-        // Once a notification is marked read it must never reappear; the backend
-        // listFor() returns read rows too (until its own unread-only fix lands),
-        // so filter them out client-side here as well.
-        var all = ((d && d.items) || []).filter(function (n) { return !n.is_read; });
+        // Cleared = gone for good (Buck 2026-06-10; Vanessa 2026-06-11 re-report):
+        // unread-only AND nothing older than the last explicit Clear. The backend
+        // upsert REVIVES a repeat notification (is_read=false, created_at=now()),
+        // so is_read alone isn't enough — the Clear watermark keeps resurrected
+        // old rows out while genuinely new activity (fresh created_at) still shows.
+        var cw = 0;
+        try { cw = parseInt(localStorage.getItem('lg_notif_cleared_at'), 10) || 0; } catch (eW) {}
+        var all = ((d && d.items) || []).filter(function (n) {
+          if (n.is_read) return false;
+          if (cw) {
+            var ts = Date.parse(String(n.created_at || '').replace(' ', 'T'));
+            if (ts && ts <= cw) return false;
+          }
+          return true;
+        });
         var items = showAll ? all : all.slice(0, 8);
         if (!items.length) { box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>'; return; }
         box.innerHTML = items.map(notifRow).join('') +
@@ -556,6 +578,8 @@
   // empties the visible list (the "Clear" button); false just dims them (auto on view).
   function markAllNotifsRead(clearList) {
     var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge'); if (bdg) bdg.hidden = true;   // optimistic
+    // explicit Clear sets the permanent watermark (see loadSheetNotifs filter)
+    if (clearList) { try { localStorage.setItem('lg_notif_cleared_at', String(Date.now())); } catch (eC) {} }
     var box = document.getElementById('lt-notifs');
     if (box) {
       if (clearList) box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>';
@@ -585,6 +609,12 @@
       .then(function (d) {
         if (!d) return;
         var n = (d.notifications_unread || 0);
+        // Messages row badge (You sheet) — unread DM count
+        var mb = document.querySelector('.lt-msg-badge');
+        if (mb) {
+          var mu = (d.messages_unread || 0);
+          if (mu > 0) { mb.textContent = capN(mu); mb.hidden = false; } else { mb.hidden = true; }
+        }
         var bdg = document.querySelector('#' + BAR_ID + ' .lt-badge');
         if (!bdg) return;
         if (n > 0) { bdg.textContent = capN(n); bdg.hidden = false; } else { bdg.hidden = true; }

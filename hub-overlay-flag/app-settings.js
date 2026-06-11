@@ -58,10 +58,12 @@
 
   // ---- Text size (scales the rem base, the standard a11y approach) ----
   var SIZES = [
+    // Vanessa 2026-06-11: the top option needs to be genuinely large on a phone —
+    // Larger raised 1.25 -> 1.45, Large rescaled to keep even steps.
     { id: 's', name: 'Small', scale: 0.92 },
     { id: 'm', name: 'Default', scale: 1 },
-    { id: 'l', name: 'Large', scale: 1.12 },
-    { id: 'xl', name: 'Larger', scale: 1.25 }
+    { id: 'l', name: 'Large', scale: 1.2 },
+    { id: 'xl', name: 'Larger', scale: 1.45 }
   ];
 
   // ---- Comment bubble color (the Facebook-style comment bubbles) ----
@@ -202,6 +204,14 @@
       // inline-reply / edit SEND buttons were inverted (white-on-light-sage ~1.9:1)
       // in picked Dark — match the other dark action chips.
       D + ' .feed-card__inline-compose .fic-send,' + D + ' .reply-stub__editbox .rse-save,' + D + ' .lg-fb-send{background:#2a341f!important;color:#e5e7e1!important;border-color:#3d5233!important}',
+      // ── Leaflet maps → night mode (Buck 2026-06-10). Invert-filter the TILES
+      // only (markers/pins live in their own pane and keep their real colors);
+      // darken the map chrome (zoom buttons, attribution) to match the app.
+      D + ' .leaflet-container{background:#15171a!important}',
+      D + ' .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.65)}',
+      D + ' .leaflet-control-zoom a{background:#262b30!important;color:#e5e7e1!important;border-color:#2c312d!important}',
+      D + ' .leaflet-control-attribution{background:rgba(21,23,26,.8)!important;color:#80867d!important}',
+      D + ' .leaflet-control-attribution a{color:#9cb37d!important}',
       // reply-EDIT Quill toolbar stayed #fff (forums only patches hub-theme-dark, not
       // the app data-lguser-theme="dark"); darken the toolbar AND its icon strokes/fills
       // so the icons don't go invisible on the now-dark bar.
@@ -425,9 +435,10 @@
         container.appendChild(sec);
       })();
     }
-    section('Videos', PLAYONE, getPlayone(), 'playone', function (b, it) {
-      b.innerHTML = '<span class="lg-set-opt__t">' + it.name + '</span>';
-    });
+    // Videos section REMOVED from the panel (Vanessa 2026-06-11: "no situation
+    // where a person would want to watch two videos at once") — one-at-a-time is
+    // simply the behavior now. PLAYONE + getPlayone stay: hub-polish's
+    // enforceSingleVideo still reads the pref, which defaults to 'on'.
   }
 
   window.LGSettings = {

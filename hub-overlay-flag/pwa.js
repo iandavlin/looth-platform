@@ -24,7 +24,7 @@
     if (document.getElementById('looth-app-settings-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-app-settings-js';
-    s.src = '/app-settings.js?v=29';
+    s.src = '/app-settings.js?v=31';
     (document.head || document.documentElement).appendChild(s);
   })();
 
@@ -34,7 +34,7 @@
     if (document.getElementById('looth-shop-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-shop-js';
-    s.src = '/shop-bubble.js?v=8';
+    s.src = '/shop-bubble.js?v=18';
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -45,7 +45,7 @@
     if (document.getElementById('looth-tabbar-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-tabbar-js';
-    s.src = '/bottom-nav.js?v=18';
+    s.src = '/bottom-nav.js?v=21';
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -103,7 +103,7 @@
     if (document.getElementById("looth-hub-polish-js")) return;
     var s = document.createElement("script");
     s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=156";
+    s.src = "/hub-polish.js?v=174";
     s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -126,7 +126,7 @@
     if (document.getElementById("looth-dir-mobile-js")) return;
     var s = document.createElement("script");
     s.id = "looth-dir-mobile-js";
-    s.src = "/directory-mobile.js?v=8";
+    s.src = "/directory-mobile.js?v=11";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -139,7 +139,7 @@
     if (document.getElementById("looth-dir-desktop-js")) return;
     var s = document.createElement("script");
     s.id = "looth-dir-desktop-js";
-    s.src = "/directory-desktop.js?v=8";
+    s.src = "/directory-desktop.js?v=9";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -174,7 +174,19 @@
     if (document.getElementById("looth-prof-sheet-js")) return;
     var s = document.createElement("script");
     s.id = "looth-prof-sheet-js";
-    s.src = "/profile-sheet.js?v=5";
+    s.src = "/profile-sheet.js?v=6";
+    s.defer = true;
+    (document.head || document.documentElement).appendChild(s);
+  })();
+
+  // Load the Messenger-style DM pull-up (chats home + conversation view over
+  // the canonical /me/messages API; supersedes the shared social modal on
+  // mobile). Site-wide loader; the script self-gates to <=640 + logged-in use.
+  (function () {
+    if (document.getElementById("looth-msgr-js")) return;
+    var s = document.createElement("script");
+    s.id = "looth-msgr-js";
+    s.src = "/messenger-sheet.js?v=1";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
@@ -186,7 +198,7 @@
     if (document.getElementById("looth-spon-sheet-js")) return;
     var s = document.createElement("script");
     s.id = "looth-spon-sheet-js";
-    s.src = "/sponsor-sheet.js?v=1";
+    s.src = "/sponsor-sheet.js?v=2";
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();

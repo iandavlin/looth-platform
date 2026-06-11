@@ -133,8 +133,10 @@
   // alone can't reorder across branches. The cover lift + bottom-line slim are
   // CSS. Idempotent (data-lg-card) and wrapped so one bad card can't break the
   // feed.
-  // Sandbox action-row icons (inline SVG, no emoji) — heart / chat / share-box.
-  var ICO_LIKE = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+  // Sandbox action-row icons (inline SVG, no emoji) — thumbs-up / chat / share-box.
+  // (Was a heart; Buck 2026-06-11: the Like action applies a 👍 reaction, so the
+  // icon is a thumbs-up to match.)
+  var ICO_LIKE = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
   var ICO_REPLIES = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>';
   var ICO_SHARE = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
   // Instagram-style bookmark — outline normally, fills (currentColor) when saved.
@@ -335,6 +337,27 @@
     ].join('\n');
     (document.head || document.documentElement).appendChild(s);
   }
+  // ── Long-author-name blowout fix (Buck bug 2026-06-11) ──────────────────────
+  // forums.css gives .reply-stub__author white-space:nowrap + flex-shrink:0 for
+  // its native HEAD-row ellipsis. fbStyleReply moves that same node INTO the
+  // bubble as the block .lg-fb-name line, where the un-wrappable name drives the
+  // bubble/col to max-content width (e.g. 618px at a 390px viewport for
+  // "Dave Staudte (rhymms with ...) NB Guitar Repair (...)"), shoving the comment
+  // text and photo off the screen edge. Let the name wrap once it lives in a
+  // bubble, and clamp the column + any raw content <img> as a backstop. Applies
+  // to the inline feed replies AND the discussion sheet (the base nowrap rule is
+  // unscoped, so #looth-rep-sheet inherits the same bug).
+  function ensureReplyNameWrapCss() {
+    if (document.getElementById('lg-fbname-wrap-css')) return;
+    var s = document.createElement('style'); s.id = 'lg-fbname-wrap-css';
+    s.textContent =
+      '.feed-page .lg-fb-col,#looth-rep-sheet .lg-fb-col{max-width:100%}' +
+      '.feed-page .lg-fb-bubble .lg-fb-name,#looth-rep-sheet .lg-fb-bubble .lg-fb-name{' +
+      'white-space:normal;overflow-wrap:anywhere}' +
+      '.feed-page .lg-fb-bubble img,#looth-rep-sheet .lg-fb-bubble img{max-width:100%;height:auto}';
+    (document.head || document.documentElement).appendChild(s);
+  }
+
   // Register a card; the clamp check is DEFERRED to when the card scrolls into view.
   // (Measuring scrollHeight>clientHeight at build time is unreliable for cards still
   // below the fold — they lay out later and were wrongly read as "not clamped", so
@@ -404,17 +427,31 @@
     row.setAttribute('data-lg-wired', '1');
     var like = row.querySelector('.lg-act-like');
     if (like) {
+      // server-rendered bars still ship the old HEART — swap it for the
+      // thumbs-up so the icon matches the 👍 reaction Like applies
+      var lic = like.querySelector('svg.ico, svg');
+      if (lic) lic.outerHTML = ICO_LIKE;
       like.addEventListener('click', function () { like.classList.toggle('is-on'); });
     }
     var rep = row.querySelector('.lg-act-replies');
     if (rep) rep.addEventListener('click', function (e) {
-      // MOBILE: tapping Reply on a discussion/topic post opens the replies sheet with
-      // its Facebook-style composer focused (keyboard up) — so you can reply to the
-      // POST itself, not just to a reply (Buck 2026-06-08). Content cards are handled
-      // by keepContentOnHub's capture route, so this only governs topic/legacy cards.
-      if (window.matchMedia('(max-width:640px)').matches && card.getAttribute('data-topic-id')) {
-        if (e) { e.preventDefault(); e.stopPropagation(); }
-        openRepliesSheet(card, { focus: true });
+      // A Reply tap must NEVER fall through to a legacy-page navigation (smoke-test
+      // audit 2026-06-11, holes H1–H3): claim the event FIRST, then pick the best
+      // in-place surface per viewport. Mobile discussion → the modal, thread first
+      // (Buck: "one intuitive button"); mobile content → FB comments, else the
+      // content sheet (anon cards have no comments button). Desktop keeps the
+      // native inline surfaces; topic last-resort = a title click, which opens the
+      // fork's §4e discussion modal instead of navigating.
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      var isTopic = !!card.getAttribute('data-topic-id');
+      if (window.matchMedia('(max-width:640px)').matches) {
+        if (isTopic) { openRepliesSheet(card, { toReplies: true }); return; }
+        var cmr = card.querySelector('[data-comments], .feed-card__comments-btn');
+        if (cmr) { cmr.click(); return; }
+        var cl = card.querySelector('.fc-title a, .feed-card__title a');
+        var ct = card.querySelector('.fc-title, .feed-card__title');
+        openContentSheet((cl && cl.href) || card.getAttribute('data-href'),
+          ct ? (ct.textContent || '').trim() : '');
         return;
       }
       var exp = card.querySelector('.feed-card__expand');
@@ -423,9 +460,14 @@
       if (cta) { cta.click(); return; }                          // forum topic → reply composer
       var cm = card.querySelector('.feed-card__comments-btn');
       if (cm) { cm.click(); return; }                            // content card (article/loothprint) → comments
-      var l = card.querySelector('.feed-card__title a');         // last resort → open the post so the tap is never dead
+      var t = card.querySelector('.fc-title, .feed-card__title');
+      if (isTopic && t) {                                        // topic last-resort → §4e desktop modal
+        t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        return;
+      }
+      var l = card.querySelector('.feed-card__title a');         // desktop content w/o any surface →
       var href = (l && l.getAttribute('href')) || card.getAttribute('data-href');
-      if (href) location.href = href;
+      if (href) location.href = href;                            // post page (canonical: CPTs click through)
     });
     var share = row.querySelector('.lg-act-share');
     if (share) share.addEventListener('click', function () {
@@ -475,6 +517,13 @@
   // data-topic-id (post_type 'topic'). null if neither (not savable).
   function cardSaveRef(card) {
     var pt = card.getAttribute('data-post-type'), id = card.getAttribute('data-item-id');
+    if (!pt || !id) {
+      // The fork's pared card markup (2026-06-10) moved the save contract off the
+      // card root onto inner carriers (.fc-save / .fcr / comments btn) — Vanessa's
+      // "save icon won't toggle": the root lookup came up empty so we bailed.
+      var car = card.querySelector('[data-post-type][data-item-id]');
+      if (car) { pt = car.getAttribute('data-post-type'); id = car.getAttribute('data-item-id'); }
+    }
     if ((!pt || !id) && card.getAttribute('data-topic-id')) { pt = 'topic'; id = card.getAttribute('data-topic-id'); }
     if (!pt || !id) return null;
     id = parseInt(id, 10); if (!id) return null;
@@ -548,6 +597,36 @@
         clone.removeAttribute('id');
         clone.addEventListener('click', function (e) { e.preventDefault(); hero.click(); });
         bar.appendChild(clone);
+      }
+    } catch (e) {}
+  }
+  // Saved pill NEXT TO Trending (Buck 2026-06-10) — nav-only entry to the
+  // canonical server-rendered ?saved=1 view. Mobile only (canonical owns the
+  // desktop bar per the bespoke-cutover lane wall). Own idempotent pass with
+  // delayed retries — the bar's tabs can land after the first run() pass.
+  // The drawer/rail "Saved posts" entry is hidden (moved here); You-menu link stays.
+  function ensureSavedPill() {
+    try {
+      if (!window.matchMedia('(max-width:640px)').matches) return;
+      var bar = document.querySelector('.feed-sort-bar');
+      if (!bar || bar.querySelector('.lg-saved-pill')) return;
+      var tabs = bar.querySelectorAll('a'), trend = null;
+      for (var ti = 0; ti < tabs.length; ti++) {
+        if (/trending/i.test((tabs[ti].textContent || '').trim())) { trend = tabs[ti]; break; }
+      }
+      if (!trend) return;                                   // tabs not in yet — retry will catch it
+      var onSaved = /[?&]saved=1/.test(location.search);
+      var sp = document.createElement('a');
+      var base = trend.className.replace(/\b(active|is-active)\b/g, '').replace(/\s+/g, ' ').trim();
+      sp.className = (base + ' lg-saved-pill' + (onSaved ? ' active is-active' : '')).trim();
+      sp.href = onSaved ? location.pathname : (location.pathname + '?saved=1');
+      sp.textContent = 'Saved';
+      trend.parentNode.insertBefore(sp, trend.nextSibling);
+      var olds = document.querySelectorAll('a[href*="saved=1"]:not(.lg-saved-pill)');
+      for (var oi = 0; oi < olds.length; oi++) {
+        if (olds[oi].closest('.feed-sort-bar') || olds[oi].closest('#looth-sheet')) continue;
+        var row = olds[oi].closest('li, .hub-rail__row, .hub-rail__item') || olds[oi];
+        row.style.display = 'none';
       }
     } catch (e) {}
   }
@@ -1131,12 +1210,94 @@
       panel.setAttribute('role', 'listbox');
       document.body.appendChild(panel);
 
+      // ── suggested category pills (Buck 2026-06-11: typing "3d" should surface
+      // a "#3D Printing" pill at the TOP — the same categories the cards wear).
+      // Harvested once from the filter rail's cat=/leaf= links, so labels, counts
+      // and targets always match the real filters. Prefix matches rank first.
+      if (!document.getElementById('lg-hs-cats-css')) {
+        var hcss = document.createElement('style'); hcss.id = 'lg-hs-cats-css';
+        hcss.textContent =
+          '.lg-hub-search__cats{display:flex;gap:7px;flex-wrap:wrap;padding:11px 12px 5px}' +
+          '.lg-hs-cat{display:inline-flex;align-items:center;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
+          'border-radius:999px;padding:7px 12px;font:700 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;white-space:nowrap}' +
+          'html[data-lguser-theme="dark"] .lg-hs-cat{background:#243024;color:#b6c79a}';
+        (document.head || document.documentElement).appendChild(hcss);
+      }
+      var hubCats = null;
+      function harvestCats() {
+        if (hubCats) return hubCats;
+        var seen = {}, out = [];
+        var links = document.querySelectorAll('a.hub-rail__nm[href*="cat="], a.hub-rail__nm[href*="leaf="]');
+        for (var i = 0; i < links.length; i++) {
+          var label = (links[i].textContent || '').trim();
+          if (!label || seen[label.toLowerCase()]) continue;
+          seen[label.toLowerCase()] = 1;
+          out.push({ label: label, href: links[i].getAttribute('href') });
+        }
+        if (out.length) hubCats = out;                       // cache once populated
+        return out;
+      }
+      function catPillsFor(q) {
+        var ql = q.toLowerCase().replace(/^#/, '');
+        var starts = [], contains = [];
+        harvestCats().forEach(function (c) {
+          var l = c.label.toLowerCase();
+          if (l.indexOf(ql) === 0) starts.push(c);
+          else if (l.indexOf(ql) > -1) contains.push(c);
+        });
+        var hits = starts.concat(contains).slice(0, 6);
+        if (!hits.length) return null;
+        var row = document.createElement('div');
+        row.className = 'lg-hub-search__cats';
+        hits.forEach(function (c) {
+          var a = document.createElement('a');
+          a.className = 'lg-hs-cat';
+          a.href = c.href;
+          a.textContent = '#' + c.label;
+          row.appendChild(a);
+        });
+        return row;
+      }
+
       function position() {
         var r = wrap.getBoundingClientRect();
         panel.style.top = Math.round(r.bottom + 8) + 'px';
       }
       function open() { position(); panel.classList.add('is-open'); }
       function close() { panel.classList.remove('is-open'); }
+
+      // Search results open IN PLACE (Buck 2026-06-11: tapping a result was
+      // navigating to the legacy page). Discussions resolve their topic id from
+      // the topic page (one fetch — the suggest payload has no id) and open the
+      // discussion modal via a stub card; everything else opens the content
+      // sheet. Category pills (.lg-hs-cat) still navigate — they ARE filters.
+      panel.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a.lg-hub-search__item');
+        if (!a) return;
+        var url = a.getAttribute('data-url') || a.getAttribute('href');
+        var kind = a.getAttribute('data-kind') || '';
+        var title = a.getAttribute('data-title') || (a.textContent || '').trim();
+        try { if (new URL(url, location.href).origin !== location.origin) return; } catch (err) { return; }
+        e.preventDefault(); e.stopPropagation();
+        close();
+        function asContent() { openContentSheet(url, title); }
+        if (/discussion|topic|reply|forum/i.test(kind)) {
+          fetch(url, { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.text() : ''; })
+            .then(function (html) {
+              var m = (html || '').match(/data-topic-id="(\d+)"/);
+              if (!m) { asContent(); return; }
+              var stub = document.createElement('div');
+              stub.setAttribute('data-topic-id', m[1]);
+              var t = document.createElement('span'); t.className = 'fc-title'; t.textContent = title;
+              stub.appendChild(t);
+              openRepliesSheet(stub);
+            })
+            .catch(asContent);
+        } else {
+          asContent();
+        }
+      }, true);
       function note(msg) {
         panel.innerHTML = '';
         var n = document.createElement('div');
@@ -1149,8 +1310,18 @@
       var timer = null, seq = 0;
       function render(results, q) {
         if (q !== input.value.trim()) return;     // stale: input moved on
-        if (!results.length) { note('No matches for “' + q + '”'); return; }
+        var pills = catPillsFor(q);
+        if (!results.length && !pills) { note('No matches for “' + q + '”'); return; }
         panel.innerHTML = '';
+        if (pills) panel.appendChild(pills);      // best-match categories on top
+        if (!results.length) {
+          var n0 = document.createElement('div');
+          n0.className = 'lg-hub-search__note';
+          n0.textContent = 'No posts match “' + q + '”';
+          panel.appendChild(n0);
+          open();
+          return;
+        }
         results.slice(0, 12).forEach(function (r) {
           if (!r || !r.url) return;
           var a = document.createElement('a');
@@ -1540,7 +1711,16 @@
             '.lg-wysiwyg video,.post__body video{width:100%!important;max-width:100%!important;height:auto!important;border-radius:12px;background:#000}' +
             'figure{margin:14px 0!important;max-width:100%!important}' +
             'figcaption{font-size:12.5px;color:var(--lg-mute,#6b6f6b);padding-top:6px}' +
-            'html[data-lguser-dark="1"] figcaption{color:#9aa097!important}';
+            'html[data-lguser-dark="1"] figcaption{color:#9aa097!important}' +
+            // dark-audit 2026-06-10: the post tagline/byline under the title kept its
+            // light-theme muted ink → near-invisible on the dark sheet. Raise contrast.
+            'html[data-lguser-dark="1"] .lg-post-header__tagline,html[data-lguser-dark="1"] .lg-post-header__byline,' +
+            'html[data-lguser-dark="1"] .lg-post-header__pub,html[data-lguser-dark="1"] .lg-post-header__eyebrow{color:#b9bfb6!important}' +
+            'html[data-lguser-dark="1"] .lg-post-header__name{color:#e5e7e1!important}' +
+            // dark: the tag chips keep their light-theme fill → glaring on the dark
+            // sheet (Buck 2026-06-10 "these pills look too brite"). Dark chip + sage text.
+            'html[data-lguser-dark="1"] .lg-post-header__chip{background:#243024!important;border-color:transparent!important;color:#b6c79a!important}' +
+            'html[data-lguser-dark="1"] .lg-post-header__chip--tier{background:#2e2a1c!important;color:#d8c08a!important}';
           (d.head || d.documentElement).appendChild(st);
         }
         // Overscroll-to-dismiss (Buck 2026-06-09): when the post is scrolled to the
@@ -1716,9 +1896,17 @@
         // (A) The REPLY action opens the Facebook-style comments modal (.lg-cmodal,
         // archive-api/v0/comments) via the card's [data-comments] trigger — NOT the
         // forum-thread sheet. (Buck 2026-06-09: that modal IS the comments view he wants.)
+        // Claim the event BEFORE the trigger lookup (audit 2026-06-11 H3: anon users
+        // have no comments button → the tap used to bubble on to a page navigation);
+        // with no trigger, fall back to the content sheet — comments render in the embed.
         if (e.target.closest('.lg-act-replies')) {
+          e.preventDefault(); e.stopPropagation();
           var cmr = card.querySelector('[data-comments], .feed-card__comments-btn');
-          if (cmr) { e.preventDefault(); e.stopPropagation(); cmr.click(); }
+          if (cmr) { cmr.click(); return; }
+          var cl0 = card.querySelector('.fc-title a, .feed-card__title a');
+          var ct0 = card.querySelector('.fc-title, .feed-card__title');
+          openContentSheet((cl0 && cl0.href) || card.getAttribute('data-href'),
+            ct0 ? (ct0.textContent || '').trim() : '');
           return;
         }
 
@@ -2117,7 +2305,38 @@
       });
       host.addEventListener('mouseleave', function () { stopHover(host); });
     }
-    function wireAll() { [].forEach.call(document.querySelectorAll('.fc-cover--video[data-yt-play]'), wireHost); }
+    // Body-EMBEDDED YouTube iframes (server-rendered in the post body, not a
+    // cover) never hover-autoplayed (Buck 2026-06-11). First hover rewrites the
+    // src once to a muted autoplay w/ the JS API enabled (a quick reload);
+    // after that hover plays / leave pauses like the cover previews.
+    function wireEmbed(f) {
+      if (f.getAttribute('data-lg-hoverwired')) return;
+      if (f.closest('.fc-cover--video')) return;                  // cover system owns those
+      var card = f.closest('.feed-card'); if (!card) return;
+      f.setAttribute('data-lg-hoverwired', '1');
+      f.addEventListener('mouseenter', function () {
+        if (!/enablejsapi=1/.test(f.src)) {
+          try {
+            var u = new URL(f.src, location.href);
+            u.searchParams.set('enablejsapi', '1');
+            u.searchParams.set('autoplay', '1');
+            u.searchParams.set('mute', '1');
+            u.searchParams.set('playsinline', '1');
+            f.src = u.toString();
+          } catch (e) { return; }
+        } else {
+          ytPost(f, 'playVideo');
+        }
+        try { stopOtherVideos(f); } catch (e2) {}
+      });
+      f.addEventListener('mouseleave', function () {
+        if (/enablejsapi=1/.test(f.src)) ytPost(f, 'pauseVideo');
+      });
+    }
+    function wireAll() {
+      [].forEach.call(document.querySelectorAll('.fc-cover--video[data-yt-play]'), wireHost);
+      [].forEach.call(document.querySelectorAll('.feed-card iframe[src*="youtube.com/embed"], .feed-card iframe[src*="youtube-nocookie.com/embed"]'), wireEmbed);
+    }
     wireAll();
     var root = document.getElementById('hub-feed-results') || document.querySelector('.feed') || document.body;
     if ('MutationObserver' in window) new MutationObserver(wireAll).observe(root, { childList: true, subtree: true });
@@ -2309,11 +2528,17 @@
       '#looth-rep-sheet .lrs-comp{flex:0 0 auto;display:flex;flex-wrap:wrap;align-items:flex-end;gap:9px;padding:9px 12px calc(9px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--lg-line,#e3ddd0);background:var(--lg-cream,#fbfbf8);will-change:transform;transition:transform .18s ease;position:relative;z-index:3}',
       '#looth-rep-sheet .lrs-comp__av{width:32px;height:32px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}',
       '#looth-rep-sheet .lrs-comp__av img{width:100%;height:100%;object-fit:cover;display:block}',
-      '#looth-rep-sheet .lrs-comp__wrap{display:flex;align-items:flex-end;gap:4px;flex:1 1 auto;min-width:0;background:#fff;border:1px solid #d8d2c4;border-radius:20px;padding:5px 6px 5px 14px}',
-      '#looth-rep-sheet .lrs-comp__input{flex:1 1 auto;min-width:0;border:0;background:none;outline:none;resize:none;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif);color:#111!important;max-height:120px;padding:5px 0}',
-      '#looth-rep-sheet .lrs-comp__input::placeholder{color:#888!important}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__wrap,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__wrap{background:#fff!important}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__input,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__input{color:#111!important}',
+      // The pinned bar is a TRIGGER for the composer sheet now (Buck 2026-06-10:
+      // "fix the look") — a clean FB-style pill: avatar + muted "Write a comment…",
+      // no live input chrome, no Post/photo buttons (those live in the sheet).
+      '#looth-rep-sheet .lrs-comp__wrap{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;background:var(--lguser-bubble,#eceff3);border:0;border-radius:999px;padding:10px 16px;cursor:pointer}',
+      '#looth-rep-sheet .lrs-comp__input{flex:1 1 auto;min-width:0;border:0;background:none;outline:none;resize:none;font:15px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#65676b);height:20px;max-height:20px;overflow:hidden;padding:0;pointer-events:none;cursor:pointer}',
+      '#looth-rep-sheet .lrs-comp__input::placeholder{color:var(--lg-mute,#65676b)}',
+      '#looth-rep-sheet .lrs-comp .lrs-comp__photo,#looth-rep-sheet .lrs-comp .lrs-comp__send,' +
+        '#looth-rep-sheet .lrs-comp .lrs-comp__previews,#looth-rep-sheet .lrs-comp .lrs-comp__status{display:none!important}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__wrap,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__wrap{background:#262b30!important}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__input,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__input{color:#9aa097!important}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-comp__input::placeholder,html[data-lguser-dark="1"] #looth-rep-sheet .lrs-comp__input::placeholder{color:#9aa097!important}',
       '#looth-rep-sheet .lrs-comp__send{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);font:700 14px/1 var(--lg-font-sans,system-ui,sans-serif);padding:7px 9px}',
       '#looth-rep-sheet .lrs-comp__photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#52613d);padding:5px 4px;line-height:0}',
       '#looth-rep-sheet .lrs-comp__photo svg{width:21px;height:21px}',
@@ -2358,6 +2583,15 @@
     else { lrsHist = false; }
   }
   window.addEventListener('popstate', function () {
+    // Composer sheet stacks on top of the modal — phone back closes IT first and
+    // re-pushes the modal's history entry so a second back closes the modal.
+    var cs = document.getElementById('looth-comp-sheet');
+    if (cs && cs.classList.contains('is-open')) {
+      closeComposerSheet();
+      var sh0 = document.getElementById('looth-rep-sheet');
+      if (sh0 && sh0.classList.contains('is-open') && lrsHist) { try { history.pushState({ lgRs: 1 }, ''); } catch (e) {} }
+      return;
+    }
     var sh = document.getElementById('looth-rep-sheet');
     if (sh && sh.classList.contains('is-open')) lrsClose(true);
   });
@@ -2380,6 +2614,16 @@
     })();
   }
   // Fetch the thread into the sheet body (reused on open AND after posting a reply).
+  // Scroll the sheet body so the thread starts at the top (Buck 2026-06-11: "if i
+  // click replys ... can it be scrolled to where the replys start"). Only inside a
+  // short window after a replies-intent open, and never after the user scrolled.
+  function lrsScrollToReplies() {
+    var sh = document.getElementById('looth-rep-sheet');
+    if (!sh || !sh.__lgToReplies || Date.now() - sh.__lgToReplies > 5000) return;
+    var body = sh.querySelector('#lrs-body'), th = sh.querySelector('#lrs-thread');
+    if (!body || !th) return;
+    body.scrollTop += th.getBoundingClientRect().top - body.getBoundingClientRect().top - 6;
+  }
   function lrsLoadThread(tid) {
     var sh = document.getElementById('looth-rep-sheet'); if (!sh) return;
     // Replies land in #lrs-thread so reloading after a post keeps the OP above intact.
@@ -2392,8 +2636,9 @@
         body.innerHTML = '<div class="feed-card__replies-full lg-rshow"></div>';
         var full = body.querySelector('.feed-card__replies-full');
         full.innerHTML = html;
-        if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; return; }
+        if (!full.querySelector('.reply-stub')) { body.innerHTML = '<div class="lrs-note">No replies yet. Be the first to reply.</div>'; if (sh) sh.__lgToReplies = 0; return; }
         lrsLoadAll(full);
+        lrsScrollToReplies();
       })
       .catch(function () { body.innerHTML = '<div class="lrs-note">Couldn’t load replies right now.</div>'; });
   }
@@ -2440,7 +2685,13 @@
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
-      .then(function (html) { if (html && html.trim()) body.innerHTML = html; })
+      .then(function (html) {
+        if (html && html.trim()) body.innerHTML = html;
+        // the full OP grows above the thread → re-anchor a replies-intent open
+        // (again shortly after, for images in the OP body landing late)
+        lrsScrollToReplies();
+        setTimeout(lrsScrollToReplies, 450);
+      })
       .catch(function () {});
   }
   function openRepliesSheet(card, opts) {
@@ -2496,6 +2747,9 @@
         attach(sh.querySelector('.lrs-hd'), null);
         var bodyEl = sh.querySelector('#lrs-body');
         attach(bodyEl, function () { return bodyEl.scrollTop <= 0; });
+        // the user taking over scrolling cancels any pending auto-anchor to the thread
+        bodyEl.addEventListener('touchstart', function () { sh.__lgToReplies = 0; }, { passive: true });
+        bodyEl.addEventListener('wheel', function () { sh.__lgToReplies = 0; }, { passive: true });
       })();
       // composer wiring (once): enable Post on input; auto-grow; submit
       var inp = sh.querySelector('#lrs-comp-input'), send = sh.querySelector('#lrs-comp-send');
@@ -2556,6 +2810,16 @@
       }
       inp.addEventListener('focus', function () { setTimeout(lrsAdjustKb, 120); setTimeout(lrsAdjustKb, 330); });
       inp.addEventListener('blur', function () { setTimeout(lrsAdjustKb, 80); });
+      // FB-style (Ian 2026-06-10): the pinned bar is now a TRIGGER — tapping any
+      // part of it opens the floating composer sheet instead of typing inline.
+      inp.setAttribute('readonly', 'readonly');
+      sh.querySelector('.lrs-comp').addEventListener('click', function (ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        openComposerSheet({
+          tid: sh.getAttribute('data-tid'), fid: sh.getAttribute('data-fid'),
+          title: (sh.querySelector('.lrs-t') || {}).textContent, focus: true
+        });
+      }, true);
     }
     // per-open setup
     sh.setAttribute('data-tid', tid || ''); sh.setAttribute('data-fid', fid);
@@ -2564,6 +2828,10 @@
     var ttl = ttlEl ? (ttlEl.textContent || '').trim() : '';
     sh.querySelector('.lrs-t').textContent = ttl || (n ? (n + ' replies') : 'Replies');
     var bd0 = sh.querySelector('#lrs-body'); if (bd0) bd0.scrollTop = 0;
+    // Replies intent (Buck 2026-06-11): opened from a replies control → land on the
+    // thread, not the OP. Timestamped so late async loads (OP body) can re-anchor
+    // for a few seconds without hijacking the sheet later (e.g. post-reply reloads).
+    sh.__lgToReplies = (opts && opts.toReplies) ? Date.now() : 0;
     var av = sh.querySelector('#lrs-comp-av'); var avs = lrsViewerAvatar();
     av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
     var inp2 = sh.querySelector('#lrs-comp-input'); inp2.value = ''; inp2.style.height = 'auto';
@@ -2574,10 +2842,15 @@
     lrsScroll = document.body.style.overflow; document.body.style.overflow = 'hidden';
     sh.classList.add('is-open');
     if (!lrsHist) { try { history.pushState({ lgRs: 1 }, ''); lrsHist = true; } catch (e) {} }
-    // Focus the composer (opens the keyboard) when opened via the Reply intent.
-    // MUST be synchronous within the originating tap so iOS honors the focus.
-    if (opts && opts.focus) { try { inp2.focus({ preventScroll: true }); } catch (e) { try { inp2.focus(); } catch (e2) {} } }
+    // Reply intent → open the FB-style composer sheet on top (focus is synchronous
+    // within the originating tap so iOS honors the keyboard).
+    if (opts && opts.focus) openComposerSheet({ tid: tid, fid: fid, title: ttl, focus: true });
     lrsLoadOp(sh, card, tid);
+    // No topic id (audit 2026-06-11 H6: dynamically built legacy cards) → no thread
+    // to fetch and nothing valid to post to; hide the composer instead of letting
+    // Post submit to a null topic.
+    var compEl = sh.querySelector('.lrs-comp');
+    if (compEl) compEl.style.display = tid ? '' : 'none';
     if (!tid) { (sh.querySelector('#lrs-thread') || sh.querySelector('#lrs-body')).innerHTML = '<div class="lrs-note">Couldn’t load replies.</div>'; return; }
     lrsLoadThread(tid);
   }
@@ -2611,6 +2884,220 @@
     });
   }
 
+  // ── FB-style reply composer sheet (Ian via Buck 2026-06-10: replies should
+  // compose like Facebook's share sheet) — a compact floating card over the
+  // content: grab pill, your avatar + name, a context pill naming the post, a
+  // big open input, photo attach, and ONE big Post button. Opens from the card's
+  // Reply action and from the modal's pinned "Write a comment…" bar (now a
+  // trigger). Posting reuses the same canonical REST flow as lrsSubmit.
+  var lcpMediaIds = [];
+  function ensureCompSheet() {
+    var sh = document.getElementById('looth-comp-sheet');
+    if (sh) return sh;
+    if (!document.getElementById('lg-lcp-css')) {
+      var st = document.createElement('style'); st.id = 'lg-lcp-css';
+      var D = 'html[data-lguser-theme="dark"]';
+      st.textContent = [
+        '#looth-comp-sheet{position:fixed;inset:0;z-index:2147483560;display:none}',
+        '#looth-comp-sheet.is-open{display:block}',
+        // light scrim — the thread in the modal behind stays readable ABOVE the
+        // composer card (Buck 2026-06-10: show the replies while writing)
+        '#looth-comp-sheet .lcp-back{position:absolute;inset:0;background:rgba(15,16,12,.18)}',
+        '#looth-comp-sheet .lcp-card{position:absolute;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom,0px));' +
+          'background:#fff;border-radius:22px;box-shadow:0 10px 44px rgba(0,0,0,.3);padding:2px 16px 14px;' +
+          'animation:looth-pwa-up .26s ease;will-change:transform;font:15px/1.4 var(--lg-font-sans,system-ui,sans-serif)}',
+        '#looth-comp-sheet .lcp-grab{height:18px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}',
+        '#looth-comp-sheet .lcp-grab::before{content:"";width:36px;height:4px;border-radius:3px;background:#d8d2c4}',
+        '#looth-comp-sheet .lcp-head{display:flex;align-items:center;gap:10px;margin:4px 0 2px}',
+        '#looth-comp-sheet .lcp-av{width:38px;height:38px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3)}',
+        '#looth-comp-sheet .lcp-av img{width:100%;height:100%;object-fit:cover;display:block}',
+        '#looth-comp-sheet .lcp-id{min-width:0;flex:1 1 auto}',
+        '#looth-comp-sheet .lcp-name{font:700 15px/1.2 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-charcoal,#1a1d1a)}',
+        '#looth-comp-sheet .lcp-ctx{display:inline-block;margin-top:4px;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
+          'font:600 11.5px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;padding:5px 10px;max-width:240px;' +
+          'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}',
+        '#looth-comp-sheet .lcp-input{width:100%;box-sizing:border-box;border:0;outline:0;background:none;resize:none;' +
+          'font:17px/1.45 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#1a1d1a);min-height:84px;max-height:200px;padding:10px 2px 6px}',
+        '#looth-comp-sheet .lcp-input::placeholder{color:#9aa097}',
+        '#looth-comp-sheet .lcp-row{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap}',
+        '#looth-comp-sheet .lcp-photo{flex:0 0 auto;border:0;background:none;cursor:pointer;color:var(--lg-sage-d,#6b7c52);padding:4px 2px;line-height:0}',
+        '#looth-comp-sheet .lcp-photo svg{width:22px;height:22px}',
+        '#looth-comp-sheet .lcp-previews{display:flex;gap:8px;flex-wrap:wrap}',
+        '#looth-comp-sheet .lcp-previews:empty{display:none}',
+        '#looth-comp-sheet .lcp-pv{position:relative;display:inline-block}',
+        '#looth-comp-sheet .lcp-pv img{width:52px;height:52px;object-fit:cover;border-radius:10px;display:block;border:1px solid var(--lg-line,#e3ddd0)}',
+        '#looth-comp-sheet .lcp-pv-x{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border:0;border-radius:50%;background:rgba(26,29,26,.75);color:#fff;font:700 13px/20px sans-serif;cursor:pointer;padding:0}',
+        '#looth-comp-sheet .lcp-status{flex-basis:100%;font:12px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:#8a8d91}',
+        '#looth-comp-sheet .lcp-status:empty{display:none}',
+        '#looth-comp-sheet .lcp-post{display:block;width:100%;box-sizing:border-box;border:0;border-radius:12px;cursor:pointer;' +
+          'background:var(--lg-sage,#87986a);color:#fff;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif);padding:14px}',
+        '#looth-comp-sheet .lcp-post:disabled{background:#c9cfc0;cursor:default}',
+        // dark pass
+        D + ' #looth-comp-sheet .lcp-card{background:#1b1e21;color:#e5e7e1}',
+        D + ' #looth-comp-sheet .lcp-grab::before{background:#3a403a}',
+        D + ' #looth-comp-sheet .lcp-name{color:#f2f4ee}',
+        D + ' #looth-comp-sheet .lcp-ctx{background:#243024;color:#b6c79a}',
+        D + ' #looth-comp-sheet .lcp-input{color:#e5e7e1;background:none!important;border:0!important}',
+        D + ' #looth-comp-sheet .lcp-input::placeholder{color:#7e857c}',
+        D + ' #looth-comp-sheet .lcp-av{background:#262b30}',
+        D + ' #looth-comp-sheet .lcp-pv img{border-color:#2c312d}',
+        D + ' #looth-comp-sheet .lcp-post{background:var(--lg-sage-d,#6b7c52)}',
+        D + ' #looth-comp-sheet .lcp-post:disabled{background:#2c312d;color:#7e857c}'
+      ].join('\n');
+      (document.head || document.documentElement).appendChild(st);
+    }
+    sh = document.createElement('div'); sh.id = 'looth-comp-sheet';
+    sh.setAttribute('role', 'dialog'); sh.setAttribute('aria-modal', 'true'); sh.setAttribute('aria-label', 'Write a reply');
+    sh.innerHTML =
+      '<div class="lcp-back" data-lcp-close></div>' +
+      '<div class="lcp-card">' +
+        '<div class="lcp-grab" aria-hidden="true"></div>' +
+        '<div class="lcp-head"><span class="lcp-av" id="lcp-av"></span>' +
+          '<div class="lcp-id"><div class="lcp-name" id="lcp-name">You</div><span class="lcp-ctx" id="lcp-ctx" hidden></span></div></div>' +
+        '<textarea class="lcp-input" id="lcp-input" rows="3" placeholder="Write a comment…"></textarea>' +
+        '<div class="lcp-row">' +
+          '<button class="lcp-photo" id="lcp-photo" type="button" aria-label="Add photo" title="Add photo">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.8"/><path d="M4 17l4.5-4.5 3 3L16 11l4 4"/></svg></button>' +
+          '<input type="file" id="lcp-file" accept="image/*" style="display:none">' +
+          '<span class="lcp-previews" id="lcp-previews"></span>' +
+          '<span class="lcp-status" id="lcp-status"></span>' +
+        '</div>' +
+        '<button class="lcp-post" id="lcp-post" type="button" disabled>Post</button>' +
+      '</div>';
+    (document.body || document.documentElement).appendChild(sh);
+    sh.addEventListener('click', function (e) { if (e.target.closest('[data-lcp-close]')) closeComposerSheet(); });
+    var card = sh.querySelector('.lcp-card');
+    // drag the grab pill down to dismiss
+    (function () {
+      var grab = sh.querySelector('.lcp-grab'), sy = 0, dy = 0, on = false;
+      grab.addEventListener('touchstart', function (e) { sy = e.touches[0].clientY; dy = 0; on = true; card.style.transition = 'none'; }, { passive: true });
+      grab.addEventListener('touchmove', function (e) {
+        if (!on) return; dy = Math.max(0, e.touches[0].clientY - sy);
+        card.style.transform = 'translateY(' + dy + 'px)'; if (e.cancelable) e.preventDefault();
+      }, { passive: false });
+      grab.addEventListener('touchend', function () {
+        if (!on) return; on = false; card.style.transition = ''; card.style.transform = '';
+        if (dy > 90) closeComposerSheet();
+      });
+    })();
+    var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post');
+    ta.addEventListener('input', function () {
+      post.disabled = !ta.value.trim() && !lcpMediaIds.length;
+      ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    });
+    post.addEventListener('click', function () { lcpSubmit(sh); });
+    // photo attach — same canonical contract as the modal composer (media/upload → bbp_media)
+    var photoBtn = sh.querySelector('#lcp-photo'), fileIn = sh.querySelector('#lcp-file');
+    photoBtn.addEventListener('click', function () { fileIn.click(); });
+    fileIn.addEventListener('change', function () {
+      var file = fileIn.files && fileIn.files[0];
+      fileIn.value = '';
+      if (!file) return;
+      var status = sh.querySelector('#lcp-status');
+      status.textContent = 'Uploading photo…';
+      lrsGetAuth(function (a) {
+        if (!a || !a.authenticated) { status.textContent = 'Sign in to add photos.'; return; }
+        var fd = new FormData(); fd.append('file', file);
+        fetch(LRS_REPLY_BASE + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': a.nonce }, body: fd })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok || !res.j.upload_id) { status.textContent = 'Photo upload failed: ' + ((res.j && res.j.message) || 'error'); return; }
+            lcpMediaIds.push(res.j.upload_id);
+            status.textContent = '';
+            var pv = sh.querySelector('#lcp-previews');
+            var chip = document.createElement('span'); chip.className = 'lcp-pv';
+            chip.innerHTML = '<img src="' + String(res.j.upload_thumb || res.j.upload).replace(/"/g, '&quot;') + '" alt="">' +
+              '<button type="button" class="lcp-pv-x" aria-label="Remove photo">&times;</button>';
+            chip.querySelector('.lcp-pv-x').addEventListener('click', function () {
+              var ix = lcpMediaIds.indexOf(res.j.upload_id);
+              if (ix > -1) lcpMediaIds.splice(ix, 1);
+              chip.remove();
+              post.disabled = !ta.value.trim() && !lcpMediaIds.length;
+            });
+            pv.appendChild(chip);
+            post.disabled = false;
+          })
+          .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
+      });
+    });
+    // keyboard-aware: lift the floating card above the on-screen keyboard
+    function lcpKb() {
+      if (!sh.classList.contains('is-open') || !window.visualViewport) { card.style.transform = ''; return; }
+      var vv = window.visualViewport;
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      card.style.transform = kb > 1 ? ('translateY(-' + kb + 'px)') : '';
+    }
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', lcpKb);
+      window.visualViewport.addEventListener('scroll', lcpKb);
+    }
+    ta.addEventListener('focus', function () { setTimeout(lcpKb, 120); setTimeout(lcpKb, 330); });
+    ta.addEventListener('blur', function () { setTimeout(lcpKb, 80); });
+    return sh;
+  }
+  function openComposerSheet(o) {
+    o = o || {};
+    var sh = ensureCompSheet();
+    sh.__lcpCtx = { tid: parseInt(o.tid, 10) || 0, fid: parseInt(o.fid, 10) || 0 };
+    var av = sh.querySelector('#lcp-av'); var avs = lrsViewerAvatar();
+    av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
+    var nameEl = sh.querySelector('#lcp-name');
+    nameEl.textContent = 'You';
+    lrsGetAuth(function (a) { if (a && a.display_name) nameEl.textContent = a.display_name; });
+    var ctx = sh.querySelector('#lcp-ctx');
+    var ttl = (o.title || '').trim();
+    if (ttl) { ctx.hidden = false; ctx.textContent = 'Replying to: ' + (ttl.length > 34 ? ttl.slice(0, 33) + '…' : ttl); }
+    else { ctx.hidden = true; }
+    var ta = sh.querySelector('#lcp-input');
+    ta.value = ''; ta.style.height = 'auto';
+    sh.querySelector('#lcp-post').disabled = true;
+    sh.querySelector('#lcp-status').textContent = '';
+    sh.querySelector('#lcp-previews').innerHTML = '';
+    lcpMediaIds.length = 0;
+    sh.classList.add('is-open');
+    // bring the latest replies into view in the modal behind, so the user reads
+    // the conversation right above the composer while writing
+    var rs = document.getElementById('looth-rep-sheet');
+    if (rs && rs.classList.contains('is-open')) {
+      var bd = rs.querySelector('#lrs-body');
+      if (bd) { try { bd.scrollTo({ top: bd.scrollHeight, behavior: 'smooth' }); } catch (e) { bd.scrollTop = bd.scrollHeight; } }
+    }
+    if (o.focus !== false) { try { ta.focus({ preventScroll: true }); } catch (e) { try { ta.focus(); } catch (e2) {} } }
+  }
+  function closeComposerSheet() {
+    var sh = document.getElementById('looth-comp-sheet');
+    if (sh) sh.classList.remove('is-open');
+  }
+  function lcpSubmit(sh) {
+    var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
+    var text = (ta.value || '').trim(); if (!text && !lcpMediaIds.length) return;
+    var ctx = sh.__lcpCtx || {}; var tid = ctx.tid; if (!tid) { status.textContent = 'Couldn’t find the post.'; return; }
+    post.disabled = true; status.textContent = 'Posting…';
+    lrsGetAuth(function (a) {
+      if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; return; }
+      var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
+      if (ctx.fid) payload.forum_id = ctx.fid;
+      if (lcpMediaIds.length) payload.bbp_media = lcpMediaIds.slice();
+      fetch(LRS_REPLY_BASE + '/reply', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+        body: JSON.stringify(payload)
+      })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
+          closeComposerSheet();
+          // live-refresh the discussion modal if it's open on this topic
+          var rs = document.getElementById('looth-rep-sheet');
+          if (rs && rs.classList.contains('is-open') && parseInt(rs.getAttribute('data-tid'), 10) === tid) {
+            lrsLoadThread(tid);
+            var b = rs.querySelector('#lrs-body'); if (b) setTimeout(function () { b.scrollTop = b.scrollHeight; }, 600);
+          }
+        })
+        .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
+    });
+  }
+
   function wireExpandLoadAll() {
     if (!window.matchMedia('(max-width:640px)').matches) return;   // mobile only — desktop keeps native inline expand
     if (document.body.getAttribute('data-lg-loadall')) return;
@@ -2622,11 +3109,11 @@
         if (!c || c.__lgRepLoading || c.__lgPreviewing) return;          // our/teaser programmatic clicks
         if (/hide/i.test(exp.textContent || '')) return;                 // collapsing → let native
         e.preventDefault(); e.stopPropagation();
-        openRepliesSheet(c);                                             // "View N replies" → popup
+        openRepliesSheet(c, { toReplies: true });                        // "View N replies" → popup, thread on top
         return;
       }
       var lm = e.target.closest && e.target.closest('.replies-loadmore');
-      if (lm) { var c2 = lm.closest('.feed-card'); if (c2 && !c2.__lgRepLoading) { e.preventDefault(); e.stopPropagation(); openRepliesSheet(c2); } }
+      if (lm) { var c2 = lm.closest('.feed-card'); if (c2 && !c2.__lgRepLoading) { e.preventDefault(); e.stopPropagation(); openRepliesSheet(c2, { toReplies: true }); } }
     }, true);                                                  // capture: own the tap, drive the loader ourselves
   }
 
@@ -2699,13 +3186,11 @@
       // card shell matches the app; bg chains to forums --bg-card so DEFAULT follows
       // the OS while a picked theme's --lguser-card overrides. Masonry props here too:
       // each card is a whole block in the column flow with an even vertical rhythm.
-      // C3 flip (2026-06-11): arrangement/geometry props REMOVED here — forums.css's
-      // desktop grid (@media min-width:641, commit 88955fb) now lays the cards out.
-      // Only the card CHROME (bg/border/radius/shadow) still ships from the overlay;
-      // those retire next once confirmed value-identical via the theme bridge.
       P + ' .feed-card{background:var(--lguser-card,var(--bg-card,#fff))!important;' +
         'border:1px solid var(--lguser-line,#e3ddd0)!important;border-radius:16px!important;' +
-        'box-shadow:0 1px 2px rgba(26,29,26,.05),0 10px 22px -14px rgba(26,29,26,.28)!important}',
+        'box-shadow:0 1px 2px rgba(26,29,26,.05),0 10px 22px -14px rgba(26,29,26,.28)!important;' +
+        'display:block!important;width:100%!important;margin:0 0 18px!important;column-span:none!important;' +
+        'break-inside:avoid!important;-webkit-column-break-inside:avoid!important;page-break-inside:avoid!important}',
       // text + pills follow the theme tokens (OS-aware for default)
       P + ' .feed-card__title,' + P + ' .feed-card__title a,' + P + ' .feed-card__op-author{color:var(--lguser-ink,#1a1d1a)!important}',
       P + ' .feed-card__op-excerpt,' + P + ' .fc-excerpt,' + P + ' .fc-time,' + P + ' .fc-category{color:var(--lguser-mute,#6b6f6b)!important}',
@@ -2782,6 +3267,31 @@
       '.feed-sort-bar .feed-text-toggle,.feed-sort-bar .feed-theme-toggle,.feed-sort-bar .feed-compact-toggle{display:none!important}'
     ].join('\n');
     css = '@media (min-width:641px){\n' + css + '\n}';
+    // ULTRAWIDE cap (Buck 2026-06-11): forums.css's 3-column masonry has no feed
+    // max-width, so on a 3440px monitor each card stretched past 1100px and the
+    // covers stopped filling the card. Cap the feed where a column ≈ 560px (the
+    // width Buck pointed at, covers edge-to-edge) and center it. The full 5-col
+    // ultrawide layout stays parked post-launch per the 6/10 call.
+    css += '\n@media (min-width:1780px){\n' +
+      '.feed-page .feed{max-width:1716px;margin-left:auto;margin-right:auto}\n' +
+      '.feed-page .feed-sort-bar{max-width:1716px;margin-left:auto;margin-right:auto}\n' +
+      '}';
+    // ULTRAWIDE columns (Buck 2026-06-11): same Mosaic mode — when the empty
+    // margin on EITHER side of the capped 3-col feed passes a full card width
+    // (~560px + gap), spend that space on another column instead of margins.
+    // Triggers: 1716 + 2x578 ~= 2872 -> 4 cols (2294px); 2294 + 2x578 ~= 3414
+    // -> 5 cols (2872px). Plain media queries: normal monitors never hit this.
+    // Overlay <style> loads after forums.css, so the same-specificity
+    // column-count wins in cascade order. (Supersedes the 6/10 "park
+    // ultrawide" note — Buck asked for this explicitly today.)
+    css += '\n@media (min-width:2872px){\n' +
+      '.feed-page .feed{column-count:4;max-width:2294px}\n' +
+      '.feed-page .feed-sort-bar{max-width:2294px}\n' +
+      '}';
+    css += '\n@media (min-width:3414px){\n' +
+      '.feed-page .feed{column-count:5;max-width:2872px}\n' +
+      '.feed-page .feed-sort-bar{max-width:2872px}\n' +
+      '}';
     var s = document.createElement('style'); s.id = 'lg-desktop-css'; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
@@ -2804,6 +3314,27 @@
   // Tapping the BODY text of a reply (not the author name, not a link/action)
   // expands the collapsed thread — same as tapping "View N replies" (Buck
   // 2026-06-08). Only fires while collapsed; once expanded a body tap is inert.
+  // Loothprint body tap -> the loothprint details sheet (Buck 2026-06-11:
+  // clicking the body text of a loothprint card did NOTHING on desktop -- the
+  // sheet's last caller was severed in the 6/10 cutover, leaving
+  // openLoothprintSheet orphaned). Title/cover anchors still navigate (Ian:
+  // CPTs click through); this only claims the otherwise-dead body/excerpt
+  // taps. ALL widths. Registered BEFORE wirePostBodyExpand so the sheet wins
+  // over the synthetic read-more toggle on mobile.
+  function wireLoothprintTap() {
+    if (document.body.getAttribute('data-lg-lptap')) return;
+    document.body.setAttribute('data-lg-lptap', '1');
+    document.addEventListener('click', function (e) {
+      var card = e.target.closest && e.target.closest('.feed-card[data-kind="loothprint"]');
+      if (!card) return;
+      var body = e.target.closest('.feed-card__op-excerpt, .fc-excerpt, .feed-card__header-body, .fc-body');
+      if (!body) return;
+      if (e.target.closest('a, button, .feed-card__title, .fc-title, .lg-act, .lg-card-actions, .fc-actions, .fcr, .fcr-palette, .reply-stub, .fc-author')) return;
+      e.preventDefault(); e.stopPropagation();
+      try { openLoothprintSheet(card); } catch (err) {}
+    }, true);
+  }
+
   function wireReplyBodyExpand() {
     if (!window.matchMedia('(max-width:640px)').matches) return;   // mobile only — desktop unchanged
     if (document.body.getAttribute('data-lg-replybody')) return;
@@ -2817,7 +3348,7 @@
       // Tapping a reply opens the full replies popup (Buck 2026-06-08) — the teaser
       // reply shows first; tapping it (or "View N replies") opens the sheet with all.
       e.preventDefault(); e.stopPropagation();
-      openRepliesSheet(card);
+      openRepliesSheet(card, { toReplies: true });
     }, true);  // capture: beat the card's open-thread handler
   }
 
@@ -3291,6 +3822,55 @@
     });
   }
 
+  // ── New-post composer un-wedge (Vanessa 2026-06-11) ─────────────────────────
+  // The fork's ntm overlay caches its auth state: ONE transient auth.php failure
+  // (FPM hiccup) leaves it wedged on "Loading…"/"Sign in" for the whole page
+  // session even though you ARE signed in — reopening never retries. Real fix =
+  // retry-on-open in the fork (msg'd to fable). Stopgap: when the overlay opens
+  // into anon/loading but auth.php says authenticated, do one guarded reload
+  // (fresh closure → clean auth) and auto-reopen the composer.
+  function wireComposerUnwedge() {
+    if (document.body.getAttribute('data-lg-unwedge')) return;
+    document.body.setAttribute('data-lg-unwedge', '1');
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest) return;
+      if (!e.target.closest('.forum-header__new-post, .lg-newpost, [data-ntm-open]')) return;
+      setTimeout(function () {
+        try {
+          var ov = document.getElementById('ntm-overlay');
+          if (!ov || ov.hidden) return;
+          var anon = document.getElementById('ntm-anon'), loading = document.getElementById('ntm-loading');
+          var wedged = (anon && !anon.hidden) || (loading && !loading.hidden);
+          if (!wedged) return;
+          fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              if (!d || !d.authenticated) return;             // genuinely signed out — leave the prompt
+              var last = 0;
+              try { last = parseInt(sessionStorage.getItem('lgNtmKick'), 10) || 0; } catch (e2) {}
+              if (Date.now() - last < 60000) return;          // at most one auto-recover a minute
+              try {
+                sessionStorage.setItem('lgNtmKick', String(Date.now()));
+                sessionStorage.setItem('lgNtmReopen', '1');
+              } catch (e3) {}
+              location.reload();
+            })
+            .catch(function () {});
+        } catch (err) {}
+      }, 2500);                                               // give the fork's own fetch a fair chance
+    }, true);
+    // after a recovery reload, reopen the composer so the user keeps their flow
+    try {
+      if (sessionStorage.getItem('lgNtmReopen') === '1') {
+        sessionStorage.removeItem('lgNtmReopen');
+        setTimeout(function () {
+          var b = document.querySelector('.forum-header__new-post, [data-ntm-open]');
+          if (b) b.click();
+        }, 1200);
+      }
+    } catch (e4) {}
+  }
+
   function run() {
     if (!onHubPath()) return;
     if (!document.querySelector('.feed-page')) return; // listing pages only
@@ -3299,6 +3879,7 @@
     wireFilterDrawer();
     ensureImmersiveCss();
     ensureDesktopCss();
+    wireLoothprintTap();
     wireReplyBodyExpand();
     wirePostBodyExpand();
     wireFastFilters();
@@ -3311,6 +3892,8 @@
     addTagline();
     relocateFilterToggle();
     restyleSortBar();
+    ensureSavedPill();
+    setTimeout(ensureSavedPill, 1500); setTimeout(ensureSavedPill, 4000);
     setupDesktopFilterNav();
     lgSyncSaved();
     relabelAuthorFilter();
@@ -3322,7 +3905,9 @@
     buildTopSearch();
     wireHeaderAutoHide();
     keepContentOnHub();
+    wireComposerUnwedge();
     lgPolishCommentsFrame();
+    ensureReplyNameWrapCss();
     relayCards(document);
     // Server-rendered cards carry data-lg-card, so relayCards skips them (forums.js
     // owns their expand/read-more). Their action bar is hub-polish-exclusive and
