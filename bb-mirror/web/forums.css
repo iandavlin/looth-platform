@@ -3496,6 +3496,9 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
 .hub-fmodal__x:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
 .hub-fmodal__body { overflow-y: auto; padding: 14px 20px 20px;
   scrollbar-width: thin; scrollbar-color: var(--lg-line) transparent; }
+/* fetch-in-flight while a filter applies (modal stays open, Ian 6/11) */
+.hub-fmodal__body.is-loading { opacity: .55; pointer-events: none;
+  transition: opacity .15s; }
 body.hub-fmodal-lock { overflow: hidden; }
 /* Two open sections, side by side; single column on phones */
 .hub-rail__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px;

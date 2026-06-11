@@ -252,13 +252,80 @@
       if (p) p.focus();
     }
   }
+  // Filter clicks APPLY WITHOUT CLOSING (Ian 2026-06-11: pick several, modal
+  // only closes on the × or a click off it). The rail rows are plain server
+  // links (zero-JS fallback = navigate); here we fetch the target URL and
+  // swap, in place: the feed cards (keeping the .feed NODE alive so the
+  // pinned-columns + infinite-scroll observers survive), the modal body
+  // (fresh counts + on-states), the chip bar, and the sort-pill hrefs (so a
+  // later sort click keeps the picked filters). URL via replaceState so
+  // reload/share lands on the same filtered view. Any failure falls back to
+  // plain navigation.
+  function fmodalApply(href) {
+    var mbody = fmodal.querySelector('.hub-fmodal__body');
+    if (mbody) mbody.classList.add('is-loading');
+    fetch(href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var oldR = document.getElementById('hub-feed-results');
+        var newR = doc.getElementById('hub-feed-results');
+        if (oldR && newR) {
+          var oldF = oldR.querySelector('.feed'), newF = newR.querySelector('.feed');
+          if (oldF && newF) {
+            oldF.innerHTML = newF.innerHTML;
+            var oldM = oldR.querySelector('.feed-more'), newM = newR.querySelector('.feed-more');
+            if (oldM && newM) oldM.innerHTML = newM.innerHTML;
+            else if (oldM && !newM) oldM.parentNode.removeChild(oldM);
+            else if (!oldM && newM) oldF.insertAdjacentElement('afterend', document.importNode(newM, true));
+          } else {
+            oldR.innerHTML = newR.innerHTML;   // empty-state transitions
+          }
+          document.dispatchEvent(new CustomEvent('lg:hub-feed-swapped'));
+        }
+        var nb = doc.querySelector('.hub-fmodal__body');
+        if (mbody && nb) mbody.innerHTML = nb.innerHTML;
+        var oldC = document.querySelector('.hub-chipbar'), newC = doc.querySelector('.hub-chipbar');
+        if (oldC && newC) oldC.replaceWith(document.importNode(newC, true));
+        else if (oldC && !newC) oldC.remove();
+        else if (!oldC && newC) {
+          var bar = document.querySelector('.feed-sort-bar');
+          if (bar) bar.insertAdjacentElement('beforebegin', document.importNode(newC, true));
+        }
+        // Sort/Saved pills keep the new filter set (hrefs are server-built).
+        var newAs = {}, list = doc.querySelectorAll('.feed-sort-bar a');
+        for (var i = 0; i < list.length; i++) newAs[list[i].textContent.trim()] = list[i].getAttribute('href');
+        document.querySelectorAll('.feed-sort-bar a').forEach(function (a) {
+          var h = newAs[a.textContent.trim()];
+          if (h) a.setAttribute('href', h);
+        });
+        // Toolbar search forms carry filters as hidden inputs — refresh them.
+        ['q', 'author'].forEach(function (kind) {
+          var of = document.querySelector('.hub-tsearch--' + kind);
+          var nf = doc.querySelector('.hub-tsearch--' + kind);
+          if (!of || !nf) return;
+          of.querySelectorAll('input[type="hidden"]').forEach(function (n) { n.remove(); });
+          nf.querySelectorAll('input[type="hidden"]').forEach(function (n) {
+            of.insertBefore(document.importNode(n, true), of.firstChild);
+          });
+        });
+        try { history.replaceState({}, '', href); } catch (e) {}
+        if (mbody) mbody.classList.remove('is-loading');
+      })
+      .catch(function () { location.href = href; });
+  }
   if (fmodal) {
     fmodal.addEventListener('click', function (e) {
-      if (e.target.closest('[data-hub-fmodal-close]')) fmodalSet(false);
+      if (e.target.closest('[data-hub-fmodal-close]')) { fmodalSet(false); return; }
+      var a = e.target.closest('a[href]');
+      var mbody = fmodal.querySelector('.hub-fmodal__body');
+      if (a && mbody && mbody.contains(a)) {
+        e.preventDefault();
+        fmodalApply(a.getAttribute('href'));
+      }
     });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !fmodal.hidden) fmodalSet(false);
-    });
+    // No Esc close — Ian 2026-06-11: the modal closes ONLY via the × or a
+    // click off the panel (multi-select sessions shouldn't lose the dialog).
   }
 
   if (ham) ham.addEventListener('click', toggleNav);
@@ -2752,6 +2819,9 @@
     if (mo) return;
     mo = new MutationObserver(function (muts) {
       if (moving || !bucketed) return;
+      // A filters-modal apply replaces the feed's children wholesale (the
+      // column wrappers go with them) — rebuild the buckets from scratch.
+      if (!liveCols(feed).length) { bucket(feed); return; }
       var cols = null;
       for (var i = 0; i < muts.length; i++) {
         var added = muts[i].addedNodes;
@@ -2768,6 +2838,16 @@
       }
     });
     mo.observe(feed, { childList: true });
+    // Empty-state transitions replace the .feed NODE itself — re-init on the
+    // swap event the filters modal dispatches.
+    document.addEventListener('lg:hub-feed-swapped', function () {
+      var f = feedEl();
+      if (!f) return;
+      if (mo) { mo.disconnect(); mo = null; }
+      bucketed = f.classList.contains('feed--pinned') && !!f.querySelector('.feed-colw');
+      apply();
+      watch(f);
+    });
   }
 
   function boot() {
