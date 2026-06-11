@@ -97,3 +97,54 @@ backup-file deny + wp-config quarantine; /.well-known/ gate-exempt on 443; perf-
 - Temp Buck key auto-removes Sat 18:44 UTC (`systemctl list-timers buck-key-rotate`).
 - Buck's clone can resurrect coord-removed overlay code — he's warned twice; check version
   numbers in his msgs against live before assuming.
+
+---
+
+## Addendum — 6/11 late evening (same coordinator, post-handoff burst)
+
+**Ian rulings tonight (all relayed to Buck):**
+- **Backfill directive CHANGED**: "cutting close to complete with a backfill
+  top off" — full backfills on dev are now fine; cut day re-runs idempotent
+  scripts as a top-off. Buck's legacy-DM run is ratified. Keep-list:
+  `docs/CUT-DAY-DATA-TOPOFF.md` (avatar chain + DM script fixes live there).
+- **Buck's wide-screen column-cap override APPROVED** ("override fine") —
+  the v180–v183 caps/rail behavior stand; absorb into forums.css when his
+  geometry settles. NB his rail auto-open targets an aside the hub no longer
+  renders (see filters modal below) — he should retire it.
+- **members-geo**: restore; **each member's pin follows their own profile
+  privacy decision** (slider panel) — no blanket coarse/pull. Gates the
+  front-page Bento map tile + You-pin.
+- **Events are OUT of the hub feed** (events page owns them) — union, Type
+  facet, and category counts all exclude kind='event' (592f7ac).
+- **Filters = centered MODAL, multi-select** (8a31dda + 8307540): Categories
+  AND Types both open, no segmented toggle; picks apply in place via fetch;
+  closes ONLY on × / click-off (no Esc). Hub renders no nav aside / hamburger
+  / drawer anymore; forum subpages keep the classic left nav.
+
+**Also landed tonight:**
+- Launch-blocker closed: 253 backup files swept out of /var/www/dev →
+  `/var/www/dev-bak-archive/` (paths+ownership kept, loothdevs-writable);
+  deny rules verified live both vhosts (loothtool got the .bak rule);
+  assetlinks.json serves anon (Buck's TWA unblocked).
+- Hub scroll repeat/reshuffle fixed two-sided: pinned mosaic columns
+  (forums.js §9 — multicol rebalance was moving read cards between columns)
+  + deterministic paging (sort tiebreakers, frozen hot clock `hnow=`).
+- Desktop header GEAR restored: live pwa.js loads bottom-nav.js on ALL
+  viewports again (the gated loader had it mobile-only). hub-polish v185 =
+  wireFilterDrawer no-ops when #hub-fmodal exists. Both live-only until
+  Buck's next mirror commit.
+- Gating bug: post 71179 (public-badged video) carried a stray per-block
+  `gated_tier: looth-lite` — stripped in WP meta + blob re-materialized;
+  anon now gets the embed. Only post with the mismatch (71441 has NO tier
+  term at all — content-cleanup should term it).
+- Merges: buck/social-modal-dark → fork (c88e443); buck/front-page-bento →
+  main (509a17d — was already cp-deployed, tree now clean);
+  buck/profile-section-move → main (2953172 — owner-view eyeball still on
+  Buck). Fork is 5 commits ahead, unpushed (review-before-push rule).
+
+**Still queued (coord lane):** Buck's _feed.php asks — cover img
+width/height attrs (proper scroll-jump fix; his hub-nojump shim then
+retires), "Comment" label on content cards, viaReplies `.lg-act-replies`
+one-liner, topic-tap exclusion list, ntm auth retry, heart→thumbs-up SVG.
+Then the three greenlit builds (loothprint popup, member create-flow,
+members-geo re-point — now per-user-privacy shaped).
