@@ -160,10 +160,13 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
     echo '<h3 class="lg-bh">';
     if ($isOwner) {
         // Editable block title — reuses the generic lg-edit inline editor (PUT me-gallery {title}).
+        // The empty state must render its placeholder TEXT (like About does) — an empty span
+        // is a zero-width click target the owner can't see, let alone click.
         $hasT = $title !== '';
         echo '<span class="lg-edit lg-btitle' . ($hasT ? '' : ' lg-edit--empty') . '"'
            . ' data-edit-field="title" data-edit-url="/profile-api/v0/me/gallery" data-edit-method="PUT"'
-           . ' data-edit-type="text" data-edit-placeholder="Gallery">' . looth_h($hasT ? $title : '') . '</span>';
+           . ' data-edit-type="text" data-edit-placeholder="Name this gallery…">'
+           . ($hasT ? looth_h($title) : 'Name this gallery…') . '</span>';
         echo ' ' . looth_pmp_control('gallery', (string)$g['vis'], $headerVis);
     } else {
         echo looth_h($title !== '' ? $title : 'Gallery');
