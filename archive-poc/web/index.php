@@ -243,6 +243,8 @@ define('LG_SPONSORS',     is_array($_lg_overlay['sponsors']     ?? null) ? $_lg_
 define('LG_LOCAL_LOOTHS', is_array($_lg_overlay['local_looths'] ?? null) ? $_lg_overlay['local_looths'] : $_lg_defaults['local_looths']);
 define('LG_CTA_MEMBER',   is_array($_lg_overlay['cta_member']   ?? null) ? $_lg_overlay['cta_member']   : $_lg_defaults['cta_member']);
 define('LG_CTA_PUBLIC',   is_array($_lg_overlay['cta_public']   ?? null) ? $_lg_overlay['cta_public']   : $_lg_defaults['cta_public']);
+define('LG_FEATURED_MEMBER', is_array($_lg_overlay['featured_member'] ?? null) ? $_lg_overlay['featured_member'] : ($_lg_defaults['featured_member'] ?? []));
+define('LG_HUB_TEASER', is_array($_lg_overlay['hub_teaser'] ?? null) ? $_lg_overlay['hub_teaser'] : ($_lg_defaults['hub_teaser'] ?? []));
 unset($_lg_defaults, $_lg_overlay, $_lg_raw, $_lg_parsed);
 
 function thumb_url(array $it): string {
@@ -417,7 +419,7 @@ $client_state = [
 <link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
-<body class="view-discover<?= $happening_now ? ' has-live' : '' ?>">
+<body class="view-discover<?= $happening_now ? ' has-live' : '' ?><?= $is_member ? ' is-member' : '' ?>">
 <?php $lg_active_nav = ''; // front page is none of the nav sections — show all, incl. Archive
 require __DIR__ . '/_chrome.php'; ?>
 <?php if ($happening_now): $hn = $happening_now;
@@ -670,12 +672,84 @@ require __DIR__ . '/_chrome.php'; ?>
 <?php endif; ?>
 
   <div class="rows" id="rows">
-<?php foreach ($main_rows as $row):
+<?php
+// Bento logged-in layout (Buck's pick, Ian-greenlit 2026-06-11): members get a
+// featured-member band after the welcome promo, and the events row pairs with
+// a member-map tile in a two-up bento grid, Loothalong link pinned on top.
+$lg_fm = ($is_member && defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])) ? LG_FEATURED_MEMBER : null;
+foreach ($main_rows as $row):
     $layout = $row['layout'] ?? 'rail';
     $row_id = $row['id'] ?? '';
 ?>
 
+<?php if ($row_id === 'upcoming-events'): ?>
+      <div class="lg-bento">
+        <section class="lg-bento__map" id="lg-fp-map" aria-label="Member map">
+          <div class="lg-fp-map__canvas"></div>
+          <img class="lg-bento__map-img" src="/archive-poc/member-map-teaser.webp" alt="" loading="lazy">
+          <div class="lg-bento__map-copy">
+            <h2 class="lg-bento__map-title"><?= $is_member ? 'Makers near you' : 'Luthiers everywhere' ?></h2>
+            <p class="lg-bento__map-sub"><?= $is_member ? 'You&rsquo;re on the map. The closest luthiers and shops:' : 'Find members and shops near you.' ?></p>
+            <div class="lg-fp-map__list"></div>
+            <button type="button" class="lg-bento__map-btn" data-action="open-member-map">Open the member map</button>
+          </div>
+        </section>
+        <script defer src="/archive-poc/fp-map.js?v=<?= @filemtime(__DIR__ . '/fp-map.js') ?>"></script>
+        <div class="lg-bento__events">
+          <?php if ($is_member): ?>
+          <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/loothalong.php">
+            <span class="lg-loothalong__glow"></span>
+            <span class="lg-loothalong__live"><span class="lg-loothalong__dot"></span><?= $happening_now ? 'Live now' : 'Open 24/7' ?></span>
+            <span class="lg-loothalong__txt">Loothalong<small>A 24-hour workbench full of friends.</small></span>
+            <span class="lg-loothalong__go">Pull up a bench<svg class="lg-loothalong__arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span>
+          </a>
+          <?php endif; ?>
+          <?php include __DIR__ . "/_render-main-row.php"; ?>
+        </div>
+      </div>
+<?php if (!$is_member && defined('LG_HUB_TEASER') && !empty(LG_HUB_TEASER['enabled']) && !empty(LG_HUB_TEASER['items'])): ?>
+      <section class="row row--hub-teaser" data-row-id="hub-teaser">
+        <div class="lg-hubt__head">
+          <p class="lg-hubt__eyebrow">The Hub</p>
+          <h2 class="lg-hubt__title">What members are talking about</h2>
+          <p class="lg-hubt__sub">Real bench problems, candid answers. Join to reply and see who you&rsquo;re talking to.</p>
+        </div>
+        <div class="lg-hubt__grid">
+          <?php foreach (array_slice(LG_HUB_TEASER['items'], 0, 6) as $lg_ht): ?>
+          <article class="lg-hubt__card">
+            <div class="lg-hubt__top">
+              <span class="lg-hubt__chip">Discussion</span>
+              <?php if (!empty($lg_ht['replies'])): ?><span class="lg-hubt__replies"><?= (int)$lg_ht['replies'] ?> replies</span><?php endif; ?>
+            </div>
+            <h3 class="lg-hubt__t"><?= h((string)($lg_ht['title'] ?? '')) ?></h3>
+            <p class="lg-hubt__ex"><?= h((string)($lg_ht['excerpt'] ?? '')) ?></p>
+            <div class="lg-hubt__by">Private member &middot; join to see who</div>
+          </article>
+          <?php endforeach; ?>
+        </div>
+        <div class="lg-hubt__cta"><a class="lg-hubt__more" href="/hub/">See the full Hub &rarr;</a></div>
+      </section>
+<?php endif; ?>
+<?php else: ?>
 <?php include __DIR__ . "/_render-main-row.php"; ?>
+<?php endif; ?>
+<?php if ($lg_fm && $row_id === 'video-promo-members'): ?>
+      <section class="row row--featured-member" data-row-id="featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="<?= h((string)($lg_fm['avatar'] ?? '')) ?>" alt="" loading="lazy"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name"><?= h((string)($lg_fm['name'] ?? '')) ?></h2>
+            <div class="lg-fm__role"><?= h((string)($lg_fm['role'] ?? '')) ?></div>
+            <?php if (!empty($lg_fm['where'])): ?><div class="lg-fm__where"><?= h((string)$lg_fm['where']) ?></div><?php endif; ?>
+            <?php if (!empty($lg_fm['bio'])): ?><p class="lg-fm__bio"><?= h((string)$lg_fm['bio']) ?></p><?php endif; ?>
+          </div>
+          <?php if (!empty($lg_fm['cta_href'])): ?>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="<?= h((string)$lg_fm['cta_href']) ?>"><?= h((string)($lg_fm['cta_label'] ?? 'View')) ?></a></div>
+          <?php endif; ?>
+        </div>
+      </section>
+<?php endif; ?>
 <?php endforeach; /* /main_rows */ ?>
   </div><!-- /.rows -->
   </div><!-- /.arc-pane--main -->

@@ -3085,3 +3085,373 @@ html[data-lguser-theme="dark"] body.view-discover {
    rule reads correctly in both. Last-in-file so source order wins at equal specificity. */
 body.view-discover .vpromo__copy .vp-cta--secondary { color: var(--lg-sage-d, #4a5a4a) !important; }
 body.view-discover .vpromo__copy .vp-cta--secondary:hover { background: rgba(135, 152, 106, 0.14); }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   BENTO (logged-in front page) — Buck's pick, Ian-greenlit 2026-06-11.
+   Featured-member band + map/events bento pair + Loothalong link.
+   Scope: body.view-discover.is-member ONLY (public Classic Landing
+   untouched). All colors via --lg-*/--fp-* tokens so the dark counterpart
+   (html[data-lguser-theme=dark] / OS-dark) flows through with no extra rules.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Featured-member band ── */
+body.view-discover.is-member .row--featured-member { margin: 26px 0; }
+body.view-discover.is-member .lg-fm {
+  position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 22px; align-items: center;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line, #ebe9e2);
+  border-left: 5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 14px; padding: 22px 26px;
+}
+body.view-discover.is-member .lg-fm__badge {
+  position: absolute; top: 14px; right: 18px;
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--lg-amber, #ecb351);
+}
+body.view-discover.is-member .lg-fm__avi {
+  width: 104px; height: 104px; border-radius: 50%; overflow: hidden; display: block;
+  border: 3px solid var(--lg-card-bg, #fff); box-shadow: 0 0 0 1px var(--lg-line, #ebe9e2);
+  background: var(--fp-img-ph, #d4ccb8); flex: 0 0 auto;
+}
+body.view-discover.is-member .lg-fm__avi img { width: 100%; height: 100%; object-fit: cover; display: block; }
+body.view-discover.is-member .lg-fm__name { margin: 0 0 2px; font: 400 26px/1.12 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover.is-member .lg-fm__role { font: 600 13px/1.3 var(--lg-font-sans); color: var(--lg-sage-d, #6f7c54); }
+body.view-discover.is-member .lg-fm__where { font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); margin-top: 1px; }
+body.view-discover.is-member .lg-fm__bio { margin: 9px 0 0; font: 400 14px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532); max-width: 600px; }
+body.view-discover.is-member .lg-fm__cta {
+  display: inline-block; background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff);
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+  text-decoration: none; white-space: nowrap;
+}
+body.view-discover.is-member .lg-fm__cta:hover { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+/* ── Bento pair: member-map tile + events ── */
+body.view-discover .lg-bento {
+  display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: stretch;
+  margin: 26px 0;
+}
+body.view-discover .lg-bento__events { min-width: 0; }
+body.view-discover .lg-bento__events .rail { overflow-x: auto; }
+body.view-discover .lg-bento .row { margin: 0; }
+body.view-discover .lg-bento__map {
+  position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+  min-height: 280px; border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--lg-line, #ebe9e2); background: var(--fp-img-ph, #d4ccb8);
+}
+body.view-discover .lg-bento__map-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block;
+}
+body.view-discover .lg-bento__map-copy {
+  position: relative; z-index: 2; padding: 40px 20px 16px;
+  background: linear-gradient(transparent, rgba(20, 22, 15, .78));
+}
+body.view-discover .lg-bento__map-title { margin: 0 0 2px; font: 400 22px/1.15 var(--lg-font-serif); color: #fbfbf8; }
+body.view-discover .lg-bento__map-sub { margin: 0 0 12px; font: 400 13.5px/1.4 var(--lg-font-sans); color: rgba(251,251,248,.85); }
+body.view-discover .lg-bento__map-btn {
+  display: inline-block; width: auto; align-self: flex-start; cursor: pointer;
+  background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff); border: 0;
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+}
+body.view-discover .lg-bento__map-btn:hover { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+/* ── Loothalong link (top of the events tile) ── */
+body.view-discover.is-member .lg-loothalong {
+  display: flex; align-items: center; gap: 13px; margin: 0 0 14px;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-sage, #8a9670); border-left: 5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 12px; padding: 12px 15px; text-decoration: none;
+}
+body.view-discover.is-member .lg-loothalong__live {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--lg-mute, #6b6f6b);
+}
+body.view-discover.is-member .lg-loothalong.is-live .lg-loothalong__live { color: var(--lg-rust, #c66845); }
+body.view-discover.is-member .lg-loothalong__dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--lg-mute, #6b6f6b);
+}
+body.view-discover.is-member .lg-loothalong.is-live .lg-loothalong__dot {
+  background: var(--lg-rust, #c66845);
+  animation: lg-la-pulse 1.7s infinite;
+}
+@keyframes lg-la-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(198, 104, 69, .55); }
+  100% { box-shadow: 0 0 0 10px rgba(198, 104, 69, 0); }
+}
+body.view-discover.is-member .lg-loothalong__txt { flex: 1 1 auto; min-width: 0; font: 600 15px/1.25 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover.is-member .lg-loothalong__txt small { display: block; font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); margin-top: 2px; }
+body.view-discover.is-member .lg-loothalong__go {
+  flex: 0 0 auto; font: 700 13px/1 var(--lg-font-sans);
+  background: var(--lg-sage-d, #6f7c54); color: var(--fp-cta-ink, #fff);
+  border-radius: 999px; padding: 9px 15px;
+}
+body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__go { background: var(--fp-cta-hover-bg, #3a4a3a); }
+
+@media (max-width: 1080px) {
+  body.view-discover .lg-bento { grid-template-columns: 1fr; }
+  body.view-discover.is-member .lg-fm { grid-template-columns: auto minmax(0,1fr); }
+  body.view-discover.is-member .lg-fm__act { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  body.view-discover.is-member .lg-fm { grid-template-columns: 1fr; text-align: center; }
+  body.view-discover.is-member .lg-fm__avi { margin: 0 auto; }
+  body.view-discover.is-member .lg-loothalong { flex-wrap: wrap; }
+}
+
+/* Contain the LOGGED-IN discover column to a centered max-width so the
+   featured-member band, bento, and rails read as a tidy column instead of
+   stretching full-bleed on wide monitors (matches the approved Bento deck).
+   Member view only (body...is-member) — the public Classic Landing width is
+   the front-page lane's call, flagged separately. (Buck 2026-06-11) */
+@media (min-width: 641px) {
+  body.view-discover.is-member .topbar--standalone,
+  body.view-discover.is-member .rows {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   PUBLIC front page → Buck's deck style (2026-06-11): split welcome hero
+   (copy left / video right, checkmark bullets), events+map bento (events
+   left, map right, no Loothalong), Hub teaser section, contained column.
+   Scope: body.view-discover:not(.is-member). Appended AFTER the Classic
+   Landing block so same-specificity overrides win in cascade order.
+   Tokens only — the dark counterpart flows through untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* contain the public column too (twin of the member cap) */
+@media (min-width: 641px) {
+  body.view-discover:not(.is-member) .topbar--standalone,
+  body.view-discover:not(.is-member) .rows {
+    max-width: 1200px; margin-left: auto; margin-right: auto;
+  }
+}
+
+/* ── split hero ── */
+body.view-discover:not(.is-member) .row--video-promo[data-row-id="video-promo-public"] { padding: 34px 0 30px; }
+body.view-discover:not(.is-member) .row--video-promo[data-row-id="video-promo-public"] .row__head { display: none; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo {
+  grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+  max-width: none; gap: 44px; align-items: center;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy {
+  order: 0; text-align: left; align-items: flex-start; font-size: 1.02rem;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__video { order: 1; max-width: none; margin: 0; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__label { text-align: left; }
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy .vp-eyebrow {
+  font: 700 11px/1 var(--lg-font-sans); letter-spacing: .15em; text-transform: uppercase;
+  color: var(--lg-sage-d, #6f7c54); margin: 0 0 12px;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy h3 {
+  font: 400 40px/1.12 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a);
+  letter-spacing: -.01em; margin: 0 0 14px;
+}
+/* checkmark bullets back (Classic Landing hid them) */
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul {
+  display: block; list-style: none; margin: 0 0 18px; padding: 0;
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul li {
+  position: relative; padding-left: 24px; margin: 0 0 8px;
+  font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-ink, #323532);
+}
+body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo__copy ul li::before {
+  content: ""; position: absolute; left: 2px; top: .42em; width: 10px; height: 6px;
+  border-left: 2.5px solid var(--lg-sage-d, #6f7c54); border-bottom: 2.5px solid var(--lg-sage-d, #6f7c54);
+  transform: rotate(-45deg);
+}
+
+/* ── bento order for public: events left, map right ── */
+body.view-discover:not(.is-member) .lg-bento__map { order: 2; }
+body.view-discover:not(.is-member) .lg-bento__events { order: 1; }
+
+/* ── Hub teaser ── */
+body.view-discover:not(.is-member) .row--hub-teaser { margin: 34px 0 10px; }
+body.view-discover:not(.is-member) .lg-hubt__eyebrow {
+  font: 700 11px/1 var(--lg-font-sans); letter-spacing: .15em; text-transform: uppercase;
+  color: var(--lg-sage-d, #6f7c54); margin: 0 0 8px;
+}
+body.view-discover:not(.is-member) .lg-hubt__title { margin: 0 0 4px; font: 400 26px/1.15 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover:not(.is-member) .lg-hubt__sub { margin: 0 0 18px; font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); max-width: 560px; }
+body.view-discover:not(.is-member) .lg-hubt__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+body.view-discover:not(.is-member) .lg-hubt__card {
+  display: flex; flex-direction: column;
+  background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #ebe9e2);
+  border-radius: 10px; padding: 15px 16px 13px;
+}
+body.view-discover:not(.is-member) .lg-hubt__top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+body.view-discover:not(.is-member) .lg-hubt__chip {
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 999px;
+  background: var(--lg-sage-tint, #f0f2e9); color: var(--lg-sage-d, #6f7c54);
+}
+body.view-discover:not(.is-member) .lg-hubt__replies { margin-left: auto; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); }
+body.view-discover:not(.is-member) .lg-hubt__t { margin: 0 0 7px; font: 600 15.5px/1.3 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover:not(.is-member) .lg-hubt__ex {
+  margin: 0 0 12px; font: 400 13.5px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1 1 auto;
+}
+body.view-discover:not(.is-member) .lg-hubt__by {
+  font: 500 12px/1.2 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b);
+  border-top: 1px solid var(--lg-line, #ebe9e2); padding-top: 10px;
+}
+body.view-discover:not(.is-member) .lg-hubt__cta { display: flex; justify-content: center; margin-top: 20px; }
+body.view-discover:not(.is-member) .lg-hubt__more {
+  display: inline-block; font: 700 13px/1 var(--lg-font-sans); text-decoration: none;
+  color: var(--lg-sage-d, #6f7c54); border: 1.5px solid var(--lg-sage-d, #6f7c54);
+  border-radius: 999px; padding: 11px 20px;
+}
+body.view-discover:not(.is-member) .lg-hubt__more:hover { background: var(--lg-sage-tint, #f0f2e9); }
+
+@media (max-width: 1080px) {
+  body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo { grid-template-columns: 1fr; }
+  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr; }
+}
+
+/* Inside the bento cell the events list stacks vertically (deck style),
+   instead of the row's default horizontal scroll rail. Both audiences. */
+body.view-discover .lg-bento__events .row--events .rail {
+  display: flex; flex-direction: column; gap: 12px;
+  overflow: visible; margin: 0; padding: 0;
+}
+body.view-discover .lg-bento__events .row--events .ecard { width: 100%; }
+
+/* ── Member What's-New promo → BENTO band (Buck 2026-06-11: "we wanted bento
+   not split hero"). The lane's centered member-hero becomes a compact card
+   tile: copy left, video right, same card language as the rest of the page.
+   Member view only; appended last so it outranks the member-hero block. ── */
+body.view-discover.is-member .row--video-promo[data-row-id="video-promo-members"] {
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line, #ebe9e2);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin: 26px 0 8px;
+}
+body.view-discover.is-member .row--video-promo[data-row-id="video-promo-members"] .row__head { display: none; }
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  max-width: none; gap: 30px; align-items: center;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy {
+  order: 0; text-align: left; align-items: flex-start; font-size: .98rem;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__video {
+  order: 1; max-width: 460px; width: 100%; margin: 0; justify-self: end;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__label { text-align: left; }
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy h2,
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy h3 {
+  font: 400 24px/1.2 var(--lg-font-serif); text-align: left; margin: 0 0 10px;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy p { text-align: left; }
+@media (max-width: 1080px) {
+  body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo { grid-template-columns: 1fr; }
+  body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__video { justify-self: stretch; max-width: none; }
+}
+
+
+/* ── Member map tile, LIVE state (fp-map.js): mini Leaflet zoomed on the
+   viewer + closest-members list. Until .is-live lands, the static teaser
+   renders exactly as before (public always keeps the teaser). ── */
+.lg-fp-map__canvas { display: none; }
+.lg-bento__map.is-live { justify-content: flex-start; }
+.lg-bento__map.is-live .lg-fp-map__canvas { display: block; height: 240px; flex: 0 0 auto; }
+.lg-bento__map.is-live .lg-bento__map-img { display: none; }
+.lg-bento__map.is-live .lg-bento__map-copy {
+  position: static; background: none; padding: 14px 16px 14px;
+  display: flex; flex-direction: column; flex: 1 1 auto;
+}
+.lg-bento__map.is-live .lg-bento__map-title { color: var(--lg-charcoal, #1a1d1a); font-size: 19px; }
+.lg-bento__map.is-live .lg-bento__map-sub { color: var(--lg-mute, #6b6f6b); margin-bottom: 10px; }
+.lg-fp-map__list { display: none; }
+.lg-bento__map.is-live.has-list .lg-fp-map__list {
+  display: flex; flex-direction: column; gap: 7px; margin: 0 0 12px;
+}
+.lg-fp-near {
+  display: flex; align-items: baseline; gap: 9px; text-decoration: none;
+  font: 500 13px/1.35 var(--lg-font-sans);
+  border: 1px solid var(--lg-line, #ebe9e2); border-radius: 9px; padding: 8px 11px;
+  background: var(--lg-card-bg, #fff);
+}
+.lg-fp-near:hover { border-color: var(--lg-sage, #8a9670); }
+.lg-fp-near__n { font-weight: 700; color: var(--lg-charcoal, #1a1d1a); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-fp-near__m { color: var(--lg-mute, #6b6f6b); flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-fp-near__d {
+  flex: 0 0 auto; font: 700 11px/1 var(--lg-font-sans); color: var(--lg-sage-d, #6f7c54);
+  background: var(--lg-sage-tint, #f0f2e9); border-radius: 999px; padding: 5px 9px;
+}
+.lg-fp-you { font: 700 11px/1 var(--lg-font-sans); }
+.lg-bento__map.is-live .lg-bento__map-btn { align-self: flex-start; margin-top: auto; }
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   Front-page cleanup (Buck 2026-06-11): compact event cards + Loothalong
+   matched to the events-page banner. Appended last → wins source order.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* 1) Event cards: in the stacked bento column, .ecard's flex:0 0 320px was a
+   fixed HEIGHT (giant empty boxes). Make them content-height + full width. */
+body.view-discover .lg-bento__events .row--events .ecard {
+  flex: 0 0 auto; width: 100%; min-height: 0;
+}
+
+/* 2) lg-loothalong RESTYLE → events-page banner look (green gradient, LIVE
+   chip, cream "Pull up a bench" button). Member-only tile, both themes via
+   the same fixed brand greens the events banner uses. */
+body.view-discover.is-member .lg-loothalong {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 14px; padding: 15px 16px; text-decoration: none;
+  border-radius: 16px; border: 1px solid var(--lg-sage-d, #6b7c52);
+  background: radial-gradient(120% 140% at 12% 0%, #9aa97d 0%, var(--lg-sage, #87986a) 42%, var(--lg-sage-d, #6b7c52) 100%);
+  color: #fbfbf8; box-shadow: 0 10px 28px rgba(26, 29, 26, .18);
+}
+body.view-discover.is-member .lg-loothalong:hover { filter: brightness(1.02); box-shadow: 0 16px 38px rgba(26, 29, 26, .24); }
+body.view-discover.is-member .lg-loothalong__glow {
+  position: absolute; top: -46px; right: -34px; width: 190px; height: 190px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(236, 179, 81, .5), rgba(236, 179, 81, 0) 70%);
+  pointer-events: none; animation: lg-ll-glow 4.5s ease-in-out infinite;
+}
+body.view-discover.is-member .lg-loothalong__live {
+  position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(26, 29, 26, .28); padding: 5px 11px 5px 9px; border-radius: 999px;
+  font: 800 10.5px/1 var(--lg-font-sans); letter-spacing: .1em; text-transform: uppercase; color: #fbfbf8;
+}
+body.view-discover.is-member .lg-loothalong__dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--lg-rust, #c66845); flex: 0 0 auto;
+  animation: lg-la-pulse 1.8s ease-out infinite;
+}
+body.view-discover.is-member .lg-loothalong__txt {
+  position: relative; flex: 1 1 auto; min-width: 0;
+  font: 700 17px/1.1 var(--lg-font-serif); color: #fbfbf8;
+}
+body.view-discover.is-member .lg-loothalong__txt small {
+  display: block; font: 600 12px/1.3 var(--lg-font-sans); color: rgba(251, 251, 248, .9); margin-top: 3px;
+}
+body.view-discover.is-member .lg-loothalong__go {
+  position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px;
+  background: var(--lg-cream, #fbfbf8); color: var(--lg-sage-d, #6b7c52);
+  font: 800 13.5px/1 var(--lg-font-sans); padding: 11px 15px; border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(26, 29, 26, .22);
+}
+body.view-discover.is-member .lg-loothalong__arr {
+  width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4;
+  stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease;
+}
+body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transform: translateX(3px); }
+@keyframes lg-ll-glow { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  body.view-discover.is-member .lg-loothalong__dot,
+  body.view-discover.is-member .lg-loothalong__glow { animation: none !important; }
+}
+@media (max-width: 640px) {
+  body.view-discover.is-member .lg-loothalong { flex-wrap: wrap; }
+}

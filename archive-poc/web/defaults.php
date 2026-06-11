@@ -28,6 +28,35 @@ return [
         ['name' => 'Member Benefits',       'url' => 'https://loothgroup.com/archive/?_post_type=member-benefit', 'logo' => 'https://loothgroup.com/wp-content/uploads/2024/06/Member-Benefits-300x80.webp',    'bg' => '#fff'],
     ],
 
+    // Featured-member band on the LOGGED-IN front page (Bento layout,
+    // Buck/Ian 2026-06-11). Rotate via the config.json overlay; enabled=false
+    // hides the band. Dan Erlewine first.
+    'featured_member' => [
+        'enabled'   => true,
+        'name'      => 'Dan Erlewine',
+        'role'      => 'Master Luthier & Repair Authority',
+        'where'     => 'Athens, Ohio',
+        'bio'       => 'Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.',
+        'avatar'    => 'https://i.ytimg.com/vi/2IBxue3zPxE/hqdefault.jpg',
+        'cta_label' => "See Dan's videos",
+        'cta_href'  => '/hub/?author=Dan%20Erlewine&type=video',
+    ],
+
+    // Public front-page Hub teaser ("What members are talking about") —
+    // Bento/Classic deck section, Buck 2026-06-11. Snapshot of real public-tier
+    // posts; refresh via the config.json overlay (or wire live data later).
+    'hub_teaser' => [
+        'enabled' => true,
+        'items' => [
+            ['title' => 'Gibson LG-1 1957 fingerboard extension glue will not loosen', 'excerpt' => 'Today I have spent the better part of five hours attempting to get the fingerboard extension free on this guitar. I am using the method I have used for dozens...', 'replies' => 4],
+            ['title' => 'National Triolian - Fishman Resophonic/Lipstick pickup rewiring', 'excerpt' => 'I am trying to figure out a wiring scheme for a modded National Triolian resonator guitar. It has a Fishman Resophonic end pin jack pickup...', 'replies' => 2],
+            ['title' => 'Some questions on a Taylor Acoustic...', 'excerpt' => 'I have a Taylor Acoustic in for a setup and I had a couple of questions. My main one is how you would go about gluing the label back on?', 'replies' => 5],
+            ['title' => 'Heat Blanket controller', 'excerpt' => 'I have been using a really old timer and rheostat control, with a separate thermometer, on my heat blanket setup for a while. It has worked, but...', 'replies' => 5],
+            ['title' => 'Stainless steel fretwire for compound radius', 'excerpt' => 'I have a friend who builds flat tops who wants to give stainless a try. I have done a handful of refrets and he was asking advice...', 'replies' => 3],
+            ['title' => 'Reputable looths in Albuquerque, NM?', 'excerpt' => 'A buddy of mine needs work on his mid-60s Jaguar. I know it is missing a saddle and needs a general going-over and a setup...', 'replies' => 6],
+        ],
+    ],
+
     'local_looths' => [
         ['name' => 'Tri State Looths (NYC)',  'url' => 'https://loothgroup.com/groups/tri-state-looths-nyc/',  'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/38/6703eb1642637-bpthumb.jpg'],
         ['name' => 'SoCal Looths',            'url' => 'https://loothgroup.com/groups/socal-looths/',          'avatar' => 'https://loothgroup.com/wp-content/uploads/group-avatars/39/67059fc8c8f52-bpthumb.png'],
