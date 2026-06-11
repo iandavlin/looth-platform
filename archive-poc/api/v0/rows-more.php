@@ -33,9 +33,15 @@ foreach ($config['rows'] as $r) {
 if (!$row) send_json(['error' => 'row not found'], 404);
 if (($row['layout'] ?? '') !== 'rail') send_json(['error' => 'row is not a rail'], 400);
 
-// Viewer tier (mirrors web/index.php logic, simplified).
-$viewer_tier = $_COOKIE['lg_tier'] ?? 'public';
-if (!in_array($viewer_tier, ['public', 'lite', 'pro'], true)) $viewer_tier = 'public';
+// Viewer tier from /whoami ONLY — this endpoint had NO server check at all,
+// so anon + a forged lg_tier=pro cookie paged every gated rail ungated (Buck
+// paywall audit 6/11). Mirrors web/index.php; anon fails closed to public.
+$viewer_tier = 'public';
+$rm_whoami = function_exists('lg_archive_poc_whoami') ? lg_archive_poc_whoami() : null;
+if (!empty($rm_whoami['authenticated'])
+    && in_array($rm_whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)) {
+    $viewer_tier = $rm_whoami['tier'];
+}
 $GLOBALS['LG_VIEWER_TIER'] = $viewer_tier;
 
 // Inject offset + force limit=$want for this page.

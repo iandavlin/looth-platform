@@ -28,13 +28,14 @@ function lg_page_boot(): array {
     foreach (array_keys($_COOKIE) as $name) {
         if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
     }
-    $viewer_tier = $_COOKIE['lg_tier'] ?? 'public';
-    if (!in_array($viewer_tier, ['public', 'lite', 'pro'], true)) $viewer_tier = 'public';
+    // Tier from /whoami ONLY — never the forgeable lg_tier cookie (Buck 6/11
+    // paywall audit; anon fails closed to public, same as index.php).
+    $viewer_tier = 'public';
     $whoami = lg_archive_poc_whoami();
     if (!empty($whoami['authenticated'])) {
         $is_member   = true;
         $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
-                     ? $whoami['tier'] : $viewer_tier;
+                     ? $whoami['tier'] : 'public';
     }
     $GLOBALS['LG_VIEWER_TIER'] = $viewer_tier;
     return [$is_member, $viewer_tier];

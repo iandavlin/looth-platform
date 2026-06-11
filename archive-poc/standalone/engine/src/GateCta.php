@@ -47,7 +47,7 @@ final class GateCta
             'headline'     => 'Members-only content',
             'body'         => 'Join The Looth Group to unlock the full library — long-form video, transcripts, build threads, and the trade-craft community of 1,500+ luthiers, repair techs, and instrument builders.',
             'button_label' => 'Become a member',
-            'button_url'   => 'https://www.patreon.com/theloothgroup',
+            'button_url'   => '/join/', // on-site funnel (Ian 6/11); was the Patreon URL
             'eyebrow_embed'    => 'Members-only video',
             'eyebrow_download' => 'Members-only download',
             'eyebrow_paywall'  => 'Looth Pro — continue reading',
