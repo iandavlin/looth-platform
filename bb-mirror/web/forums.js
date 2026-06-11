@@ -946,6 +946,10 @@
     return null;
   }
 
+  // Discussion-body YouTube/Vimeo plays FREE for everyone — Ian 2026-06-11
+  // ("don't gate youtube videos in discussions"; overrules the earlier
+  // no-free-video rule for member-pasted links). Looth's OWN paywalled
+  // content stays locked via the server-rendered teaser cards.
   function bbIframeEmbed(src) {
     var wrap = document.createElement('div');
     wrap.className = 'bb-embed bb-embed--video';

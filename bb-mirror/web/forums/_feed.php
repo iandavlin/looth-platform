@@ -259,13 +259,15 @@ switch ($sort_param) {
         // 0-engagement cards draw uniform, a 30-reply thread gets ~1.7 — a mild
         // lift, not a monopoly, so Random is a true mix of all CPTs + discussions
         // (both viewports; same query serves mobile). Stable per seed for
-        // coherent infinite-scroll paging. Locked teasers keep the 0.25 penalty.
+        // coherent infinite-scroll paging.
+        // The locked-teaser 0.25 penalty is GONE (Buck/Ian 6/11: gated content
+        // surfaces "same as normal" as lock-overlay teasers that drive signup —
+        // the penalty buried every gated card off page 1 of the default sort,
+        // which read as "the hub lock disappeared").
         $union_order_by = "ORDER BY power(
             (hashtextextended(card_type || ':' || topic_id::text, :rand_seed) & 9223372036854775807)::double precision / 9223372036854775807.0,
             1.0 / (1.0 + ln(1 + reply_count + like_count) / 5.0)
-        ) * CASE WHEN content_tier IS NOT NULL
-                 AND (CASE content_tier WHEN 'lite' THEN 1 WHEN 'pro' THEN 2 ELSE 0 END) > :viewer_rank
-               THEN 0.25 ELSE 1.0 END DESC";
+        ) DESC";
         break;
     default: // new
         $union_order_by = 'ORDER BY created_at DESC NULLS LAST, card_type ASC, topic_id DESC';
@@ -661,8 +663,7 @@ if ($scoped_forum) {
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
     if ($sort_param === 'random') {
-        $stmt->bindValue(':rand_seed',   $rand_seed,             PDO::PARAM_INT);
-        $stmt->bindValue(':viewer_rank', (int)$viewer_tier_rank, PDO::PARAM_INT);
+        $stmt->bindValue(':rand_seed', $rand_seed, PDO::PARAM_INT);
     }
     if ($sort_param === 'hot') $stmt->bindValue(':hot_now', $hot_now, PDO::PARAM_INT);
     $stmt->execute();
