@@ -1714,10 +1714,11 @@ if (ssrPresent && !hasFilters) {
     const trigger = e.target.closest('[data-action="open-member-map"]');
     if (trigger) {
       e.preventDefault();
-      // Anon visitors are redirected by the API 401/403 handler inside
-      // initMap — the wordpress_logged_in_* cookie is httpOnly, so JS
-      // can't pre-flight membership client-side.
-      open();
+      // The modal's /members-geo endpoint is dead (audit M1), so it only ever
+      // said "unavailable" — until that endpoint exists, the real map lives at
+      // /directory/members/. Navigate there instead (Buck 2026-06-11). The
+      // modal + loader code below stays dormant for when the endpoint lands.
+      window.location.assign('/directory/members/');
       return;
     }
     const closer = e.target.closest('[data-member-map-close]');
