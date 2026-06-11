@@ -144,7 +144,7 @@
         "side": "video-right",
         "video_id": "2IBxue3zPxE",
         "aspect": "16x9",
-        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar makers, for guitar makers.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community \u2014 not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library \u2014 long-form workshops from working makers.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/cw/theloothgroup/membership\">Join Looth Group \u2192</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
+        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar makers, for guitar makers.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working makers.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/cw/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
       }
     },
     {
@@ -158,7 +158,7 @@
         "side": "video-right",
         "video_id": "LhcIQ0x31hc",
         "aspect": "16x9",
-        "html": "<p class=\"vp-eyebrow\">What's new</p><h3>A redesigned front page</h3><p>We rebuilt the archive home so the catalog comes to you. Each rail below is a different angle on what's in the group \u2014 recent posts, hot discussions, all-time favorites, and tag rails that rotate daily so you keep stumbling into things you'd forgotten.</p><ul><li>Tap <strong>Search the Archive</strong> in the sidebar for the full-text index.</li><li>Open <strong>Member Map</strong> to find makers near you.</li><li>Tag rails rotate every morning \u2014 a new topic surfaces daily.</li><li>Upcoming events and active discussions are pinned where you can see them.</li></ul><hr class=\"vp-divider\"><p>This is a work in progress and your feedback shapes what we build next. If something feels off, broken, or missing \u2014 tell us.</p><p><a class=\"vp-cta\" href=\"https://loothgroup.com/all-forums-all-topics/forum/suggestion-box-bug-reporting/\">Suggestion box \u2192</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/add-a-post-on-the-forum/\">Start a thread</a></p>"
+        "html": "<p class=\"vp-eyebrow\">What's new</p><h3>A redesigned front page</h3><p>We rebuilt the archive home so the catalog comes to you. Each rail below is a different angle on what's in the group — recent posts, hot discussions, all-time favorites, and tag rails that rotate daily so you keep stumbling into things you'd forgotten.</p><ul><li>Tap <strong>Search the Archive</strong> in the sidebar for the full-text index.</li><li>Open <strong>Member Map</strong> to find makers near you.</li><li>Tag rails rotate every morning — a new topic surfaces daily.</li><li>Upcoming events and active discussions are pinned where you can see them.</li></ul><hr class=\"vp-divider\"><p>This is a work in progress and your feedback shapes what we build next. If something feels off, broken, or missing — tell us.</p><p><a class=\"vp-cta\" href=\"https://loothgroup.com/all-forums-all-topics/forum/suggestion-box-bug-reporting/\">Suggestion box →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/add-a-post-on-the-forum/\">Start a thread</a></p>"
       }
     },
     {
@@ -187,6 +187,14 @@
       "query": {
         "limit": 20
       }
+    },
+    {
+      "id": "guitardle",
+      "title": "Guitardle",
+      "type": "guitardle",
+      "layout": "guitardle",
+      "column": "",
+      "audience": "both"
     },
     {
       "id": "frets-row",

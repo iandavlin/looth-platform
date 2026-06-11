@@ -418,6 +418,31 @@
     </section>
 <?php video_promo_end: ?>
 
+<?php elseif ($layout === 'guitardle'): ?>
+    <section class="row row--guitardle" data-row-id="<?= h($row_id) ?>">
+      <header class="row__head">
+        <h2 class="row__title"><?= h($row['title'] ?: 'Guitardle') ?></h2>
+        <span class="row__subtitle">the daily guitar phrase game</span>
+      </header>
+      <?php /* Static app vendored at web/guitardle/ — iframed (its CSS has
+               global resets that would fight archive.css inline). ?embed=1
+               makes the game postMessage its height up; the listener sizes
+               the frame so the block never double-scrolls. */ ?>
+      <iframe class="gdle-frame" id="gdle-frame"
+              src="/archive-poc/guitardle/index.html?embed=1&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
+              title="Guitardle — daily guitar phrase game"
+              loading="lazy"
+              scrolling="no"></iframe>
+      <script>
+      addEventListener('message', function (e) {
+          if (e.origin !== location.origin) return;
+          if (!e.data || e.data.type !== 'guitardle:height' || !(e.data.height > 0)) return;
+          var f = document.getElementById('gdle-frame');
+          if (f) f.style.height = Math.ceil(e.data.height) + 'px';
+      });
+      </script>
+    </section>
+
 <?php else: /* default rail */
     require_once __DIR__ . '/_render-card.php';
     $viewer_tier = $GLOBALS['LG_VIEWER_TIER'] ?? 'public';

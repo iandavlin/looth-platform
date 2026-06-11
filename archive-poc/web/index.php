@@ -150,28 +150,27 @@ $is_member = false;
 foreach (array_keys($_COOKIE) as $name) {
     if (str_starts_with($name, 'wordpress_logged_in_')) { $is_member = true; break; }
 }
-$viewer_tier = $_COOKIE['lg_tier'] ?? 'public';
-if (!in_array($viewer_tier, ['public', 'lite', 'pro'], true)) $viewer_tier = 'public';
-
-// /whoami — truth for tier + capabilities when the user is authenticated there.
-// profile-app uses its own looth_id JWT cookie (not the WP cookie), so
-// authenticated:false from /whoami does NOT mean the user isn't a WP member —
-// it means they haven't yet received a looth_id token (pre-full-cutover state).
-// Only promote $is_member and $viewer_tier when /whoami says authenticated:true;
-// otherwise keep WP-cookie values so no logged-in user is accidentally downgraded.
+// Tier comes from /whoami ONLY (server-side loopback) — NEVER from the lg_tier
+// cookie. That cookie is a client-forgeable display cache: anon + lg_tier=pro
+// ungated every paid card on the front page + rails (Buck paywall audit 6/11).
+// Same rule as bb-mirror's hub_content_tiers(). Anon (or whoami-unreachable)
+// defaults public — entitlement fails CLOSED.
+$viewer_tier = 'public';
 $whoami = lg_archive_poc_whoami();
 if (!empty($whoami['authenticated'])) {
     $is_member   = true;
     $viewer_tier = in_array($whoami['tier'] ?? '', ['public', 'lite', 'pro'], true)
-                 ? $whoami['tier'] : $viewer_tier;
+                 ? $whoami['tier'] : 'public';
 }
 $edit_capable = ($whoami['capabilities']['edit_archive_poc'] ?? false) === true;
 
-// Admin preview: ?as=public|lite|pro forces viewer state for QA (overrides /whoami).
+// Admin preview: ?as=public|lite|pro forces viewer state for QA. DOWNGRADES
+// (?as=public) are open to anyone; tier-RAISING previews require the edit
+// capability — ?as=pro was an anonymous entitlement bypass otherwise.
 $preview_as = $_GET['as'] ?? null;
 if ($preview_as === 'public') { $is_member = false; $viewer_tier = 'public'; $edit_capable = false; }
-elseif ($preview_as === 'lite') { $is_member = true;  $viewer_tier = 'lite'; }
-elseif ($preview_as === 'pro')  { $is_member = true;  $viewer_tier = 'pro'; }
+elseif ($preview_as === 'lite' && $edit_capable) { $is_member = true; $viewer_tier = 'lite'; }
+elseif ($preview_as === 'pro'  && $edit_capable) { $is_member = true; $viewer_tier = 'pro'; }
 
 // Expose to templates as globals the render closures can capture.
 $GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
@@ -215,6 +214,8 @@ foreach ($rows_config as $row) {
         'sponsors'         => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'sponsors',     'tag' => null],
         // Per-row config rides through as `query` (the dash's JSON field) — see _render-main-row.php
         'video-promo'      => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'video-promo',  'tag' => null, 'query' => $row['query'] ?? null],
+        // Daily Guitardle game — static iframe embed of /archive-poc/guitardle/
+        'guitardle'        => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'guitardle',    'tag' => null],
         default            => archive_poc_run_row($db, $row),
     };
     $rendered['id'] = $row['id'] ?? '';
@@ -545,7 +546,7 @@ require __DIR__ . '/_chrome.php'; ?>
 <?php
     // Split into main vs sidebar columns. Static layouts (cta-bar/looths/sponsors)
     // never have $row['items'] — exempt them from the empty-skip.
-    $static_layouts = ['cta-bar','local-looths','sponsors','video-promo'];
+    $static_layouts = ['cta-bar','local-looths','sponsors','video-promo','guitardle'];
     $activity_row = null;
     $main_rows = [];
     $left_rows = [];
