@@ -150,6 +150,9 @@
 
   function buildUI() {
     injectStyles();
+    // FAB removed for now (Ian 2026-06-11): no floating Shop button on any
+    // viewport. The modal/UI code stays dormant; restore by deleting this line.
+    if (true) return;
 
     fab = document.createElement('button');
     fab.id = 'looth-shop-fab';

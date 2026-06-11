@@ -34,7 +34,7 @@
     if (document.getElementById('looth-shop-js')) return;
     var s = document.createElement('script');
     s.id = 'looth-shop-js';
-    s.src = '/shop-bubble.js?v=18';
+    s.src = '/shop-bubble.js?v=19';
     s.defer = true;
     (document.head || document.documentElement).appendChild(s);
   })();
