@@ -577,8 +577,9 @@ function handleForfeit(movesMade) {
 }
 
 // Show a locked end state when the player has already played today.
-// Reveals the full phrase but shows no move count or score.
-function showAlreadyPlayed() {
+// Reveals the full phrase but shows no move count or score. `result`
+// (optional, from the server) personalizes the recap for members.
+function showAlreadyPlayed(result) {
     state.gameOver = true;
     localStorage.removeItem(ACTIVE_KEY);
 
@@ -601,7 +602,11 @@ function showAlreadyPlayed() {
     const lossCard = document.getElementById('result-loss');
     lossCard.querySelector('.result-emoji').textContent    = '🎸';
     lossCard.querySelector('.result-headline').textContent = 'Already played today!';
-    lossCard.querySelector('.result-subline').textContent  = 'Come back tomorrow.';
+    lossCard.querySelector('.result-subline').textContent  = result
+        ? (result.won
+            ? `You solved it in ${result.moves} move${result.moves === 1 ? '' : 's'} — come back tomorrow.`
+            : 'No luck this time — come back tomorrow.')
+        : 'Come back tomorrow.';
     lossCard.style.display = 'flex';
     endStateEl.style.display = 'flex';
 }
@@ -857,13 +862,17 @@ function initInstructions() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
     // Testing door: ?reset=1 wipes this browser's guitardle state (streaks,
-    // played-today lock, forfeit marker). Replay was always possible by
-    // clearing site data; the server still keeps only the FIRST result per
-    // member per day, so this can't rewrite a recorded score.
+    // played-today lock, forfeit marker), then strips itself from the URL —
+    // ONE-SHOT, so refreshing the tab doesn't keep re-wiping the lock and
+    // granting endless replays. For members the server lock below still
+    // rules: a recorded result locks the day no matter what storage says.
     if (new URLSearchParams(location.search).has('reset')) {
         Object.keys(localStorage)
             .filter(k => k.startsWith('guitardle_'))
             .forEach(k => localStorage.removeItem(k));
+        const u = new URL(location.href);
+        u.searchParams.delete('reset');
+        history.replaceState(null, '', u);
     }
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
@@ -903,6 +912,17 @@ async function init() {
         localStorage.removeItem(ACTIVE_KEY);   // marker from a previous day — that
                                                // game simply never happened server-side
     }
+
+    // SERVER lock for members: localStorage is wipeable (reset door, site-data
+    // clear, another device), but a recorded result means today is DONE. When
+    // the auth handshake lands, lock the board if the server already has a
+    // row — even if a fresh local game snuck in a move or two meanwhile.
+    scoreSyncPromise.then(() => {
+        if (scoreAuth.authenticated && scoreAuth.today && !state.gameOver) {
+            localStorage.setItem('guitardle_lastPlayed', todayString());
+            showAlreadyPlayed(scoreAuth.today);
+        }
+    });
 }
 
 document.addEventListener('DOMContentLoaded', init);
