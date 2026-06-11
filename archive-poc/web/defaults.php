@@ -39,7 +39,7 @@ return [
         'bio'       => 'Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.',
         'avatar'    => 'https://i.ytimg.com/vi/2IBxue3zPxE/hqdefault.jpg',
         'cta_label' => "See Dan's videos",
-        'cta_href'  => '/archive/?q=Dan+Erlewine',
+        'cta_href'  => '/hub/?author=Dan%20Erlewine&type=video',
     ],
 
     // Public front-page Hub teaser ("What members are talking about") —
