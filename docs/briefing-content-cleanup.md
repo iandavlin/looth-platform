@@ -25,6 +25,15 @@
 - Quality reference for image-article conversions: post 71106. Ian's image rule: portrait → side-by-side, square/wide → single.
 - Verify renders over HTTP with the gate cookie + `chrome-dev-login` for browser checks; check BOTH the standalone path and `?lg_edit=1`.
 
+## ⚖ PARITY GATE (Ian 2026-06-11 — standing rule, all lanes)
+No new user-facing control or section ships on ONE surface without its
+counterpart on the other (mobile <=640 / desktop >=641) **in the same change**,
+or a written "tabled: <surface>, <why>" note in the commit + report-back.
+Generalizes the 6/10 card-chip complement rule. Read-side profile markup is
+ONE server render — keep it that way; never viewport-hide a section to fake
+parity. Current ruling: profile privacy UI converges on the SLIDER panel
+(canonical, both surfaces) — the chip rows retire when it lands.
+
 ## Report-back (end of session, verbatim format)
 ```
 CONTENT-CLEANUP LANE report — <date>

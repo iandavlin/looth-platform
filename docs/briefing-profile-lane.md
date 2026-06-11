@@ -18,6 +18,15 @@
 3. **Patreon-onboard gaps (profile-app side)** — OAuth onboard creates the WP user but: identity splits from the poller sweep, rows orphan on delete, whoami bridge gap. Poller lane owns the cookie fix; you own the profile-app row lifecycle. See memory/docs from 6/4 investigation before touching.
 4. **Verify the renderLocation cutover patch** — 2-decimal + text-fallback in `src/Profile.php::renderLocation` must be in place (NULL components must not break public location rendering). Confirm present + covered; it ships at cutover.
 
+5. **Privacy UI convergence (Ian ruling 6/11):** build Buck's mobile privacy
+   slider panel (whole-profile + per-section sliders + discussion toggle) as the
+   CANONICAL control on BOTH surfaces, wired to the existing pmp endpoints;
+   retire the chip rows in the same change. Coordinate with buck-COORD over
+   `msg` — his mobile injection (profile-sheet.js) retires once canonical lands,
+   and his layer duplicates the endpoint table (announce any shape change).
+6. **QA owner-view account:** a claimed-profile QA user now exists (see report
+   2026-06-11) — use it to machine-verify OWNER view at 390 + 1440 every change.
+
 ## Cross-lane tripwires
 - Buck's mobile **privacy pull-up** (`profile-sheet.js`, buck-lane) duplicates your `u.php` pmp endpoint table verbatim. **If you change any pmp endpoint shape, msg buck-COORD before shipping.**
 - The profile editor embed is iframed by Buck's mobile layer — markup changes to `edit.php` / `.lg-caddy` are shared-markup changes: announce via `msg`.
@@ -27,6 +36,15 @@
 - Some files in the shared tree are lane-user-owned: edit via `sudo` + `chown` back to the original owner; never `sudo git`.
 - Dev = small test fixtures only; bulk backfills run at cutover.
 - Verify over HTTP with the gate cookie (mint via `/claim?t=<token>` from the nginx conf) and the `chrome-dev-login` skill for real-browser checks.
+
+## ⚖ PARITY GATE (Ian 2026-06-11 — standing rule, all lanes)
+No new user-facing control or section ships on ONE surface without its
+counterpart on the other (mobile <=640 / desktop >=641) **in the same change**,
+or a written "tabled: <surface>, <why>" note in the commit + report-back.
+Generalizes the 6/10 card-chip complement rule. Read-side profile markup is
+ONE server render — keep it that way; never viewport-hide a section to fake
+parity. Current ruling: profile privacy UI converges on the SLIDER panel
+(canonical, both surfaces) — the chip rows retire when it lands.
 
 ## Report-back (end of session, verbatim format)
 ```
