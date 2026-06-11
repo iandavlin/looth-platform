@@ -665,10 +665,13 @@ final class Block
         }
         if ($precision === 'city') {
             $text = trim(implode(', ', array_filter([$city, $region]))) ?: (string)($place['text'] ?? '');
-            return ['text' => $text, 'lat' => self::coarsen($lat, 1), 'lng' => self::coarsen($lng, 1), 'zoom' => 11, 'kind' => 'coarse'];
+            // 2-decimal (~1.1km), NOT 1 (~11km): 1-decimal landed city pins in the
+            // East River (renderLocation cutover patch, Ian 5/26 — Evan Gluck's pin).
+            return ['text' => $text, 'lat' => self::coarsen($lat, self::DP_NEIGHBORHOOD), 'lng' => self::coarsen($lng, self::DP_NEIGHBORHOOD), 'zoom' => 11, 'kind' => 'coarse'];
         }
-        // state
-        $text = trim(implode(', ', array_filter([$region, $country])));
+        // state — same text fallback as city: snapshot-migrated / text-only rows have
+        // NULL components and must render their literal text, not an empty string.
+        $text = trim(implode(', ', array_filter([$region, $country]))) ?: (string)($place['text'] ?? '');
         return ['text' => $text, 'lat' => self::coarsen($lat, 0), 'lng' => self::coarsen($lng, 0), 'zoom' => 6, 'kind' => 'coarse'];
     }
 
