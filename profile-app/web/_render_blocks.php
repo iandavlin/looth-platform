@@ -67,10 +67,6 @@ function looth_caddy_preview(string $key): string
         case 'resume':
             return $svg('<rect x="44" y="6" width="32" height="36" rx="3" fill="#fff" stroke="#9fb295" stroke-width="2"/><rect x="50" y="13" width="20" height="3" rx="1.5" fill="#c8d3c0"/><rect x="50" y="20" width="20" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="25" width="14" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="30" width="20" height="2" rx="1" fill="#cdd8c5"/><rect x="50" y="35" width="10" height="2" rx="1" fill="#cdd8c5"/>');
     }
-    // Freeform blocks all share one preview shape — small heading + 3 body lines.
-    if (str_starts_with($key, 'freeform:')) {
-        return $svg('<rect x="12" y="10" width="56" height="6" rx="3" fill="#9fb295"/><rect x="12" y="22" width="96" height="4" rx="2" fill="#c8d3c0"/><rect x="12" y="30" width="96" height="4" rx="2" fill="#c8d3c0"/><rect x="12" y="38" width="64" height="4" rx="2" fill="#dbe2d4"/>');
-    }
     return '';
 }
 
@@ -127,7 +123,6 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     $renderers = [
         'about'       => static fn() => looth_render_about_block($userId, $role, $headerVis),
         'location'    => static fn() => looth_render_location_block($userId, $role, $headerVis),
-        'dropoffs'    => static fn() => looth_render_dropoffs_block($userId, $role, $headerVis),
         'skills'      => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'skills'),
         'services'    => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'services'),
         'instruments' => static fn() => looth_render_catalog_block($userId, $role, $headerVis, 'instruments'),
@@ -140,28 +135,9 @@ function looth_render_profile_blocks(int $userId, string $role, ?string $tierBad
     $hiddenBlocks = array_flip(Block::launchHiddenBlocks());
     foreach (Block::profileLayout($userId) as $key) {
         if (isset($hiddenBlocks[$key])) continue;                 // launch-deferred block
-        if (isset($renderers[$key])) {
-            ($renderers[$key])();
-        } elseif (Block::isFreeformKey($key)) {
-            // Freeform blocks are per-instance — dispatch by key prefix, not by static map.
-            looth_render_freeform_block($userId, $key, $role, $headerVis);
-        }
+        if (isset($renderers[$key])) ($renderers[$key])();
     }
-
-    // Owner-only: "+ New section" affordance. Creates a fresh freeform block
-    // (POST /me/freeform) and reloads so the new empty section appears at the
-    // end of the layout, ready for inline title + body editing.
-    if ($role === 'me') {
-        $count = count(Block::listFreeformKeys($userId));
-        $cap   = Block::FREEFORM_MAX_PER_USER;
-        echo '<div class="lg-freeform-add"' . ($count >= $cap ? ' data-at-cap' : '') . '>';
-        echo '<button type="button" class="lg-freeform-add__btn" id="lg-freeform-add"'
-           . ($count >= $cap ? ' disabled aria-disabled="true" title="Section limit reached (' . (int)$cap . ')"' : ' title="Add a custom titled section"')
-           . '>＋ New section</button>';
-        echo '</div>';
-    }
-
-    // TODO(next increments): practices block — same shape.
+    // (Freeform sections + the "+ New section" affordance removed 2026-06-11, Ian.)
 }
 
 /**
@@ -282,54 +258,6 @@ function looth_render_about_block(int $userId, string $role, string $headerVis, 
     echo '</section>';
 }
 
-/**
- * Freeform titled block — user-set title + free-text body. Same pre-wrap render
- * model as About; differs by being multi-instance (multiple blocks per profile,
- * keyed by `freeform:<8hex>`) and by carrying its own title.
- */
-function looth_render_freeform_block(int $userId, string $key, string $role, string $headerVis): void
-{
-    $ff = Block::loadFreeform($userId, $key);
-    if ($ff === null) return;
-    $title   = (string)$ff['title'];
-    $body    = (string)$ff['body'];
-    $isOwner = ($role === 'me');
-
-    if ($title === '' && $body === '' && !$isOwner) return;
-    if (!Block::canSee($role, $headerVis, Block::denormalizeVis((string)$ff['vis'])) && !$isOwner) return;
-
-    $kAttr   = looth_h($key);
-    $sectionUrl = '/profile-api/v0/me/freeform?key=' . rawurlencode($key);
-
-    echo '<section class="block lg-block lg-block--freeform" data-block="' . $kAttr . '" data-freeform-key="' . $kAttr . '">';
-    echo '<h3 class="lg-bh">';
-    if ($isOwner) {
-        $hasT = $title !== '';
-        echo '<span class="lg-edit lg-btitle' . ($hasT ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="title" data-edit-url="' . looth_h($sectionUrl) . '" data-edit-method="PUT"'
-           . ' data-edit-type="text" data-edit-placeholder="Section title (e.g. Experience, Education)">'
-           . looth_h($hasT ? $title : '') . '</span>';
-        echo ' ' . looth_pmp_control($key, (string)$ff['vis'], $headerVis);
-        // The generic lg-block__rm (✕) injected by u.php removes from the LAYOUT
-        // (data preserved). This dedicated trash permanently deletes the section —
-        // the builder reskin retired the caddy chip that used to host delete.
-        echo ' <button type="button" class="lg-freeform__rm" data-freeform-rm="' . $kAttr . '" aria-label="Delete section" title="Delete section">×</button>';
-    } else {
-        echo looth_h($title !== '' ? $title : 'Section');
-    }
-    echo '</h3>';
-
-    if ($isOwner) {
-        $hasB = $body !== '';
-        echo '<div class="lg-freeform lg-edit' . ($hasB ? '' : ' lg-edit--empty') . '"'
-           . ' data-edit-field="body" data-edit-url="' . looth_h($sectionUrl) . '" data-edit-method="PUT"'
-           . ' data-edit-type="textarea" data-edit-multiline="1" data-edit-placeholder="Write something…">'
-           . ($hasB ? looth_h($body) : 'Write something…') . '</div>';
-    } else {
-        echo '<div class="lg-freeform">' . nl2br(looth_h($body)) . '</div>';
-    }
-    echo '</section>';
-}
 /**
  * The resume block — single PDF (versioned). Per-resume visibility lives on
  * users.resume_visibility (NOT a profile_sections row — resume is a singleton

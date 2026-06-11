@@ -172,10 +172,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   overflow:hidden;background:var(--lg-sage-tint);
   position:relative;isolation:isolate;z-index:0}   /* contain Leaflet's z-index so it can't cover the header or menus */
 .lg-loc__map .leaflet-container,.lg-loc__pin .leaflet-container{height:100%;border-radius:12px;font:inherit}
-/* drop-off locations map — multi-pin Leaflet, one popup per drop-off */
-.lg-dropoffs__map{margin:6px 0 14px;height:320px;border-radius:12px;border:1px solid var(--lg-line);
-  overflow:hidden;background:var(--lg-sage-tint);position:relative;isolation:isolate;z-index:0}
-.lg-dropoffs__map .leaflet-container{height:100%;border-radius:12px;font:inherit}
 .lg-pinpop__name{display:block;font-weight:600;font-size:14px;color:var(--lg-ink);margin-bottom:2px}
 .lg-pinpop__addr,.lg-pinpop__hours,.lg-pinpop__notes{font-size:12.5px;color:var(--lg-mute);line-height:1.4}
 .lg-pinpop__hours{margin-top:3px}
@@ -272,7 +268,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
   color:var(--lg-sage-d);border:1px solid var(--lg-sage-3);border-radius:5px;padding:2px 6px}
 .lg-bubble__multi{margin-left:auto;font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;
   color:var(--lg-mute);border:1px solid var(--lg-line);border-radius:5px;padding:2px 6px}
-.lg-bubble--freeform{cursor:pointer}
 /* discovery-linkage: taxonomy blocks feed the member-directory search facets */
 .lg-filterable{font:800 8.5px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;color:var(--lg-sage-d);background:var(--lg-sage-tint);border:1px solid var(--lg-sage-3);border-radius:5px;padding:3px 6px;vertical-align:middle}
 .lg-findnote{display:flex;align-items:center;gap:7px;font:600 11.5px/1.4 var(--lg-font-sans);color:var(--lg-sage-d);background:var(--lg-sage-tint);border-radius:9px;padding:8px 11px;margin:0 0 12px}
@@ -330,18 +325,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-link__rm:hover{color:var(--lg-rust)}
 .lg-link__add{align-self:flex-start;border:1px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:999px;padding:6px 14px;font:700 12.5px/1 var(--lg-font-sans);color:var(--lg-sage-d)}
 .lg-link__add:hover{background:var(--lg-sage-tint);border-color:var(--lg-sage)}
-.lg-dropoffs{display:flex;flex-direction:column;gap:12px;align-items:stretch}
-.lg-dropoff{background:var(--lg-cream);border:1px solid var(--lg-line);border-radius:10px;padding:12px 14px}
-.lg-dropoff__name{font:700 15px/1.2 var(--lg-font-sans);color:var(--lg-ink)}
-.lg-dropoff__addr{font:500 13.5px/1.4 var(--lg-font-sans);color:var(--lg-charcoal);margin-top:3px}
-.lg-dropoff__hours{font:600 12.5px/1.3 var(--lg-font-sans);color:var(--lg-sage-d);margin-top:4px}
-.lg-dropoff__notes{font:400 13px/1.45 var(--lg-font-sans);color:var(--lg-mute);margin-top:5px}
-.lg-dropoff--edit{position:relative;display:flex;flex-direction:column;gap:7px;padding-right:34px}
-.lg-dropoff--edit .lg-dropoff__rm{position:absolute;top:8px;right:8px}
-.lg-dropoff__f{width:100%;box-sizing:border-box;font:500 13.5px/1.3 var(--lg-font-sans);color:var(--lg-ink);background:var(--lg-card-bg,#fff);border:1px solid var(--lg-line);border-radius:7px;padding:7px 9px}
-.lg-dropoff__f:focus{outline:none;border-color:var(--lg-sage);box-shadow:0 0 0 2px var(--lg-sage-tint)}
-.lg-dropoff__name-in{font-weight:700}
-.lg-dropoff__notes-in{resize:vertical;min-height:38px;font-family:var(--lg-font-sans)}
 .lg-link-form{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .lg-link-form select,.lg-link-form input{border:1px solid var(--lg-line);border-radius:8px;padding:7px 10px;font:600 13px/1 var(--lg-font-sans)}
 .lg-link-form button{border:0;border-radius:8px;padding:8px 14px;font:700 12.5px/1 var(--lg-font-sans);cursor:pointer}
@@ -392,19 +375,6 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-edit.saved{box-shadow:0 0 0 2px var(--lg-sage-3)}
 .lg-about{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:640px}
 .lg-about.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
-/* freeform titled block — same render model as about, distinct hooks for divergent polish */
-.lg-freeform{font-size:14.5px;line-height:1.6;color:var(--lg-ink);white-space:pre-wrap;max-width:680px}
-.lg-freeform.lg-edit{min-height:1.5em;display:block;padding:6px 8px;margin:0 -8px}
-.lg-block--freeform .lg-bh{display:flex;align-items:center;gap:8px}
-/* freeform permanent-delete ✕ on the block head (builder reskin retired the caddy trash) */
-.lg-freeform__rm{margin-left:auto;border:0;background:none;cursor:pointer;color:var(--lg-mute);font-size:18px;line-height:1;padding:0 4px}
-.lg-freeform__rm:hover{color:var(--lg-rust)}
-.lg-freeform__rm:disabled{opacity:.5;cursor:wait}
-/* "+ New section" affordance under the profile body — owner only */
-.lg-freeform-add{display:flex;justify-content:center;margin:8px 0 16px}
-.lg-freeform-add__btn{border:1.5px dashed var(--lg-sage-3);background:none;cursor:pointer;border-radius:14px;padding:14px 22px;font:700 13.5px/1 var(--lg-font-sans);color:var(--lg-sage-d);transition:background .15s,border-color .15s}
-.lg-freeform-add__btn:hover:not([disabled]){background:var(--lg-sage-tint);border-color:var(--lg-sage);border-style:solid}
-.lg-freeform-add__btn[disabled]{opacity:.5;cursor:not-allowed}
 /* resume block — single PDF, download button + owner replace/remove */
 .lg-resume{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .lg-resume__a{display:inline-flex;align-items:center;gap:9px;background:var(--lg-sage-tint);color:var(--lg-ink);text-decoration:none;padding:9px 14px;border-radius:10px;font:700 13px/1 var(--lg-font-sans);transition:background .15s,transform .15s}
@@ -574,9 +544,8 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
         $available = Block::availableBlocks($subjectId);
         // Builder palette: real layout blocks grouped like the approved mockup.
         $paletteGroups = [
-          'Core'   => ['about', 'instruments', 'skills', 'services', 'music'],
-          'Extras' => ['location', 'dropoffs', 'gallery', 'connect', 'socials'],
-          'Custom' => ['resume'],
+          'Core'   => ['about', 'instruments', 'skills', 'services', 'music', 'location'],
+          'Extras' => ['gallery', 'connect', 'socials', 'resume'],
         ];
         // Section icons — line SVGs (stroke=currentColor inherits the bubble/badge color).
         $iconPaths = [
@@ -586,12 +555,10 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           'services'    => '<path d="M15.6 7.4a3.6 3.6 0 0 0-4.7 4.4l-6.1 6.1 2.3 2.3 6.1-6.1a3.6 3.6 0 0 0 4.4-4.7l-2.2 2.2-2-2 2.2-2.2z"/>',
           'music'       => '<path d="M9 17V5l10-2v12"/><circle cx="6.5" cy="17" r="2.5"/><circle cx="16.5" cy="15" r="2.5"/>',
           'location'    => '<path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
-          'dropoffs'    => '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/><path d="M12 12.5v4"/><path d="M9.8 14.6 12 16.8l2.2-2.2"/>',
           'gallery'     => '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
           'connect'     => '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
           'socials'     => '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
           'resume'      => '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>',
-          'freeform'    => '<path d="M16.5 4.5l3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>',
           'credentials' => '<circle cx="12" cy="9" r="5"/><path d="M9 13.4 7.4 21l4.6-2.6L16.6 21 15 13.4"/>',
           'practices'   => '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.6 10l1.8 1.8 3.8-3.8"/><path d="M8.6 16h6.8"/>',
         ];
@@ -624,13 +591,6 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
                 <?php if ($filt): ?><span class="lg-bubble__find" title="Makes you findable in the member directory">Filterable</span><?php endif; ?>
               </button>
             <?php endforeach; ?>
-            <?php if ($grp === 'Custom'): ?>
-              <button type="button" class="lg-caddy__item lg-bubble lg-bubble--freeform" id="lg-bubble-freeform" data-freeform-new="1">
-                <span class="lg-bubble__ic" aria-hidden="true"><?= $icSvg('freeform') ?></span>
-                <span class="lg-bubble__lab">Freeform</span>
-                <span class="lg-bubble__multi">add many</span>
-              </button>
-            <?php endif; ?>
           </div>
         <?php endforeach; ?>
       </div>
@@ -693,49 +653,6 @@ window.addEventListener('load', function () {
 });
 </script>
 
-<script>
-/* Drop-off Locations map — Leaflet + OSM tiles (CDN, no API key). Reads pins from
-   the .lg-dropoffs__map[data-pins] div (JSON the renderer emitted), drops a marker
-   per drop-off, and binds a click-to-open popup with name / address / hours / notes.
-   Runs for visitor and owner alike; panning is allowed so all pins are reachable. */
-window.addEventListener('load', function () {
-  if (typeof L === 'undefined') return;
-  document.querySelectorAll('.lg-dropoffs__map[data-pins]').forEach(function (el) {
-    var pins;
-    try { pins = JSON.parse(el.getAttribute('data-pins')); } catch (e) { return; }
-    if (!Array.isArray(pins) || !pins.length) return;
-
-    var esc = function (v) {
-      var d = document.createElement('div');
-      d.textContent = (v === null || v === undefined) ? '' : String(v);
-      return d.innerHTML;
-    };
-
-    var map = L.map(el, { scrollWheelZoom: true }).setView([pins[0].lat, pins[0].lng], 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
-
-    var markers = [];
-    pins.forEach(function (p) {
-      if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
-      var html = '<div class="lg-pinpop">'
-        + (p.n  ? '<strong class="lg-pinpop__name">'  + esc(p.n) + '</strong>' : '')
-        + (p.a  ? '<div class="lg-pinpop__addr">'     + esc(p.a) + '</div>'    : '')
-        + (p.h  ? '<div class="lg-pinpop__hours">'    + esc(p.h) + '</div>'    : '')
-        + (p.no ? '<div class="lg-pinpop__notes">'    + esc(p.no).replace(/\n/g, '<br>') + '</div>' : '')
-        + '</div>';
-      markers.push(L.marker([p.lat, p.lng]).addTo(map).bindPopup(html));
-    });
-
-    if (markers.length > 1) {
-      map.fitBounds(L.featureGroup(markers).getBounds().pad(0.2));
-    } else if (markers.length === 1) {
-      map.setView(markers[0].getLatLng(), 14);
-    }
-    setTimeout(function () { map.invalidateSize(); }, 80);
-  });
-});
-</script>
 
 <script>
 /* Gallery carousel viewer — runs for everyone (visitor + owner). Activates on any
@@ -896,18 +813,18 @@ window.lgSortable = function (container, opts) {
     gallery:     '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="M5 17l4.5-4.5 3 3L16 11l3 3.4"/>',
     connect:     '<circle cx="8.5" cy="9" r="2.8"/><circle cx="16" cy="9.5" r="2.3"/><path d="M3.5 19a5 5 0 0 1 10 0"/><path d="M14 19a4.3 4.3 0 0 1 6.5-3.7"/>',
     socials:     '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.6 2.4 2.6 14.6 0 17"/><path d="M12 3.5c-2.6 2.4-2.6 14.6 0 17"/>',
-    resume:      '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>',
-    freeform:    '<path d="M16.5 4.5l3 3L8 19l-4 1 1-4z"/><path d="M14.5 6.5l3 3"/>'
+    resume:      '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13.2h6"/><path d="M10 16.6h6"/><path d="M10 9.8h2"/>'
   };
   function icFor(key) {
     if (!key) return '';
-    var k = key.indexOf('freeform:') === 0 ? 'freeform' : key;
-    var p = SECIC_PATHS[k];
+    var p = SECIC_PATHS[key];
     return p ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>' : '';
   }
 
   // Inject a dot-grid grip + section icon chip + a remove ✕ into each body block's heading.
-  bodyBlocks().forEach(function (b) {
+  // EDIT MODE ONLY (the caddy renders exactly when $editing): in View-as Member/Public the
+  // owner must see the page exactly as that audience does — no builder chrome in headings.
+  if (document.getElementById('lg-caddy')) bodyBlocks().forEach(function (b) {
     var host = b.querySelector('.lg-bh') || b;
     if (!host.querySelector('.lg-block__grip')) {
       var grip = document.createElement('span');
@@ -1002,11 +919,6 @@ window.lgSortable = function (container, opts) {
     list.addEventListener('click', function (e) {
       var item = e.target.closest('.lg-caddy__item');
       if (!item || item.classList.contains('is-used')) return;  // placed bubbles are inert
-      if (item.dataset.freeformNew) {                            // "add many" → reuse +New section flow
-        var fb = document.getElementById('lg-freeform-add');
-        if (fb) fb.click();
-        return;
-      }
       addBlock(item.getAttribute('data-block'));                 // tap-to-add (appends)
     });
   }
@@ -1030,7 +942,7 @@ window.lgSortable = function (container, opts) {
   if (list) {
     list.addEventListener('dragstart', function (e) {
       var item = e.target.closest('.lg-caddy__item');
-      if (!item || item.classList.contains('is-used') || item.dataset.freeformNew) return;
+      if (!item || item.classList.contains('is-used')) return;
       caddyDragKey = item.getAttribute('data-block');
       item.classList.add('lg-sort-dragging');
       e.dataTransfer.effectAllowed = 'copy';
@@ -1080,7 +992,6 @@ window.lgSortable = function (container, opts) {
     'about':           { url: BASE + '/me/about',    m: 'PATCH', k: 'visibility' },
     'gallery':         { url: BASE + '/me/gallery',  m: 'PUT',   k: 'visibility' },
     'socials':         { url: BASE + '/me/socials',  m: 'PUT',   k: 'visibility' },
-    'dropoffs':        { url: BASE + '/me/dropoffs', m: 'PUT',   k: 'visibility' },
     'location-approx': { url: BASE + '/me/location', m: 'PUT',   k: 'location_visibility' },
     'location-exact':  { url: BASE + '/me/location', m: 'PUT',   k: 'location_exact_visibility' }
   };
@@ -1508,61 +1419,6 @@ window.lgSortable = function (container, opts) {
 })();
 </script>
 
-<script>
-/* Drop-offs editor (owner/Me) — add/remove/edit cards; PUT the whole list to me-dropoffs.
-   Saves on field blur (change) and on remove; no full re-render, so editing keeps focus. */
-(function () {
-  var wrap = document.getElementById('lg-dropoffs-edit');
-  if (!wrap) return;
-  var addBtn = document.getElementById('lg-dropoff-add');
-
-  function collect() {
-    return Array.prototype.map.call(wrap.querySelectorAll('.lg-dropoff'), function (card) {
-      function v(f) { var el = card.querySelector('[data-f="' + f + '"]'); return el ? el.value : ''; }
-      return { name: v('name'), address: v('address'), hours: v('hours'), notes: v('notes') };
-    });
-  }
-  function cardEl() {
-    var card = document.createElement('div'); card.className = 'lg-dropoff lg-dropoff--edit';
-    var rm = document.createElement('button'); rm.type = 'button'; rm.className = 'lg-link__rm lg-dropoff__rm';
-    rm.setAttribute('aria-label', 'Remove drop-off'); rm.title = 'Remove drop-off'; rm.textContent = '×';
-    card.appendChild(rm);
-    function inp(f, ph, cls) {
-      var el = document.createElement('input'); el.type = 'text';
-      el.className = 'lg-dropoff__f' + (cls ? ' ' + cls : '');
-      el.setAttribute('data-f', f); el.placeholder = ph; return el;
-    }
-    card.appendChild(inp('name', 'Location name (e.g. The Shop)', 'lg-dropoff__name-in'));
-    card.appendChild(inp('address', 'Street address', ''));
-    card.appendChild(inp('hours', 'Hours (e.g. Mon–Fri 9–5)', ''));
-    var ta = document.createElement('textarea');
-    ta.className = 'lg-dropoff__f lg-dropoff__notes-in';
-    ta.setAttribute('data-f', 'notes'); ta.rows = 2; ta.placeholder = 'Notes (optional)';
-    card.appendChild(ta);
-    return card;
-  }
-  function put(items) {
-    fetch('/profile-api/v0/me/dropoffs', { method: 'PUT', credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) })
-      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-      .then(function (res) { if (!res.ok) alert('Save failed: ' + (res.j && res.j.error || '?')); })
-      .catch(function () { alert('Network error.'); });
-  }
-
-  wrap.addEventListener('click', function (e) {
-    var rm = e.target.closest('.lg-dropoff__rm');
-    if (rm) { rm.closest('.lg-dropoff').remove(); put(collect()); }
-  });
-  wrap.addEventListener('change', function (e) {
-    if (e.target.closest('.lg-dropoff')) put(collect());
-  });
-  addBtn && addBtn.addEventListener('click', function () {
-    var card = cardEl();
-    wrap.insertBefore(card, addBtn);
-    var f = card.querySelector('[data-f="name"]'); if (f) f.focus();
-  });
-})();
-</script>
 
 <script>
 /* Catalog chip pickers (owner/Me) — Skills / Services / Instruments / Music. Each .lg-cat-edit
@@ -1851,51 +1707,6 @@ window.LG_LIGHTS = <?= json_encode(Block::HEADER_LIGHTS, JSON_UNESCAPED_SLASHES)
         }
       })
       .catch(function () { bizBtn.disabled = false; alert('Network error.'); });
-  });
-})();
-/* Freeform titled block (owner) — create + delete. Title and body inline-edit
-   via the generic lg-edit handler (PUT /me/freeform?key=... {title|body}). */
-(function () {
-  var addBtn = document.getElementById('lg-freeform-add');
-  if (addBtn && !addBtn.disabled) {
-    addBtn.addEventListener('click', function () {
-      addBtn.disabled = true;
-      var prev = addBtn.textContent; addBtn.textContent = 'Adding…';
-      fetch('/profile-api/v0/me/freeform', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '' })
-      })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (res.ok) location.reload();
-          else {
-            addBtn.disabled = false; addBtn.textContent = prev;
-            alert('Could not add section: ' + (res.j && res.j.error || '?'));
-          }
-        })
-        .catch(function () {
-          addBtn.disabled = false; addBtn.textContent = prev;
-          alert('Network error.');
-        });
-    });
-  }
-
-  // Permanent-delete handler on the freeform block's own trash (✕). The generic
-  // lg-block__rm handles "remove from layout, keep data"; this one truly retires
-  // the section's data. Event-delegated since blocks come/go after reload.
-  document.addEventListener('click', function (e) {
-    var rm = e.target.closest('.lg-freeform__rm[data-freeform-rm]');
-    if (!rm) return;
-    var key = rm.getAttribute('data-freeform-rm');
-    if (!key) return;
-    if (!confirm('Delete this section? This cannot be undone.')) return;
-    rm.disabled = true;
-    fetch('/profile-api/v0/me/freeform?key=' + encodeURIComponent(key), {
-      method: 'DELETE', credentials: 'include'
-    })
-      .then(function (r) { if (r.ok) location.reload(); else { rm.disabled = false; alert('Delete failed.'); } })
-      .catch(function () { rm.disabled = false; alert('Network error.'); });
   });
 })();
 /* Resume block (owner) — PDF upload + delete. Server re-validates mime; this
