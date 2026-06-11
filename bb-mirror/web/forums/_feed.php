@@ -106,6 +106,16 @@ if ($sort_param === 'random') {
         ? (int)$_GET['seed']
         : random_int(1, 2000000000);
 }
+// Hot scores divide by hours-since-NOW(), so the order DRIFTS between one
+// infinite-scroll fetch and the next — offset paging over a moving order
+// repeats/skips cards. Freeze the clock per scroll session (carried forward
+// in the "load older" URL exactly like the random seed).
+$hot_now = 0;
+if ($sort_param === 'hot') {
+    $hot_now = (isset($_GET['hnow']) && ctype_digit((string)$_GET['hnow']))
+        ? (int)$_GET['hnow']
+        : time();
+}
 
 $scoped_forum = null;
 
@@ -192,12 +202,17 @@ foreach ($db->query("SELECT slug FROM forum WHERE visibility = 'public'")->fetch
 }
 
 // -- Build ORDER BY clause --
+// Every sort carries a unique trailing tiebreaker (t.id): equal sort keys
+// (bulk-imported timestamps, all-zero hot scores) otherwise come back in
+// arbitrary per-query order and offset paging repeats/skips those cards.
 switch ($sort_param) {
     case 'old':
-        $order_by = 'ORDER BY t.last_active_at ASC NULLS LAST';
+        $order_by = 'ORDER BY t.last_active_at ASC NULLS LAST, t.id ASC';
         break;
     case 'hot':
-        $order_by = "ORDER BY (t.reply_count::float / POW(EXTRACT(EPOCH FROM (NOW() - t.last_active_at))/3600 + 2, 1.5)) DESC NULLS LAST";
+        // GREATEST guards rows newer than the frozen clock (negative age
+        // would take POW of a negative base → SQL error).
+        $order_by = "ORDER BY (t.reply_count::float / POW(GREATEST(EXTRACT(EPOCH FROM (to_timestamp(:hot_now) - t.last_active_at))/3600, 0) + 2, 1.5)) DESC NULLS LAST, t.last_active_at DESC NULLS LAST, t.id DESC";
         break;
     case 'random':
         // Seeded popularity-weighted shuffle (Efraimidis–Spirakis key u^(1/w)):
@@ -210,7 +225,7 @@ switch ($sort_param) {
         ) DESC";
         break;
     default: // new
-        $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST';
+        $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST, t.id DESC';
         break;
 }
 
@@ -224,10 +239,15 @@ switch ($sort_param) {
         // Oldest/Newest sort by CREATION time, not last activity — an old topic
         // with a fresh reply must not jump the Newest feed (Ian 2026-06-10).
         // Activity-recency still drives "hot"; reply teasers surface liveliness.
-        $union_order_by = 'ORDER BY created_at ASC NULLS LAST';
+        // card_type+topic_id tiebreaker: imported rows share timestamps and the
+        // union has no globally-unique id, so ties paginate unstably without it.
+        $union_order_by = 'ORDER BY created_at ASC NULLS LAST, card_type ASC, topic_id ASC';
         break;
     case 'hot':
-        $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
+        // Frozen :hot_now clock (see $hot_now above) + GREATEST guard + unique
+        // tiebreaker — hot is the worst offset-paging offender: every
+        // 0-engagement card scores exactly 0 and ties with all the others.
+        $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(GREATEST(EXTRACT(EPOCH FROM (to_timestamp(:hot_now) - event_time))/3600, 0) + 2, 1.5)) DESC NULLS LAST, event_time DESC NULLS LAST, card_type ASC, topic_id DESC";
         break;
     case 'random':
         // Front-door Random: seeded shuffle over the unified feed with a GENTLE
@@ -248,7 +268,7 @@ switch ($sort_param) {
                THEN 0.25 ELSE 1.0 END DESC";
         break;
     default: // new
-        $union_order_by = 'ORDER BY created_at DESC NULLS LAST';
+        $union_order_by = 'ORDER BY created_at DESC NULLS LAST, card_type ASC, topic_id DESC';
         break;
 }
 
@@ -459,6 +479,7 @@ if ($scoped_forum) {
     $stmt->bindValue(':fetch_size', $card_limit,              PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset,              PDO::PARAM_INT);
     if ($sort_param === 'random') $stmt->bindValue(':rand_seed', $rand_seed, PDO::PARAM_INT);
+    if ($sort_param === 'hot')    $stmt->bindValue(':hot_now',   $hot_now,   PDO::PARAM_INT);
     $stmt->execute();
 } else {
     // Site-wide /hub/ = the UNIFIED feed: forum topics ∪ content (discovery).
@@ -626,6 +647,7 @@ if ($scoped_forum) {
           FROM discovery.content_item c
           LEFT JOIN rx crx ON crx.post_type = c.cpt AND crx.item_id = c.id
          WHERE c.tier IN ($tier_in)
+           AND c.kind <> 'event' -- events have their own page (Ian 2026-06-11)
            $q_content
       ) u
       $hub_where
@@ -642,6 +664,7 @@ if ($scoped_forum) {
         $stmt->bindValue(':rand_seed',   $rand_seed,             PDO::PARAM_INT);
         $stmt->bindValue(':viewer_rank', (int)$viewer_tier_rank, PDO::PARAM_INT);
     }
+    if ($sort_param === 'hot') $stmt->bindValue(':hot_now', $hot_now, PDO::PARAM_INT);
     $stmt->execute();
 }
 
@@ -1444,6 +1467,8 @@ $header_cat = $scoped_forum
       $qs_parts[] = 'offset=' . $next_offset;
       // Carry the random-shuffle seed so infinite scroll keeps ONE coherent order.
       if ($sort_param === 'random') $qs_parts[] = 'seed=' . $rand_seed;
+      // Carry the frozen hot clock for the same reason (see $hot_now above).
+      if ($sort_param === 'hot')    $qs_parts[] = 'hnow=' . $hot_now;
       // Carry active Hub filters into the next page (Type/Cat/Author/Search).
       foreach (hub_query_params() as $k => $v) $qs_parts[] = $k . '=' . urlencode($v);
   ?>
