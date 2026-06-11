@@ -406,6 +406,10 @@ $client_state = [
 <meta name="twitter:description" content="Articles, videos, loothprints, events, and discussions from the lutherie community.">
 <meta name="twitter:image" content="<?= h($og_image) ?>">
 
+<!-- Front-page redesign fonts (Classic Landing pick, 2026-06-11) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/archive-poc/archive.css?v=<?= @filemtime(__DIR__.'/archive.css') ?>">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 </head>
