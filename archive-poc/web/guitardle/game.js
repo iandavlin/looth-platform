@@ -17,7 +17,20 @@ let siteConfig    = {};
 // anonymous players just play — localStorage stats keep working for everyone.
 const IS_EMBED  = new URLSearchParams(location.search).has('embed');
 const SCORE_API = '/archive-api/v0/guitardle-score';
+const BOARD_API = '/archive-api/v0/guitardle-board';
 let scoreAuth   = { authenticated: false, nonce: '' };
+
+// Audience: the front-page block passes ?aud=m (member) / ?aud=p (logged-out)
+// from its SSR member check. Logged-out players get a DIFFERENT daily phrase
+// (Ian 6/11) — same shared sequence, day index shifted by half its length, so
+// the two tracks never collide on the same day. Cosmetic only: recording is
+// still server-gated, so spoofing ?aud only changes which puzzle you see.
+const AUD_MEMBER = new URLSearchParams(location.search).get('aud') === 'm';
+
+// In-progress marker for the refresh-forfeit rule: set on the first move,
+// cleared on any end state. Present at load for today = the player bailed
+// mid-game (refresh/close) — that counts as a loss, with a warning card.
+const ACTIVE_KEY = 'guitardle_active';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  STATE
@@ -114,10 +127,13 @@ async function loadPhrase() {
         }
     }
 
-    // Calculate today's phrase index
+    // Calculate today's phrase index. Logged-out players run half a sequence
+    // ahead of members so the two audiences get different daily phrases.
     const today   = todayString();
-    const elapsed = daysBetween(seqData.startDate, today);
-    const idx     = ((elapsed % seqData.sequence.length) + seqData.sequence.length) % seqData.sequence.length;
+    const len     = seqData.sequence.length;
+    const elapsed = daysBetween(seqData.startDate, today)
+                  + (AUD_MEMBER ? 0 : Math.floor(len / 2));
+    const idx     = ((elapsed % len) + len) % len;
     const phraseId = seqData.sequence[idx];
 
     PHRASE        = phraseMap.get(phraseId).toUpperCase();
@@ -130,27 +146,35 @@ async function loadPhrase() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Ask the API who we are. Anonymous (or endpoint missing) → authenticated:false
 // and the game plays exactly as before, local-only.
-async function initScoreSync() {
-    try {
-        const res = await fetch(SCORE_API, { credentials: 'same-origin' });
-        if (res.ok) scoreAuth = await res.json();
-    } catch (e) { /* offline/anon — local play unaffected */ }
+let scoreSyncPromise = Promise.resolve();
+function initScoreSync() {
+    scoreSyncPromise = (async () => {
+        try {
+            const res = await fetch(SCORE_API, { credentials: 'same-origin' });
+            if (res.ok) scoreAuth = await res.json();
+        } catch (e) { /* offline/anon — local play unaffected */ }
+    })();
 }
 
 // Record today's result for a logged-in member. Server keys on (user, date) and
 // keeps the FIRST result, so a replay from a cleared browser can't overwrite.
+// Waits for the auth handshake — a forfeit fires at page load, which can be
+// before initScoreSync() resolves.
 function postScore(won, streak) {
-    if (!scoreAuth.authenticated || !scoreAuth.nonce) return;
-    fetch(SCORE_API, {
-        method:      'POST',
-        credentials: 'same-origin',
-        headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
-        body: JSON.stringify({
-            phrase_id: PHRASE_ID,
-            won:       !!won,
-            moves:     state.moves,
-            streak:    streak,
-        }),
+    const moves = state.moves;
+    scoreSyncPromise.then(() => {
+        if (!scoreAuth.authenticated || !scoreAuth.nonce) return;
+        return fetch(SCORE_API, {
+            method:      'POST',
+            credentials: 'same-origin',
+            headers:     { 'Content-Type': 'application/json', 'X-WP-Nonce': scoreAuth.nonce },
+            body: JSON.stringify({
+                phrase_id: PHRASE_ID,
+                won:       !!won,
+                moves:     moves,
+                streak:    streak,
+            }),
+        });
     }).catch(() => {});
 }
 
@@ -223,6 +247,9 @@ function incrementMoves() {
     state.moves++;
     moveCountEl.textContent = state.moves;
     updateScoreBox(state.moves);
+    // Refresh-forfeit marker: from the first move on, bailing out of the page
+    // before an end state counts as a loss (cleared in the end-state handlers).
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: todayString(), moves: state.moves }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,6 +473,7 @@ function updateStreak(won) {
 // ─────────────────────────────────────────────────────────────────────────────
 function handleWin() {
     state.gameOver = true;
+    localStorage.removeItem(ACTIVE_KEY);
     exitGuessMode(false);
 
     phraseRowEl.querySelectorAll('.tile.editable').forEach(tile => {
@@ -460,6 +488,7 @@ function handleWin() {
 
 function handleLoss() {
     state.gameOver = true;
+    localStorage.removeItem(ACTIVE_KEY);
     exitGuessMode(false);
 
     phraseRowEl.querySelectorAll('.tile.blank, .tile.editable').forEach(tile => {
@@ -503,10 +532,46 @@ function showEndState(won, streak) {
     endStateEl.style.display = 'flex';
 }
 
+// The player made at least one move and then left/refreshed the page — that
+// counts as a loss (anti-reroll rule, Ian 6/11). Record it, lock the board,
+// and say WHY on the card so it never feels like a bug.
+function handleForfeit(movesMade) {
+    state.gameOver = true;
+    state.moves = Math.max(1, movesMade);
+    moveCountEl.textContent = state.moves;
+    updateScoreBox(state.moves);
+    localStorage.removeItem(ACTIVE_KEY);
+
+    // Reveal the phrase in loss styling
+    phraseRowEl.querySelectorAll('.tile.blank').forEach(tile => {
+        tile.classList.remove('blank');
+        tile.classList.add('revealed-loss');
+        tile.textContent = tile.dataset.letter;
+    });
+
+    guessAreaEl.style.display     = 'none';
+    vowelInstructEl.style.display = 'none';
+    keyboardEl.style.display      = 'none';
+    gameMainEl.classList.add('game-over');
+    document.querySelectorAll('.key').forEach(k => { k.disabled = true; });
+
+    updateStreak(false);
+    postScore(false, 0);
+
+    const lossCard = document.getElementById('result-loss');
+    lossCard.querySelector('.result-emoji').textContent    = '⚠️';
+    lossCard.querySelector('.result-headline').textContent = 'Game forfeited';
+    lossCard.querySelector('.result-subline').textContent  =
+        'Leaving or refreshing mid-game counts as a loss. Come back tomorrow!';
+    lossCard.style.display = 'flex';
+    endStateEl.style.display = 'flex';
+}
+
 // Show a locked end state when the player has already played today.
 // Reveals the full phrase but shows no move count or score.
 function showAlreadyPlayed() {
     state.gameOver = true;
+    localStorage.removeItem(ACTIVE_KEY);
 
     // Reveal all tiles
     phraseRowEl.querySelectorAll('.tile.blank').forEach(tile => {
@@ -624,46 +689,11 @@ function attachKeyboardListeners() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  MENU BAR
 // ─────────────────────────────────────────────────────────────────────────────
+// The hamburger site-nav is gone (Ian 6/11) — the game lives on the front page,
+// so it doesn't need its own navigation. Its slot shows the weekly #1 (crown).
 function initMenuBar() {
-    const btnMenu    = document.getElementById('btn-menu');
-    const dropdown   = document.getElementById('menu-dropdown');
-
-    // Populate dropdown from config
-    dropdown.innerHTML = '';
-    (siteConfig.menuLinks || []).forEach(({ label, url }) => {
-        const li = document.createElement('li');
-        const a  = document.createElement('a');
-        a.href        = url;
-        a.textContent = label;
-        a.target      = '_blank';
-        a.rel         = 'noopener noreferrer';
-        li.appendChild(a);
-        dropdown.appendChild(li);
-    });
-
-    // Toggle dropdown, positioned below the hamburger button
-    btnMenu.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const isOpen = dropdown.classList.contains('open');
-        if (isOpen) {
-            dropdown.classList.remove('open');
-            btnMenu.setAttribute('aria-expanded', 'false');
-        } else {
-            const rect = btnMenu.getBoundingClientRect();
-            dropdown.style.top  = `${rect.bottom + 4}px`;
-            dropdown.style.left = `${rect.left}px`;
-            dropdown.classList.add('open');
-            btnMenu.setAttribute('aria-expanded', 'true');
-        }
-    });
-
-    // Close on outside click
-    document.addEventListener('click', () => {
-        if (dropdown.classList.contains('open')) {
-            dropdown.classList.remove('open');
-            btnMenu.setAttribute('aria-expanded', 'false');
-        }
-    });
+    document.getElementById('btn-board').addEventListener('click', openBoard);
+    document.getElementById('board-crown').addEventListener('click', openBoard);
 
     // Stats
     document.getElementById('btn-stats').addEventListener('click', () => {
@@ -673,6 +703,66 @@ function initMenuBar() {
     // Help — opens instructions overlay
     document.getElementById('btn-help').addEventListener('click', () => {
         openInstructions();
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  WEEKLY LEADERBOARD
+// ─────────────────────────────────────────────────────────────────────────────
+// Data from /archive-api/v0/guitardle-board: this week's members ranked by
+// points (each win = 11 − moves pts, min 1; losses 0), full list, no cap.
+// The #1 leader also shows as a crown chip on the card without the modal.
+let boardData = null;
+
+async function initBoard() {
+    try {
+        const res = await fetch(BOARD_API, { credentials: 'same-origin' });
+        if (!res.ok) return;
+        boardData = await res.json();
+    } catch (e) { return; /* board is decoration — never block the game */ }
+
+    const top = boardData && boardData.leaders && boardData.leaders[0];
+    if (top) {
+        document.getElementById('board-crown-name').textContent = top.name;
+        document.getElementById('board-crown').style.display = '';
+    }
+}
+
+function openBoard() {
+    const list  = document.getElementById('board-list');
+    const empty = document.getElementById('board-empty');
+    const leaders = (boardData && boardData.leaders) || [];
+
+    list.innerHTML = '';
+    empty.style.display = leaders.length ? 'none' : '';
+    leaders.forEach((l, i) => {
+        const li = document.createElement('li');
+        li.className = 'board-row' + (i === 0 ? ' board-row--first' : '');
+        const rank = document.createElement('span');
+        rank.className = 'board-rank';
+        rank.textContent = i === 0 ? '👑' : String(i + 1);
+        const name = document.createElement('span');
+        name.className = 'board-name';
+        name.textContent = l.name;
+        const meta = document.createElement('span');
+        meta.className = 'board-meta';
+        meta.textContent = `${l.points} pt${l.points === 1 ? '' : 's'} · ${l.wins} win${l.wins === 1 ? '' : 's'}`;
+        li.append(rank, name, meta);
+        list.appendChild(li);
+    });
+
+    document.getElementById('overlay-board').style.display = 'flex';
+}
+
+function closeBoard() {
+    document.getElementById('overlay-board').style.display = 'none';
+}
+
+function initBoardOverlay() {
+    const overlay  = document.getElementById('overlay-board');
+    document.getElementById('btn-board-close').addEventListener('click', closeBoard);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeBoard();
     });
 }
 
@@ -759,18 +849,31 @@ function initInstructions() {
 async function init() {
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
+    initBoard();       // fire-and-forget; crown chip pops in when it lands
     await loadPhrase();
 
     renderPhrase();
     attachKeyboardListeners();
     initMenuBar();
+    initBoardOverlay();
     initStats();
     initInstructions();
     updateScoreBox(0);
 
-    // Check if already played today
+    // Already finished today → locked recap. Otherwise, an in-progress marker
+    // from today means the player refreshed mid-game — forfeit (a loss).
+    const active = (() => {
+        try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || 'null'); }
+        catch (e) { return null; }
+    })();
     if (localStorage.getItem('guitardle_lastPlayed') === todayString()) {
+        localStorage.removeItem(ACTIVE_KEY);   // stale marker from a finished game
         showAlreadyPlayed();
+    } else if (active && active.date === todayString()) {
+        handleForfeit((active.moves | 0) || 1);
+    } else if (active) {
+        localStorage.removeItem(ACTIVE_KEY);   // marker from a previous day — that
+                                               // game simply never happened server-side
     }
 }
 

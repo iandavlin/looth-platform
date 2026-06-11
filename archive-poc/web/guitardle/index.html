@@ -7,11 +7,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260611b">
+    <link rel="stylesheet" href="style.css?v=20260612a">
 </head>
 <body>
-    <!-- Menu dropdown — outside game-wrap so overflow:hidden doesn't clip it -->
-    <ul class="menu-dropdown" id="menu-dropdown" aria-label="Site navigation"></ul>
+    <!-- Leaderboard overlay — weekly leaders, full ranked list -->
+    <div class="overlay-backdrop" id="overlay-board" style="display:none" role="dialog" aria-modal="true" aria-labelledby="board-title">
+        <div class="overlay-panel">
+            <h2 class="overlay-title" id="board-title">Weekly Leaders</h2>
+            <p class="board-sub" id="board-sub">Most wins, fewest moves &middot; resets Monday</p>
+            <ol class="board-list" id="board-list"></ol>
+            <p class="board-empty" id="board-empty" style="display:none">No wins yet this week &mdash; be the first!</p>
+            <button class="btn-overlay-close" type="button" id="btn-board-close">Done</button>
+        </div>
+    </div>
 
     <!-- Stats overlay -->
     <div class="overlay-backdrop" id="overlay-stats" style="display:none" role="dialog" aria-modal="true" aria-labelledby="stats-title">
@@ -77,23 +85,27 @@
 
     <div class="game-wrap">
 
-        <!-- Slim menu bar above the game header -->
+        <!-- Slim menu bar above the game header. The hamburger site-nav was
+             removed (Ian 6/11) — the game lives ON the front page now. Its
+             slot shows the week's #1 leader; tap it (or the trophy) for the
+             full weekly leaderboard. -->
         <nav class="menu-bar" aria-label="Menu">
             <div class="menu-bar-inner">
-                <button class="menu-icon-btn" id="btn-menu" aria-label="Open menu" aria-expanded="false">
-                    <svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;">
-                        <g transform="matrix(1,0,0,1,-18392.7,-1586.35)">
-                            <g transform="matrix(0.047573,0,0,0.047573,18404.8,1598.53)">
-                                <g transform="matrix(1,0,0,1,-256,-256)">
-                                    <g transform="matrix(32,0,0,32,0,0)">
-                                        <path d="M2.75,12.25L13.25,12.25M2.75,8.25L13.25,8.25M2.75,4.25L13.25,4.25" style="fill:none;fill-rule:nonzero;stroke:currentColor;stroke-width:1.5px;"/>
-                                    </g>
-                                </g>
-                            </g>
-                        </g>
-                    </svg>
+                <button class="board-crown" id="board-crown" style="display:none" aria-label="Open weekly leaderboard">
+                    <span aria-hidden="true">&#128081;</span>
+                    <span class="board-crown-name" id="board-crown-name"></span>
                 </button>
                 <div class="menu-icons-right">
+                    <button class="menu-icon-btn" id="btn-board" aria-label="Weekly leaderboard">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                            <path d="M6 2h12v7a6 6 0 0 1-12 0V2z"/>
+                            <path d="M12 15v3"/>
+                            <path d="M8 21h8"/>
+                            <path d="M10 21a2 2 0 0 1 2-3 2 2 0 0 1 2 3"/>
+                        </svg>
+                    </button>
                     <button class="menu-icon-btn" id="btn-stats" aria-label="Stats">
                         <svg viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
                             <g transform="matrix(1,0,0,1,-18738.4,-1586.35)">
@@ -284,6 +296,6 @@
         </main>
     </div>
 
-    <script src="game.js?v=20260611b"></script>
+    <script src="game.js?v=20260612a"></script>
 </body>
 </html>

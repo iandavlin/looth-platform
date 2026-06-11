@@ -428,8 +428,10 @@
                global resets that would fight archive.css inline). ?embed=1
                makes the game postMessage its height up; the listener sizes
                the frame so the block never double-scrolls. */ ?>
+      <?php /* aud=m|p picks the audience's daily phrase track (logged-out gets
+               a different puzzle). Cosmetic: score recording is server-gated. */ ?>
       <iframe class="gdle-frame" id="gdle-frame"
-              src="/archive-poc/guitardle/index.html?embed=1&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
+              src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
               title="Guitardle — daily guitar phrase game"
               loading="lazy"
               scrolling="no"></iframe>
