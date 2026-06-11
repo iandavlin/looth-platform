@@ -516,6 +516,16 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
 <body class="bb-mirror">
+<?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
+<script>/* Pre-paint rail state (Ian 2026-06-11): the desktop filter rail's default is
+  COLLAPSED. Set body.nav-closed synchronously HERE — before .bb-layout__nav parses
+  below — so the rail never paints open then gets collapsed by the deferred overlay
+  (that flash + the content-pane reflow it caused was CLS ~0.19). Reads the user's
+  own lg-nav-open so opted-open users still get the rail from the first frame.
+  ≥961 collapse is CSS-gated; mobile (drawer) is unaffected. */
+(function(){try{if(localStorage.getItem('lg-nav-open')!=='1')document.body.classList.add('nav-closed');}catch(e){}})();
+</script>
+<?php endif; ?>
 
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"
