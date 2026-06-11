@@ -3197,3 +3197,17 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__go { backgroun
   body.view-discover.is-member .lg-fm__avi { margin: 0 auto; }
   body.view-discover.is-member .lg-loothalong { flex-wrap: wrap; }
 }
+
+/* Contain the LOGGED-IN discover column to a centered max-width so the
+   featured-member band, bento, and rails read as a tidy column instead of
+   stretching full-bleed on wide monitors (matches the approved Bento deck).
+   Member view only (body...is-member) — the public Classic Landing width is
+   the front-page lane's call, flagged separately. (Buck 2026-06-11) */
+@media (min-width: 641px) {
+  body.view-discover.is-member .topbar--standalone,
+  body.view-discover.is-member .rows {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
