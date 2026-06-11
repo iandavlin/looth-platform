@@ -1746,6 +1746,9 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   }
   .bb-nav__close:hover { color: var(--lg-rust, #c66845); border-color: var(--lg-rust, #c66845); }
   body.nav-closed .bb-nav__close { display: none; }
+  /* The Categories/Type segmented toggle is the rail's top row — give it a
+     right gutter so the close X doesn't sit on the "Type" tab (Ian screenshot). */
+  .bb-layout__nav .hub-rail__switch { margin-right: 38px; }
 }
 
 /* Desktop: the sort/search/filters CONTROL SURFACE sticks just below the
