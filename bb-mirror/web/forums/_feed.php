@@ -1122,7 +1122,7 @@ $header_cat = $scoped_forum
 <div class="page feed-page">
 
   <!-- Forum header -->
-  <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?>"
+  <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?><?= $scoped_forum ? '' : ' forum-header--hub' ?>"
           data-cat="<?= htmlspecialchars($header_cat) ?>">
     <?php if ($has_header_image): ?>
       <div class="forum-header__bg"

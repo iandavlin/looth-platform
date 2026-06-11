@@ -4077,3 +4077,17 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   .feed-page .feed-card .fc-actions .fc-save:hover { color: var(--lg-sage-d, #586b3f); }
   .feed-page .feed-card .fc-actions .fc-save.is-on { color: var(--lg-sage-d, #586b3f); }
 }
+
+/* Desktop hub: top banner removed on the FRONT-DOOR hub (scoped forums keep
+   theirs); the sort-bar New-post pill un-hides and sits right of Filters —
+   mirrors the existing mobile banner-hide. (Buck pre-launch 2026-06-11) */
+@media (min-width:641px){
+  .feed-page .forum-header--hub{display:none}
+  .feed-page .feed-sort-bar > .lg-newpost{
+    display:inline-flex;align-items:center;gap:5px;position:static;width:auto;height:auto;
+    background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;
+    padding:8px 15px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+    white-space:nowrap;margin:0;box-shadow:none;transform:none;cursor:pointer;
+  }
+  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
+}
