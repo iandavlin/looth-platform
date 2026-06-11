@@ -694,13 +694,14 @@ foreach ($main_rows as $row):
             <button type="button" class="lg-bento__map-btn" data-action="open-member-map">Open the member map</button>
           </div>
         </section>
-        <?php if ($is_member): ?><script defer src="/archive-poc/fp-map.js?v=<?= @filemtime(__DIR__ . '/fp-map.js') ?>"></script><?php endif; ?>
+        <script defer src="/archive-poc/fp-map.js?v=<?= @filemtime(__DIR__ . '/fp-map.js') ?>"></script>
         <div class="lg-bento__events">
           <?php if ($is_member): ?>
-          <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/lal-link/">
-            <span class="lg-loothalong__live"><span class="lg-loothalong__dot"></span><?= $happening_now ? 'Live' : 'LAL' ?></span>
-            <span class="lg-loothalong__txt"><?= $happening_now ? 'Loothalong is on now' : 'Loothalong' ?><small><?= $happening_now ? 'Build along with the shop - live video room' : 'The live build-along video room' ?></small></span>
-            <span class="lg-loothalong__go">Join the Loothalong &rarr;</span>
+          <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/loothalong.php">
+            <span class="lg-loothalong__glow"></span>
+            <span class="lg-loothalong__live"><span class="lg-loothalong__dot"></span><?= $happening_now ? 'Live now' : 'Open 24/7' ?></span>
+            <span class="lg-loothalong__txt">Loothalong<small>A 24-hour workbench full of friends.</small></span>
+            <span class="lg-loothalong__go">Pull up a bench<svg class="lg-loothalong__arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span>
           </a>
           <?php endif; ?>
           <?php include __DIR__ . "/_render-main-row.php"; ?>
