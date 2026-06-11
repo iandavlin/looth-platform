@@ -56,6 +56,12 @@
    with this). Root scroller only; no visual track until needed. */
 html { scrollbar-gutter: stable; }
 
+/* The shell owns its own ground rules: kill the UA's default 8px body margin.
+   Consumers that forgot their own reset (events.css) showed the dark header
+   floating with page-bg gaps around it (Ian screenshot 2026-06-11). Hub/
+   front-page already reset — harmless double-zero there. */
+body { margin: 0; }
+
 /* ---------- Sticky header shell ---------- */
 .lg-chrome {
   background: rgba(255,255,255,0.96);
