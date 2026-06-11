@@ -3323,3 +3323,36 @@ body.view-discover .lg-bento__events .row--events .rail {
   overflow: visible; margin: 0; padding: 0;
 }
 body.view-discover .lg-bento__events .row--events .ecard { width: 100%; }
+
+/* ── Member What's-New promo → BENTO band (Buck 2026-06-11: "we wanted bento
+   not split hero"). The lane's centered member-hero becomes a compact card
+   tile: copy left, video right, same card language as the rest of the page.
+   Member view only; appended last so it outranks the member-hero block. ── */
+body.view-discover.is-member .row--video-promo[data-row-id="video-promo-members"] {
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line, #ebe9e2);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin: 26px 0 8px;
+}
+body.view-discover.is-member .row--video-promo[data-row-id="video-promo-members"] .row__head { display: none; }
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  max-width: none; gap: 30px; align-items: center;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy {
+  order: 0; text-align: left; align-items: flex-start; font-size: .98rem;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__video {
+  order: 1; max-width: 460px; width: 100%; margin: 0; justify-self: end;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__label { text-align: left; }
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy h2,
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy h3 {
+  font: 400 24px/1.2 var(--lg-font-serif); text-align: left; margin: 0 0 10px;
+}
+body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy p { text-align: left; }
+@media (max-width: 1080px) {
+  body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo { grid-template-columns: 1fr; }
+  body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__video { justify-self: stretch; max-width: none; }
+}
