@@ -166,12 +166,10 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
                || !empty($filters['authors']) || !empty($filters['q'])
                || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
-    // Segmented Type/Categories toggle (replaces the old stacked accordions, Ian):
-    // ONE facet list visible at a time, switchable with zero JS via two visually-
-    // hidden radios + :checked sibling rules. Default-checked = the section with an
-    // active selection; Categories (the primary nav) otherwise.
-    $type_active = !empty($filters['types']) || !empty($muted['types']);
-    $open_sec    = $type_active ? 'type' : 'cat';
+    // BOTH sections visible at once, side by side — the segmented Type/Categories
+    // radio toggle is retired (Ian 2026-06-11: "both open, no toggle"); the rail
+    // now renders inside the centered filters modal (_chrome.php) and the modal
+    // body lays the two columns out via .hub-rail__cols.
     // (Rail "Saved posts" entry removed 2026-06-11, Ian — the Saved pill in the
     // sort bar is now the one Saved affordance. hub_saved_url() stays for the pill.)
     ?>
@@ -180,30 +178,24 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
-      <input type="radio" name="hub-rail-sec" id="hrs-cat"  class="hub-rail__radio"<?= $open_sec === 'cat'  ? ' checked' : '' ?>>
-      <input type="radio" name="hub-rail-sec" id="hrs-type" class="hub-rail__radio"<?= $open_sec === 'type' ? ' checked' : '' ?>>
-      <div class="hub-rail__switch" role="group" aria-label="Filter by">
-        <label class="hub-rail__seg hub-rail__seg--cat"  for="hrs-cat">Categories</label>
-        <label class="hub-rail__seg hub-rail__seg--type" for="hrs-type">Type</label>
+      <div class="hub-rail__cols">
+        <section class="hub-rail__col hub-rail__col--cat" aria-label="Filter by category">
+          <h3 class="hub-rail__colh">Categories</h3>
+          <div class="hub-rail__group" id="hub-cat-accordion">
+            <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+          </div>
+        </section>
+
+        <section class="hub-rail__col hub-rail__col--type" aria-label="Filter by type">
+          <h3 class="hub-rail__colh">Types</h3>
+          <div class="hub-rail__group">
+            <?php foreach ($type_order as $key):
+              if (!isset($types[$key])) continue;
+              hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+            endforeach; ?>
+          </div>
+        </section>
       </div>
-
-      <p class="hub-rail__help">Tap a name to filter.</p>
-
-      <div class="hub-rail__panel hub-rail__panel--cat">
-        <div class="hub-rail__group" id="hub-cat-accordion">
-          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
-        </div>
-      </div>
-
-      <div class="hub-rail__panel hub-rail__panel--type">
-        <div class="hub-rail__group">
-          <?php foreach ($type_order as $key):
-            if (!isset($types[$key])) continue;
-            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-          endforeach; ?>
-        </div>
-      </div>
-
     </div>
     <?php
 }

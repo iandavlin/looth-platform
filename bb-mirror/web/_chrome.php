@@ -526,18 +526,12 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
          pwa.js re-introduces the flash). Behaviors-only mobile-hub.js may defer. */ ?>
 <link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
-<body class="bb-mirror">
-<?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
-<script>/* Pre-paint rail state (Ian 2026-06-11): the desktop filter rail's default is
-  COLLAPSED. Set body.nav-closed synchronously HERE — before .bb-layout__nav parses
-  below — so the rail never paints open then gets collapsed by the deferred overlay
-  (that flash + the content-pane reflow it caused was CLS ~0.19). Reads the user's
-  own lg-nav-open so opted-open users still get the rail from the first frame.
-  ≥961 collapse is CSS-gated; mobile (drawer) is unaffected. */
-(function(){try{if(localStorage.getItem('lg-nav-open')!=='1')document.body.classList.add('nav-closed');}catch(e){}})();
-</script>
-<?php endif; ?>
-
+<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>">
+<?php /* Hub feed: filters live in a CENTERED MODAL (Ian 2026-06-11), not the
+         side rail — so the hub emits no nav aside, no hamburger, no drawer
+         backdrop, and needs no pre-paint nav-closed state. Forum subpages
+         keep the classic left nav + hamburger below. */ ?>
+<?php if (empty($GLOBALS['__bb_hub_rail'])): ?>
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"
         aria-label="Toggle navigation" aria-expanded="true">
@@ -546,6 +540,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 
 <!-- Mobile drawer backdrop -->
 <div class="nav-overlay" id="bb-overlay" aria-hidden="true"></div>
+<?php endif; ?>
 
 <?php
     lg_shared_render_site_header([
@@ -562,17 +557,33 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ]);
 ?>
 
-<div class="bb-layout">
-  <aside class="bb-layout__nav" id="bb-nav">
-    <?php /* Close-filters control (Ian 2026-06-11): same state as the "Filters"
-             pill toggle — body.nav-closed + localStorage lg-nav-open — wired in
-             forums.js. Desktop-only via CSS; mobile keeps the drawer's own close. */ ?>
-    <button type="button" class="bb-nav__close" data-lg-nav-close aria-label="Close filters" title="Close filters">&times;</button>
-    <?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')):
-        // Option A: the Hub control rail replaces the forum nav on the unified feed.
+<?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')): ?>
+<?php /* Centered filters modal (Ian 2026-06-11): the rail content — Categories
+         AND Types both visible — in a dialog the sort-bar "Filters" chip opens.
+         Server-rendered, link-driven (zero-JS filtering still round-trips);
+         forums.js only opens/closes the shell. All viewports. */ ?>
+<div class="hub-fmodal" id="hub-fmodal" hidden role="dialog" aria-modal="true" aria-label="Hub filters">
+  <div class="hub-fmodal__back" data-hub-fmodal-close></div>
+  <div class="hub-fmodal__panel" tabindex="-1">
+    <header class="hub-fmodal__head">
+      <h2 class="hub-fmodal__title">Filters</h2>
+      <p class="hub-fmodal__help">Tap a name to filter the feed.</p>
+      <button type="button" class="hub-fmodal__x" data-hub-fmodal-close aria-label="Close filters">&times;</button>
+    </header>
+    <div class="hub-fmodal__body">
+      <?php
         $__r = $GLOBALS['__bb_hub_rail'];
         hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['tree'] ?? []);
-    else: ?>
+      ?>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+
+<div class="bb-layout">
+  <?php if (empty($GLOBALS['__bb_hub_rail'])): ?>
+  <aside class="bb-layout__nav" id="bb-nav">
+    <button type="button" class="bb-nav__close" data-lg-nav-close aria-label="Close filters" title="Close filters">&times;</button>
     <?php bb_mirror_left_nav(); ?>
 
     <nav class="bb-mirror__searchbar bb-mirror__searchbar--sidebar" aria-label="Forum search">
@@ -585,8 +596,8 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
         <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
       </form>
     </nav>
-    <?php endif; ?>
   </aside>
+  <?php endif; ?>
   <main class="bb-layout__content bb-mirror__main" id="lg-main">
 <?php
 }

@@ -238,11 +238,37 @@
     syncRailControls(railIsOpen());
   }
 
+  // Centered filters modal (Ian 2026-06-11): on the hub feed the side rail no
+  // longer renders — the "Filters" chip opens #hub-fmodal instead. Forum
+  // subpages have no modal, so the chip/hamburger keep the legacy nav toggle.
+  const fmodal = document.getElementById('hub-fmodal');
+  function fmodalSet(open) {
+    if (!fmodal) return;
+    fmodal.hidden = !open;
+    document.body.classList.toggle('hub-fmodal-lock', open);
+    syncRailControls(open);
+    if (open) {
+      var p = fmodal.querySelector('.hub-fmodal__panel');
+      if (p) p.focus();
+    }
+  }
+  if (fmodal) {
+    fmodal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-hub-fmodal-close]')) fmodalSet(false);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !fmodal.hidden) fmodalSet(false);
+    });
+  }
+
   if (ham) ham.addEventListener('click', toggleNav);
   document.addEventListener('click', function (e) {
-    if (e.target.closest && e.target.closest('.lg-filters-chip')) toggleNav();
+    if (e.target.closest && e.target.closest('.lg-filters-chip')) {
+      if (fmodal) { fmodalSet(fmodal.hidden); return; }
+      toggleNav();
+    }
   });
-  syncRailControls(railIsOpen());   // reflect initial state on the chip(s)
+  if (!fmodal) syncRailControls(railIsOpen());   // reflect initial state on the chip(s)
 
   if (overlay) {
     overlay.addEventListener('click', function () {
@@ -2623,4 +2649,155 @@
     e.stopPropagation();   // beat the legacy inline-expand handlers
     open(card);
   }, true);
+})();
+
+/* ── §9 Pinned mosaic columns (desktop) ─────────────────────────────────────
+ * The mosaic was CSS multi-column (forums.css .feed{column-count}). Multicol
+ * REBALANCES the whole flow whenever anything changes height or count — every
+ * infinite-scroll append and every mid-feed insertion (sponsor cards) moved
+ * cards the user had already read into other columns ("the feed reorganizes
+ * and repeats itself", Ian 2026-06-11). Convert the feed to N fixed column
+ * buckets instead: each card is placed ONCE into the currently-shortest
+ * column and never moves again; new cards (infinite scroll) go to the
+ * shortest column at arrival. The column COUNT still comes from the CSS
+ * cascade (forums.css bands + any overlay override) via the computed
+ * column-count, so geometry stays CSS-owned — this module only pins.
+ * Stream layout (single reading column) is left on the CSS path untouched. */
+(function () {
+  'use strict';
+  var mqDesk = window.matchMedia('(min-width: 641px)');
+  var ord = 0, mo = null, bucketed = false, moving = false;
+
+  function feedEl() { return document.querySelector('.feed-page .feed'); }
+  function isStream() {
+    return (document.documentElement.getAttribute('data-lg-hublayout') || '') === 'stream';
+  }
+  function colCount(feed) {
+    // Read the value the CASCADE says (forums.css bands, overlay overrides).
+    // Multicol props are ignored by a flex container, so the declared count
+    // survives as a readable signal even while we're display:flex.
+    var n = parseInt(getComputedStyle(feed).columnCount, 10);
+    return (n >= 1 && n <= 8) ? n : 0;
+  }
+
+  function shortest(cols) {
+    var best = cols[0];
+    for (var i = 1; i < cols.length; i++) {
+      if (cols[i].offsetHeight < best.offsetHeight) best = cols[i];
+    }
+    return best;
+  }
+
+  function place(card, cols) {
+    if (!card.hasAttribute('data-lg-ord')) card.setAttribute('data-lg-ord', String(ord++));
+    shortest(cols).appendChild(card);
+  }
+
+  function unbucket(feed) {
+    if (!bucketed) return;
+    moving = true;
+    var cards = Array.prototype.slice.call(feed.querySelectorAll('.feed-card'));
+    cards.sort(function (a, b) {
+      // unstamped cards (late in-column insertions) sink to the end
+      function o(el) { var n = parseInt(el.getAttribute('data-lg-ord'), 10); return isNaN(n) ? 1e9 : n; }
+      return o(a) - o(b);
+    });
+    for (var i = 0; i < cards.length; i++) feed.appendChild(cards[i]);
+    var ws = feed.querySelectorAll('.feed-colw');
+    for (var j = 0; j < ws.length; j++) ws[j].remove();
+    feed.classList.remove('feed--pinned');
+    bucketed = false;
+    moving = false;
+  }
+
+  function bucket(feed) {
+    var n = colCount(feed);
+    if (!n || n < 2) { unbucket(feed); return; } // single column: CSS path is fine
+    moving = true;
+    var cards = Array.prototype.slice.call(feed.querySelectorAll('.feed-card'));
+    if (bucketed) {
+      cards.sort(function (a, b) {
+        // unstamped cards (late in-column insertions) sink to the end
+        function o(el) { var n = parseInt(el.getAttribute('data-lg-ord'), 10); return isNaN(n) ? 1e9 : n; }
+        return o(a) - o(b);
+      });
+      var old = feed.querySelectorAll('.feed-colw');
+      for (var k = 0; k < old.length; k++) old[k].remove();
+    }
+    var cols = [];
+    for (var i = 0; i < n; i++) {
+      var d = document.createElement('div');
+      d.className = 'feed-colw';
+      feed.appendChild(d);
+      cols.push(d);
+    }
+    feed.classList.add('feed--pinned');
+    for (var c = 0; c < cards.length; c++) place(cards[c], cols);
+    bucketed = true;
+    moving = false;
+  }
+
+  function liveCols(feed) {
+    return Array.prototype.slice.call(feed.querySelectorAll(':scope > .feed-colw'));
+  }
+
+  function apply() {
+    var feed = feedEl();
+    if (!feed) return;
+    if (!mqDesk.matches || isStream()) { unbucket(feed); return; }
+    bucket(feed);
+  }
+
+  function watch(feed) {
+    if (mo) return;
+    mo = new MutationObserver(function (muts) {
+      if (moving || !bucketed) return;
+      var cols = null;
+      for (var i = 0; i < muts.length; i++) {
+        var added = muts[i].addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          var node = added[j];
+          // Only direct-child cards (infinite-scroll appends). Cards inserted
+          // INSIDE a column (sponsor afterend-insertions) are already placed.
+          if (node.nodeType === 1 && node.parentNode === feed &&
+              node.classList && node.classList.contains('feed-card')) {
+            if (!cols) cols = liveCols(feed);
+            if (cols.length) { moving = true; place(node, cols); moving = false; }
+          }
+        }
+      }
+    });
+    mo.observe(feed, { childList: true });
+  }
+
+  function boot() {
+    var feed = feedEl();
+    if (!feed) return;
+    apply();
+    watch(feed);
+    var pend = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(pend);
+      pend = setTimeout(function () {
+        var f = feedEl();
+        if (!f) return;
+        // Re-bucket only when the cascade's column count actually changed
+        // (band crossing / rail open) — a plain resize never reshuffles.
+        if (!mqDesk.matches || isStream()) { unbucket(f); return; }
+        var want = colCount(f);
+        var have = f.querySelectorAll(':scope > .feed-colw').length;
+        if (want !== have) bucket(f);
+      }, 150);
+    });
+    // Layout toggle (gear: Mosaic <-> Stream) flips data-lg-hublayout live.
+    new MutationObserver(apply).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-lg-hublayout']
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 })();
