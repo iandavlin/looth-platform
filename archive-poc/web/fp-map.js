@@ -21,7 +21,7 @@
   // me/location block shapes vary (display/pin/two-tier) — take the first pair.
   function pickLL(b) {
     if (!b || typeof b !== 'object') return null;
-    var cands = [b, b.display, b.pin, b.map, b.coarse, b.exact];
+    var cands = [b, b.place, b.display, b.pin, b.map, b.coarse, b.exact];
     for (var i = 0; i < cands.length; i++) {
       var c = cands[i];
       if (c && num(c.lat) && num(c.lng)) {
