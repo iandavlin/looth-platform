@@ -62,7 +62,7 @@ try {
         $stmt = $db->prepare('SELECT blob FROM article_blobs WHERE post_type = :pt AND post_id = :id LIMIT 1');
         $stmt->execute([':pt' => $postType, ':id' => $postId]);
     } else {
-        $stmt = $db->prepare('SELECT blob FROM article_blobs WHERE post_type = :pt AND slug = :sl LIMIT 1');
+        $stmt = $db->prepare('SELECT blob FROM article_blobs WHERE post_type = :pt AND slug = :sl ORDER BY materialized_at DESC, post_id DESC LIMIT 1');
         $stmt->execute([':pt' => $postType, ':sl' => $slug]);
     }
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
