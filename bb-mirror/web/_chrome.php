@@ -506,7 +506,13 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 <title><?= $title ?> — Looth Group</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&family=Cabin:wght@400;500;600;700&display=swap" rel="stylesheet">
+<?php /* Google Fonts CSS INLINED (perf lane 2026-06-11): the css2 <link> for
+         Lora+Cabin plus the Source Serif Pro @import formerly at the top of
+         forums.css — together ~930ms of render-blocking CDN round trips for
+         <15KB of @font-face rules (cascade-position-independent, so relocating
+         them is a visual no-op). Binaries still stream from fonts.gstatic.com
+         (preconnect above). See web/_fonts-inline.css header for refresh steps. */ ?>
+<style><?php @readfile(__DIR__ . '/_fonts-inline.css'); ?></style>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <?php /* Quill toolbar CSS loads ASYNC (perf lane 2026-06-11): Quill only initializes
          lazily when a composer opens (forums.js, with a plain-textarea fallback), so
@@ -558,6 +564,10 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 
 <div class="bb-layout">
   <aside class="bb-layout__nav" id="bb-nav">
+    <?php /* Close-filters control (Ian 2026-06-11): same state as the "Filters"
+             pill toggle — body.nav-closed + localStorage lg-nav-open — wired in
+             forums.js. Desktop-only via CSS; mobile keeps the drawer's own close. */ ?>
+    <button type="button" class="bb-nav__close" data-lg-nav-close aria-label="Close filters" title="Close filters">&times;</button>
     <?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')):
         // Option A: the Hub control rail replaces the forum nav on the unified feed.
         $__r = $GLOBALS['__bb_hub_rail'];

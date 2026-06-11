@@ -5,7 +5,9 @@
  * Option B (no hero card, no right rail — those are Option C, deferred).
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;600&display=swap');
+/* Source Serif Pro @import moved to the inlined fonts block in _chrome.php
+   (perf lane 2026-06-11) — as an @import here it was a render-blocking request
+   serialized BEHIND the forums.css download. Same @font-face rules, same swap. */
 
 /* Crisp text (Ian 6/7) — grayscale font-smoothing across the whole Hub (incl. the
    fixed composer modal + search panel, which live outside .feed-page). This is the
@@ -1719,6 +1721,24 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
 /* The Saved pill is a VIEW TOGGLE — unlike sort pills it stays clickable when
    active so a second click exits the Saved view (Ian 2026-06-11). */
 .feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
+
+/* Close-filters button at the top of the sidebar (Ian 2026-06-11). Desktop
+   only — mobile's filter drawer has its own close. Same state as the pill. */
+.bb-nav__close { display: none; }
+@media (min-width: 641px) {
+  .bb-layout__nav { position: relative; }
+  .bb-nav__close {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    width: 30px; height: 30px; padding: 0;
+    border: 1px solid var(--lg-line, #e3ddd0); border-radius: 50%;
+    background: var(--bg-card, #fff); color: var(--lg-mute, #6b6f6b);
+    font-size: 18px; line-height: 1; cursor: pointer;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .bb-nav__close:hover { color: var(--lg-rust, #c66845); border-color: var(--lg-rust, #c66845); }
+  body.nav-closed .bb-nav__close { display: none; }
+}
 
 /* Desktop: the sort/search/filters CONTROL SURFACE sticks just below the
    (sticky, 61px) site header (Ian 2026-06-11: header stays sticky too; the

@@ -958,6 +958,16 @@
     });
   }
 
+  // Close-filters button in the sidebar (Ian 2026-06-11) — mirrors the Filters
+  // pill: same body class + the same lg-nav-open persistence the pre-paint
+  // rail-state script reads, so pill/button/first-frame all agree.
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest && e.target.closest('[data-lg-nav-close]');
+    if (!c) return;
+    document.body.classList.add('nav-closed');
+    try { localStorage.setItem('lg-nav-open', '0'); } catch (err) {}
+  });
+
   // Expose so the §4e discussion modal (separate IIFE) can embed provider URLs
   // in its lazily-fetched OP body + reply thread — the load-time scan below only
   // sees static page content, never the modal's injected HTML.
