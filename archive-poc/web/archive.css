@@ -2914,7 +2914,19 @@ body.view-discover {
   --lg-card-bg: #ffffff;
   --lg-font-serif: "DM Serif Display", Georgia, serif;
   --lg-font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  background: #fcfcf9;
+  /* surface tokens the dark counterpart re-points; light = the original
+     hardcoded values, so light mode is pixel-identical */
+  --fp-slab: #efe9dc;               /* member vpromo row slab */
+  --fp-chip-bg: var(--lg-charcoal); /* ecard date chip / search-more btn */
+  --fp-chip-ink: #fff;
+  --fp-pill-bg: #fff;               /* like chips */
+  --fp-pill-line: #d8d2c2;
+  --fp-badge-kind-bg: #e8e2d2;
+  --fp-input-bg: #f3efe7;           /* topbar sort, vpromo inline code */
+  --fp-img-ph: #d4ccb8;             /* thumb placeholder */
+  --fp-cta-ink: #fff;               /* vp-cta text */
+  --fp-cta-hover-bg: #3a4a3a;
+  background: var(--lg-cream);
 }
 
 /* ── Hero: Classic Landing — centered copy, video beneath, open (no card box) ── */
@@ -2978,3 +2990,89 @@ body.view-discover .ecard {
   box-shadow: none;
 }
 body.view-discover .row--video-promo[data-row-id="video-promo-public"] + .row { margin-top: 12px; }
+
+/* ── Token-aware surfaces: hardcoded light colors re-routed through the
+   --fp-* tokens above so the dark counterpart below can re-point them.
+   Light values are identical to the originals — zero visual change. ── */
+body.view-discover .row--video-promo { background: var(--fp-slab); border-color: var(--lg-line); }
+body.view-discover .ecard { background: var(--lg-card-bg); }
+body.view-discover .ecard__date { background: var(--fp-chip-bg); }
+body.view-discover .ecard__day { color: var(--fp-chip-ink); }
+body.view-discover .like,
+body.view-discover .rcard .like { background: var(--fp-pill-bg); border-color: var(--fp-pill-line); }
+body.view-discover .badge--kind { background: var(--fp-badge-kind-bg); }
+body.view-discover .badge--subforum { background: var(--lg-card-bg); }
+body.view-discover .topbar { background: var(--lg-card-bg); }
+body.view-discover .topbar .sort { background: var(--fp-input-bg); }
+body.view-discover .rcard__img { background: var(--fp-img-ph); }
+body.view-discover .vpromo__copy code { background: var(--fp-input-bg); }
+body.view-discover .vpromo__copy hr.vp-divider { border-top-color: var(--lg-line); }
+body.view-discover .vpromo__copy .vp-cta { color: var(--fp-cta-ink) !important; }
+body.view-discover .vpromo__copy .vp-cta:hover { background: var(--fp-cta-hover-bg); }
+body.view-discover .search-modal__dialog { background: var(--lg-card-bg); }
+body.view-discover .search-modal__more { background: var(--fp-chip-bg); color: var(--fp-chip-ink); }
+
+/* ── Dark counterpart (Minimal · dark) ──────────────────────────────────
+   Two entry gates, SAME declaration set — keep both copies in sync:
+   1. html[data-lguser-theme="dark"] — the user picked Dark in app settings
+      (Buck's overlay/boot script stamps the attr pre-paint).
+   2. OS prefers-color-scheme: dark, ONLY while no theme attr is stamped
+      (first visit before app-settings runs / JS off). An explicit Light
+      pick (attr="default") stays light regardless of the OS, per the
+      2026-06-10 two-mode policy.
+   --lguser-* indirection: when Buck's overlay is present its tuned dark
+   values flow through; fallbacks mirror app-settings.js THEMES dark. ── */
+html[data-lguser-theme="dark"] body.view-discover {
+  color-scheme: dark;
+  --lg-cream: var(--lguser-bg, #15171a);
+  --lg-card-bg: var(--lguser-card, #1e2124);
+  --lg-sage: var(--lguser-accent, #9cb37d);
+  --lg-sage-d: var(--lguser-accent-d, #b0c693);
+  --lg-sage-tint: var(--lguser-pill, #243024);
+  --lg-sage-3: #2f3d2c;
+  --lg-line: var(--lguser-line, #2c312d);
+  --lg-ink: var(--lguser-ink, #e5e7e1);
+  --lg-mute: var(--lguser-mute, #a6ac9f);
+  --lg-charcoal: #f2f4ee;
+  --lg-amber: #ecb351;
+  --lg-rust: #d57a55;
+  --fp-slab: #1f231e;
+  --fp-chip-bg: #2c312d;
+  --fp-chip-ink: #f2f4ee;
+  --fp-pill-bg: var(--lguser-pill, #243024);
+  --fp-pill-line: var(--lguser-line, #2c312d);
+  --fp-badge-kind-bg: #2f3d2c;
+  --fp-input-bg: #222629;
+  --fp-img-ph: #262b30;
+  --fp-cta-ink: #15171a;
+  --fp-cta-hover-bg: #c3d6a8;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-lguser-theme]) body.view-discover {
+    color-scheme: dark;
+    --lg-cream: var(--lguser-bg, #15171a);
+    --lg-card-bg: var(--lguser-card, #1e2124);
+    --lg-sage: var(--lguser-accent, #9cb37d);
+    --lg-sage-d: var(--lguser-accent-d, #b0c693);
+    --lg-sage-tint: var(--lguser-pill, #243024);
+    --lg-sage-3: #2f3d2c;
+    --lg-line: var(--lguser-line, #2c312d);
+    --lg-ink: var(--lguser-ink, #e5e7e1);
+    --lg-mute: var(--lguser-mute, #a6ac9f);
+    --lg-charcoal: #f2f4ee;
+    --lg-amber: #ecb351;
+    --lg-rust: #d57a55;
+    --fp-slab: #1f231e;
+    --fp-chip-bg: #2c312d;
+    --fp-chip-ink: #f2f4ee;
+    --fp-pill-bg: var(--lguser-pill, #243024);
+    --fp-pill-line: var(--lguser-line, #2c312d);
+    --fp-badge-kind-bg: #2f3d2c;
+    --fp-input-bg: #222629;
+    --fp-img-ph: #262b30;
+    --fp-cta-ink: #15171a;
+    --fp-cta-hover-bg: #c3d6a8;
+  }
+  /* overscroll behind the dark page (html bg is otherwise light) */
+  html:not([data-lguser-theme]):has(body.view-discover) { background: #15171a; }
+}
