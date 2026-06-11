@@ -17,202 +17,104 @@
     });
   }
 
-  // Load the user settings engine FIRST (color theme / webfont / text size from
+  // Warm the Google Fonts connections early — several layers inject webfonts
+  // (Cabin on the Hub, Barlow Condensed/Inter on the shop surfaces).
+  (function () {
+    var hosts = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
+    for (var i = 0; i < hosts.length; i++) {
+      var l = document.createElement('link');
+      l.rel = 'preconnect'; l.href = hosts[i]; l.crossOrigin = '';
+      (document.head || document.documentElement).appendChild(l);
+    }
+  })();
+
+  // ── Layer loader (Buck 2026-06-11 site-wide speed pass) ─────────────────────
+  // Layers used to be injected on EVERY page and rely on their internal gates to
+  // no-op — which still cost the download + parse everywhere (hub-polish alone is
+  // ~250KB; a non-hub desktop page pulled ~620KB of layer JS it could never run).
+  // The loader now applies each layer's OWN gate (mirrored from the layer source —
+  // the internal gates STAY, a layer must remain safe however it's loaded) BEFORE
+  // injecting, and `idle()` layers (tap-to-open sheets, push opt-in) wait for
+  // requestIdleCallback so the first paint never competes with them.
+  // "mobileish" = phone width OR coarse-pointer tablet/phone in ANY orientation,
+  // so a landscape phone still gets the layers its portrait flip needs. Layers
+  // that hard-gate at ≤640 internally behave exactly as before — they just also
+  // skip the download on devices that could never pass that gate.
+  var PATH = location.pathname || '/';
+  var onHub = /^\/hub(\/|$)/.test(PATH);           // covers /hub/ + /hub/<cat>/<topic>/
+  var onEvents = PATH.indexOf('/events') === 0;
+  var onDir = PATH.indexOf('/directory') === 0;
+  var mqPhone = window.matchMedia('(max-width:640px)').matches;
+  var coarse = window.matchMedia('(pointer:coarse)').matches;
+  var mobileish = mqPhone || (coarse && window.matchMedia('(max-width:1366px)').matches);
+
+  function inject(id, src, sync) {
+    if (document.getElementById(id)) return;
+    var s = document.createElement('script');
+    s.id = id; s.src = src;
+    if (sync) s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
+    else s.defer = true;
+    (document.head || document.documentElement).appendChild(s);
+  }
+  var idleQ = [];
+  function idle(id, src) { idleQ.push([id, src]); }
+
+  // The user settings engine FIRST (color theme / webfont / text size from
   // localStorage, applied site-wide). Earliest so a picked theme paints with
   // minimal flash; defaults apply no override, so most users see no change.
+  inject('looth-app-settings-js', '/app-settings.js?v=32', true);
+
+  if (onHub) {
+    // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
+    inject('looth-hub-polish-js', '/hub-polish.js?v=191', true);
+    // Hub infinite scroll (auto-append older feed items at the bottom).
+    inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
+    // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
+    inject('looth-sponsor-cards-js', '/sponsor-cards.js?v=3');
+    // Cover-image placeholder heights (scroll-jump mitigation, Buck 6/11).
+    inject('looth-hub-nojump-js', '/hub-nojump.js?v=2', true);
+    // Mobile Hub behaviors (≤640): killCompactOnMobile + long-press reactions.
+    if (mobileish) inject('looth-mobile-hub-js', '/mobile-hub.js?v=3');
+  }
+
+  // Marketplace shop bubble — ALL viewports/pages: the desktop pop-up modal plus
+  // the site-wide loothtool.com nav-link interceptor (mobile → /shop/).
+  inject('looth-shop-js', '/shop-bubble.js?v=21');
+
+  // Bottom tab bar (Hub/Events/Members/Shop/You) on phones — but the SAME layer
+  // also owns the DESKTOP header settings gear (lg-set-gear -> LGSettings panel),
+  // so it must load on ALL viewports; it self-gates internally (tab bar <=640,
+  // gear >=641). Gating it mobile-only removed the desktop gear (Ian 6/11).
+  inject('looth-tabbar-js', '/bottom-nav.js?v=21');
+
+  if (mobileish) {
+    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=33');
+    // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
+    idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
+    idle('looth-prof-sheet-js', '/profile-sheet.js?v=7');      // /u/ profile sheet
+    idle('looth-msgr-js', '/messenger-sheet.js?v=1');          // DM pull-up
+    idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=2');      // sponsors sheet
+    idle('looth-push-js', '/push.js?v=1');                     // self-gates mobile-coarse
+  }
+
+  if (onEvents) {
+    inject('looth-loothalong-js', '/loothalong.js?v=4');       // pinned Loothalong CTA
+    inject('looth-events-live-js', '/events-live.js?v=1');     // LIVE-NOW surfacing
+    if (mobileish) inject('looth-events-mobile-js', '/events-mobile.js?v=7'); // event-details popup
+  }
+
+  if (onDir) {
+    // Coarse pointers can rotate across the 640 split — give them both layers
+    // (each self-gates at init); fine pointers load only the matching one.
+    if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=11');
+    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=9');
+  }
+
   (function () {
-    if (document.getElementById('looth-app-settings-js')) return;
-    var s = document.createElement('script');
-    s.id = 'looth-app-settings-js';
-    s.src = '/app-settings.js?v=32';
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the marketplace shop bubble (separate concern; runs on every viewport,
-  // so it must be kicked off before the mobile-only install-banner bail-out below).
-  (function () {
-    if (document.getElementById('looth-shop-js')) return;
-    var s = document.createElement('script');
-    s.id = 'looth-shop-js';
-    s.src = '/shop-bubble.js?v=21';
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the mobile bottom tab bar (Hub/Events/Members/Shop). Self-contained;
-  // shows only on mobile viewports and hides the floating Shop FAB there.
-  (function () {
-    if (document.getElementById('looth-tabbar-js')) return;
-    var s = document.createElement('script');
-    s.id = 'looth-tabbar-js';
-    s.src = '/bottom-nav.js?v=21';
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Mobile Hub behaviors (≤640px): killCompactOnMobile + long-press → the SHARED
-  // .fcr-palette reaction picker (forums.js). Behaviors only — the mobile LOOK is
-  // mobile-hub.css (<head> <link media>). Mobile/desktop split. OWNER: Buck.
-  (function () {
-    if (document.getElementById('looth-mobile-hub-js')) return;
-    if (!window.matchMedia || !window.matchMedia('(max-width:640px)').matches) return;
-    var s = document.createElement('script');
-    s.id = 'looth-mobile-hub-js';
-    s.src = '/mobile-hub.js?v=3';
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-
-  // Load the Loothalong CTA (pinned banner at the top of the Events page).
-  // Self-contained; path-gates to /events/ only. No gated Zoom URL in client.
-  (function () {
-    if (document.getElementById("looth-loothalong-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-loothalong-js";
-    s.src = "/loothalong.js?v=4";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the events LIVE-NOW surfacing (forward-compatible; no-ops until the
-  // events listing emits per-card start/end timestamps). No gated URL in client.
-  (function () {
-    if (document.getElementById("looth-events-live-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-events-live-js";
-    s.src = "/events-live.js?v=1";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load site-wide mobile layout guards (fixes shared-footer horizontal overflow
-  // on phones; CSS-only, no-op once the canonical site-header.css media query lands).
-  (function () {
-    if (document.getElementById("looth-mobile-fixes-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-mobile-fixes-js";
-    s.src = "/app-mobile-fixes.js?v=29";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load Hub feed visual polish (app-card feed + richer hero on the Hub landing;
-  // CSS layers over forums.css via source order, path-gated to /hub, no-op elsewhere).
-  (function () {
-    if (document.getElementById("looth-hub-polish-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-hub-polish-js";
-    s.src = "/hub-polish.js?v=181";
-    s.async = false;   // ordered, earliest execution (dynamic-script defer is a no-op = async)
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load Hub infinite scroll (auto-append older feed items at the bottom so the
-  // Hub feels endless). Reuses the server offset pagination; path-gated to /hub.
-  (function () {
-    if (document.getElementById("looth-hub-infinite-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-hub-infinite-js";
-    s.src = "/hub-infinite.js?v=3";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the map-first mobile directory layer (full-stage map + draggable
-  // results sheet + Filters sheet). Path-gated to /directory, ≤640 only; a
-  // no-op on desktop and elsewhere. Buck-owned client layer.
-  (function () {
-    if (document.getElementById("looth-dir-mobile-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-dir-mobile-js";
-    s.src = "/directory-mobile.js?v=11";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the Google-Maps-style desktop directory layer (two-pane: left results
-  // column + full-height map, single floating search bar + Filters popover,
-  // hover-sync). Path-gated to /directory, >=641 only; a no-op on mobile and
-  // elsewhere. Buck-owned client layer.
-  (function () {
-    if (document.getElementById("looth-dir-desktop-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-dir-desktop-js";
-    s.src = "/directory-desktop.js?v=9";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the mobile event-details popup (tapping an event card opens an inline
-  // sheet instead of the desktop /event/ page). Path-gated to /events, <=640.
-  (function () {
-    if (document.getElementById("looth-events-mobile-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-events-mobile-js";
-    s.src = "/events-mobile.js?v=7";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the mobile business/practice popup sheet (tapping a /p/<slug> link — the
-  // bizpill on a profile, a practice row, a directory link — opens the business in
-  // an app-style sheet instead of the desktop /p/ page). Self-gates to <=640.
-  (function () {
-    if (document.getElementById("looth-prac-sheet-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-prac-sheet-js";
-    s.src = "/practice-sheet.js?v=2";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the mobile profile popup sheet (tapping a profile link or "View
-  // profile" opens the person's profile in an app-style sheet instead of the
-  // desktop /u/ page). Site-wide loader; the script self-gates to <=640.
-  (function () {
-    if (document.getElementById("looth-prof-sheet-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-prof-sheet-js";
-    s.src = "/profile-sheet.js?v=7";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the Messenger-style DM pull-up (chats home + conversation view over
-  // the canonical /me/messages API; supersedes the shared social modal on
-  // mobile). Site-wide loader; the script self-gates to <=640 + logged-in use.
-  (function () {
-    if (document.getElementById("looth-msgr-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-msgr-js";
-    s.src = "/messenger-sheet.js?v=1";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-  // Load the mobile sponsor popup sheet (tapping the Sponsors nav or an
-  // individual sponsor opens it in an app-style bottom sheet instead of the
-  // full page). Site-wide loader; the script self-gates to <=640.
-  (function () {
-    if (document.getElementById("looth-spon-sheet-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-spon-sheet-js";
-    s.src = "/sponsor-sheet.js?v=2";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
-  })();
-
-
-  // Load Web Push opt-in + subscription sync (runs in the installed app too,
-  // so it must sit BEFORE the mobile-only install-banner bail-out below).
-  (function () {
-    if (document.getElementById("looth-push-js")) return;
-    var s = document.createElement("script");
-    s.id = "looth-push-js";
-    s.src = "/push.js?v=1";
-    s.defer = true;
-    (document.head || document.documentElement).appendChild(s);
+    function flush() { for (var i = 0; i < idleQ.length; i++) inject(idleQ[i][0], idleQ[i][1]); }
+    if (!idleQ.length) return;
+    if ('requestIdleCallback' in window) requestIdleCallback(flush, { timeout: 1500 });
+    else setTimeout(flush, 600);
   })();
 
   // Retire the dead Kick-era "Stream" nav item from the shared header, site-wide.

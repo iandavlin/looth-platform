@@ -112,14 +112,42 @@
     if (!window.matchMedia('(min-width:961px)').matches) return;  // sidebar is persistent only >960
     if (document.body.getAttribute('data-lg-navinit')) return;
     document.body.setAttribute('data-lg-navinit', '1');
-    var saved = null; try { saved = localStorage.getItem('lg-nav-open'); } catch (e) {}
-    if (saved !== '1') {                                          // default: collapsed
-      document.body.classList.add('nav-closed');
-      var chip = document.querySelector('.lg-filters-chip'); if (chip) chip.classList.remove('is-on');
+    var saved = null, savedWide = null;
+    try { saved = localStorage.getItem('lg-nav-open'); savedWide = localStorage.getItem('lg-nav-open-wide'); } catch (e) {}
+    // ULTRAWIDE auto-open (Buck 2026-06-11: columns max at 4 — past that,
+    // "automatically open up the filter side bar if there is room"): from
+    // 2520px the rail (~240px measured, ≤300 max) fits beside the capped
+    // 2294px feed with at most a few invisible px of squeeze — Buck's own
+    // monitor is a 2560×1080 ultrawide, which the first cut's 2620 threshold
+    // missed. Wide mode keeps its OWN pref key (lg-nav-open-wide): open is
+    // the default there, and only an explicit close made WHILE wide vetoes
+    // it — the years of narrow-mode chip clicks stored in lg-nav-open (where
+    // closed is the default anyway) no longer suppress the wide auto-open.
+    var wide = window.matchMedia('(min-width:2520px)');
+    function applyNavDefault() {
+      // Fullscreen video resizes the viewport to monitor size — crossing the
+      // 2520 band mid-fullscreen would auto-open the rail, reflow the feed and
+      // KILL the fullscreen (card DOM moves reload the player iframe). A
+      // fullscreen resize is not a real window change: wait it out, re-apply
+      // on exit (listener below).
+      if (document.fullscreenElement || document.webkitFullscreenElement) return;
+      var open = wide.matches ? savedWide !== '0' : saved === '1';
+      document.body.classList.toggle('nav-closed', !open);
+      var chip = document.querySelector('.lg-filters-chip');
+      if (chip) chip.classList.toggle('is-on', open);
     }
+    applyNavDefault();
+    if (wide.addEventListener) wide.addEventListener('change', applyNavDefault);
+    document.addEventListener('fullscreenchange', function () {
+      if (!document.fullscreenElement) setTimeout(applyNavDefault, 150);
+    });
     var chip2 = document.querySelector('.lg-filters-chip');
     if (chip2) chip2.addEventListener('click', function () {
-      setTimeout(function () { try { localStorage.setItem('lg-nav-open', document.body.classList.contains('nav-closed') ? '0' : '1'); } catch (e) {} }, 60);
+      setTimeout(function () { try {
+        var val = document.body.classList.contains('nav-closed') ? '0' : '1';
+        if (wide.matches) { savedWide = val; localStorage.setItem('lg-nav-open-wide', val); }
+        else { saved = val; localStorage.setItem('lg-nav-open', val); }
+      } catch (e) {} }, 60);
     });
   }
 
@@ -1005,7 +1033,7 @@
           previewObserver.unobserve(entries[i].target);
         }
       }
-    }, { rootMargin: '250px 0px' });
+    }, { rootMargin: '3000px 0px' });
     observePreviewCards(document);
   }
 
@@ -1602,7 +1630,7 @@
       '<div class="lcs-panel">' +
         '<div class="lcs-grab" aria-hidden="true"></div>' +
         '<div class="lcs-bar"><button class="lcs-x" type="button" aria-label="Close">✕</button><span class="lcs-ttl"></span></div>' +
-        '<iframe class="lcs-frame" title="Post" referrerpolicy="same-origin" allow="fullscreen; clipboard-write; web-share"></iframe>' +
+        '<iframe class="lcs-frame" title="Post" referrerpolicy="same-origin" allow="fullscreen; clipboard-write; web-share" allowfullscreen></iframe>' +
       '</div>';
     (document.body || document.documentElement).appendChild(lgCs);
     lgCs.querySelector('.lcs-x').addEventListener('click', function () { closeContentSheet(); });
@@ -2188,9 +2216,23 @@
     ov.innerHTML = '<span class="lg-unmute__b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>Tap to unmute</span>';
     ov.addEventListener('click', function (e) {
       e.preventDefault(); e.stopPropagation();
+      // If the first tap lands where YouTube's fullscreen button sits (the
+      // player's bottom-right corner), do BOTH: unmute AND go fullscreen —
+      // instead of the overlay eating the click (Buck 2026-06-11).
+      var goFs = false;
+      try {
+        var r = ov.getBoundingClientRect();
+        goFs = (e.clientX > r.right - 72) && (e.clientY > r.bottom - 56);
+      } catch (err) {}
       ytPost(f, 'unMute'); ytPost(f, 'playVideo');
       f.setAttribute('data-lg-unmuted', '1');
       ov.parentNode && ov.parentNode.removeChild(ov);    // first tap done → taps now reach YouTube
+      if (goFs) {
+        try {
+          var fn = f.requestFullscreen || f.webkitRequestFullscreen;
+          if (fn) { var pr = fn.call(f); if (pr && pr.catch) pr.catch(function () {}); }
+        } catch (err) {}
+      }
     });
     host.appendChild(ov);
   }
@@ -2209,7 +2251,7 @@
         if (!inf.getAttribute('data-lg-auto')) {         // first play → autoplay muted + enable JS API
           var iid = ytIdFrom(inf.src); if (!iid) return;
           inf.setAttribute('data-lg-auto', '1');
-          inf.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
+          inf.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen');
           inf.src = 'https://www.youtube.com/embed/' + iid + '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
           addUnmuteOverlay(host, inf);
         } else { ytPost(inf, 'playVideo'); }             // back in view → resume (don't re-mute)
@@ -2221,7 +2263,7 @@
       f.className = 'fc-video'; f.setAttribute('data-lg-auto', '1');
       f.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
       f.title = 'Video';
-      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:5;';
       host.appendChild(f);
@@ -2284,7 +2326,7 @@
       f.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) +
         '?autoplay=1&mute=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1';
       f.title = 'Video';
-      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
       f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:5;';
       host.appendChild(f);
@@ -2293,6 +2335,9 @@
       if (lbl && lbl.lastChild && lbl.lastChild.nodeType === 3) lbl.lastChild.textContent = 'Click to unmute';
     }
     function stopHover(host) {
+      // never tear a player down because fullscreen promotion re-computed the
+      // hover chain (top-layer elements drop ancestor :hover -> mouseleave)
+      if (document.fullscreenElement || document.webkitFullscreenElement) return;
       var f = host.querySelector('iframe.fc-video[data-lg-hover]');
       if (!f || f.getAttribute('data-lg-unmuted')) return;          // engaged (clicked) videos keep playing
       if (f.parentNode) f.parentNode.removeChild(f);
@@ -3260,10 +3305,13 @@
     // 3-col cap is 1520 (not the old 1716): the ~272px nav rail eats into the
     // viewport, and at Buck's 1920×1080 the available 1648px must still leave
     // VISIBLE side buffer (≈64px/side, ≈478px cards) — 1716 left zero.
+    // Round 4 (Buck 2026-06-11 night): "max on 4 columns" — the 5/6-col steps
+    // are gone. The 4-col rule also PINS 4 against forums.css's 5@3200 (overlay
+    // loads later → wins in cascade at every width above 2294). Width beyond
+    // the capped feed goes to side margins, and past ~2620px the filter
+    // sidebar auto-opens to spend it (see setupDesktopFilterNav).
     css += '\n@media (min-width:1101px){.feed-page .feed{max-width:1520px;margin-left:auto;margin-right:auto}}' +
-           '\n@media (min-width:2294px){.feed-page .feed{max-width:2294px;column-count:4}}' +
-           '\n@media (min-width:2872px){.feed-page .feed{max-width:2872px;column-count:5}}' +
-           '\n@media (min-width:3450px){.feed-page .feed{max-width:3450px;column-count:6}}';
+           '\n@media (min-width:2294px){.feed-page .feed{max-width:2294px;column-count:4}}';
     var s = document.createElement('style'); s.id = 'lg-desktop-css'; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
   }
@@ -3497,6 +3545,10 @@
     (document.head || document.documentElement).appendChild(s);
   }
   function wireFilterDrawer() {
+    // Canonical centered filters modal (#hub-fmodal, Ian 2026-06-11) owns the
+    // Filters chip on ALL viewports — this drawer presented .bb-layout__nav,
+    // which the hub no longer renders. No-op when the modal exists.
+    if (document.getElementById('hub-fmodal')) return;
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (document.body.getAttribute('data-lg-hubf')) return;
     document.body.setAttribute('data-lg-hubf', '1');
@@ -3563,6 +3615,10 @@
       '.feed-page .lg-card-actions .lg-act-save .ico{fill:none;stroke:currentColor}',
       '.feed-page .lg-card-actions .lg-act-save.is-on{color:var(--lguser-ink,#1a1d1a)}',
       '.feed-page .lg-card-actions .lg-act-save.is-on .ico{fill:currentColor;stroke:currentColor}',
+      // Label the bookmark (Buck 2026-06-11: the bare icon read as MISSING on
+      // phones next to the labelled Like/replies/Share). is-on flips the text.
+      '.feed-page .lg-card-actions .lg-act-save::after{content:"Save";font:inherit}',
+      '.feed-page .lg-card-actions .lg-act-save.is-on::after{content:"Saved"}',
       // Category icon before the label text — inherits the label color (currentColor,
       // so dark-mode-safe), optical-center nudge.
       '.feed-page .fc-category.lg-card-cat .lg-cat-ico,.feed-page .lg-card-cat .lg-cat-ico{display:inline-block;vertical-align:-2px;margin-right:5px;flex:0 0 auto;opacity:.85}',
@@ -3913,10 +3969,169 @@
     requestAnimationFrame(function () { de.classList.remove('lg-feed-booting'); });
   }
 
+  // ── No free video in the Hub (Buck 2026-06-11) ──────────────────────────────
+  // Members paste YouTube/Vimeo links into discussion posts; canonical forums.js
+  // auto-builds a PLAYABLE inline iframe (.bb-embed--video) AND leaves the raw URL
+  // text in the body. Buck's rule: nothing plays for free inside the Hub. Convert
+  // every such embed into a non-playing thumbnail that LOOKS playable (poster +
+  // play glyph) but, on tap, routes to the join/paywall page instead of playing,
+  // and strip the raw youtube/vimeo URL text ("i dont want to see youtube links").
+  // Scope: discussion/reply BODIES only — Looth's own content-video covers
+  // (.fc-cover--video) are already server-gated (public tier plays, gated shows a
+  // lock → its paywall page), so they're untouched. Client-side; the canonical
+  // forums.js embed builder is coordinator-owned, so we transform after the fact.
+  var LG_JOIN_URL = '/join/';
+
+  function ensureVidwallCss() {
+    if (document.getElementById('lg-vidwall-css')) return;
+    var css = [
+      '.lg-vidwall{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;',
+        'overflow:hidden;background:#0d0f0c;text-decoration:none;margin:10px 0;',
+        'border:1px solid var(--lguser-line,var(--lg-line,#e3ddd0));cursor:pointer}',
+      '.lg-vidwall__img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.82)}',
+      '.lg-vidwall__img--blank{background:linear-gradient(135deg,#2a2f26,#11130f)}',
+      '.lg-vidwall__play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62px;height:62px;',
+        'border-radius:50%;background:rgba(20,22,17,.62);display:flex;align-items:center;justify-content:center;',
+        'color:#fff;transition:background .15s ease}',
+      '.lg-vidwall__play svg{width:30px;height:30px;margin-left:3px}',
+      '.lg-vidwall__tag{position:absolute;left:10px;bottom:10px;display:inline-flex;align-items:center;',
+        'padding:5px 11px;border-radius:999px;background:var(--lg-sage-d,#6b7c52);color:#fff;',
+        'font:600 12px/1 var(--lg-font-sans,system-ui,sans-serif);letter-spacing:.01em}',
+      '.lg-vidwall:hover .lg-vidwall__play,.lg-vidwall:focus .lg-vidwall__play{background:var(--lg-sage-d,#6b7c52)}'
+    ].join('');
+    var s = document.createElement('style'); s.id = 'lg-vidwall-css'; s.textContent = css;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function lgYtId(url) {
+    if (!url) return '';
+    var m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
+    return m ? m[1] : '';
+  }
+  function lgIsVideoUrl(url) {
+    return /(?:youtube\.com|youtu\.be|player\.vimeo\.com|vimeo\.com)\//i.test(url || '');
+  }
+
+  function lgBuildVidwall(ytId) {
+    var a = document.createElement('a');
+    a.className = 'lg-vidwall';
+    a.href = LG_JOIN_URL;
+    a.setAttribute('data-lg-vidwall', '1');
+    a.setAttribute('aria-label', 'Join Looth to watch this video');
+    var poster = ytId
+      ? '<img class="lg-vidwall__img" src="https://i.ytimg.com/vi/' + ytId + '/hqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer">'
+      : '<span class="lg-vidwall__img lg-vidwall__img--blank"></span>';
+    a.innerHTML = poster +
+      '<span class="lg-vidwall__play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>' +
+      '<span class="lg-vidwall__tag">Join to watch</span>';
+    return a;
+  }
+
+  function paywallDiscussionVideos(root) {
+    // DISABLED — Ian 2026-06-11 (overrules the v190 rule): "don't gate
+    // youtube videos in discussions." Member-pasted YT/Vimeo plays free for
+    // everyone; Looth's own paywalled content stays locked server-side.
+    if (true) return;
+    var scope = (root && root.querySelectorAll) ? root : document;
+    // 1) Playable embeds → non-playing thumbnail facade (skip content-card covers)
+    var embeds = scope.querySelectorAll('.bb-embed--video');
+    for (var i = 0; i < embeds.length; i++) {
+      var wrap = embeds[i];
+      if (wrap.getAttribute('data-lg-vidwall')) continue;
+      if (wrap.closest('.fc-cover--video')) continue;
+      var ifr = wrap.querySelector('iframe');
+      var src = ifr ? (ifr.getAttribute('src') || ifr.getAttribute('data-src') || '') : '';
+      var wall = lgBuildVidwall(lgYtId(src));
+      if (wrap.parentNode) wrap.parentNode.replaceChild(wall, wrap);
+    }
+    // 2) Raw youtube/vimeo links (auto-linkified URL text). If the body already has
+    //    a facade, drop the bare link; otherwise convert the bare link into one.
+    var bodies = scope.querySelectorAll('.post__body, .feed-card__full-body, .feed-card__excerpt, .reply-stub__body, .fc-reply__body');
+    for (var b = 0; b < bodies.length; b++) {
+      var anchors = bodies[b].querySelectorAll('a[href]');
+      for (var k = 0; k < anchors.length; k++) {
+        var an = anchors[k];
+        if (an.getAttribute('data-lg-vidwall')) continue;
+        var href = an.getAttribute('href') || '';
+        if (!lgIsVideoUrl(href)) continue;
+        if (bodies[b].querySelector('.lg-vidwall')) { an.remove(); continue; }
+        var wall2 = lgBuildVidwall(lgYtId(href));
+        if (an.parentNode) an.parentNode.replaceChild(wall2, an);
+      }
+    }
+  }
+
+  // A vidwall tap goes to /join/ in capture phase, so it never bubbles to the
+  // card's inline-expand / content-sheet tap handlers.
+  function wireVidwallClick() {
+    if (window.__lgVidwallClick) return;
+    window.__lgVidwallClick = true;
+    document.addEventListener('click', function (e) {
+      var w = e.target.closest && e.target.closest('.lg-vidwall');
+      if (!w) return;
+      e.preventDefault(); e.stopPropagation();
+      window.location.href = LG_JOIN_URL;
+    }, true);
+  }
+
+  var lgVidwallMo = null;
+  function startVidwall() {
+    if (!onHubPath()) return;
+    ensureVidwallCss();
+    wireVidwallClick();
+    var pass = function () { try { paywallDiscussionVideos(document); } catch (e) {} };
+    pass();
+    setTimeout(pass, 500); setTimeout(pass, 1500); setTimeout(pass, 3500);
+    // forums.js builds embeds async + on infinite scroll → debounced re-run.
+    if (!lgVidwallMo && 'MutationObserver' in window) {
+      var t = null;
+      lgVidwallMo = new MutationObserver(function () {
+        if (t) return;
+        t = setTimeout(function () { t = null; pass(); }, 250);
+      });
+      var obsHost = document.body || document.documentElement;
+      if (obsHost) lgVidwallMo.observe(obsHost, { childList: true, subtree: true });
+    }
+  }
+
   function start() {
     if (!onHubPath()) return;
+    startVidwall();
     if (document.body) run();
     else document.addEventListener('DOMContentLoaded', run);
   }
   start();
+})();
+
+/* ── Fullscreen column pin (Buck 2026-06-11, desktop fullscreen warp-back) ──
+ * Entering video fullscreen resizes the viewport to MONITOR size; the
+ * canonical mosaic re-bucketer (forums.js) sees the CSS column-count band
+ * change and physically moves cards between column wrappers — which reloads
+ * the fullscreen player iframe and kicks the user straight back out. While a
+ * fullscreen is active we pin .feed{column-count} (the SIGNAL colCount()
+ * reads — the bucketed feed is display:flex, so this changes no visual) to
+ * its pre-fullscreen value, making want===have a no-op. On exit the pin
+ * lifts and a synthetic resize lets the canonical handler heal the layout
+ * at the real window size. */
+(function () {
+  function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement; }
+  function onChange() {
+    var pin = document.getElementById("lg-fs-colpin");
+    if (fsEl()) {
+      if (pin) return;
+      var feed = document.querySelector(".feed-page .feed");
+      if (!feed) return;
+      var n = parseInt(getComputedStyle(feed).columnCount, 10);
+      if (!(n >= 1 && n <= 8)) return;
+      var st = document.createElement("style");
+      st.id = "lg-fs-colpin";
+      st.textContent = ".feed-page .feed{column-count:" + n + " !important}";
+      document.head.appendChild(st);
+    } else if (pin) {
+      pin.parentNode.removeChild(pin);
+      setTimeout(function () { try { window.dispatchEvent(new Event("resize")); } catch (e) {} }, 120);
+    }
+  }
+  document.addEventListener("fullscreenchange", onChange, false);
+  document.addEventListener("webkitfullscreenchange", onChange, false);
 })();
