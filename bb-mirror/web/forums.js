@@ -1486,6 +1486,10 @@
           } else {
             frmAppendOptimistic(frmCard, frmName, content); // images come from frmMediaPreviews
           }
+          // Announce for surfaces with no .feed-card ancestor (discussion modal §4e).
+          try {
+            document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: topicId } }));
+          } catch (err) {}
           frmResetEditor();
           frmSubmit.disabled = false;
           frmClose();
@@ -2499,8 +2503,22 @@
       .catch(function () {});
 
     // Thread: nested one-deep + reply reactions, straight off the shared endpoint.
+    m.dataset.topicId = String(tid);
     var rep = m.querySelector('.lg-dmodal__replies');
     rep.innerHTML = '<div class="lg-dmodal__note">Loading replies…</div>';
+    loadThread(tid);
+
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Thread (re)loader — used on open and to LIVE-refresh after a reply posts
+  // from inside the modal (the composer has no .feed-card ancestor here, so
+  // the in-feed optimistic insert can't see the modal). Keeps the current
+  // thread on screen until the fresh HTML lands.
+  function loadThread(tid) {
+    var rep = modal && modal.querySelector('.lg-dmodal__replies');
+    if (!rep) return;
     fetch(BASE + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { if (!r.ok) throw 0; return r.text(); })
       .then(function (html) {
@@ -2517,10 +2535,16 @@
       .catch(function () {
         rep.innerHTML = '<div class="lg-dmodal__note">Couldn’t load replies right now.</div>';
       });
-
-    m.hidden = false;
-    document.body.style.overflow = 'hidden';
   }
+
+  // The canonical composer announces successful posts; refresh in place when
+  // the modal is open on that topic.
+  document.addEventListener('lg:reply-posted', function (e) {
+    if (!modal || modal.hidden) return;
+    var tid = modal.dataset.topicId || '';
+    var posted = e.detail && e.detail.topicId;
+    if (tid && posted && String(posted) === tid) loadThread(tid);
+  });
 
   document.addEventListener('click', function (e) {
     if (!deskt()) return;
