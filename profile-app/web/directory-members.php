@@ -396,7 +396,7 @@ function zoomToMember(main) {
   collapseDropoffs();
   dirCluster.zoomToShowLayer(rec.marker, () => {
     dirMap.setView([rec.lat, rec.lng], Math.max(dirMap.getZoom(), 13), {animate: true});
-    rec.marker.openPopup();
+    rec.openPin ? rec.openPin() : rec.marker.openPopup();
   });
 }
 document.addEventListener('DOMContentLoaded', () => {
@@ -506,6 +506,7 @@ function expandDropoffs(p) {
     const m = L.marker([k.lat, k.lng], {icon: pinIconDropoff})
       .bindPopup('<div style="font-weight:600;font-size:12px;color:#1f1d1a">' + escH(k.name || 'Drop-off') + '</div>'
         + '<div style="font-size:11px;color:#8a8478">' + escH(p.display_name) + '</div>');
+    m.on('mouseover', function () { this.openPopup(); });   // hover-open, matching the parent pins
     dirChildLayer.addLayer(m);
     pts.push([k.lat, k.lng]);
   });
@@ -521,7 +522,9 @@ function initDirMap() {
   // Cluster many overlapping pins into counts; spiderfy on click at max zoom.
   dirCluster = L.markerClusterGroup({chunkedLoading: true, maxClusterRadius: 50, spiderfyOnMaxZoom: true, showCoverageOnHover: false});
   dirMap.addLayer(dirCluster);
-  dirMap.on('click', collapseDropoffs);   // click empty map to collapse an expanded pin
+  // Click empty map: collapse an expanded pin + dismiss any open popup (our managed
+  // popups set closeOnClick:false, so this is the only map-click dismissal path).
+  dirMap.on('click', () => { collapseDropoffs(); dirMap.closePopup(); });
   loadPins();
 }
 function plotPins(pins) {
@@ -535,38 +538,54 @@ function plotPins(pins) {
   pins.forEach(p => {
     if (p.lat == null || p.lng == null) return;
     if (p.gated && viewFilter === 'visible') return;   // "Visible profiles" filter hides anonymized pins
-    let m;
+    // Popups open on HOVER; once a pin's popup is open, clicking the pin clicks THROUGH
+    // to the profile (Ian 6/11). Popups are managed manually (not bindPopup) so Leaflet's
+    // built-in click-to-toggle can't close the popup on the very click that should navigate.
+    // Touch (no hover): first tap opens the popup, second tap navigates — same gate.
+    let m, popupHtml, navigates = false;
+    const hasKids = !p.gated && !!(p.dropoffs && p.dropoffs.length);
+    const isMe = !p.gated && !!(DIR_ME_SLUG && p.slug === DIR_ME_SLUG);
     if (p.gated) {
-      m = L.marker([p.lat, p.lng], {icon: pinIconGated})
-        .bindPopup(`<div style="font-size:13px;color:#6b665e;max-width:190px">${escH(p.message)}</div>`
-          + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:var(--lg-rust);text-decoration:none">Sign in to view</a>`);
+      m = L.marker([p.lat, p.lng], {icon: pinIconGated});
+      popupHtml = `<div style="font-size:13px;color:#6b665e;max-width:190px">${escH(p.message)}</div>`
+        + `<a href="/wp-login.php" style="font-size:12px;font-weight:600;color:var(--lg-rust);text-decoration:none">Sign in to view</a>`;
     } else {
-      const hasKids = !!(p.dropoffs && p.dropoffs.length);
-      const isMe = !!(DIR_ME_SLUG && p.slug === DIR_ME_SLUG);
-      m = L.marker([p.lat, p.lng], {icon: hasKids ? pinIconWithCount(p.dropoffs.length) : pinIcon, title: p.display_name})
-        .bindPopup(`<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
-          + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : '')
-          + (hasKids ? `<div style="margin-top:4px;font-size:11px;color:#0d7a6f;font-weight:600">${p.dropoffs.length} drop-off location${p.dropoffs.length===1?'':'s'} — click pin to show</div>` : ''));
-      if (hasKids || isMe) {
-        m.on('click', (ev) => {
-          if (expandedSlug === p.slug) { collapseDropoffs(); return; }
-          if (p.dropoffs && p.dropoffs.length) { expandDropoffs(p); return; }
-          // Owner-self interim: the feed doesn't carry my drop-offs yet, but I own
-          // them so I can read them directly — lets the owner preview the expansion
-          // before the canonical feed change lands.
-          if (isMe) {
-            fetch('/profile-api/v0/me/dropoffs', {credentials:'include'})
-              .then(r => r.json())
-              .then(d => {
-                const items = (d.items || d.dropoffs || []).filter(k => k.lat != null && k.lng != null);
-                if (items.length) expandDropoffs(Object.assign({}, p, {dropoffs: items}));
-              }).catch(()=>{});
-          }
-        });
-      }
+      navigates = !hasKids && !isMe;   // drop-off pins keep click-to-expand (their popup says so)
+      m = L.marker([p.lat, p.lng], {icon: hasKids ? pinIconWithCount(p.dropoffs.length) : pinIcon, title: p.display_name});
+      popupHtml = `<a href="/u/${escH(p.slug)}" style="font-weight:600;text-decoration:none;color:#1f1d1a">${escH(p.display_name)}</a>`
+        + (p.text ? `<div style="font-size:12px;color:#8a8478">${escH(p.text)}</div>` : '')
+        + (hasKids ? `<div style="margin-top:4px;font-size:11px;color:#0d7a6f;font-weight:600">${p.dropoffs.length} drop-off location${p.dropoffs.length===1?'':'s'} — click pin to show</div>` : '');
+    }
+    // closeOnClick:false — Leaflet otherwise closes the popup on the map's pre-click,
+    // BEFORE the marker's click handler runs, so the "is the popup open?" navigation
+    // gate would always see it closed. Empty-map clicks close popups explicitly below.
+    const popup = L.popup({offset: [0, -10], closeOnClick: false}).setContent(popupHtml);
+    const openPin = () => popup.setLatLng([p.lat, p.lng]).openOn(dirMap);
+    m.on('mouseover', openPin);
+    if (navigates) {
+      m.on('click', () => { dirMap.hasLayer(popup) ? (window.location.href = '/u/' + p.slug) : openPin(); });
+    } else if (hasKids || isMe) {
+      m.on('click', (ev) => {
+        openPin();
+        if (expandedSlug === p.slug) { collapseDropoffs(); return; }
+        if (p.dropoffs && p.dropoffs.length) { expandDropoffs(p); return; }
+        // Owner-self interim: the feed doesn't carry my drop-offs yet, but I own
+        // them so I can read them directly — lets the owner preview the expansion
+        // before the canonical feed change lands.
+        if (isMe) {
+          fetch('/profile-api/v0/me/dropoffs', {credentials:'include'})
+            .then(r => r.json())
+            .then(d => {
+              const items = (d.items || d.dropoffs || []).filter(k => k.lat != null && k.lng != null);
+              if (items.length) expandDropoffs(Object.assign({}, p, {dropoffs: items}));
+            }).catch(()=>{});
+        }
+      });
+    } else {
+      m.on('click', openPin);   // gated: nothing to click through to
     }
     dirCluster.addLayer(m);
-    if (!p.gated && p.slug) pinMarkerBySlug[p.slug] = {marker: m, lat: p.lat, lng: p.lng};
+    if (!p.gated && p.slug) pinMarkerBySlug[p.slug] = {marker: m, lat: p.lat, lng: p.lng, openPin: openPin};
     pts.push([p.lat, p.lng]);
   });
   if (pts.length) dirMap.fitBounds(pts, {padding: [32, 32], maxZoom: 10});
