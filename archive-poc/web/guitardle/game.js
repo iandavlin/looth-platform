@@ -184,14 +184,23 @@ function postScore(won, streak) {
 function initEmbedMode() {
     if (!IS_EMBED) return;
     document.body.classList.add('is-embed');
-    // Measure the body's laid-out height, NOT documentElement.scrollHeight —
-    // the latter never reports below the iframe viewport, so the frame could
-    // grow but never shrink back (e.g. after the keyboard hides on game over).
-    const post = () => parent.postMessage({
-        type:   'guitardle:height',
-        height: document.body.getBoundingClientRect().height,
-    }, '*');
-    new ResizeObserver(post).observe(document.body);
+    // Height = the game wrapper's real bottom edge (+ breathing room), NOT
+    // body height or documentElement.scrollHeight: the end-state card can
+    // overflow the body without growing it (clipped the card bottom on the
+    // front page), and scrollHeight never reports below the iframe viewport
+    // so the frame could grow but never shrink back.
+    const wrap = document.querySelector('.game-wrap');
+    const post = () => {
+        const h = Math.max(
+            document.body.getBoundingClientRect().bottom,
+            wrap ? wrap.getBoundingClientRect().bottom : 0
+        ) + (window.scrollY || 0) + 16;
+        parent.postMessage({ type: 'guitardle:height', height: h }, '*');
+    };
+    const ro = new ResizeObserver(post);
+    ro.observe(document.body);
+    if (wrap) ro.observe(wrap);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(post);
     post();
 }
 
@@ -847,6 +856,15 @@ function initInstructions() {
 //  INIT
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
+    // Testing door: ?reset=1 wipes this browser's guitardle state (streaks,
+    // played-today lock, forfeit marker). Replay was always possible by
+    // clearing site data; the server still keeps only the FIRST result per
+    // member per day, so this can't rewrite a recorded score.
+    if (new URLSearchParams(location.search).has('reset')) {
+        Object.keys(localStorage)
+            .filter(k => k.startsWith('guitardle_'))
+            .forEach(k => localStorage.removeItem(k));
+    }
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
     initBoard();       // fire-and-forget; crown chip pops in when it lands
