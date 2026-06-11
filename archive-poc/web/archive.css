@@ -3356,3 +3356,37 @@ body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__copy p
   body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo { grid-template-columns: 1fr; }
   body.view-discover.is-member [data-row-id="video-promo-members"] .vpromo__video { justify-self: stretch; max-width: none; }
 }
+
+
+/* ── Member map tile, LIVE state (fp-map.js): mini Leaflet zoomed on the
+   viewer + closest-members list. Until .is-live lands, the static teaser
+   renders exactly as before (public always keeps the teaser). ── */
+.lg-fp-map__canvas { display: none; }
+.lg-bento__map.is-live { justify-content: flex-start; }
+.lg-bento__map.is-live .lg-fp-map__canvas { display: block; height: 240px; flex: 0 0 auto; }
+.lg-bento__map.is-live .lg-bento__map-img { display: none; }
+.lg-bento__map.is-live .lg-bento__map-copy {
+  position: static; background: none; padding: 14px 16px 14px;
+  display: flex; flex-direction: column; flex: 1 1 auto;
+}
+.lg-bento__map.is-live .lg-bento__map-title { color: var(--lg-charcoal, #1a1d1a); font-size: 19px; }
+.lg-bento__map.is-live .lg-bento__map-sub { color: var(--lg-mute, #6b6f6b); margin-bottom: 10px; }
+.lg-fp-map__list { display: none; }
+.lg-bento__map.is-live.has-list .lg-fp-map__list {
+  display: flex; flex-direction: column; gap: 7px; margin: 0 0 12px;
+}
+.lg-fp-near {
+  display: flex; align-items: baseline; gap: 9px; text-decoration: none;
+  font: 500 13px/1.35 var(--lg-font-sans);
+  border: 1px solid var(--lg-line, #ebe9e2); border-radius: 9px; padding: 8px 11px;
+  background: var(--lg-card-bg, #fff);
+}
+.lg-fp-near:hover { border-color: var(--lg-sage, #8a9670); }
+.lg-fp-near__n { font-weight: 700; color: var(--lg-charcoal, #1a1d1a); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-fp-near__m { color: var(--lg-mute, #6b6f6b); flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-fp-near__d {
+  flex: 0 0 auto; font: 700 11px/1 var(--lg-font-sans); color: var(--lg-sage-d, #6f7c54);
+  background: var(--lg-sage-tint, #f0f2e9); border-radius: 999px; padding: 5px 9px;
+}
+.lg-fp-you { font: 700 11px/1 var(--lg-font-sans); }
+.lg-bento__map.is-live .lg-bento__map-btn { align-self: flex-start; margin-top: auto; }

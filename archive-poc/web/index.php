@@ -684,14 +684,17 @@ foreach ($main_rows as $row):
 
 <?php if ($row_id === 'upcoming-events'): ?>
       <div class="lg-bento">
-        <section class="lg-bento__map" aria-label="Member map">
+        <section class="lg-bento__map" id="lg-fp-map" aria-label="Member map">
+          <div class="lg-fp-map__canvas"></div>
           <img class="lg-bento__map-img" src="/archive-poc/member-map-teaser.webp" alt="" loading="lazy">
           <div class="lg-bento__map-copy">
-            <h2 class="lg-bento__map-title">Luthiers everywhere</h2>
-            <p class="lg-bento__map-sub">Find members and shops near you.</p>
+            <h2 class="lg-bento__map-title"><?= $is_member ? 'Makers near you' : 'Luthiers everywhere' ?></h2>
+            <p class="lg-bento__map-sub"><?= $is_member ? 'You&rsquo;re on the map. The closest luthiers and shops:' : 'Find members and shops near you.' ?></p>
+            <div class="lg-fp-map__list"></div>
             <button type="button" class="lg-bento__map-btn" data-action="open-member-map">Open the member map</button>
           </div>
         </section>
+        <?php if ($is_member): ?><script defer src="/archive-poc/fp-map.js?v=<?= @filemtime(__DIR__ . '/fp-map.js') ?>"></script><?php endif; ?>
         <div class="lg-bento__events">
           <?php if ($is_member): ?>
           <a class="lg-loothalong<?= $happening_now ? ' is-live' : '' ?>" href="/lal-link/">
