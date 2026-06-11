@@ -1720,17 +1720,23 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
    active so a second click exits the Saved view (Ian 2026-06-11). */
 .feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
 
-/* Desktop: the sort/search/filters CONTROL SURFACE sticks to the top while the
-   page (incl. the now-static site header) scrolls away (Ian 2026-06-11).
-   Solid themed bg so cards slide under cleanly; z above card content but far
-   below the modal (8800) / composer (9000). Mobile untouched (Buck lane). */
+/* Desktop: the sort/search/filters CONTROL SURFACE sticks just below the
+   (sticky, 61px) site header (Ian 2026-06-11: header stays sticky too; the
+   controls stack under it). Solid themed bg so cards slide under cleanly;
+   z BELOW the header's 40 so its account/notification dropdowns overlay the
+   bar. Mobile untouched (Buck lane). */
 @media (min-width: 641px) {
   .feed-page .feed-sort-bar {
-    position: sticky; top: 0; z-index: 80;
+    position: sticky; top: var(--lg-header-h, 61px); z-index: 39;
     background: var(--lguser-bg, #e9eedd);
     padding: 10px 0;
     box-shadow: 0 8px 14px -12px rgba(26, 29, 26, .35);
   }
+  /* The Filters chip's ☰ icon keeps position:absolute from the legacy corner-
+     button styling; the bar becoming position:sticky made it the icon's
+     containing block, painting a stray ☰ over the first pill (Ian report).
+     Inline it inside the chip on desktop. */
+  .feed-page .feed-sort-bar .lg-filters-chip .corner-hamburger__icon { position: static; }
 }
 
 /* ══════════════════════════════════════════════════════════
