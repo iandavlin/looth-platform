@@ -35,8 +35,9 @@ function reply_out(int $code, array $body): void {
     exit;
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST only.']);
+$method = $_SERVER['REQUEST_METHOD'] ?? '';
+if (!in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
+    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST/PUT/DELETE only.']);
 }
 
 $uid = get_current_user_id();
@@ -44,7 +45,67 @@ if (!$uid) {
     reply_out(401, ['ok' => false, 'error' => 'auth', 'message' => 'Sign in to reply.']);
 }
 
-$body     = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
+$body = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
+
+// ── EDIT (PUT) / DELETE — own reply OR moderator (Ian 2026-06-11: members can
+//    edit AND delete their own replies, no time limit, hard remove). The native
+//    BuddyBoss DELETE is moderators-only, so we own the policy here. ──────────
+if ($method === 'PUT' || $method === 'DELETE') {
+    $reply_id = (int) ($body['reply_id'] ?? 0);
+    if ($reply_id <= 0) {
+        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
+    }
+    // CSRF: the same wp_rest nonce the auth endpoint mints (X-WP-Nonce header).
+    if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
+        reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
+    }
+    if (!function_exists('bbp_get_reply_post_type')) {
+        reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
+    }
+    $reply = get_post($reply_id);
+    if (!$reply || $reply->post_type !== bbp_get_reply_post_type()) {
+        reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Reply not found.']);
+    }
+    // Author-or-moderator. The reply author is taken from the stored post, never
+    // the client (IDOR-proof) — same contract as the create path's flood check.
+    $is_author = ((int) $reply->post_author === (int) $uid);
+    $is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+    if (!$is_author && !$is_mod) {
+        reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit or delete your own replies.']);
+    }
+
+    if ($method === 'DELETE') {
+        // Hard remove (Ian: not a tombstone). wp_delete_post(force) fires
+        // before_delete_post → bbp_deleted_reply → the bb→pg sync 'delete'.
+        $del = wp_delete_post($reply_id, true);
+        if (!$del) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Could not delete the reply.']);
+        }
+        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'delete'); // belt-and-suspenders
+        reply_out(200, ['ok' => true, 'status' => 'deleted', 'reply_id' => $reply_id]);
+    }
+
+    // PUT — edit content. wp_update_post kses-filters for non-unfiltered_html users.
+    $new = trim((string) ($body['content'] ?? ''));
+    if ($new === '') {
+        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
+    }
+    $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
+    if (is_wp_error($upd)) {
+        reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
+    }
+    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly.
+    if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'upsert');
+    $fresh = get_post($reply_id);
+    reply_out(200, [
+        'ok'           => true,
+        'status'       => 'edited',
+        'reply_id'     => $reply_id,
+        'content_html' => (string) apply_filters('bbp_get_reply_content', $fresh->post_content, $reply_id),
+    ]);
+}
+
+// ── CREATE (POST) ───────────────────────────────────────────────────────────
 $topic_id = (int) ($body['topic_id'] ?? 0);
 $content  = trim((string) ($body['content'] ?? ''));
 $reply_to = (int) ($body['reply_to'] ?? 0);

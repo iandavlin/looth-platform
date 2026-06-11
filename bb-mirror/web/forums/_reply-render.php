@@ -269,7 +269,11 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $av_slug     = $rslug ?: ($r['author_name'] ?: 'anonymous');
         $classes     = 'reply-stub' . ($is_child ? ' reply-stub--child' : '');
         $rid_attr    = isset($r['reply_id']) ? ' data-reply-id="' . (int)$r['reply_id'] . '"' : '';
-        echo '<div class="' . $classes . '"' . $rid_attr . '>';
+        // Reply author's WP user id (forums.person.id IS the WP user id) — lets the
+        // client mark the viewer's OWN rows so they can edit/delete them (Ian
+        // 2026-06-11). Absent on masked-anon rows; that's fine (anon replies retired).
+        $aid_attr    = !empty($r['author_id']) ? ' data-author-id="' . (int)$r['author_id'] . '"' : '';
+        echo '<div class="' . $classes . '"' . $rid_attr . $aid_attr . '>';
         echo '<div class="reply-stub__head">';
         echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28, $r['avatar_url'] ?? null);
         if ($rslug) {

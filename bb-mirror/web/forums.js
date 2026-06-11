@@ -318,7 +318,28 @@
     // Moderator Trash on thread reply stubs (BB-style admin action, in-feed).
     // Reveal the trash controls when the viewer can moderate; the DELETE endpoint
     // re-checks caps server-side, so the UI gate is convenience, not security.
-    protoGetAuth(function (auth) { if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate'); });
+    protoGetAuth(function (auth) {
+      if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate');
+      // Own-reply edit/delete (Ian 2026-06-11): tag the viewer's own reply rows
+      // with .reply-stub--mine so CSS reveals their edit/trash. Covers lazily
+      // loaded threads (feed expand + the §4e modal drains) via a throttled
+      // observer; the server endpoint re-checks author-or-mod regardless.
+      var myUid = (auth && auth.wp_user_id) || 0;
+      if (myUid > 0) {
+        var markMine = function () {
+          document.querySelectorAll('.reply-stub[data-author-id="' + myUid + '"]:not(.reply-stub--mine)')
+            .forEach(function (s) { s.classList.add('reply-stub--mine'); });
+        };
+        markMine();
+        var queued = false;
+        try {
+          new MutationObserver(function () {
+            if (queued) return; queued = true;
+            requestAnimationFrame(function () { queued = false; markMine(); });
+          }).observe(document.body, { childList: true, subtree: true });
+        } catch (e) {}
+      }
+    });
 
     // Moderator Edit — inline rich editor on a thread reply stub (PUT /reply/{id};
     // topic/forum read from the card). Quill (same snow toolbar as the new-topic /
@@ -441,10 +462,12 @@
         status.textContent = 'Saving…';
         protoGetAuth(function (auth) {
           if (!auth || !auth.nonce) { status.textContent = 'Not signed in.'; return; }
-          fetch(protoReplyBase + '/reply/' + id, {
+          // Our endpoint authorizes author-OR-moderator + hard-deletes (the native
+          // BuddyBoss DELETE is mods-only) — Ian 2026-06-11 own-reply edit/delete.
+          fetch('/bb-mirror-api/v0/reply', {
             method: 'PUT', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
-            body: JSON.stringify({ id: id, topic_id: topicId, forum_id: forumId || undefined, content: html }),
+            body: JSON.stringify({ reply_id: id, content: html }),
           })
             .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
             .then(function (res) {
@@ -466,8 +489,10 @@
       protoGetAuth(function (auth) {
         if (!auth || !auth.nonce) { alert('Not signed in.'); return; }
         t.disabled = true;
-        fetch(protoReplyBase + '/reply/' + id, {
-          method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': auth.nonce },
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'DELETE', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
+          body: JSON.stringify({ reply_id: id }),
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
