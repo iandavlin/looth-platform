@@ -69,7 +69,7 @@ function lg_reactions_palette(): array {
         ['slug' => 'ouch',          'label' => 'Ouch',          'type' => 'image', 'file' => 'ouch.png'],
         ['slug' => 'wow',           'label' => 'Wow',           'type' => 'emoji', 'char' => '😮'],
         ['slug' => 'lol',           'label' => 'LOL',           'type' => 'emoji', 'char' => '😂'],
-        ['slug' => 'shop',          'label' => 'Shop',          'type' => 'image', 'file' => 'shop.png'],
+        ['slug' => 'shop',          'label' => 'Optimum',       'type' => 'image', 'file' => 'shop.png'],   // label renamed Shop->Optimum (Ian 2026-06-11); slug stays so stored reactions keep counting
         ['slug' => 'take-my-money', 'label' => 'Take my money', 'type' => 'image', 'file' => 'take-my-money.png'],
         ['slug' => 'brain',         'label' => 'Brain',         'type' => 'emoji', 'char' => '🧠'],
     ];
