@@ -316,9 +316,16 @@ if ($rows) {
         $canSee = ($suid === $viewerUserId) || $isAdmin
             || ($audience === 'members' && in_array($svis, ['public', 'members'], true));
         if (!$canSee) continue;
+        // Contact PII (email/phone) NEVER ships in the BULK directory, even to
+        // members (Ian 2026-06-11: "scrape proof"): one logged-in account would
+        // otherwise harvest every member's email in ~4 paged calls. These live on
+        // the individual rate-limited profile only. Social/web handles (discovery,
+        // not bulk-PII) still ship to members per the visibility gate above.
+        $kind = (string)$so['kind'];
+        if (in_array($kind, ['email', 'phone', 'tel', 'whatsapp', 'sms'], true)) continue;
         $val = trim((string)$so['value']);
         if ($val === '') continue;
-        $linksByUser[$suid][] = ['kind' => (string)$so['kind'], 'value' => $val];
+        $linksByUser[$suid][] = ['kind' => $kind, 'value' => $val];
     }
 
     foreach ($rows as $r) {
