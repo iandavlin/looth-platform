@@ -3757,28 +3757,25 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
 .feed-page .feed-card--gated-pro .fc-tier-badge { background: #caa24a; }
 
 @media (min-width: 641px) {
-  /* thumbs/players a little bigger (Ian) */
-  .feed-page .feed-card--content .fc-cover { max-width: 480px; }
-  /* ALL CPT (content) cards with a cover: image LEFT, text RIGHT, large 16:9 (Ian).
-     Reuses the cooler-card area names — cover spans the left column across the text
-     rows. :has(.fc-cover) so text-only cards (no image) keep the default 1-col grid
-     instead of an empty left gutter. Covers video, gated teaser, article, etc. */
-  .feed-page .feed-card--content:has(.fc-cover) {
-    grid-template-columns: 360px 40px minmax(0,1fr) auto;
-    grid-template-areas:
-      "cover avatar  author   time"
-      "cover avatar  activity category"
-      "cover title   title    title"
-      "cover excerpt excerpt  excerpt"
-      "cover actions actions  actions"
-      "cover tags    tags     tags";
-    align-items: start;
-  }
+  /* CPT (content) cards now match discussions: a full-width 16:9 cover BAND in
+     the card flow — NOT the old image-LEFT/text-RIGHT split (Ian 2026-06-11).
+     They keep the default single-column grid (cover = the full "cover" row);
+     we just normalise the cover img to a true 16:9 cover. :has(.fc-cover) so
+     text-only CPT cards stay clean. */
   .feed-page .feed-card--content:has(.fc-cover) .fc-cover {
-    grid-area: cover; align-self: start; margin-top: 0; max-width: none; width: 360px; }
+    grid-area: cover; align-self: stretch; max-width: none; width: auto; }
   .feed-page .feed-card--content:has(.fc-cover) .fc-cover .feed-card__cover-img {
     aspect-ratio: 16 / 9; height: auto; max-height: none; object-fit: cover; }
-  .feed-page .feed-card--content:has(.fc-cover) .fc-title { margin-top: 0; }
+
+  /* ── Full-bleed cover band (Ian 2026-06-11): the 16:9 image fills edge-to-edge
+     to the card sides by breaking out of the 16px card padding; the card's
+     overflow:hidden clips it into a clean band. Applies to BOTH discussion and
+     CPT covers. 3-class selector + late source order outweighs the legacy
+     .feed-page .fc-cover (3654) and masonry cover rules. Desktop only — mobile
+     covers are Buck's mobile-hub.css. */
+  .feed-page .feed-card .fc-cover {
+    width: auto; max-width: none; margin: 12px -16px 0; border-radius: 0;
+  }
 }
 
 /* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
