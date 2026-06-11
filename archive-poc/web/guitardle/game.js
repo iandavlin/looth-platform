@@ -868,6 +868,16 @@ async function init() {
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
     initBoard();       // fire-and-forget; crown chip pops in when it lands
+
+    // Native leave-page prompt while a game is live (≥1 move, not over) —
+    // the last chance to back out before the refresh-forfeit rule bites.
+    // Works from inside the iframe: the parent page's reload/close asks too.
+    window.addEventListener('beforeunload', (e) => {
+        if (state.moves > 0 && !state.gameOver) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
     await loadPhrase();
 
     renderPhrase();

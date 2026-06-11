@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260612b">
+    <link rel="stylesheet" href="style.css?v=20260612c">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -75,6 +75,7 @@
                 <li>Vowels cost 2 moves — click once to unlock, again to place</li>
                 <li>Click "Guess the Phrase" at any time — one attempt only</li>
                 <li>Lower score is better</li>
+                <li>One game per day — leaving or refreshing mid-game counts as a loss</li>
             </ul>
             <h3 class="overlay-subheading">About the Phrases</h3>
             <p class="overlay-body">Phrases cover a wide range of guitar world topics — models, brands, parts, tonewoods, hardware, finishes, and accessories. You may also find some well-known players (but only those associated with specific instruments), as well as luthier tools and processes. Most are accessible even if you're not a builder.</p>
@@ -194,6 +195,8 @@
 
             <p class="vowel-instruction" id="vowel-instruction">Vowels cost 2 moves — unlock first, then place.</p>
 
+            <p class="refresh-warning" id="refresh-warning">&#9888;&#65039; One game per day &mdash; leaving or refreshing mid-game counts as a loss.</p>
+
             <section class="keyboard" id="keyboard" aria-label="Letter keyboard">
 
                 <div class="keyboard-row">
@@ -296,6 +299,6 @@
         </main>
     </div>
 
-    <script src="game.js?v=20260612b"></script>
+    <script src="game.js?v=20260612c"></script>
 </body>
 </html>

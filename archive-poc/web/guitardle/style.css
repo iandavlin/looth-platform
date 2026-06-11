@@ -1085,3 +1085,12 @@ body.is-embed {
     color: #78895B;
     margin: 8px 0 16px;
 }
+
+/* ── Refresh-forfeit heads-up (shown during play, gone once the game ends) ── */
+.refresh-warning {
+    text-align: center;
+    font-size: 0.78rem;
+    color: #A98434;
+    margin: 6px 16px 2px;
+}
+.game-main.game-over .refresh-warning { display: none; }
