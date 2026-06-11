@@ -222,6 +222,12 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* per-block remove (owner) — injected next to the grip */
 .lg-block__rm{display:inline-block;border:0;background:none;cursor:pointer;color:var(--lg-mute);font:700 15px/1 var(--lg-font-sans);padding:0 4px;vertical-align:middle;margin-left:2px}
 .lg-block__rm:hover{color:var(--lg-rust)}
+/* per-block move up/down (owner, Buck 2026-06-11) — tap-friendly arrows beside the ✕
+   for phones where the drag grip is fiddly; drag still works unchanged */
+.lg-block__mv{display:inline-flex;align-items:center;justify-content:center;border:0;background:none;cursor:pointer;color:var(--lg-mute);padding:0 2px;min-width:26px;height:26px;vertical-align:middle}
+.lg-block__mv svg{width:15px;height:15px}
+.lg-block__mv:hover{color:var(--lg-sage-d)}
+.lg-block__mv[disabled]{opacity:.28;cursor:default}
 /* drop indicator while dragging a caddy block onto the profile */
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
@@ -860,6 +866,56 @@ window.lgSortable = function (container, opts) {
       var grip2 = host.querySelector('.lg-block__grip');
       host.insertBefore(rm, grip2 ? grip2.nextSibling : host.firstChild);
     }
+    // Up/Down buttons (Buck 2026-06-11): one-tap section reorder — the drag grip
+    // is fiddly on phones. Same /me/layout persist as drag, no reload.
+    if (!host.querySelector('.lg-block__mv--up')) {
+      var mkMv = function (dir, label, path) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'lg-block__mv lg-block__mv--' + dir;
+        btn.setAttribute('data-mv', dir);
+        btn.setAttribute('title', label); btn.setAttribute('aria-label', label);
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>';
+        return btn;
+      };
+      var mvUp = mkMv('up', 'Move section up', '<path d="m5 14.5 7-7 7 7"/>');
+      var mvDn = mkMv('down', 'Move section down', '<path d="m5 9.5 7 7 7-7"/>');
+      var rmEl = host.querySelector('.lg-block__rm');
+      host.insertBefore(mvDn, rmEl);
+      host.insertBefore(mvUp, mvDn);
+    }
+  });
+
+  // Grey out the arrows that can't act (first block's ↑, last block's ↓).
+  function refreshMvDisabled() {
+    var list = bodyBlocks();
+    list.forEach(function (b, i) {
+      var u = b.querySelector('.lg-block__mv--up'), d = b.querySelector('.lg-block__mv--down');
+      if (u) u.disabled = (i === 0);
+      if (d) d.disabled = (i === list.length - 1);
+    });
+  }
+  refreshMvDisabled();
+
+  // Move a section one slot up/down → same no-reload persist as drag.
+  profile.addEventListener('click', function (e) {
+    var mv = e.target.closest('.lg-block__mv');
+    if (!mv || mv.disabled) return;
+    var block = mv.closest('.lg-block:not(.lg-block--header)');
+    if (!block) return;
+    var list = bodyBlocks();
+    var i = list.indexOf(block);
+    if (i < 0) return;
+    if (mv.getAttribute('data-mv') === 'up') {
+      if (i === 0) return;
+      list[i - 1].parentNode.insertBefore(block, list[i - 1]);
+    } else {
+      if (i === list.length - 1) return;
+      list[i + 1].parentNode.insertBefore(block, list[i + 1].nextSibling);
+    }
+    putLayout(order());
+    refreshMvDisabled();
+    try { block.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (err) {}
   });
 
   // Remove a block → drop its key from the layout, reload (it returns to the caddy; data kept).
@@ -876,7 +932,7 @@ window.lgSortable = function (container, opts) {
   lgSortable(profile, {
     itemSelector: '.lg-block:not(.lg-block--header)',
     handleSelector: '.lg-block__grip',
-    onDrop: function () { putLayout(order()); }
+    onDrop: function () { putLayout(order()); refreshMvDisabled(); }
   });
 
   /* ---- caddy: open / close ---- */
