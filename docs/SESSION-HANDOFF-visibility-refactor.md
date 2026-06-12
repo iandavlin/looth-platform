@@ -66,11 +66,20 @@ bin/backfill-profile-visibility.php (ran: 501 resolved). Buck notified via msg.
    per-member teaser-card form of ruling; "never named" holds, "never absent"
    now satisfied by the map dots).
 
-## Still open / parked
+## Since written (same day, all PUSHED with Ian's go)
 
-- **PUSH PENDING IAN'S REVIEW** — nothing pushed; commits above await his go.
-- Map data fixes (1 wrong-state pin + 16 state-coarse rows, /tmp/map-divergent.json)
-  still await Ian's go — member data, hold.
+- Everything above pushed (main through `7b4e7b1`, bespoke-cutover `93b3ab5`).
+- Map data REPAIRED (`f0883a0`): evidence-guarded section fix from each
+  member's own BB text — 119/126 verified coherent, 1 genuine fix
+  (karrikercustoms → Titusville PA), geocoder hallucinations refused. Script:
+  `bin/fix-divergent-locations.php` (idempotent). Audit JSON preserved at
+  docs/map-divergent-2026-06-12.json.
+- **Admin front-end editing** (`7b4e7b1`): admins open ANY profile in the real
+  editor (?admin_edit=1); saves carry ?as=<uuid>, honored at ONE choke point
+  (Auth::requireUser) — admin-only, profile-content allowlist (social
+  endpoints excluded), audit-logged. Matrix now 60 asserts, GREEN.
+
+## Still open / parked
 - Master-switch flips reach the hub-search cache via person-sync/backfill
   (`bb-mirror/bin/backfill-profile-visibility.php [id]`) — eventual, same
   contract as the discussion mask. A synchronous push at flip time is a
