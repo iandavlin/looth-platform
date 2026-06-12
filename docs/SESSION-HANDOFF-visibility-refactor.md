@@ -1,109 +1,82 @@
-# SESSION HANDOFF — Visibility refactor (profile-app + finder)
+# SESSION HANDOFF — Visibility refactor: BUILT + GREEN (2026-06-12 pm)
 
-Written 2026-06-12 morning, by the fable coordinator session, at Ian's
-direction: **"no patches, refactor only — handoff before compaction."**
-Successor: read this + memory `project_visibility_model_final` before
-touching ANYTHING visibility-related. Ian is at the end of his patience with
-surface-by-surface patching — the next session builds the refactor below,
-end to end, and proves it with the matrix test. Do not ship partial fixes.
+The refactor specced in `handoffs/2026-06-12-visibility-refactor-spec.md` is
+**done, live on dev, matrix-proven**. Successor sessions: the enforcement
+point is `profile-app/src/Visibility.php` — if a visibility question comes up,
+the answer is "route it through Visibility and add a matrix assertion",
+never a per-surface patch.
 
-## Ian's FOUR FINAL RULINGS (6/12, locked — do not relitigate)
+## Definition of done — MET
 
-1. **Profile master switch**: public (default) / **private = OWNER-ONLY** —
-   invisible to members too (directory, map, search, profile page). Admins
-   excepted. Does not exist yet (`users.profile_visibility` to be added).
-2. **Imported/never-touched members default = MEMBERS-ONLY.** The public
-   luthier finder is explicit **opt-in** ("Public sees" dial, or the
-   front-page "Put me on the map" CTA). DATA PASS ALREADY RUN: 1896 rows
-   `location_public_precision -> 'private'` (signal: `place_result IS NULL`
-   = never picked via the editor). 3 genuine opt-ins remain public.
-3. **Location keeps the two-audience precision dials** (Members see / Public
-   sees × city/region/private). No simplification rework.
-4. **Admins see everything** (existing exception stands: location dialed
-   'private' hides the exact pin even from admins).
+```
+php /srv/profile-app/bin/visibility-matrix.php   →   MATRIX GREEN  pass=55 fail=0
+```
 
-Plus the UX ruling for the finder: **logged-out gets the SAME full UI as
-members** (two-pane, filters, map) — non-public members appear as anonymous
-**"join to see" teaser cards + coarse gated pins**, never absent, never named.
+Real HTTP, four viewers (anon / member / owner / admin), three subject states
+(public opt-in / members-only default / master private), across: /u/ SSR,
+user + users APIs, directory list + pins, pins-public, me/location,
+/profile-media files (avatar / gallery / resume), hub search-suggest. Re-run
+any time as the regression gate. Fixture: profile user 1849 ('qa', wp 1910),
+parked members-only so the public finder stays clean.
 
-## State as of this handoff (all pushed, main @ 9cbe326)
+## What shipped (commits on main, in order)
 
-- Anon directory API (`directory-members.php`): non-consented members emit as
-  `{gated:true}` items (no name/slug/avatar/uuid) — VERIFIED at the API.
-  Named cards/pins only for opt-ins. Anon payloads strip `uuid` everywhere.
-  Teaser PINS (coarse, rounded, message) ride the pre-existing gated-pin path.
-- **KNOWN GAP (unresolved, goes to the refactor):** gated teaser CARDS don't
-  paint in the browser — API emits them, the served page contains the
-  `it.gated` renderer (`renderResults`), but only named cards render
-  (2 children in #dir-results). Prime suspect: the buck overlay
-  `directory-desktop.js` (v11, runs for anon since the finder reopened)
-  re-rendering or filtering the list. Debug WITHIN the refactor.
-- `pins-public` aggregate endpoint exists (no-auth, cells+counts only) — used
-  by nothing currently (finder uses the full flow); keep for non-finder
-  surfaces (front-page anon tile candidate).
-- fp-map (front page tile): 3 member states working (on-map / never-set →
-  IP-area no-pin map + CTA / stowed → teaser + CTA, no IP guess);
-  "Put me on the map" CTA re-adds the section via me/layout. me/location
-  carries `in_layout` + `opted_out` (additive flags).
-- Members map/directory enforcement (logged-in) verified correct:
-  `dir_member_display` is the single coarsening path; stowed section = off
-  map for everyone incl. admins.
-- Ian's own data fixed (was a dev-test 'Salem OR' pick; now Ridgefield NJ);
-  audit artifacts: /tmp/map-divergent.json — 1 wrong-state pin
-  (karrikercustoms: BP says Titusville PA, pin Rocklin CA) + 16 state-coarse
-  rows AWAIT IAN'S GO before touching (member data = hold).
+- `3100bd1` A: `users.profile_visibility` migration + **src/Visibility.php**
+  (the ONE module: viewer struct, audience×vis truth table, master switch,
+  section decision, location precision rule, file classes). Profile::canSee +
+  Block::gateDecision delegate to it; role 'admin' renders everything.
+- `7535ede` B: /u/ + /user API answer **404** for private profiles (existence
+  not probeable); admin role threaded; **/users identity API locked** (logged-in
+  + loopback only; payload carries profile_visibility; private ⇒ slug:null).
+- `2178b0c` C: directory/map through the module. Anon stack = **opt-ins only**;
+  anon map = anonymous ~11km **dots** with ONE generic message (Ian 6/12 pm
+  ruling: "dots for anon, stack vis only" — teaser CARDS removed, which also
+  mooted the unexplained card-render bug). **Trilateration guard**: radius +
+  distance run on the coarsened point per audience, never true coords.
+  Members-private location = no pin for anyone below admin… and no anon dot
+  (public never sees more than members). pins-public same filters.
+- `2196441` D: **/profile-media auth** (media.php + X-Accel-Redirect; nginx
+  live conf patched + reference snippet). avatars/banners public chrome;
+  gallery → section vis; resumes → resume_visibility; unknown class closed;
+  denials 404. THE gallery/resume hole is closed.
+- `7dfcf25` E: **ONE DIAL** — the existing profile-visibility chip drives the
+  master switch (me-header writes both columns atomically). No new UI control.
+  Copy updated (control bar + privacy-sheet.js, the latter lives in
+  /var/www/dev, buck-owned, patched in place).
+- `53f2d9b` F: **hub search mask** — search-suggest JOINs forums.person; anon
+  needs discussion_visibility='public' (fail-closed on missing row); master-
+  private is never a hit for anyone. archive-poc role granted SELECT on
+  forums.person.
+- `e9981dc` + follow-up: the matrix harness (now 55 asserts, incl. the parked
+  "Public sees on the anon profile page" item — works).
 
-## THE REFACTOR (what the next session builds — whole, not piecemeal)
+On **bespoke-cutover** (worktree ~/worktrees/bespoke-cutover): `93b3ab5` —
+forums.person.profile_visibility cache column + bb_mirror_person_vis_batch +
+bin/backfill-profile-visibility.php (ran: 501 resolved). Buck notified via msg.
 
-1. **One module**: `profile-app/src/Visibility.php` —
-   `Visibility::can(viewer, subjectUserId, what)` where `what` ∈ profile |
-   section(key) | location(precision-resolved) | file(class, path).
-   Implements: master switch (owner-only private), section visibility
-   (public/members/private), location dials, admin bypass, owner always.
-   EVERY read path calls it: `u.php` SSR render, `directory-members.php`
-   (list + pins), `pins-public.php`, `me-location` consumers, user/users
-   APIs, search/suggest, and the FILE STORE (below). Kill the per-surface
-   copies (`dir_member_display` keeps its coarsening math but delegates the
-   decision).
-2. **Master switch**: `users.profile_visibility` ('public' default |
-   'private') + owner toggle in the privacy slider panel (CANONICAL panel,
-   parity both surfaces per standing rule) + enforcement via the module
-   (private → absent from every list/map/search; /u/ page → join/sign-in
-   prompt for everyone but owner+admin).
-3. **File store auth**: /profile-media currently serves EVERYTHING to anyone
-   past the dev cookie (gallery + resumes included — THE standing hole).
-   Front-controller (media.php) + nginx internal alias (X-Accel-Redirect):
-   avatars/banners public; gallery → gallery section visibility; resumes →
-   `users.resume_visibility`; unknown classes fail closed. uuid in the path
-   identifies the subject.
-4. **Matrix test** (definition of done): script (bin/visibility-matrix.php or
-   curl harness) driving REAL HTTP as 4 viewers — anon, member, owner, admin
-   (mint via `sudo -u profile-app php profile-app/bin/mint-dev-token.php
-   <wp_user_id>`; wp 1 = Ian = profile user 4) — against every surface:
-   /u/<slug> render, directory list+pins, pins-public, me/location, file
-   URLs. Assert presence/absence per the matrix (sections × visibility ×
-   viewer). Keep it as a regression gate. GREEN RUN = done; show Ian the run.
+## Decisions made WITH Ian this session (do not relitigate)
 
-## Standing context a successor needs
+1. **One dial**: chip Private = master switch (owner-only everywhere, admins
+   excepted). No separate toggle.
+2. **Identity API locked** ("yes, if we still function as expected" — loopback
+   callers verified working: archive-poc comments, bb-mirror person-sync).
+3. **Hub search fixed in this refactor** (verified leak: anon q=david returned
+   member names; now anon=[]).
+4. **Anon finder = dots + vis-only stack** (supersedes the morning's
+   per-member teaser-card form of ruling; "never named" holds, "never absent"
+   now satisfied by the map dots).
 
-- Repo serves LIVE: /srv/profile-app + /srv/archive-poc symlink into
-  ~/projects — edits are live on save; php -l / node --check before save.
-- Tree is contested (multiple sessions + buck temp-key merges) — COMMIT
-  TESTED INCREMENTS IMMEDIATELY; an uncommitted archive.css edit was already
-  clobbered once today. Commit ≠ push; Ian gates pushes (he has said "commit
-  and push" repeatedly today — confirm per batch).
-- Buck's overlays live in /var/www/dev/*.js (live = source of truth);
-  coordinate via `msg send buck`. directory-desktop.js v11 currently runs
-  for anon. Backups → /var/www/dev-bak-archive/.
-- Tier gating is a SEPARATE one-rule system (whoami-only) — don't entangle.
-- CDP verify: chrome-dev-login skill; cookies = dev gate (`loothdev_auth`
-  from the nginx conf) + `looth_id` JWT from mint-dev-token.
-- Related today (done, don't redo): Join→Patreon split (/connect-your-patreon
-  public), What's-New blurb + bullets, maker→looth copy, shorty facade,
-  guitardle DECOM'D (fast-follow; `_gdle-promo.php` live-ready — don't touch),
-  hub pinned columns + stable pagination + filters modal, no-cache HTML on
-  the front page.
-- Open Ian decisions parked: 6 junk-slug shorties need human titles;
-  map data fixes (1 wrong-state + 16 state-coarse) await his go; "Public
-  sees" rendering on the public PROFILE page (it renders nothing for anon
-  today — fold into the refactor's matrix).
+## Still open / parked
+
+- **PUSH PENDING IAN'S REVIEW** — nothing pushed; commits above await his go.
+- Map data fixes (1 wrong-state pin + 16 state-coarse rows, /tmp/map-divergent.json)
+  still await Ian's go — member data, hold.
+- Master-switch flips reach the hub-search cache via person-sync/backfill
+  (`bb-mirror/bin/backfill-profile-visibility.php [id]`) — eventual, same
+  contract as the discussion mask. A synchronous push at flip time is a
+  possible later nicety.
+- Buck has 6/5-era coordinator asks sitting unread in `msg` (practice-block
+  WS3 land, push notifications, footer mobile CSS) — not this lane's scope,
+  left unread for the coordinator.
+- whoami-anon (unbridged member) sees the anon mask in hub search — same
+  known tradeoff as the Hub author mask, fix is the bridge, not the mask.
