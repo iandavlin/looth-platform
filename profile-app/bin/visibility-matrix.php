@@ -196,6 +196,12 @@ check('S0 default layout: about NOT auto-placed',   strpos($b, 'Matrix fixture a
 check('S0 default layout: gallery NOT auto-placed', strpos($b, 'data-block="gallery"') === false);
 check('S0 default layout: connect NOT auto-placed', strpos($b, 'lg-block--connect') === false);
 
+// Starting-state defaults (Ian 6/12 pm: "member is the default"): a brand-new
+// users row must begin members-only — public finder strictly opt-in.
+check('S0 column default: Public-sees starts private',
+      strpos(pgq("SELECT column_default FROM information_schema.columns
+                  WHERE table_name='users' AND column_name='location_public_precision'"), 'private') !== false);
+
 // The rest of the matrix asserts SECTION-VISIBILITY enforcement, which needs
 // the blocks ON the layout — so the fixture becomes an "arranged" profile.
 pgq("UPDATE users SET profile_layout = '[\"about\",\"location\",\"gallery\"]'::jsonb WHERE id = " . SUBJ_ID);
