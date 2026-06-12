@@ -117,6 +117,22 @@ function bb_mirror_discussion_vis(int $uid): string {
  * Returns [] on any failure → every caller falls back to the safe 'member'.
  */
 function bb_mirror_discussion_vis_batch(array $wpIds): array {
+    $out = [];
+    foreach (bb_mirror_person_vis_batch($wpIds) as $wid => $vis) {
+        $out[$wid] = $vis['discussion'];
+    }
+    return $out;
+}
+
+/**
+ * Richer batch resolver: wp_user_id => ['discussion' => 'public'|'member',
+ * 'profile' => 'public'|'private']. 'profile' is the MASTER SWITCH
+ * (users.profile_visibility, Ian 6/12 visibility refactor) — 'private' = the
+ * member is owner-only everywhere; forums.person caches it so the hub search
+ * mask rides the same JOIN as the logged-out author mask. Unresolved ids are
+ * absent; callers default leak-safe.
+ */
+function bb_mirror_person_vis_batch(array $wpIds): array {
     $wpIds = array_values(array_filter(array_map('intval', $wpIds), static fn($i) => $i > 0));
     if (!$wpIds) return [];
     $token  = (string) getenv('LG_LOOTHDEV_GATE_TOKEN');
@@ -144,7 +160,10 @@ function bb_mirror_discussion_vis_batch(array $wpIds): array {
         foreach ($data['items'] as $it) {
             $wid = (int) ($it['wp_user_id'] ?? 0);
             if ($wid <= 0) continue;
-            $out[$wid] = (($it['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member';
+            $out[$wid] = [
+                'discussion' => (($it['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member',
+                'profile'    => (($it['profile_visibility'] ?? 'public') === 'private') ? 'private' : 'public',
+            ];
         }
     }
     return $out;
