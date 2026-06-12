@@ -2904,9 +2904,15 @@
     apply();
     watch(feed);
     var pend = null;
-    window.addEventListener('resize', function () {
+    function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement; }
+    function recheck() {
       clearTimeout(pend);
       pend = setTimeout(function () {
+        // Entering video fullscreen resizes the viewport to monitor size; a
+        // re-bucket then MOVES the card hosting the player, which reloads the
+        // iframe and kicks the user out of fullscreen (Buck 6/11). Defer all
+        // layout work until fullscreen exits, then heal at the real size.
+        if (fsEl()) return;
         var f = feedEl();
         if (!f) return;
         // Re-bucket only when the cascade's column count actually changed
@@ -2916,7 +2922,10 @@
         var have = f.querySelectorAll(':scope > .feed-colw').length;
         if (want !== have) bucket(f);
       }, 150);
-    });
+    }
+    window.addEventListener('resize', recheck);
+    document.addEventListener('fullscreenchange', recheck);
+    document.addEventListener('webkitfullscreenchange', recheck);
     // Layout toggle (gear: Mosaic <-> Stream) flips data-lg-hublayout live.
     new MutationObserver(apply).observe(document.documentElement, {
       attributes: true, attributeFilter: ['data-lg-hublayout']
