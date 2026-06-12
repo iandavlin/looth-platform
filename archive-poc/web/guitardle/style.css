@@ -1177,3 +1177,20 @@ a.board-name:hover { text-decoration: underline; }
 
 /* Crown chip removed (6/12): keep the icons pinned right as the only child */
 .menu-icons-right { margin-left: auto; }
+
+/* ── Embed-mode weekly top 5 (under the game; hosts inherit via height pipe) ── */
+.gdle-eb { margin: 14px auto 0; max-width: 420px; padding: 12px 16px 14px;
+  background: var(--card-bg, #fff); border: 1px solid var(--line, #e3ddd0);
+  border-radius: 14px; text-align: left; }
+body:not(.is-embed) .gdle-eb { display: none; } /* standalone page keeps its own column */
+.gdle-eb__title { margin: 0 0 8px; font: 700 13px/1.2 inherit; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-soft, #6b6f6b); }
+.gdle-eb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.gdle-eb__row { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.gdle-eb__row.is-first { font-weight: 700; }
+.gdle-eb__rank { flex: none; width: 20px; text-align: center; color: var(--ink-soft, #6b6f6b); }
+.gdle-eb__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: inherit; text-decoration: none; }
+a.gdle-eb__name:hover { text-decoration: underline; }
+.gdle-eb__pts { flex: none; font-size: 12.5px; color: var(--ink-soft, #6b6f6b); }
+.gdle-eb__empty { margin: 2px 0 0; font-size: 13px; color: var(--ink-soft, #6b6f6b); }

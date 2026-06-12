@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260613b">
+    <link rel="stylesheet" href="style.css?v=20260613c">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -308,9 +308,19 @@
 
             </section>
 
+            <!-- Embed-mode weekly top 5 (Ian 6/12: the leaderboard lives in the
+                 modal). Hidden on the standalone page and until the board API
+                 answers; game.js fills it when ?embed=1. Hosts (front-page
+                 modal, Hub sheet) inherit it for free via the height pipe. -->
+            <section class="gdle-eb" id="gdle-eb" hidden aria-label="Weekly leaders">
+                <h3 class="gdle-eb__title">🏆 Weekly Leaders</h3>
+                <ol class="gdle-eb__list" id="gdle-eb-list"></ol>
+                <p class="gdle-eb__empty" id="gdle-eb-empty" hidden>No wins yet this week — be the first!</p>
+            </section>
+
         </main>
     </div>
 
-    <script src="game.js?v=20260613a"></script>
+    <script src="game.js?v=20260613b"></script>
 </body>
 </html>

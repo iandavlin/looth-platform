@@ -425,42 +425,39 @@
         <h2 class="row__title"><?= h($row['title'] ?: 'Guitardle') ?></h2>
         <span class="row__subtitle">the daily guitar phrase game</span>
       </header>
-      <?php /* Static app vendored at web/guitardle/ — iframed (its CSS has
-               global resets that would fight archive.css inline). ?embed=1
-               makes the game postMessage its height up; the listener sizes
-               the frame so the block never double-scrolls. */ ?>
-      <?php /* aud=m|p picks the audience's daily phrase track (logged-out gets
-               a different puzzle). Cosmetic: score recording is server-gated.
-               The side panel (weekly leaders + your stats) shares the column —
-               board from /archive-api/v0/guitardle-board, stats read straight
-               from the game's localStorage (same origin as the iframe). */ ?>
-      <div class="gdle-duo">
-        <iframe class="gdle-frame" id="gdle-frame"
-                src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
-                title="Guitardle — daily guitar phrase game"
-                loading="lazy"
-                scrolling="no"></iframe>
-        <aside class="gdle-side" aria-label="Guitardle leaderboard and stats">
-          <section class="gdle-card">
-            <h3 class="gdle-card__title">🏆 Weekly Leaders</h3>
-            <p class="gdle-card__sub">Win = 11&minus;moves pts &middot; Hardcore 2&times; &middot; resets Monday</p>
-            <ol class="gdle-side-board" id="gdle-side-board"></ol>
-            <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
-          </section>
-          <section class="gdle-card">
-            <h3 class="gdle-card__title">Your stats</h3>
-            <div class="gdle-stats">
-              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="played">0</span><span class="gdle-stat__l">Played</span></div>
-              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="winrate">0%</span><span class="gdle-stat__l">Win rate</span></div>
-              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="streak">0</span><span class="gdle-stat__l">Streak</span></div>
-              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="best">0</span><span class="gdle-stat__l">Best</span></div>
-            </div>
-          </section>
-          <?php /* Big Guitardle app-icon art fills the otherwise-empty space
-                   under the side cards (Buck 6/12); transparent corners, so it
-                   sits on light and dark page backgrounds alike. */ ?>
-          <img class="gdle-side-art" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="" aria-hidden="true" loading="lazy" width="512" height="512">
+      <?php /* COMPACT promo (Ian 6/12: 'button on the front page with a small
+               top-5 leaderboard' — the embedded game + stats column read as
+               dead space). Icon + pitch + Play button + weekly top 5; the game
+               itself opens in the centered modal below. The iframe src is set
+               lazily on first open and the modal hides (never destroys) on
+               close, so a mid-game peek can't forfeit the round. Embed carries
+               its own top-5 strip under the game (guitardle/index.html), so
+               the Hub sheet inherits the leaderboard too. */ ?>
+      <div class="gdle-promo">
+        <img class="gdle-promo__icon gdle-side-art" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="" aria-hidden="true" loading="lazy" width="512" height="512">
+        <div class="gdle-promo__main">
+          <p class="gdle-promo__pitch">Six guesses, one guitar phrase a day. Wins score points &mdash; Hardcore counts double, board resets Monday.</p>
+          <button type="button" class="gdle-promo__play" id="gdle-play">Play today's Guitardle &rarr;</button>
+        </div>
+        <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
+          <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
+          <ol class="gdle-side-board" id="gdle-side-board"></ol>
+          <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
         </aside>
+      </div>
+
+      <div class="gdle-modal" id="gdle-modal" hidden role="dialog" aria-modal="true" aria-label="Guitardle — daily guitar phrase game">
+        <div class="gdle-modal__back" data-gdle-close></div>
+        <div class="gdle-modal__panel">
+          <div class="gdle-modal__row">
+            <span class="gdle-modal__title"><img class="gdle-modal__ic" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="">Guitardle</span>
+            <button type="button" class="gdle-modal__x" data-gdle-close aria-label="Close">&times;</button>
+          </div>
+          <iframe class="gdle-frame" id="gdle-frame"
+                  data-src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
+                  title="Guitardle — daily guitar phrase game"
+                  scrolling="no"></iframe>
+        </div>
       </div>
       <script>
       (function () {
@@ -478,7 +475,7 @@
                       if (!b) return;
                       var list = document.getElementById('gdle-side-board');
                       var empty = document.getElementById('gdle-side-empty');
-                      var leaders = b.leaders || [];
+                      var leaders = (b.leaders || []).slice(0, 5);   // promo card = top 5
                       list.innerHTML = '';
                       empty.hidden = leaders.length > 0;
                       leaders.forEach(function (l, i) {
@@ -500,28 +497,37 @@
                   }).catch(function () {});
           }
 
-          // The game saves its stats in localStorage on this same origin.
-          function fillStats() {
-              var g = function (k, d) { return localStorage.getItem('guitardle_' + k) || d; };
-              var played = parseInt(g('gamesPlayed', '0'), 10);
-              var won    = parseInt(g('gamesWon', '0'), 10);
-              var set = function (k, v) {
-                  var el = document.querySelector('[data-gdle-stat="' + k + '"]');
-                  if (el) el.textContent = v;
-              };
-              set('played', played);
-              set('winrate', (played > 0 ? Math.round(won / played * 100) : 0) + '%');
-              set('streak', g('streak', '0'));
-              set('best', g('bestStreak', '0'));
+          // Modal open/close. The iframe src loads ONCE on first open and the
+          // modal only hides after that — destroying it would forfeit a round
+          // in progress (refresh-forfeit rule).
+          var modal = document.getElementById('gdle-modal');
+          var frame = document.getElementById('gdle-frame');
+          function openGame() {
+              if (frame && !frame.src) frame.src = frame.dataset.src;
+              modal.hidden = false;
+              document.body.classList.add('gdle-modal-lock');
           }
+          function closeGame() {
+              modal.hidden = true;
+              document.body.classList.remove('gdle-modal-lock');
+              setTimeout(fillBoard, 1500);   // a just-finished round shows up
+          }
+          var play = document.getElementById('gdle-play');
+          if (play) play.addEventListener('click', openGame);
+          modal.addEventListener('click', function (e) {
+              if (e.target.closest('[data-gdle-close]')) closeGame();
+          });
+          addEventListener('keydown', function (e) {
+              if (e.key === 'Escape' && !modal.hidden) closeGame();
+          });
+          // Hub-teaser style deep link still works: /front-page/#guitardle=play
+          if (location.hash === '#guitardle=play') openGame();
 
           fillBoard();
-          fillStats();
           // The iframe writing localStorage at game end fires `storage` here —
-          // refresh the stats at once and the board after the score POST lands.
+          // refresh the board after the score POST lands.
           addEventListener('storage', function (e) {
               if (!e.key || e.key.indexOf('guitardle_') !== 0) return;
-              fillStats();
               setTimeout(fillBoard, 2000);
           });
       })();

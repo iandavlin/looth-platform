@@ -268,6 +268,43 @@ function initEmbedMode() {
     if (wrap) ro.observe(wrap);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(post);
     post();
+    fillEmbedBoard();
+}
+
+// Embed-only weekly top 5 under the game (Ian 6/12: the leaderboard rides in
+// the modal). Same /guitardle-board API the front-page block reads; the
+// height ResizeObserver above grows the host frame when it appears.
+function fillEmbedBoard() {
+    const box = document.getElementById('gdle-eb');
+    if (!box) return;
+    fetch('/archive-api/v0/guitardle-board', { credentials: 'same-origin' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(b => {
+            if (!b) return;
+            const leaders = (b.leaders || []).slice(0, 5);
+            const list  = document.getElementById('gdle-eb-list');
+            const empty = document.getElementById('gdle-eb-empty');
+            list.innerHTML = '';
+            empty.hidden = leaders.length > 0;
+            leaders.forEach((l, i) => {
+                const li = document.createElement('li');
+                li.className = 'gdle-eb__row' + (i === 0 ? ' is-first' : '');
+                const rank = document.createElement('span');
+                rank.className = 'gdle-eb__rank';
+                rank.textContent = i === 0 ? '👑' : String(i + 1);
+                const name = document.createElement(l.profile_url ? 'a' : 'span');
+                name.className = 'gdle-eb__name';
+                name.textContent = l.name;
+                if (l.profile_url) { name.href = l.profile_url; name.target = '_top'; }
+                const pts = document.createElement('span');
+                pts.className = 'gdle-eb__pts';
+                pts.textContent = l.points + ' pts · ' + l.wins + 'W';
+                li.append(rank, name, pts);
+                list.appendChild(li);
+            });
+            box.hidden = false;
+        })
+        .catch(() => {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
