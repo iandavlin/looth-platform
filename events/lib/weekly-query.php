@@ -141,6 +141,10 @@ function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = 
     // Email-only chrome: drop anchors that point at unsubscribe/preference
     // endpoints (meaningless on the web view), keep everything else verbatim.
     $html = preg_replace('#<a\b[^>]*href="[^"]*unsubscribe[^"]*"[^>]*>.*?</a>#is', '', $html) ?? $html;
+    // The web view serves this in an IFRAME: without a base target, links
+    // navigate the frame (page-inside-a-page, Ian 6/12). _top breaks every
+    // click out to the real CPT/hub page.
+    $html = preg_replace('#<head([^>]*)>#i', '<head$1><base target="_top">', $html, 1) ?? $html;
     if ($maskAuthors) {
         // ANON view (vis-1 digest, Ian 6/12): forum-author bylines follow the
         // discussion-identity mask — logged-out viewers never see a forum
