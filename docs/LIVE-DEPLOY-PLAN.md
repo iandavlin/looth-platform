@@ -116,6 +116,31 @@ re-derive on live from scratch; that would silently lose rulings.
    UPDATEs.
 5. `/srv/profile-app-media` rsync dev → live (15 MB).
 
+## 3b. WP-side delta — RULED: wire to existing, never copy the WP DB
+
+Ian floated copying dev's WordPress state to live (6/12); recommendation
+accepted framing: **live's WP DATABASE is canonical and is never
+overwritten** — dev's WP is a 6/11 snapshot, and a dump-over would erase
+everything members did on live since (posts, signups, webhook state), ship
+QA residue/dev URLs, and break every wp-id-keyed table (bridge, persons).
+Copy CODE and CONFIG deliberately instead:
+
+1. **Plugin code**: lg-layout-v2 via the established zip deploy (build in
+   /var/www/dev/.well-known/, curl on live, unzip + chown looth-live +
+   bundle regen + epoch bump). lg-legacy-import only if conversions run
+   from live.
+2. **mu-plugins**: from `platform/mu-plugins/` (profile-auth, profile-sync,
+   whoami-shim retirement decision rides the consumer-repoint item) + the
+   archive-poc feed mu-plugin + showrunner bridge (its own cutover doc).
+3. **Converted posts (managed CPTs)**: re-import on LIVE via the conversion
+   pipeline (designed for live; dev's duplicate-post quirk doesn't carry).
+   Inventory at posts/conversions/.
+4. **Options/settings**: scripted `wp option update` list — gate-CTA copy,
+   lgms_* member-sync creds (fresh secrets!), sponsor ACF group disable
+   (`wp post update 33147 --post_status=acf-disabled`), menus/pages diff.
+5. **Form 38 hub-anon snippet is LIVE-only already** — do not port from
+   dev; verify it survives plugin updates.
+
 ## 4. Cut-day sequence
 
 - **Phase A — prep (days before, zero user impact):** PG + roles + restore
