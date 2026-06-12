@@ -29,7 +29,8 @@ declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 
-const HOST     = 'https://dev.loothgroup.com';
+// Override for the LIVE acceptance run: LG_MATRIX_HOST=https://loothgroup.com
+define('HOST', getenv('LG_MATRIX_HOST') ?: 'https://dev.loothgroup.com');
 const SUBJ_ID  = 1849;            // profile-app user id   ('qa')
 const SUBJ_WP  = 1910;            // bridged wp user id
 const MEMBER_WP = 7;              // genuine non-admin member (read-only viewer)

@@ -43,6 +43,6 @@ $subj = "[looth-report] $type#$id: " . substr($reason, 0, 60);
 $msg  = "Target:   $type #$id\nReason:   $reason\nBody:\n" . ($body ?: '(none)')
       . "\n\nReporter: " . ($viewer ? ($viewer['primary_email'] . ' (id ' . $viewer['id'] . ')') : 'anonymous')
       . "\nIP:       $ip\nTime:     " . gmdate('c');
-@mail($adminEmail, $subj, $msg, "From: noreply@dev.loothgroup.com");
+@mail($adminEmail, $subj, $msg, "From: noreply@" . LG_PROFILE_APP_HOST);
 
 profile_app_json(200, ['ok' => true]);

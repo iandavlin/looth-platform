@@ -421,7 +421,10 @@ document.getElementById('claim-btn').addEventListener('click', async () => {
 }
 
 function looth_render_login_interstitial(string $back = '/profile/edit'): void {
-    $login = 'https://dev.loothgroup.com/wp-login.php?redirect_to=' . urlencode('https://dev.loothgroup.com' . $back);
+    // Host from config (env-branched) — a hardcoded dev URL here would bounce
+    // LIVE users to the dev box at cutover (found in the 6/12 deploy audit).
+    $login = 'https://' . LG_PROFILE_APP_HOST . '/wp-login.php?redirect_to='
+           . urlencode('https://' . LG_PROFILE_APP_HOST . $back);
 ?>
 <!doctype html><html><head><meta charset="utf-8"><title>Sign in to edit · Looth</title>
 <link rel="stylesheet" href="/profile/edit/edit.css"></head>
