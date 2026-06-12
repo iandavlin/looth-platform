@@ -1,0 +1,192 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * /weekly/ — STANDALONE weekly-digest pages (Ian 6/12).
+ *
+ *   /weekly/           → issue index (newest first)
+ *   /weekly/<slug>/    → one issue: the curated sections as web cards
+ *
+ * Members-only, matching the WP version's gate: logged-out visitors get the
+ * shell + a sign-in card (leak-safe — section data never renders for anon).
+ * No WP boot: issue + cards read via read-only MySQL (weekly-query.php);
+ * viewer state via the cached whoami loopback (same as the events landing).
+ */
+
+require __DIR__ . '/../config.php';
+require __DIR__ . '/../lib/weekly-query.php';
+require '/srv/lg-shared/site-header.php';
+require '/srv/lg-shared/site-footer.php';
+
+$h = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+
+$request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+$path = (string)parse_url($request_uri, PHP_URL_PATH);
+$slug = '';
+if (preg_match('#^/weekly/([a-z0-9\-]+)/?$#', $path, $m)) $slug = $m[1];
+
+$who    = lg_events_whoami();
+$authed = ($who['authenticated'] ?? false) === true;
+$ctx    = [
+    'authenticated' => $authed,
+    'tier'          => (string)($who['tier'] ?? 'public'),
+    'display_name'  => (string)($who['display_name'] ?? ''),
+    'avatar_url'    => $who['avatar_url'] ?? null,
+    'capabilities'  => (array)($who['capabilities'] ?? []),
+    'msg_unread'    => null,
+    'notif_unread'  => null,
+    'logo_url'      => LG_EVENTS_LOGO,
+    'profile_url'   => '/profile/edit',
+    'active_nav'    => 'hub',
+    'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
+];
+
+$db     = lg_events_db();
+$issue  = null;
+$issues = [];
+$title  = 'Weekly Digest — The Looth Group';
+
+if ($authed) {
+    if ($slug !== '') {
+        $issue = lg_weekly_issue($db, $slug);
+        if (!$issue) { http_response_code(404); }
+        else { $title = (string)$issue['post']['post_title'] . ' — The Looth Group'; }
+    } else {
+        $issues = lg_weekly_issues($db);
+    }
+}
+
+/** "May 25 – Jun 8" range line. */
+$range = static function (string $from, string $to): string {
+    $f = $from ? strtotime($from) : 0; $t = $to ? strtotime($to) : 0;
+    if (!$f || !$t) return '';
+    return date('M j', $f) . ' – ' . date('M j, Y', $t);
+};
+?><!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title><?= $h($title) ?></title>
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
+<style>
+/* Weekly digest — small, self-contained; tokens from site-header.css. */
+.lg-wk{max-width:880px;margin:0 auto;padding:28px 20px 56px;font-family:var(--lg-font-sans)}
+.lg-wk__head{font:800 28px/1.2 var(--lg-font-serif);color:var(--lg-charcoal);margin:0 0 4px}
+.lg-wk__sub{color:#6b7163;margin:0 0 24px}
+.lg-wk__issue{display:block;background:#fff;border:1px solid var(--lg-line);border-radius:14px;padding:18px 20px;margin:0 0 12px;text-decoration:none;color:inherit}
+.lg-wk__issue:hover{border-color:var(--lg-sage)}
+.lg-wk__issue h2{margin:0 0 2px;font:700 18px/1.3 var(--lg-font-serif);color:var(--lg-charcoal)}
+.lg-wk__issue span{color:#8a9080;font-size:13px}
+.lg-wk__sec-h{font:800 15px/1 var(--lg-font-sans);letter-spacing:.08em;text-transform:uppercase;color:var(--lg-rust);margin:34px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--lg-line)}
+.lg-wk__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.lg-wk__card{display:block;background:#fff;border:1px solid var(--lg-line);border-radius:12px;overflow:hidden;text-decoration:none;color:inherit}
+.lg-wk__card:hover{border-color:var(--lg-sage)}
+.lg-wk__thumb{aspect-ratio:16/9;background:#e8e6df center/cover no-repeat}
+.lg-wk__card h3{font:700 15px/1.35 var(--lg-font-sans);color:var(--lg-charcoal);margin:10px 12px 4px}
+.lg-wk__when,.lg-wk__type{display:block;margin:0 12px 10px;color:#8a9080;font-size:12.5px}
+.lg-wk__rows .lg-wk__card{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.lg-wk__rows h3{margin:0;flex:1}
+.lg-wk__rows .lg-wk__when{margin:0;white-space:nowrap}
+.lg-wk__sponsor{outline:2px solid #f0c987;outline-offset:-2px}
+.lg-wk__sponsor-tag{display:inline-block;background:#fdf0d8;color:#8a6326;font:800 10px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;border-radius:4px;padding:3px 7px;margin:10px 12px 0}
+.lg-wk__gate{max-width:480px;margin:60px auto;background:#fff;border:1px solid var(--lg-line);border-radius:16px;padding:34px;text-align:center}
+.lg-wk__gate h1{font:800 22px/1.3 var(--lg-font-serif);color:var(--lg-charcoal);margin:0 0 10px}
+.lg-wk__gate p{color:#6b7163;margin:0 0 20px}
+.lg-wk__gate a{display:inline-block;background:var(--lg-sage);color:#fff;border-radius:999px;padding:11px 26px;font-weight:700;text-decoration:none}
+.lg-wk__back{display:inline-block;margin:0 0 18px;color:#6b7163;text-decoration:none;font-size:14px}
+.lg-wk__back:hover{color:var(--lg-charcoal)}
+</style>
+</head>
+<body class="lg-weekly-page">
+
+<?php lg_shared_render_site_header($ctx); ?>
+
+<main id="lg-main" class="lg-wk">
+<?php if (!$authed): ?>
+    <div class="lg-wk__gate">
+        <h1>The Weekly Digest is for members</h1>
+        <p>Sign in to read this week&rsquo;s curated round-up of events, videos, and shop talk.</p>
+        <a href="/wp-login.php?redirect_to=<?= $h(rawurlencode('https://' . LG_EVENTS_HOST . $path)) ?>">Sign in</a>
+    </div>
+
+<?php elseif ($slug !== '' && !$issue): ?>
+    <a class="lg-wk__back" href="/weekly/">&larr; All digests</a>
+    <h1 class="lg-wk__head">Not found</h1>
+    <p class="lg-wk__sub">That digest doesn&rsquo;t exist (or isn&rsquo;t published).</p>
+
+<?php elseif ($issue): ?>
+    <a class="lg-wk__back" href="/weekly/">&larr; All digests</a>
+    <h1 class="lg-wk__head"><?= $h((string)$issue['post']['post_title']) ?></h1>
+    <p class="lg-wk__sub"><?= $h($range((string)($issue['data']['date_from'] ?? ''), (string)($issue['data']['date_to'] ?? ''))) ?></p>
+
+    <?php
+    // Resolve every referenced post in ONE query, then walk the sections.
+    $allIds = [];
+    foreach (($issue['data']['sections'] ?? []) as $s) {
+        foreach ((array)($s['post_ids'] ?? []) as $pid) $allIds[] = (int)$pid;
+    }
+    $cards = lg_weekly_resolve($db, $allIds);
+
+    foreach (($issue['data']['sections'] ?? []) as $s):
+        $isHeader = !empty($s['is_header']);
+        $label    = trim((string)($s['label'] ?? ''));
+        if ($isHeader) {
+            if ($label !== '') echo '<h2 class="lg-wk__sec-h">' . $h($label) . '</h2>';
+            continue;
+        }
+        $tpl  = (string)($s['template'] ?? 'card');
+        $rows = [];
+        foreach ((array)($s['post_ids'] ?? []) as $pid) {
+            if (isset($cards[(int)$pid])) $rows[] = $cards[(int)$pid];
+        }
+        // manual_items: {title,url} hand-entries from the composer — pass through.
+        foreach ((array)($s['manual_items'] ?? []) as $mi) {
+            if (!is_array($mi) || empty($mi['title'])) continue;
+            $rows[] = ['title' => (string)$mi['title'], 'url' => (string)($mi['url'] ?? '#'),
+                       'thumb' => '', 'when' => '', 'type' => '', 'excerpt' => ''];
+        }
+        if (!$rows) continue;
+        if ($label !== '') echo '<h2 class="lg-wk__sec-h">' . $h($label) . '</h2>';
+
+        if ($tpl === 'date-forward' || $tpl === 'forum'): ?>
+            <div class="lg-wk__rows">
+            <?php foreach ($rows as $r): ?>
+                <a class="lg-wk__card" href="<?= $h((string)$r['url']) ?>">
+                    <h3><?= $h((string)$r['title']) ?></h3>
+                    <?php if ($r['when'] !== ''): ?><span class="lg-wk__when"><?= $h((string)$r['when']) ?></span><?php endif; ?>
+                </a>
+            <?php endforeach; ?>
+            </div>
+        <?php else: /* card / sponsor grids */ ?>
+            <div class="lg-wk__grid">
+            <?php foreach ($rows as $r): ?>
+                <a class="lg-wk__card<?= $tpl === 'sponsor' ? ' lg-wk__sponsor' : '' ?>" href="<?= $h((string)$r['url']) ?>">
+                    <?php if ($r['thumb'] !== ''): ?><div class="lg-wk__thumb" style="background-image:url('<?= $h((string)$r['thumb']) ?>')"></div><?php endif; ?>
+                    <?php if ($tpl === 'sponsor'): ?><span class="lg-wk__sponsor-tag">Sponsored</span><?php endif; ?>
+                    <h3><?= $h((string)$r['title']) ?></h3>
+                    <?php if ($r['when'] !== ''): ?><span class="lg-wk__when"><?= $h((string)$r['when']) ?></span><?php endif; ?>
+                </a>
+            <?php endforeach; ?>
+            </div>
+        <?php endif;
+    endforeach; ?>
+
+<?php else: ?>
+    <h1 class="lg-wk__head">Weekly Digest</h1>
+    <p class="lg-wk__sub">Every issue of the members&rsquo; round-up — events, new videos, shop talk, and what the community is building.</p>
+    <?php if (!$issues): ?>
+        <p>No digests yet.</p>
+    <?php else: foreach ($issues as $i): ?>
+        <a class="lg-wk__issue" href="/weekly/<?= $h($i['slug']) ?>/">
+            <h2><?= $h($i['title']) ?></h2>
+            <span><?= $h($range($i['from'], $i['to']) ?: date('M j, Y', strtotime($i['date']))) ?></span>
+        </a>
+    <?php endforeach; endif; ?>
+<?php endif; ?>
+</main>
+
+<?php lg_shared_render_site_footer(['logo_url' => LG_EVENTS_LOGO]); ?>
+
+</body>
+</html>

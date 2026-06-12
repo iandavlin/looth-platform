@@ -1,0 +1,117 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * weekly-query.php — read-only WP-MySQL readers for the STANDALONE weekly
+ * digest page (Ian 6/12: "weekly email page built for standalone").
+ *
+ * The lg-weekly-digest plugin (WP-side) owns composing + SENDING the email;
+ * each sent issue is a `weekly_email` post whose `_lg_wd_issue_data` meta
+ * carries the curated sections (header rows + post_ids per section). This
+ * lib reads that meta with NO WP boot (same pattern as events-query.php)
+ * and resolves the referenced posts into render-ready cards whose links
+ * target the NEW surfaces (hub topics, v2 event/video pages) — not the
+ * retiring BB permalinks.
+ */
+
+/** Published issues, newest first: [{id, slug, title, date, from, to}] */
+function lg_weekly_issues(PDO $db, int $limit = 52): array
+{
+    $st = $db->prepare("
+        SELECT p.ID, p.post_name, p.post_title, p.post_date, m.meta_value
+        FROM wp_posts p
+        LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_lg_wd_issue_data'
+        WHERE p.post_type = 'weekly_email' AND p.post_status = 'publish'
+        ORDER BY p.post_date DESC
+        LIMIT " . max(1, min(200, $limit)));
+    $st->execute();
+    $out = [];
+    foreach ($st->fetchAll() as $r) {
+        $d = lg_weekly_unserialize((string)($r['meta_value'] ?? ''));
+        $out[] = [
+            'id'    => (int)$r['ID'],
+            'slug'  => (string)$r['post_name'],
+            'title' => (string)$r['post_title'],
+            'date'  => (string)$r['post_date'],
+            'from'  => (string)($d['date_from'] ?? ''),
+            'to'    => (string)($d['date_to'] ?? ''),
+        ];
+    }
+    return $out;
+}
+
+/** One issue by slug → ['post' => row, 'data' => issue meta] or null. */
+function lg_weekly_issue(PDO $db, string $slug): ?array
+{
+    $st = $db->prepare("
+        SELECT p.ID, p.post_name, p.post_title, p.post_date, m.meta_value
+        FROM wp_posts p
+        LEFT JOIN wp_postmeta m ON m.post_id = p.ID AND m.meta_key = '_lg_wd_issue_data'
+        WHERE p.post_type = 'weekly_email' AND p.post_status = 'publish' AND p.post_name = :s
+        LIMIT 1");
+    $st->execute([':s' => $slug]);
+    $r = $st->fetch();
+    if (!$r) return null;
+    $d = lg_weekly_unserialize((string)($r['meta_value'] ?? ''));
+    if (!is_array($d) || empty($d['sections'])) return null;
+    return ['post' => $r, 'data' => $d];
+}
+
+/** PHP-serialized meta → array (classes forbidden), [] on garbage. */
+function lg_weekly_unserialize(string $raw): array
+{
+    if ($raw === '') return [];
+    $v = @unserialize($raw, ['allowed_classes' => false]);
+    return is_array($v) ? $v : [];
+}
+
+/**
+ * Resolve a set of post IDs → render cards keyed by id:
+ *   {id, title, type, slug, url, thumb, excerpt, event_when}
+ * Links target the NEW surfaces: topics → /hub/topic/<slug>/ (the standalone
+ * hub), everything else → /<post_type>/<slug>/ (the v2 pages; same pretty
+ * permalinks WP uses, host-relative so they work on dev AND live).
+ */
+function lg_weekly_resolve(PDO $db, array $ids): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
+    if (!$ids) return [];
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+
+    $st = $db->prepare("
+        SELECT p.ID, p.post_title, p.post_type, p.post_name, p.post_excerpt, p.post_status,
+               thumbf.meta_value AS thumb_file,
+               evdate.meta_value AS event_start
+        FROM wp_posts p
+        LEFT JOIN wp_postmeta thumbid ON thumbid.post_id = p.ID AND thumbid.meta_key = '_thumbnail_id'
+        LEFT JOIN wp_postmeta thumbf  ON thumbf.post_id = thumbid.meta_value AND thumbf.meta_key = '_wp_attached_file'
+        LEFT JOIN wp_postmeta evdate  ON evdate.post_id = p.ID AND evdate.meta_key = 'events_start_date_and_time_'
+        WHERE p.ID IN ($ph)");
+    $st->execute($ids);
+
+    $out = [];
+    foreach ($st->fetchAll() as $r) {
+        if (!in_array($r['post_status'], ['publish', 'archived'], true)) continue;  // unpublished refs drop out
+        $type = (string)$r['post_type'];
+        $slug = (string)$r['post_name'];
+        $url  = ($type === 'topic')
+            ? '/hub/topic/' . rawurlencode($slug) . '/'
+            : '/' . rawurlencode($type) . '/' . rawurlencode($slug) . '/';
+        $when = '';
+        if (!empty($r['event_start'])) {
+            $ts = strtotime((string)$r['event_start']);
+            if ($ts) $when = date('D M j · g:i a', $ts);
+        }
+        $out[(int)$r['ID']] = [
+            'id'      => (int)$r['ID'],
+            'title'   => (string)$r['post_title'],
+            'type'    => $type,
+            'slug'    => $slug,
+            'url'     => $url,
+            'thumb'   => !empty($r['thumb_file']) ? LG_EVENTS_UPLOADS_BASE . ltrim((string)$r['thumb_file'], '/') : '',
+            'excerpt' => (string)$r['post_excerpt'],
+            'when'    => $when,
+        ];
+    }
+    return $out;
+}
