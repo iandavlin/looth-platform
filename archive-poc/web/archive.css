@@ -638,6 +638,32 @@ body.view-grid .arc-page { padding-top: 24px; }
 }
 .ecard__cal:hover { background: var(--lg-sage-tint); color: var(--lg-ink); border-color: var(--lg-sage-d); }
 
+/* "Add to calendar" chooser — appended to <body> (the ecard is one big <a>),
+   absolutely positioned under the 📅 button by archive.js */
+.cal-menu {
+  position: absolute;
+  z-index: 1000;
+  min-width: 185px;
+  display: flex; flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--lg-line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  padding: 4px;
+}
+.cal-menu__item {
+  font: 600 12px/1 var(--lg-font-sans);
+  color: var(--lg-ink);
+  text-align: left;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.cal-menu__item:hover { background: var(--lg-sage-tint); }
+
 /* --- Mobile billboard --- */
 @media (max-width: 720px) {
   .billboard { height: auto; min-height: 480px; }

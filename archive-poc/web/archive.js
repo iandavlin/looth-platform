@@ -1201,10 +1201,10 @@ if (ssrPresent && !hasFilters) {
   });
 })();
 
-// --- Event card: "Add to calendar" — generates an .ics blob client-side ---
+// --- Event card: "Add to calendar" — chooser menu (Google / Outlook / .ics) ---
 (function () {
   function pad(n) { return String(n).padStart(2, '0'); }
-  function icsDate(ts) {
+  function utcStamp(ts) {
     const d = new Date(ts * 1000);
     return d.getUTCFullYear() + pad(d.getUTCMonth()+1) + pad(d.getUTCDate())
          + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z';
@@ -1212,45 +1212,110 @@ if (ssrPresent && !hasFilters) {
   function icsEscape(s) {
     return String(s || '').replace(/[\\,;]/g, m => '\\' + m).replace(/\r?\n/g, '\\n');
   }
-  function buildIcs({ title, start, end, url, location }) {
+  function readEvent(btn) {
+    const start = parseInt(btn.dataset.start, 10);
+    return {
+      title:    btn.dataset.title || 'Event',
+      start:    start,
+      end:      parseInt(btn.dataset.end, 10) || (start + 3600),
+      url:      btn.dataset.url || '',
+      location: btn.dataset.location || '',
+    };
+  }
+  function googleUrl(ev) {
+    const p = new URLSearchParams({ action: 'TEMPLATE', text: ev.title, dates: utcStamp(ev.start) + '/' + utcStamp(ev.end) });
+    if (ev.url) p.set('details', ev.url);
+    if (ev.location) p.set('location', ev.location);
+    return 'https://calendar.google.com/calendar/render?' + p.toString();
+  }
+  function outlookUrl(ev, host) {
+    const iso = ts => new Date(ts * 1000).toISOString();
+    const p = new URLSearchParams({ rru: 'addevent', subject: ev.title, startdt: iso(ev.start), enddt: iso(ev.end) });
+    if (ev.url) p.set('body', ev.url);
+    if (ev.location) p.set('location', ev.location);
+    return 'https://' + host + '/calendar/0/action/compose?' + p.toString();
+  }
+  function buildIcs(ev) {
     const now = Math.floor(Date.now() / 1000);
     return [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//Looth Group//archive-poc//EN',
       'BEGIN:VEVENT',
-      'UID:lg-' + start + '-' + Math.random().toString(36).slice(2,8) + '@loothgroup.com',
-      'DTSTAMP:' + icsDate(now),
-      'DTSTART:' + icsDate(start),
-      'DTEND:' + icsDate(end),
-      'SUMMARY:' + icsEscape(title),
-      url ? 'URL:' + icsEscape(url) : null,
-      location ? 'LOCATION:' + icsEscape(location) : null,
-      url ? 'DESCRIPTION:' + icsEscape(url) : null,
+      'UID:lg-' + ev.start + '-' + Math.random().toString(36).slice(2,8) + '@loothgroup.com',
+      'DTSTAMP:' + utcStamp(now),
+      'DTSTART:' + utcStamp(ev.start),
+      'DTEND:' + utcStamp(ev.end),
+      'SUMMARY:' + icsEscape(ev.title),
+      ev.url ? 'URL:' + icsEscape(ev.url) : null,
+      ev.location ? 'LOCATION:' + icsEscape(ev.location) : null,
+      ev.url ? 'DESCRIPTION:' + icsEscape(ev.url) : null,
       'END:VEVENT',
       'END:VCALENDAR',
     ].filter(Boolean).join('\r\n');
   }
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-ics]');
-    if (!btn) return;
-    e.preventDefault();        // don't follow parent <a>
-    e.stopPropagation();
-    const ics = buildIcs({
-      title:    btn.dataset.title,
-      start:    parseInt(btn.dataset.start, 10),
-      end:      parseInt(btn.dataset.end, 10) || (parseInt(btn.dataset.start, 10) + 3600),
-      url:      btn.dataset.url,
-      location: btn.dataset.location,
-    });
-    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  function downloadIcs(ev) {
+    const blob = new Blob([buildIcs(ev)], { type: 'text/calendar;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (btn.dataset.title || 'event').replace(/[^a-z0-9-_]+/gi, '-').slice(0, 60) + '.ics';
+    a.download = ev.title.replace(/[^a-z0-9-_]+/gi, '-').slice(0, 60) + '.ics';
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
+  // Menu lives on <body>, NOT inside the card — the ecard is one big <a>,
+  // so any element inside it would navigate to the event post on click.
+  let menu = null;
+  function closeMenu() { if (menu) { menu.remove(); menu = null; } }
+  function openMenu(btn) {
+    closeMenu();
+    const ev = readEvent(btn);
+    menu = document.createElement('div');
+    menu.className = 'cal-menu';
+    menu.setAttribute('role', 'menu');
+    menu._btn = btn;
+    const items = [
+      ['Google Calendar', googleUrl(ev)],
+      ['Outlook.com',     outlookUrl(ev, 'outlook.live.com')],
+      ['Office 365',      outlookUrl(ev, 'outlook.office.com')],
+    ];
+    for (const [label, href] of items) {
+      const a = document.createElement('a');
+      a.className = 'cal-menu__item';
+      a.href = href;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.setAttribute('role', 'menuitem');
+      a.textContent = label;
+      a.addEventListener('click', closeMenu);
+      menu.appendChild(a);
+    }
+    const dl = document.createElement('button');
+    dl.type = 'button';
+    dl.className = 'cal-menu__item';
+    dl.setAttribute('role', 'menuitem');
+    dl.textContent = 'Apple / other (.ics)';
+    dl.addEventListener('click', () => { downloadIcs(ev); closeMenu(); });
+    menu.appendChild(dl);
+    document.body.appendChild(menu);
+    const r = btn.getBoundingClientRect();
+    const w = menu.offsetWidth;
+    menu.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+    menu.style.left = Math.max(8, Math.min(r.left + window.scrollX,
+      window.scrollX + document.documentElement.clientWidth - w - 8)) + 'px';
+  }
+
+  document.addEventListener('click', (e) => {
+    if (menu && menu.contains(e.target)) return;   // menu items handle themselves
+    const btn = e.target.closest('[data-ics]');
+    if (!btn) { closeMenu(); return; }
+    e.preventDefault();        // don't follow parent <a>
+    e.stopPropagation();
+    if (menu && menu._btn === btn) { closeMenu(); return; }   // toggle off
+    openMenu(btn);
   });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 })();
 
 // === Search modal — faceted suggest (Authors / Posts / Discussions) ===
