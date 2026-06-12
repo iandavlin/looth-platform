@@ -17,9 +17,17 @@ if ($method === 'GET') {
     if ($block === null) profile_app_json(404, ['error' => 'not_found']);
     // Removing the Location section from the profile opts the owner off the
     // map entirely (the directory enforces that server-side). Surface it here
-    // so own-pin consumers (front-page You pin) honor it too — additive flag,
+    // so own-pin consumers (front-page You pin) honor it too — additive flags,
     // the editor's GET shape is unchanged (Ian 6/12).
+    //   in_layout  — 'location' is in the effective layout (default or saved)
+    //   opted_out  — the owner SAVED a layout that omits location (deliberate
+    //                stow). A never-customized profile whose default simply
+    //                lacks the section is NOT an opt-out — those members get
+    //                the join-the-map nudge instead of the silent teaser.
     $block['in_layout'] = in_array('location', Block::profileLayout((int)$user['id']), true);
+    $st = Db::pg()->prepare('SELECT (profile_layout IS NOT NULL)::int FROM users WHERE id = :i');
+    $st->execute([':i' => (int)$user['id']]);
+    $block['opted_out'] = !$block['in_layout'] && (bool)(int)$st->fetchColumn();
     profile_app_json(200, $block);
 }
 

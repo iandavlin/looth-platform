@@ -94,20 +94,27 @@
   function resolveLocation() {
     return j('/profile-api/v0/me/location', { credentials: 'same-origin' })
       .then(function (b) {
-        if (b && b.in_layout === false) { showJoinCta(b); return { optedOut: true }; }
+        // Deliberate stow (saved layout without location) = honored opt-out:
+        // teaser + CTA, no IP guess. Everything else authed-without-a-pin
+        // (never-customized default, or section on but no place picked) gets
+        // the IP-centered no-pin map + CTA — the join nudge (Ian 6/12).
+        if (b && b.opted_out) { showJoinCta(b); return { optedOut: true }; }
         var me = pickMe(b);
-        if (b && !me) { showJoinCta(b); return { optedOut: true }; }   // authed, no usable place → CTA + teaser (no IP guess)
+        if (b && !me) { showJoinCta(b); return { joinable: true }; }
         return me;
       })
       .catch(function () { return null; })
       .then(function (loc) {
         if (loc && loc.optedOut) return null;
-        if (loc) return loc;
+        if (loc && !loc.joinable) return loc;
+        var joinable = !!(loc && loc.joinable);
         return j('https://get.geojs.io/v1/ip/geo.json')
           .then(function (g) {
             var lat = parseFloat(g && g.latitude), lng = parseFloat(g && g.longitude);
             if (!num(lat) || !num(lng)) return null;
-            return { lat: lat, lng: lng, zoom: 9, source: 'ip' };
+            // joinable = a member with no place: show their general area with
+            // NO center marker ("we don't know where you are") + the CTA.
+            return { lat: lat, lng: lng, zoom: 9, source: 'ip', noMarker: joinable };
           })
           .catch(function () { return null; });
       });
@@ -143,9 +150,11 @@
     if (!canvas) return;
     host.classList.add('is-live');
     if (titleEl) titleEl.textContent = 'Luthiers near you';
-    if (subEl) subEl.textContent = loc.source === 'ip'
-      ? 'Based on your location — the closest luthiers and shops:'
-      : 'You’re on the map. The closest luthiers and shops:';
+    if (subEl) subEl.textContent = loc.noMarker
+      ? 'Your general area — we don’t know or store your location until you add it.'
+      : (loc.source === 'ip'
+        ? 'Based on your location — the closest luthiers and shops:'
+        : 'You’re on the map. The closest luthiers and shops:');
 
     var map = L.map(canvas, { scrollWheelZoom: false, zoomControl: true })
       .setView([loc.lat, loc.lng], Math.min(11, Math.max(8, (loc.zoom || 10) - 1)));
@@ -153,10 +162,12 @@
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    var meLabel = loc.source === 'ip' ? 'Near you' : 'You';
-    L.circleMarker([loc.lat, loc.lng], { radius: 9, color: '#fff', weight: 3, fillColor: '#6f7c54', fillOpacity: 1 })
-      .addTo(map)
-      .bindTooltip(meLabel, { permanent: true, direction: 'top', offset: [0, -10], className: 'lg-fp-you' });
+    if (!loc.noMarker) {
+      var meLabel = loc.source === 'ip' ? 'Near you' : 'You';
+      L.circleMarker([loc.lat, loc.lng], { radius: 9, color: '#fff', weight: 3, fillColor: '#6f7c54', fillOpacity: 1 })
+        .addTo(map)
+        .bindTooltip(meLabel, { permanent: true, direction: 'top', offset: [0, -10], className: 'lg-fp-you' });
+    }
 
     var shown = 0;
     items.forEach(function (it) {
