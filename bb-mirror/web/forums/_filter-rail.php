@@ -230,8 +230,9 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
       <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
         <?= $keep(['author']) ?>
         <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
-        <input class="hub-tsearch__in" name="author" type="search" placeholder="Add an author…"
-               value="" autocomplete="off" aria-label="Filter by author" data-hub-author>
+        <?php /* "Search by author…" canonical (hub-polish's client rename now no-ops) */ ?>
+        <input class="hub-tsearch__in" name="author" type="search" placeholder="Search by author…"
+               value="" autocomplete="off" aria-label="Search by author" data-hub-author>
         <div class="hub-suggest" data-hub-suggest="author" hidden></div>
       </form>
     </div>

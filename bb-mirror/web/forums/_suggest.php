@@ -32,21 +32,42 @@ $tin = $tph ? implode(',', $tph) : "''";
 $results = [];
 
 if ($mode === 'author') {
+    // VISIBILITY MASK (Ian 6/12 — fork twin of 53f2d9b, which closed the same
+    // leak on archive-poc's search-suggest): author identity follows the same
+    // flags as everywhere else, read from forums.person (the synced cache;
+    // profile-app owns the source fields):
+    //   - profile_visibility 'private' (master switch) → never a hit, ANY viewer.
+    //   - anon viewers additionally need discussion_visibility = 'public' —
+    //     same mask as the Hub feed; a MISSING person row hides the author
+    //     from anon (leak-safe), but fails open for the master switch.
+    // person.id == WP user id == author_id on both sources. Also joins the
+    // avatar for the dropdown.
+    $wa     = function_exists('lg_bb_mirror_whoami') ? lg_bb_mirror_whoami() : null;
+    $lgAnon = !($wa['authenticated'] ?? false);
+    $visWhere = " AND COALESCE(fp.profile_visibility, 'public') <> 'private'";
+    if ($lgAnon) $visWhere .= " AND COALESCE(fp.discussion_visibility, 'member') = 'public'";
+    // Names group across both sources (the ?author= filter is name-keyed);
+    // MAX(author_id) picks the person row for the avatar/visibility join.
     $sql = "
-        SELECT name, SUM(n) AS n FROM (
-            SELECT author_name AS name, count(*) AS n
-              FROM topic
-             WHERE status = 'publish' AND author_name ILIKE :like1
-             GROUP BY author_name
-            UNION ALL
-            SELECT author_name, count(*)
-              FROM discovery.content_item
-             WHERE tier IN ($tin) AND author_name ILIKE :like2
-             GROUP BY author_name
-        ) z
-         WHERE name IS NOT NULL AND name <> ''
-         GROUP BY name
-         ORDER BY n DESC, name ASC
+        SELECT z.name, z.n, fp.avatar_url
+          FROM (
+            SELECT name, MAX(author_id) AS author_id, SUM(n) AS n FROM (
+                SELECT author_name AS name, MAX(author_id) AS author_id, count(*) AS n
+                  FROM topic
+                 WHERE status = 'publish' AND author_name ILIKE :like1
+                 GROUP BY author_name
+                UNION ALL
+                SELECT author_name, MAX(author_id), count(*)
+                  FROM discovery.content_item
+                 WHERE tier IN ($tin) AND author_name ILIKE :like2
+                 GROUP BY author_name
+            ) u
+             WHERE name IS NOT NULL AND name <> ''
+             GROUP BY name
+          ) z
+          LEFT JOIN forums.person fp ON fp.id = z.author_id
+         WHERE 1=1 $visWhere
+         ORDER BY z.n DESC, z.name ASC
          LIMIT 8";
     $st = $db->prepare($sql);
     $st->bindValue(':like1', $like);
@@ -54,7 +75,11 @@ if ($mode === 'author') {
     foreach ($tiers as $i => $t) $st->bindValue(':t' . $i, $t);
     $st->execute();
     foreach ($st->fetchAll() as $r) {
-        $results[] = ['name' => (string)$r['name'], 'n' => (int)$r['n']];
+        $results[] = [
+            'name'       => (string)$r['name'],
+            'n'          => (int)$r['n'],
+            'avatar_url' => $r['avatar_url'] !== null ? (string)$r['avatar_url'] : null,
+        ];
     }
 } else {
     // Live search: topics (build /hub/<forum>/<topic>/) + content (url column).
