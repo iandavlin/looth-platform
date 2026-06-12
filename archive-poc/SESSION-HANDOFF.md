@@ -22,6 +22,20 @@
 >   runtime write, then commit-or-discard.
 <!-- ========================================================================== -->
 
+> **GUITARDLE = LAUNCHED, front page only (Ian 2026-06-12 PM, reversing the AM
+> decom).** Mounted stacked under the featured video for BOTH audiences via the
+> `_render-main-row.php` video-promo include (no config row — the standalone
+> `guitardle` row layout stays renderable but unused). Board card always shows
+> FIVE slots; open slots = italic "Open spot / play to claim" placeholders.
+> Game is REFRESH-PROOF: the forfeit rule is retired — every move snapshots to
+> localStorage `guitardle_game` (keyed date+phraseId), reload restores the
+> position; save clears on win/loss/already-played. beforeunload prompt, amber
+> strip, and the How-to-Play forfeit line are gone. Server one-game-per-day
+> lock unchanged. **Hub teaser + side-art stay OFF** (Ian: "do not rearm in the
+> hub") — the two commented pwa.js lines are now the ONLY re-arm left.
+> sequence.json untouched (startDate 6/11; launch day = day 2, fresh phrase).
+
+
 # archive-poc — Session Handoff (2026-05-28)
 
 ## Where things stand

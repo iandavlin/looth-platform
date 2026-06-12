@@ -409,11 +409,13 @@
                 referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
           <?php endif; ?>
-          <?php /* Guitardle is DECOMMISSIONED for launch (Ian 6/12) — fast
-                   follow. To remount it stacked under the featured video:
-                   if ($row_id === 'video-promo-members') { $gdle_compact = true; require __DIR__ . '/_gdle-promo.php'; }
-                   (the partial + modal + embed leaderboard are all live-ready;
-                   a 'guitardle' row in config.json renders the standalone shape). */ ?>
+          <?php /* Guitardle rides stacked under the featured video, BOTH
+                   audiences (Ian 6/12: launch WITH guitardle — promo + modal +
+                   always-5-slot board; anon plays its own phrase track). */
+                if ($row_id === 'video-promo-members' || $row_id === 'video-promo-public') {
+                    $gdle_compact = true;
+                    require __DIR__ . '/_gdle-promo.php';
+                } ?>
         </div>
         <div class="vpromo__copy">
           <?= $html /* trusted: sanitized by dash on save; shortcodes expanded above */ ?>

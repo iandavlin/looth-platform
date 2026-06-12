@@ -11,9 +11,10 @@
  *
  * Either shape emits the SAME centered modal + script once: the iframe src is
  * set lazily on first open and the modal hides (never destroys) on close, so
- * a mid-game peek can't forfeit the round (refresh-forfeit rule). The embed
- * page carries its own weekly top-5 strip (side by side with the game on wide
- * hosts), so the modal shows the leaderboard with no extra wiring here.
+ * reopening never reloads a game in progress (and the game is refresh-proof
+ * anyway — state persists, Ian 6/12). The embed page carries its own weekly
+ * top-5 strip (side by side with the game on wide hosts), so the modal shows
+ * the leaderboard with no extra wiring here.
  *
  * Expects: $is_member (bool) in scope. Keep the #guitardle anchor — the Hub
  * teaser and shares deep-link /archive-poc/#guitardle (and #guitardle=play
@@ -22,6 +23,18 @@
 $gdle_compact = !empty($gdle_compact);
 $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm' : 'p')
           . '&v=' . (@filemtime(__DIR__ . '/guitardle/game.js') ?: '1');
+
+// The board always shows FIVE slots (Ian 6/12): leaders fill from the top,
+// the rest render as open-spot placeholders — never a collapsed/empty card.
+// SSR'd here so the slots are visible even before (or without) the API call;
+// fillBoard() below repaints with live leaders and pads back to five.
+$gdle_slots = '';
+for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
+    $gdle_slots .= '<li class="gdle-side-row gdle-side-row--open">'
+                 . '<span class="gdle-side-row__rank">' . $gdle_i . '</span>'
+                 . '<span class="gdle-side-row__name">Open spot</span>'
+                 . '<span class="gdle-side-row__pts">play to claim</span></li>';
+}
 ?>
 <div class="gdle-block<?= $gdle_compact ? ' gdle-block--stack' : '' ?>" id="guitardle">
   <?php if ($gdle_compact): ?>
@@ -33,8 +46,7 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
     <button type="button" class="gdle-promo__play" id="gdle-play">Play today's Guitardle &rarr;</button>
     <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
       <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
-      <ol class="gdle-side-board" id="gdle-side-board"></ol>
-      <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
+      <ol class="gdle-side-board" id="gdle-side-board"><?= $gdle_slots ?></ol>
     </aside>
   <?php else: ?>
     <div class="gdle-promo">
@@ -45,11 +57,17 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
       </div>
       <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
         <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
-        <ol class="gdle-side-board" id="gdle-side-board"></ol>
-        <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
+        <ol class="gdle-side-board" id="gdle-side-board"><?= $gdle_slots ?></ol>
       </aside>
     </div>
   <?php endif; ?>
+
+  <style>
+    /* Open-spot placeholder slots (inline so this partial stays self-contained
+       and archive.css — which has another lane's WIP — goes untouched). */
+    .gdle-side-row--open { opacity: .55; font-style: italic; }
+    .gdle-side-row--open .gdle-side-row__rank { color: #b3bfa0; }
+  </style>
 
   <div class="gdle-modal" id="gdle-modal" hidden role="dialog" aria-modal="true" aria-label="Guitardle — daily guitar phrase game">
     <div class="gdle-modal__back" data-gdle-close></div>
@@ -74,16 +92,31 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
           if (f) f.style.height = Math.ceil(e.data.height) + 'px';
       });
 
+      // An open slot — the board always shows five rows (placeholders included).
+      function openSlot(i) {
+          var li = document.createElement('li');
+          li.className = 'gdle-side-row gdle-side-row--open';
+          var rank = document.createElement('span');
+          rank.className = 'gdle-side-row__rank';
+          rank.textContent = String(i + 1);
+          var name = document.createElement('span');
+          name.className = 'gdle-side-row__name';
+          name.textContent = 'Open spot';
+          var pts = document.createElement('span');
+          pts.className = 'gdle-side-row__pts';
+          pts.textContent = 'play to claim';
+          li.append(rank, name, pts);
+          return li;
+      }
+
       function fillBoard() {
           fetch('/archive-api/v0/guitardle-board', { credentials: 'same-origin' })
               .then(function (r) { return r.ok ? r.json() : null; })
               .then(function (b) {
                   if (!b) return;
                   var list = document.getElementById('gdle-side-board');
-                  var empty = document.getElementById('gdle-side-empty');
                   var leaders = (b.leaders || []).slice(0, 5);   // promo card = top 5
                   list.innerHTML = '';
-                  empty.hidden = leaders.length > 0;
                   leaders.forEach(function (l, i) {
                       var li = document.createElement('li');
                       li.className = 'gdle-side-row' + (i === 0 ? ' is-first' : '');
@@ -100,12 +133,13 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
                       li.append(rank, name, pts);
                       list.appendChild(li);
                   });
+                  for (var i = leaders.length; i < 5; i++) list.appendChild(openSlot(i));
               }).catch(function () {});
       }
 
       // Modal open/close. The iframe src loads ONCE on first open and the
-      // modal only hides after that — destroying it would forfeit a round
-      // in progress (refresh-forfeit rule).
+      // modal only hides after that — no reason to reload a round in progress
+      // (state would survive anyway: the game is refresh-proof).
       var modal = document.getElementById('gdle-modal');
       var frame = document.getElementById('gdle-frame');
       function openGame() {
@@ -130,10 +164,12 @@ $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm'
       if (location.hash === '#guitardle=play') openGame();
 
       fillBoard();
-      // The iframe writing localStorage at game end fires `storage` here —
-      // refresh the board after the score POST lands.
+      // The iframe writes guitardle_lastPlayed at game end, firing `storage`
+      // here — refresh the board after the score POST lands. Keyed to that ONE
+      // key: the refresh-proof save now writes localStorage on every move, and
+      // a per-move board refetch would be pure noise.
       addEventListener('storage', function (e) {
-          if (!e.key || e.key.indexOf('guitardle_') !== 0) return;
+          if (e.key !== 'guitardle_lastPlayed') return;
           setTimeout(fillBoard, 2000);
       });
   })();
