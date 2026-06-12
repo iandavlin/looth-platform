@@ -745,6 +745,33 @@ foreach ($main_rows as $row):
             <span class="lg-loothalong__go">Pull up a bench<svg class="lg-loothalong__arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></span>
           </a>
           <?php endif; ?>
+          <?php if ($is_member): ?>
+          <?php /* One-click event-reminder signup (Ian 6/12): logged-in only —
+                   we know the member's email; mu-plugin lg-event-reminders.php
+                   adds them to the FluentCRM Event Reminder list. */ ?>
+          <button type="button" class="lg-bento__remind" id="lg-ev-remind">&#128276; Email me event reminders</button>
+          <script>
+          (function(){var b=document.getElementById('lg-ev-remind');if(!b)return;
+            if(localStorage.getItem('lg-ev-remind')==='1'){b.textContent='\u2713 Event reminders on';b.classList.add('is-on');b.disabled=true;}
+            b.addEventListener('click',function(){b.disabled=true;b.textContent='Signing you up\u2026';
+              fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'same-origin',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=lg_event_reminder_signup'})
+              .then(function(r){return r.json()}).then(function(j){
+                if(j&&j.ok){b.textContent='\u2713 Event reminders on';b.classList.add('is-on');localStorage.setItem('lg-ev-remind','1');}
+                else{b.textContent='Could not sign you up \u2014 tap to retry';b.disabled=false;}
+              }).catch(function(){b.textContent='Could not sign you up \u2014 tap to retry';b.disabled=false;});
+            });})();
+          </script>
+          <?php endif; ?>
+          <?php /* Weekly Digest entry — BOTH audiences (Ian 6/12); /weekly/ is
+                   members-gated server-side, so anon clicking through gets the
+                   sign-in card (a join nudge, not a leak). */ ?>
+          <a class="lg-bento__weekly" href="/weekly/">
+            <span class="lg-bento__weekly-ico" aria-hidden="true">&#128236;</span>
+            <span class="lg-bento__weekly-txt"><b>Weekly Digest</b>
+              <small><?= $is_member ? 'Catch up on everything from this week.' : 'The members&rsquo; weekly round-up.' ?></small></span>
+            <span class="lg-bento__weekly-go">Read &rarr;</span>
+          </a>
           <?php include __DIR__ . "/_render-main-row.php"; ?>
         </div>
       </div>

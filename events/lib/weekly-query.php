@@ -115,3 +115,31 @@ function lg_weekly_resolve(PDO $db, array $ids): array
     }
     return $out;
 }
+
+/** Latest published issue slug ('' if none). */
+function lg_weekly_latest_slug(PDO $db): string
+{
+    $v = $db->query("SELECT post_name FROM wp_posts WHERE post_type='weekly_email'
+                     AND post_status='publish' ORDER BY post_date DESC LIMIT 1")->fetchColumn();
+    return is_string($v) ? $v : '';
+}
+
+/**
+ * The EXACT email HTML the issue was sent as (FluentCRM campaign body, via the
+ * campaign_id in the issue meta). '' when the issue was never sent. The web
+ * page serves this in an isolated iframe so it displays "just like the email"
+ * (Ian 6/12) — with the email-only unsubscribe footer line removed.
+ */
+function lg_weekly_campaign_html(PDO $db, array $issueData): string
+{
+    $cid = (int)($issueData['campaign_id'] ?? 0);
+    if ($cid < 1) return '';
+    $st = $db->prepare("SELECT email_body FROM wp_fc_campaigns WHERE id = :i");
+    $st->execute([':i' => $cid]);
+    $html = (string)($st->fetchColumn() ?: '');
+    if ($html === '') return '';
+    // Email-only chrome: drop anchors that point at unsubscribe/preference
+    // endpoints (meaningless on the web view), keep everything else verbatim.
+    $html = preg_replace('#<a\b[^>]*href="[^"]*unsubscribe[^"]*"[^>]*>.*?</a>#is', '', $html) ?? $html;
+    return $html;
+}

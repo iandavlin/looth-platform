@@ -22,8 +22,10 @@ $h = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES | ENT_SUBS
 
 $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = (string)parse_url($request_uri, PHP_URL_PATH);
-$slug = '';
-if (preg_match('#^/weekly/([a-z0-9\-]+)/?$#', $path, $m)) $slug = $m[1];
+$slug = ''; $showAll = false; $rawMode = false;
+if (preg_match('#^/weekly/all/?$#', $path)) { $showAll = true; }
+elseif (preg_match('#^/weekly/([a-z0-9\-]+)/raw/?$#', $path, $m)) { $slug = $m[1]; $rawMode = true; }
+elseif (preg_match('#^/weekly/([a-z0-9\-]+)/?$#', $path, $m)) { $slug = $m[1]; }
 
 $who    = lg_events_whoami();
 $authed = ($who['authenticated'] ?? false) === true;
@@ -46,14 +48,29 @@ $issue  = null;
 $issues = [];
 $title  = 'Weekly Digest — The Looth Group';
 
+$emailHtml = '';
 if ($authed) {
+    if ($slug === '' && !$showAll) $slug = lg_weekly_latest_slug($db);   // default = CURRENT issue (Ian 6/12)
     if ($slug !== '') {
         $issue = lg_weekly_issue($db, $slug);
         if (!$issue) { http_response_code(404); }
-        else { $title = (string)$issue['post']['post_title'] . ' — The Looth Group'; }
+        else {
+            $title = (string)$issue['post']['post_title'] . ' — The Looth Group';
+            $emailHtml = lg_weekly_campaign_html($db, $issue['data']);
+        }
     } else {
         $issues = lg_weekly_issues($db);
     }
+}
+
+/* /weekly/<slug>/raw — the email document itself, verbatim, for the iframe.
+   Same member gate; anon gets nothing. */
+if ($rawMode) {
+    if (!$authed || !$issue || $emailHtml === '') { http_response_code(404); header('Content-Type: text/plain'); echo 'not found'; exit; }
+    header('Content-Type: text/html; charset=UTF-8');
+    header('Cache-Control: private, max-age=300');
+    echo $emailHtml;
+    exit;
 }
 
 /** "May 25 – Jun 8" range line. */
@@ -96,6 +113,7 @@ $range = static function (string $from, string $to): string {
 .lg-wk__gate a{display:inline-block;background:var(--lg-sage);color:#fff;border-radius:999px;padding:11px 26px;font-weight:700;text-decoration:none}
 .lg-wk__back{display:inline-block;margin:0 0 18px;color:#6b7163;text-decoration:none;font-size:14px}
 .lg-wk__back:hover{color:var(--lg-charcoal)}
+.lg-wk__mail{display:block;width:100%;border:1px solid var(--lg-line);border-radius:14px;background:#fff;height:1200px}
 </style>
 </head>
 <body class="lg-weekly-page">
@@ -111,12 +129,25 @@ $range = static function (string $from, string $to): string {
     </div>
 
 <?php elseif ($slug !== '' && !$issue): ?>
-    <a class="lg-wk__back" href="/weekly/">&larr; All digests</a>
+    <a class="lg-wk__back" href="/weekly/all/">&larr; All digests</a>
     <h1 class="lg-wk__head">Not found</h1>
     <p class="lg-wk__sub">That digest doesn&rsquo;t exist (or isn&rsquo;t published).</p>
 
+<?php elseif ($issue && $emailHtml !== ''): ?>
+    <a class="lg-wk__back" href="/weekly/all/">&larr; All digests</a>
+    <?php /* THE EMAIL, displayed as the email (Ian 6/12): the exact campaign
+             HTML in an isolated iframe so its inline email CSS can't fight the
+             site shell. Height syncs from the document inside. */ ?>
+    <iframe class="lg-wk__mail" id="lg-wk-mail" src="/weekly/<?= $h($slug) ?>/raw" title="<?= $h((string)$issue['post']['post_title']) ?>"></iframe>
+    <script>
+    (function(){var f=document.getElementById('lg-wk-mail');if(!f)return;
+      function fit(){try{var d=f.contentDocument;if(d&&d.body)f.style.height=Math.max(900,d.documentElement.scrollHeight)+'px';}catch(e){}}
+      f.addEventListener('load',function(){fit();setTimeout(fit,400);setTimeout(fit,1500);});
+      window.addEventListener('resize',fit);})();
+    </script>
+
 <?php elseif ($issue): ?>
-    <a class="lg-wk__back" href="/weekly/">&larr; All digests</a>
+    <a class="lg-wk__back" href="/weekly/all/">&larr; All digests</a>
     <h1 class="lg-wk__head"><?= $h((string)$issue['post']['post_title']) ?></h1>
     <p class="lg-wk__sub"><?= $h($range((string)($issue['data']['date_from'] ?? ''), (string)($issue['data']['date_to'] ?? ''))) ?></p>
 
