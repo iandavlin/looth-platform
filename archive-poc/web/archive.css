@@ -3478,9 +3478,19 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transfor
   grid-template-columns: minmax(0, 560px) minmax(280px, 380px);
   gap: 20px;
   justify-content: center;
-  /* Center the short side column against the taller game card — top-aligning
-     left a large empty band under "Your stats" next to the game. */
-  align-items: center;
+  align-items: start;
+}
+/* The big icon art (below) fills the side column's leftover height, so the
+   column top-aligns with the game card and the art soaks up the imbalance. */
+.gdle-side-art {
+  display: block;
+  width: min(310px, 78%);
+  height: auto;
+  margin: 14px auto 0;
+  filter: drop-shadow(0 10px 26px rgba(26, 32, 23, .25));
+}
+@media (max-width: 900px) {
+  .gdle-side-art { display: none; }   /* single-column layout — no void to fill */
 }
 .row--guitardle .gdle-frame { margin: 0; }      /* grid places it now */
 .gdle-side { display: flex; flex-direction: column; gap: 16px; }

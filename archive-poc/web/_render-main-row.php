@@ -456,6 +456,10 @@
               <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="best">0</span><span class="gdle-stat__l">Best</span></div>
             </div>
           </section>
+          <?php /* Big Guitardle app-icon art fills the otherwise-empty space
+                   under the side cards (Buck 6/12); transparent corners, so it
+                   sits on light and dark page backgrounds alike. */ ?>
+          <img class="gdle-side-art" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="" aria-hidden="true" loading="lazy" width="512" height="512">
         </aside>
       </div>
       <script>
