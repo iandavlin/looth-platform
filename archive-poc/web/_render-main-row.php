@@ -482,9 +482,10 @@
                           var rank = document.createElement('span');
                           rank.className = 'gdle-side-row__rank';
                           rank.textContent = i === 0 ? '👑' : (i + 1);
-                          var name = document.createElement('span');
+                          var name = document.createElement(l.profile_url ? 'a' : 'span');
                           name.className = 'gdle-side-row__name';
                           name.textContent = l.name;
+                          if (l.profile_url) name.href = l.profile_url;
                           var pts = document.createElement('span');
                           pts.className = 'gdle-side-row__pts';
                           pts.textContent = l.points + ' pts · ' + l.wins + 'W';

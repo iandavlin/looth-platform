@@ -1139,3 +1139,10 @@ body.is-embed {
     margin: 6px 16px 2px;
 }
 .game-main.game-over .cap-notice { display: none !important; }
+
+/* Leaderboard names as profile links */
+a.board-name { color: inherit; text-decoration: none; }
+a.board-name:hover { text-decoration: underline; }
+
+/* Crown chip removed (6/12): keep the icons pinned right as the only child */
+.menu-icons-right { margin-left: auto; }

@@ -781,7 +781,6 @@ function attachKeyboardListeners() {
 // so it doesn't need its own navigation. Its slot shows the weekly #1 (crown).
 function initMenuBar() {
     document.getElementById('btn-board').addEventListener('click', openBoard);
-    document.getElementById('board-crown').addEventListener('click', openBoard);
 
     // Stats
     document.getElementById('btn-stats').addEventListener('click', () => {
@@ -798,8 +797,8 @@ function initMenuBar() {
 //  WEEKLY LEADERBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 // Data from /archive-api/v0/guitardle-board: this week's members ranked by
-// points (each win = 11 − moves pts, min 1; losses 0), full list, no cap.
-// The #1 leader also shows as a crown chip on the card without the modal.
+// points (each win = 11 − moves pts, min 1, hardcore 2×; losses 0), full
+// list, no cap. The front page's side panel shows the same board.
 let boardData = null;
 
 async function initBoard() {
@@ -807,13 +806,7 @@ async function initBoard() {
         const res = await fetch(BOARD_API, { credentials: 'same-origin' });
         if (!res.ok) return;
         boardData = await res.json();
-    } catch (e) { return; /* board is decoration — never block the game */ }
-
-    const top = boardData && boardData.leaders && boardData.leaders[0];
-    if (top) {
-        document.getElementById('board-crown-name').textContent = top.name;
-        document.getElementById('board-crown').style.display = '';
-    }
+    } catch (e) { /* board is decoration — never block the game */ }
 }
 
 function openBoard() {
@@ -829,9 +822,16 @@ function openBoard() {
         const rank = document.createElement('span');
         rank.className = 'board-rank';
         rank.textContent = i === 0 ? '👑' : String(i + 1);
-        const name = document.createElement('span');
+        // Name links to the member's profile when we have one. target=_top:
+        // this page is usually iframed by the front page — navigate the
+        // whole tab, not the game frame.
+        const name = document.createElement(l.profile_url ? 'a' : 'span');
         name.className = 'board-name';
         name.textContent = l.name;
+        if (l.profile_url) {
+            name.href = l.profile_url;
+            name.target = '_top';
+        }
         const meta = document.createElement('span');
         meta.className = 'board-meta';
         meta.textContent = `${l.points} pt${l.points === 1 ? '' : 's'} · ${l.wins} win${l.wins === 1 ? '' : 's'}`;
