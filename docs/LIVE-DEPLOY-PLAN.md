@@ -228,6 +228,14 @@ machine), [GATE] = stop unless green.
 18. [IAN] smokes: walk-onboarding, sponsor 5-slug round-trip, finder anon (named opt-ins + dots), front-page tile density, hub search anon-mask, whoami ~5ms, one report email arrives via real SMTP.
 19. [BOTH] watch FPM/nginx logs ~1h; morning-after matrix re-run.
 
+**Phase E addition (Ian 6/12: "tune the old system down"):** after ~1 week
+of soak, RIGHT-SIZE the WP FPM pool (page traffic moves to the new pools;
+WP keeps auth/webhooks/admin/forum-engine duty) + prune old-UI-only WP cron.
+DO-NOT-DISABLE list — load-bearing for the NEW stack: WP core + login,
+membership/Patreon plugins (LGPO + webhooks), BuddyBoss forum machinery
+(the Hub posts into it), events bridge mu-plugins, the profile-sync hooks.
+The old UI's cost already ≈0 post-redirects (nginx answers before PHP).
+
 **Rollback at ANY point ≥ Phase C:** un-include snippets, reload nginx —
 old site is back and CURRENT (one DB, zero divergence). Nothing destructive
 touched WP.
