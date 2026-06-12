@@ -419,7 +419,8 @@
 <?php video_promo_end: ?>
 
 <?php elseif ($layout === 'guitardle'): ?>
-    <section class="row row--guitardle" data-row-id="<?= h($row_id) ?>">
+    <?php /* id anchor lets the Hub teaser (and shares) deep-link /archive-poc/#guitardle */ ?>
+    <section class="row row--guitardle" id="guitardle" data-row-id="<?= h($row_id) ?>">
       <header class="row__head">
         <h2 class="row__title"><?= h($row['title'] ?: 'Guitardle') ?></h2>
         <span class="row__subtitle">the daily guitar phrase game</span>

@@ -3465,7 +3465,7 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transfor
   width: 100%;
   max-width: 560px;
   margin: 0 auto;
-  height: 780px;            /* pre-message fallback; JS overwrites */
+  height: 640px;            /* pre-message fallback; JS overwrites (card is content-sized in embed) */
   border: 0;
   border-radius: 18px;
   background: #EAF0DD;      /* game's own light green, no white flash */
@@ -3478,7 +3478,9 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transfor
   grid-template-columns: minmax(0, 560px) minmax(280px, 380px);
   gap: 20px;
   justify-content: center;
-  align-items: start;
+  /* Center the short side column against the taller game card — top-aligning
+     left a large empty band under "Your stats" next to the game. */
+  align-items: center;
 }
 .row--guitardle .gdle-frame { margin: 0; }      /* grid places it now */
 .gdle-side { display: flex; flex-direction: column; gap: 16px; }
@@ -3514,3 +3516,18 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transfor
 .row--guitardle .row__head { max-width: 960px; margin-left: auto; margin-right: auto; }
 a.gdle-side-row__name { color: inherit; text-decoration: none; }
 a.gdle-side-row__name:hover { color: var(--lg-sage-d); text-decoration: underline; }
+
+/* Dark theme (app-settings sets data-lguser-theme on <html>): the side cards
+   were hardcoded #fff and went blinding-bright in dark mode. The game iframe
+   keeps its own light sage surface — it reads as a card either way. */
+html[data-lguser-theme="dark"] .gdle-card { background: #1d211b; }
+html[data-lguser-theme="dark"] .gdle-card__title { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .gdle-side-row { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .gdle-side-row:nth-child(even) { background: #242a20; }
+html[data-lguser-theme="dark"] .gdle-side-row.is-first { background: #332d1c; }
+html[data-lguser-theme="dark"] .gdle-stat { background: #242a20; }
+html[data-lguser-theme="dark"] .gdle-stat__n { color: #cfdabd; }
+html[data-lguser-theme="dark"] .gdle-card__sub,
+html[data-lguser-theme="dark"] .gdle-stat__l,
+html[data-lguser-theme="dark"] .gdle-side-row__pts,
+html[data-lguser-theme="dark"] .gdle-side-empty { color: #9aab7f; }

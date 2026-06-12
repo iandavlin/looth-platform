@@ -1002,3 +1002,5 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// 2026-06-13 buck: embed-mode card is now content-sized via style.css body.is-embed block (no JS change; this note bumps mtime for the iframe ?v= cache-bust).
