@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260613f">
+    <link rel="stylesheet" href="style.css?v=20260613g">
 </head>
 <body>
     <!-- Leaderboard overlay — weekly leaders, full ranked list -->
@@ -80,16 +80,11 @@
                 <li>Click "Guess the Phrase" at any time — one attempt only</li>
                 <li>Lower score is better</li>
                 <li>One game per day — leave or refresh anytime, your game picks up where you left off</li>
+                <li>&#128293; <strong>Hardcore mode</strong> (the toggle above the game) — reveals are capped by puzzle difficulty (the counter shows your budget), and wins count <strong>2&times; points</strong> on the weekly leaderboard. You can never uncover the whole phrase, so the guess is always a real guess. Locks at your first move.</li>
             </ul>
             <h3 class="overlay-subheading">About the Phrases</h3>
             <p class="overlay-body">Phrases cover a wide range of guitar world topics — models, brands, parts, tonewoods, hardware, finishes, and accessories. You may also find some well-known players (but only those associated with specific instruments), as well as luthier tools and processes. Most are accessible even if you're not a builder.</p>
             <p class="overlay-note">Where British and US spelling differs, we use US spelling.</p>
-            <div class="hardcore-row">
-                <label class="hardcore-label" for="hardcore-toggle">
-                    <input type="checkbox" id="hardcore-toggle">
-                    <span><strong>&#128293; Hardcore mode</strong> &mdash; reveals are capped by puzzle difficulty (the counter shows your budget), and wins count <strong>2&times; points</strong> on the weekly leaderboard. You can never uncover the whole phrase, so the guess is always a real guess. Locks at your first move.</span>
-                </label>
-            </div>
             <button class="btn-overlay-close" type="button" id="btn-overlay-close">Got it</button>
         </div>
     </div>
@@ -101,6 +96,13 @@
              front page's side panel (Ian 6/12). Trophy opens the board. -->
         <nav class="menu-bar" aria-label="Menu">
             <div class="menu-bar-inner">
+                <!-- Hardcore toggle rides in the chrome so the mode is
+                     discoverable (Ian 6/12: it was buried in How-to-Play). -->
+                <label class="hardcore-chip" for="hardcore-toggle"
+                       title="Hardcore: reveals capped by puzzle difficulty; wins count 2&times; points. Locks at your first move.">
+                    <input type="checkbox" id="hardcore-toggle">
+                    <span>&#128293; Hardcore <strong>2&times;</strong></span>
+                </label>
                 <div class="menu-icons-right">
                     <button class="menu-icon-btn" id="btn-board" aria-label="Weekly leaderboard">
                         <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -308,18 +310,11 @@
 
         </main>
 
-        <!-- Embed-mode weekly top 5 (Ian 6/12: the leaderboard lives in the
-             modal). Hidden on the standalone page and until the board API
-             answers; game.js fills it when ?embed=1. Sibling of the game main
-             so a wide host (desktop modal) lays them SIDE BY SIDE; narrow
-             hosts (Hub sheet, phones) stack it below. Height pipe covers both. -->
-        <section class="gdle-eb" id="gdle-eb" hidden aria-label="Weekly leaders">
-            <h3 class="gdle-eb__title">🏆 Weekly Leaders</h3>
-            <ol class="gdle-eb__list" id="gdle-eb-list"></ol>
-            <p class="gdle-eb__empty" id="gdle-eb-empty" hidden>No wins yet this week — be the first!</p>
-        </section>
+        <!-- The in-modal weekly board is GONE (Ian 6/12: the front-page card
+             is the always-visible board; the trophy button's overlay is the
+             on-demand full list). -->
     </div>
 
-    <script src="game.js?v=20260613c"></script>
+    <script src="game.js?v=20260613d"></script>
 </body>
 </html>

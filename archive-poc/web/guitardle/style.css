@@ -1135,30 +1135,30 @@ body.is-embed .refresh-warning {
 .result-emoji-img--flip { transform: rotate(180deg); }
 
 /* ── Hardcore mode (opt-in reveal cap) ──────────────────────── */
-.hardcore-row {
-    margin: 14px 0 18px;
-    padding: 11px 12px;
+/* Hardcore toggle chip — in the menu bar so the mode is discoverable
+   (Ian 6/12: it was buried in the How-to-Play overlay). */
+.hardcore-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
     background: #F9EECB;
     border: 1.5px solid #D9B765;
-    border-radius: 10px;
-}
-.hardcore-label {
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-    font-size: 0.9rem;
-    font-weight: 500;
-    line-height: 1.45;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
     color: #1a1408;        /* explicit near-black — don't let auto-dark half-invert it */
     cursor: pointer;
+    user-select: none;
 }
-.hardcore-label input {
-    margin-top: 3px;
+.hardcore-chip input {
     accent-color: #ECB351;
+    width: 14px;
+    height: 14px;
+    margin: 0;
     flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
 }
+.hardcore-chip:has(input:disabled) { opacity: 0.55; cursor: default; }
 
 /* Out of reveals: dim the letter keys (lifted while typing a guess) */
 .keyboard.capped:not(.guessing) .key { opacity: 0.4; }
@@ -1179,41 +1179,6 @@ a.board-name:hover { text-decoration: underline; }
 .menu-icons-right { margin-left: auto; }
 
 /* ── Embed-mode weekly top 5 (under the game; hosts inherit via height pipe) ── */
-.gdle-eb { margin: 14px auto 0; max-width: 420px; padding: 12px 16px 14px;
-  background: var(--card-bg, #fff); border: 1px solid var(--line, #e3ddd0);
-  border-radius: 14px; text-align: left; }
-body:not(.is-embed) .gdle-eb { display: none; } /* standalone page keeps its own column */
-.gdle-eb__title { margin: 0 0 8px; font: 700 13px/1.2 inherit; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--ink-soft, #6b6f6b); }
-.gdle-eb__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.gdle-eb__row { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
-.gdle-eb__row.is-first { font-weight: 700; }
-.gdle-eb__rank { flex: none; width: 20px; text-align: center; color: var(--ink-soft, #6b6f6b); }
-.gdle-eb__name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; color: inherit; text-decoration: none; }
-a.gdle-eb__name:hover { text-decoration: underline; }
-.gdle-eb__pts { flex: none; font-size: 12.5px; color: var(--ink-soft, #6b6f6b); }
-.gdle-eb__empty { margin: 2px 0 0; font-size: 13px; color: var(--ink-soft, #6b6f6b); }
+/* (.gdle-eb in-modal board removed — Ian 6/12) */
 
-/* Wide embed host (desktop modal): game and weekly board side by side.
-   Narrow hosts (Hub sheet, phones) keep the stacked flow above. Grid, not
-   flex — .game-wrap is column-flex in the base styles and the menu bar is a
-   third child that must keep spanning the top. */
-@media (min-width: 840px) {
-  body.is-embed .game-wrap {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    /* header (GUITARDLE banner) tops the game column; the board rides beside
-       both, spanning their rows */
-    grid-template-areas: "menu menu" "head eb" "main eb";
-    gap: 0 18px;
-    align-items: start;
-    justify-content: center;
-    max-width: 820px;   /* the embed base caps the wrap at 480 — lift it for two columns */
-    margin-left: auto; margin-right: auto;
-  }
-  body.is-embed .game-wrap > .menu-bar  { grid-area: menu; }
-  body.is-embed .game-wrap > .game-header { grid-area: head; }
-  body.is-embed .game-wrap > .game-main { grid-area: main; min-width: 0; }
-  body.is-embed .game-wrap > .gdle-eb   { grid-area: eb; margin: 0; max-width: none; }
-}
+/* (840px side-by-side embed grid removed with the in-modal board — Ian 6/12) */
