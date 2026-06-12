@@ -116,14 +116,14 @@ re-derive on live from scratch; that would silently lose rulings.
    UPDATEs.
 5. `/srv/profile-app-media` rsync dev → live (15 MB).
 
-## 3b. WP-side delta — RECOMMENDED: wire to existing, never copy the WP DB
+## 3b. WP-side delta — RULED (Ian 6/12): wire to the EXISTING live WP DB
 
-Ian floated copying dev's WordPress state to live (6/12, undecided —
-AWAITING HIS CALL). Recommendation: **live's WP DATABASE is canonical and
-is never overwritten** — dev's WP is a 6/11 snapshot, and a dump-over would erase
-everything members did on live since (posts, signups, webhook state), ship
-QA residue/dev URLs, and break every wp-id-keyed table (bridge, persons).
-Copy CODE and CONFIG deliberately instead:
+Clarified 6/12 pm: Ian's question was a duplicate copy OF LIVE's WP DB for
+the new apps vs wiring them to the real one ("I trust you" → wired to
+existing). A dupe goes stale the moment a member posts; auth cookies, WP
+hooks, and the apps' few writes (display-name/author-bio mirrors,
+member-sync) must all see the REAL DB — a month on dev proves the wiring.
+Dev's WP DB still never ships anywhere. Code + config carry deliberately:
 
 1. **Plugin code**: lg-layout-v2 via the established zip deploy (build in
    /var/www/dev/.well-known/, curl on live, unzip + chown looth-live +
@@ -164,9 +164,51 @@ Copy CODE and CONFIG deliberately instead:
 - **Phase E — post:** watch FPM/nginx error logs + [admin-edit] audit lines,
   re-run matrix next morning, then schedule the BB-surface retirements.
 
-**Rollback:** un-include the nginx snippets → live reverts to the BB
-surfaces instantly; PG keeps running warm; nothing in WP was destructively
-changed (ACF sponsor group re-enable is one wp-cli command).
+**Rollback (Ian's design goal, 6/12: "leave old site hooked up and ready
+to nginx conf it back"):** that is EXACTLY what one-DB wiring buys. The BB
+surfaces stay hooked up to the same live DB the entire time — un-include
+the nginx snippets, reload, and the old site is instantly back AND current
+(zero divergence; there was only ever one DB). The apps' few WP writes
+(display-name/author-bio mirrors) are BB-compatible. PG keeps running warm
+for a re-flip; ACF sponsor re-enable is one wp-cli command. A dupe DB would
+have broken this exact property — two diverging copies, no clean revert.
+
+## 4b. RUNBOOK v1 (Ian asked for the step list, 6/12 pm)
+
+Owner tags: [IAN] = on live (dev can't SSH there), [DEV] = prepared here and
+handed over (live pulls from a gated URL on dev, or Ian scp's via his
+machine), [GATE] = stop unless green.
+
+**Phase A — prep, zero member impact, any day before the window**
+ 1. [IAN] `php -v` on live — apps need PHP 8.3 + php8.3-{fpm,pgsql,curl,gd,xml,mbstring}; install alongside WP's PHP if it differs.
+ 2. [IAN] `apt install postgresql` (16), `mysql/psql` sanity.
+ 3. [IAN] mint secrets fresh (deploy/profile-app-live-bootstrap.sh covers the profile-app set): jwt pair, lg-internal, archive-poc, profile-app, WP profile_hook_secret.
+ 4. [IAN] GeoLite2 + geoipupdate (examples in profile-app/deploy/).
+ 5. [DEV] deploy bundle built: app code (4 apps + lg-shared), platform/{fpm,nginx,systemd,mu-plugins}, buck overlay JS inventory, lg-layout-v2 zip, wp-option script, conversions bundle.
+ 6. [IAN] unpack code to /srv/*, FPM pools in, systemd units staged (disabled), nginx: `map → $loothdev_is_authorized 1`, rate-limit conf, snippets staged NOT included.
+ 7. [IAN] verify R2: mount present ✓ (df 6/12) — confirm wp-uploads base + thumb-app paths point at it.
+ 8. [BOTH] restore drill: yesterday's dev PG dumps restored on live, PHP CLI smoke (`php -r 'require config.php;'` per app), then leave in place (refreshed at cut).
+ 9. [DEV][GATE] dev green: matrix 66/66, walk-onboarding, dev-hostname grep clean.
+
+**Phase B — cut window (freeze, ~1–2h)**
+10. [IAN] freeze: announce; optional WP maintenance banner (site can stay up — WP itself isn't changing).
+11. [DEV] final `pg_dump` profile_app + looth → hand over; final media rsync bundle.
+12. [IAN] restore both DBs over the drill copies; grants per role plan.
+13. [IAN] WP-side delta: mu-plugins in, lg-layout-v2 zip deploy + bundle regen + epoch bump, wp-option script, conversions import, sponsor ACF disable.
+14. [IAN] BACKFILL RUN (Ian runs, §3 order): reconcile-bridge → xprofile top-off → FULL person resync + profile-visibility backfill → DM fixes then social top-off → avatar backfill (real BB files!) → comments/likes top-off. Count checks after each.
+15. [IAN] enable timers (reconcile + person-vis-refresh).
+
+**Phase C — flip**
+16. [IAN] include nginx snippets + the `/` routing decision, `nginx -t && systemctl reload nginx`.
+
+**Phase D — TEST GATE**
+17. [IAN][GATE] `LG_MATRIX_HOST=https://loothgroup.com php profile-app/bin/visibility-matrix.php` → GREEN or roll back (66 asserts; provisions its own QA fixture).
+18. [IAN] smokes: walk-onboarding, sponsor 5-slug round-trip, finder anon (named opt-ins + dots), front-page tile density, hub search anon-mask, whoami ~5ms, one report email arrives via real SMTP.
+19. [BOTH] watch FPM/nginx logs ~1h; morning-after matrix re-run.
+
+**Rollback at ANY point ≥ Phase C:** un-include snippets, reload nginx —
+old site is back and CURRENT (one DB, zero divergence). Nothing destructive
+touched WP.
 
 ## 5. Standing at-cut items folded in (from the memory ledger)
 
