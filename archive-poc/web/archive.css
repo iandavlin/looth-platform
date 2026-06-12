@@ -2959,9 +2959,14 @@ body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-pr
 body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy h3 {
   font: 400 26px/1.25 var(--lg-font-serif);
 }
-/* Classic Landing hides the bullet checklist (kept in DOM — content call
-   flagged to Buck/Ian; delete this rule to bring the bullets back). */
-body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy ul { display: none; }
+/* Classic Landing hides the PUBLIC hero's bullet checklist (kept in DOM —
+   content call flagged to Buck/Ian; delete to bring it back). The MEMBERS
+   What's-New row keeps its list — its bullets are the site tour (Ian 6/12). */
+body.view-discover [data-row-id="video-promo-public"] .vpromo__copy ul { display: none; }
+body.view-discover [data-row-id="video-promo-members"] .vpromo__copy ul {
+  margin: 0 0 14px 22px; padding: 0; display: grid; gap: 9px;
+  font-size: 15.5px; line-height: 1.5; text-align: left;
+}
 body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__copy > :last-child { margin-top: 0; padding-top: 4px; }
 body.view-discover :is([data-row-id="video-promo-public"],[data-row-id="video-promo-members"]) .vpromo__video {
   max-width: 720px;
