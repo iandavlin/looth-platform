@@ -136,3 +136,27 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 .dir-light--go .dir-light__dot    { background: #3fa34d; box-shadow: 0 0 0 3px rgba(63,163,77,.18); }
 .dir-light--stop .dir-light__dot  { background: #c0492f; box-shadow: 0 0 0 3px rgba(192,73,47,.16); }
 .dir-light--maybe .dir-light__dot { background: var(--lg-amber); box-shadow: 0 0 0 3px rgba(224,168,60,.2); }
+
+/* ── Anonymous (logged-out) map view — Strava pattern (Ian 6/12) ──────────
+   The map is the page: real aggregated density, no identities. Filters,
+   member list and sort are members-only chrome — hidden for anon. */
+body.dir--anon .dir-filterbar,
+body.dir--anon .dir-app,
+body.dir--anon #dir-more { display: none; }
+body.dir--anon .dir-map { height: min(72vh, 720px); }
+.dir-join-card {
+  position: relative; z-index: 500;
+  margin: -86px 18px 18px auto; width: min(360px, calc(100% - 36px));
+  background: #fff; border: 1px solid #e3ddd0; border-radius: 14px;
+  padding: 14px 16px; box-shadow: 0 10px 30px rgba(26, 29, 26, .22);
+}
+.dir-join-card__t { margin: 0 0 3px; font: 700 15px/1.25 var(--lg-font-serif, Georgia, serif); color: #1f1d1a; }
+.dir-join-card__s { margin: 0 0 10px; font: 400 13px/1.45 var(--lg-font-sans, system-ui, sans-serif); color: #6b6f6b; }
+.dir-join-card__row { display: flex; align-items: center; gap: 12px; }
+.dir-join-card__join {
+  background: var(--lg-amber, #ecb351); color: #4a3c10; text-decoration: none;
+  font: 700 13px/1 var(--lg-font-sans, system-ui, sans-serif);
+  padding: 10px 16px; border-radius: 999px;
+}
+.dir-join-card__join:hover { background: #f2c476; }
+.dir-join-card__signin { font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); color: #6b7c52; }
