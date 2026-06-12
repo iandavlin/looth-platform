@@ -197,6 +197,19 @@ body { margin: 0; }
   text-decoration: none;
 }
 .lg-chrome__join:hover { background: #fff; box-shadow: 0 0 0 1px var(--lg-amber) inset; }
+/* Quiet outline pill beside Join — the anon door to /connect-your-patreon/
+   (stays visible ≤640, unlike Sign in: it's the only logged-out path there). */
+.lg-chrome__connect {
+  font: 600 13px/1 var(--lg-font-sans);
+  color: var(--lg-sage-d); text-decoration: none;
+  padding: 9px 13px; border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--lg-sage) inset;
+  white-space: nowrap;
+}
+.lg-chrome__connect:hover { background: var(--lg-sage-tint); }
+@media (max-width: 640px) {
+  .lg-chrome__connect { padding: 8px 10px; font-size: 12px; }
+}
 
 /* --- Account cluster (authed) --- */
 .lg-chrome__account-wrap {

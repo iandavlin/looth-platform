@@ -352,8 +352,10 @@ function lg_shared_render_site_header(array $ctx): void
         <a class="lg-chrome__signin" href="/wp-login.php">Sign in</a>
         <?php /* Join goes STRAIGHT to Patreon (Ian 2026-06-12) — joining and
                  connecting are two different things; /connect-your-patreon/ is
-                 the on-site instruction page for patrons linking an account.
+                 the on-site instruction page for patrons linking an account
+                 (visible at ALL widths — it's the only anon door to it).
                  Canonical URL also lives in wp_options lgpo_patreon_link. */ ?>
+        <a class="lg-chrome__connect" href="/connect-your-patreon/">Connect Patreon</a>
         <a class="lg-chrome__join" href="https://www.patreon.com/c/theloothgroup/membership" target="_blank" rel="noopener">Join</a>
 
       <?php endif; ?>
