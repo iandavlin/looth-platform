@@ -144,8 +144,7 @@
         "side": "video-right",
         "video_id": "2IBxue3zPxE",
         "aspect": "16x9",
-        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar looths, for guitar looths.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working looths.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/c/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>",
-        "instagram": "DQcbipnERt1"
+        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar looths, for guitar looths.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working looths.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/c/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
       }
     },
     {
@@ -159,8 +158,7 @@
         "side": "video-right",
         "video_id": "LhcIQ0x31hc",
         "aspect": "16x9",
-        "html": "<p class=\"vp-eyebrow\">What's new</p><h3>Welcome to the new Looth Group</h3><p>We rebuilt the whole site around one idea: everything the group makes &mdash; discussions, videos, articles, plans &mdash; in one place, and fast. The quick tour:</p><ul><li><strong>The Hub</strong> &mdash; every discussion and new piece of content in one feed. Tap <strong>Filters</strong> to narrow by category or type, and the bookmark on any card saves it to your <strong>Saved</strong> list.</li><li><strong>Your profile</strong> &mdash; your shop's page: skills, gallery, credentials, location. Edit it from your avatar menu; use the arrows (or drag) to reorder sections, and the privacy slider decides who sees what.</li><li><strong>The Map &amp; Directory</strong> &mdash; find looths near you. What shows on the map is up to each member's own privacy setting.</li><li><strong>Events &amp; Loothalong</strong> &mdash; workshops and live streams on one calendar; the green banner means we're live now.</li><li><strong>Messages</strong> &mdash; DM any member straight from their profile.</li><li><strong>Make it an app</strong> &mdash; on your phone, open the site and choose <em>Add to Home Screen</em>. Full app feel, no app store.</li></ul><hr class=\"vp-divider\"><p>It's all live and still moving &mdash; your feedback decides what we build next. Something off, broken, or missing? Tell us.</p><p><a class=\"vp-cta\" data-feedback href=\"/hub/?compose=suggestion-box-bug-reporting\">Report a bug or suggestion &rarr;</a><a class=\"vp-cta vp-cta--secondary\" href=\"/hub/?compose\">Start a thread</a></p>",
-        "instagram": "DQcbipnERt1"
+        "html": "<p class=\"vp-eyebrow\">What's new</p><h3>Welcome to the new Looth Group</h3><p>We rebuilt the whole site around one idea: everything the group makes &mdash; discussions, videos, articles, plans &mdash; in one place, and fast. The quick tour:</p><ul><li><strong>The Hub</strong> &mdash; every discussion and new piece of content in one feed. Tap <strong>Filters</strong> to narrow by category or type, and the bookmark on any card saves it to your <strong>Saved</strong> list.</li><li><strong>Your profile</strong> &mdash; your shop's page: skills, gallery, credentials, location. Edit it from your avatar menu; use the arrows (or drag) to reorder sections, and the privacy slider decides who sees what.</li><li><strong>The Map &amp; Directory</strong> &mdash; find looths near you. What shows on the map is up to each member's own privacy setting.</li><li><strong>Events &amp; Loothalong</strong> &mdash; workshops and live streams on one calendar; the green banner means we're live now.</li><li><strong>Messages</strong> &mdash; DM any member straight from their profile.</li><li><strong>Make it an app</strong> &mdash; on your phone, open the site and choose <em>Add to Home Screen</em>. Full app feel, no app store.</li></ul><hr class=\"vp-divider\"><p>It's all live and still moving &mdash; your feedback decides what we build next. Something off, broken, or missing? Tell us.</p><p><a class=\"vp-cta\" data-feedback href=\"/hub/?compose=suggestion-box-bug-reporting\">Report a bug or suggestion &rarr;</a><a class=\"vp-cta vp-cta--secondary\" href=\"/hub/?compose\">Start a thread</a></p>"
       }
     },
     {
@@ -329,7 +327,7 @@
     "name": "Chip Tait",
     "role": "Brooklyn Fretworks",
     "where": "Baltimore, Maryland",
-    "bio": "This week's featured work comes straight from Chip's bench at Brooklyn Fretworks — the Instagram post above.",
+    "bio": "This week's featured member: fretted-instrument work from Chip's bench at Brooklyn Fretworks.",
     "avatar": "/profile-media/avatars/6afc4e4b-870a-55b1-8345-358d69680cce/1.jpg?v=1",
     "cta_label": "Visit Chip's profile",
     "cta_href": "/u/patreon_95515498"
