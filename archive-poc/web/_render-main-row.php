@@ -1,3 +1,28 @@
+<?php
+if (!function_exists('fp_img')) {
+    /**
+     * Front-page image delivery (craft gate, Ian 6/12 "fix front page"):
+     * uploads-hosted images route through the /img.php resizer at the slot
+     * width; external URLs (ytimg etc.) pass through. fp_img_srcset() adds
+     * the 1x/2x pair so phones and 1x screens stop downloading full-size
+     * originals (a 1920px sponsor JPG was shipping into a 480px card).
+     */
+    function fp_img(?string $url, int $w): string
+    {
+        if (!$url) return '';
+        if (preg_match('#/wp-content/uploads/(.+)$#', $url, $m)) {
+            return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
+        }
+        return $url;
+    }
+    function fp_img_srcset(?string $url, int $w, string $sizes): string
+    {
+        if (!$url || !preg_match('#/wp-content/uploads/#', $url)) return '';
+        return ' srcset="' . h(fp_img($url, $w)) . ' ' . $w . 'w, '
+                           . h(fp_img($url, $w * 2)) . ' ' . ($w * 2) . 'w" sizes="' . h($sizes) . '"';
+    }
+}
+?>
 <?php if ($layout === 'activity'):
         // Pre-pass: classify each item and group consecutive text-only items into stacks of 2.
         $items = $row['items'];
@@ -77,7 +102,7 @@
           <?php if ($meta['is_sticky']): ?><span class="acard__pin">📌 Pinned</span><?php endif; ?>
           <?php if ($meta['has_image']): ?>
             <div class="acard__img-wrap">
-              <img class="acard__img" src="<?= h($img_url) ?>" alt="" loading="lazy" width="560" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+              <img class="acard__img" src="<?= h(fp_img($img_url, 560)) ?>"<?= fp_img_srcset($img_url, 480, '(max-width: 640px) 100vw, 480px') /* buckets 480/960 */ ?> alt="" loading="lazy" width="560" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
               <?php if ($meta['yt_id'] && !$is_gated): ?><button type="button" class="acard__play" data-yt-play="<?= h($meta['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button><?php endif; ?>
               <?php if ($is_gated): ?>
                 <span class="acard__gate" aria-label="<?= h(ucfirst($tier)) ?> member content" title="<?= h(ucfirst($tier)) ?> members only">
@@ -204,7 +229,7 @@
         </form>
       </div>
       <a class="billboard billboard--<?= h($kind) ?>" href="<?= h($it['url'] ?: '#') ?>">
-        <img class="billboard__img" src="<?= h(thumb_url($it)) ?>" alt="" width="1280" height="640" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+        <img class="billboard__img" src="<?= h(fp_img(thumb_url($it), 1280)) ?>"<?= fp_img_srcset(thumb_url($it), 800, '(max-width: 640px) 100vw, 960px') ?> alt="" width="1280" height="640" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
         <div class="billboard__scrim"></div>
         <div class="billboard__body">
           <span class="billboard__eyebrow">

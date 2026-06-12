@@ -241,6 +241,25 @@ check('S1 file resume anon 404',    req('anon',   '/profile-media/resumes/' . $U
 check('S1 file resume member 200',  req('member', '/profile-media/resumes/' . $UUID . '/qa.pdf')[0] === 200);
 
 check('S1 me/location anon 401',  req('anon',  '/profile-api/v0/me/location')[0] === 401);
+
+// Stale-token self-heal (Danny West bug, 6/12): WP session + INVALID looth_id
+// must bounce to re-mint, not render the member as a stranger forever.
+$wpck = trim((string)shell_exec('sudo -u www-data wp --path=/var/www/dev eval ' . escapeshellarg(
+    '$e=time()+600; echo LOGGED_IN_COOKIE."=".urlencode(wp_generate_auth_cookie(' . SUBJ_WP . ',$e,"logged_in"));')));
+if ($wpck !== '' && strpos($wpck, '=') !== false) {
+    [$wn, $wv] = explode('=', $wpck, 2);
+    $ch = curl_init(HOST . '/u/' . SLUG);
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 20,
+        CURLOPT_COOKIE => 'loothdev_auth=' . $GATE . '; ' . $wn . '=' . rawurldecode($wv) . '; looth_id=STALE.GARBAGE.TOKEN']);
+    curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $loc  = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+    curl_close($ch);
+    check('S1 stale looth_id + WP session bounces to re-mint',
+          $code === 302 && strpos($loc, '/wp-json/looth/auth/issue') !== false, "code=$code loc=$loc");
+} else {
+    check('S1 stale-token bounce (wp cookie mint failed)', false, 'could not mint wp cookie');
+}
 check('S1 me/location owner 200', req('owner', '/profile-api/v0/me/location')[0] === 200);
 
 // Admin front-end edit (act-as surface, Ian 6/12): admins only, profile-content

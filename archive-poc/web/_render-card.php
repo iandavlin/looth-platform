@@ -30,7 +30,10 @@ function archive_poc_render_rcard(array $it, string $viewer_tier): string {
     }
   ?>
   <div class="rcard__img-wrap">
-    <img class="rcard__img" src="<?= h($thumb_src) ?>" alt="" loading="lazy" width="480" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
+    <?php /* uploads thumbs via the resizer + 1x/2x pair (craft gate 6/12);
+             fp_img helpers live in _render-main-row.php, included before any
+             card renders on every front-page path. */ ?>
+    <img class="rcard__img" src="<?= h(function_exists('fp_img') ? fp_img($thumb_src, 480) : $thumb_src) ?>"<?= function_exists('fp_img_srcset') ? fp_img_srcset($thumb_src, 240, '(max-width: 640px) 45vw, 240px') : '' ?> alt="" loading="lazy" width="480" height="320" onerror="this.onerror=null;this.src='<?= h(LG_FALLBACK_IMG) ?>'">
     <?php if (!empty($it['yt_id']) && !$is_gated): ?>
       <button type="button" class="rcard__play" data-yt-play="<?= h($it['yt_id']) ?>" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
     <?php endif; ?>
