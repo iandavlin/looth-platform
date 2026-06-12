@@ -7,6 +7,7 @@ use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Profile;
 use Looth\ProfileApp\Block;
+use Looth\ProfileApp\Visibility;
 
 /** Great-circle miles — distance is computed from the DISPLAYED (precision-coarsened) point so it never leaks precision. */
 function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
@@ -20,28 +21,15 @@ function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
 
 /**
  * Coarsen a member row to the point/text the viewer is allowed to see.
- * Single source of truth shared by the paginated list and the map-pin feed,
- * so a pin can never expose more precision than the card does. Returns the
- * display array (lat/lng/text/zoom/kind) or null when private for this audience.
+ * Shared by the paginated list and the map-pin feed, so a pin can never expose
+ * more precision than the card does. The DECISION (master switch, layout flag,
+ * audience dials, admin rule, public-never-out-resolves-members) lives in
+ * Visibility::locationPrecision — only the coarsening math stays here. Returns
+ * the display array (lat/lng/text/zoom/kind) or null when private for this viewer.
  */
-function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $audience): ?array
+function dir_member_display(array $r, array $vArr): ?array
 {
-    // If the owner removed the Location block from their profile (it's in the caddy, not on the
-    // layout), they've opted off the map entirely — private for everyone, admin included.
-    if (empty($r['loc_on_profile'])) return null;
-    $subjectId = (int)$r['id'];
-    if ($subjectId === $viewerUserId) {
-        $precision = 'street';                                          // owner sees self exactly
-    } elseif ($isAdmin) {
-        // Admin oversight: exact pin for every member, UNLESS they made it private to members.
-        $mp = Block::precisionFromInput($r['location_members_precision']) ?? 'city';
-        $precision = $mp === 'private' ? 'private' : 'street';
-    } else {
-        $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
-        // Defaults diverge by audience (Ian 6/12): members-city, public-PRIVATE —
-        // the public finder is explicit opt-in; never-touched rows stay members-only.
-        $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
-    }
+    $precision = Visibility::locationPrecision($vArr, $r);
     $place = [
         'address'  => $r['location_address'],
         'postcode' => $r['location_postcode'],
@@ -57,18 +45,16 @@ function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $
 
 /**
  * The drop-off points a viewer may see for a member, as map-pin kids [{lat,lng,name}].
- * Honors the drop-off block's own visibility (owner-self/admin always; else
- * public->public-only, members->members+public). NOT coarsened — these are storefront
- * /partner addresses the owner deliberately published. Empty array when none visible.
+ * Honors the drop-off block's own visibility via the one truth table. NOT
+ * coarsened — these are storefront/partner addresses the owner deliberately
+ * published. Empty array when none visible.
  */
-function dir_visible_dropoffs(?array $do, array $r, int $viewerUserId, bool $isAdmin, string $audience): array
+function dir_visible_dropoffs(?array $do, array $r, array $vArr): array
 {
     if (!$do) return [];
-    $dvis   = in_array($do['vis'], ['public', 'members', 'private'], true) ? $do['vis'] : 'members';
-    $canSee = ((int)$r['id'] === $viewerUserId) || $isAdmin
-              || $dvis === 'public'
-              || ($dvis === 'members' && $audience === 'members');
-    if (!$canSee) return [];
+    if (!Visibility::profileVisible($vArr, $r)) return [];
+    $dvis = in_array($do['vis'], ['public', 'members', 'private'], true) ? $do['vis'] : 'members';
+    if (!Visibility::audienceCanSee(Visibility::audience($vArr, (int)$r['id']), $dvis)) return [];
     $dd = json_decode($do['data'], true) ?: [];
     $kids = [];
     foreach (($dd['items'] ?? []) as $it) {
@@ -91,8 +77,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'met
 // key) and no connection state; file-level auth on gated media remains the
 // profile-app follow-up.
 $viewer       = Auth::currentUser();   // null = anonymous (public audience)
-$viewerUserId = $viewer !== null ? (int)$viewer['id'] : 0;
-$role         = $viewer !== null ? 'member' : 'public';
+$vArr         = Visibility::viewer();  // the one viewer struct (id / uuid / admin)
+$viewerUserId = $vArr['id'];
+$isAdmin      = $vArr['admin'];        // admins see every member at full precision unless dialed members-private
+$audience     = $viewerUserId !== 0 ? 'members' : 'public';
 
 $lat    = isset($_GET['lat']) ? (float)$_GET['lat'] : null;
 $lng    = isset($_GET['lng']) ? (float)$_GET['lng'] : null;
@@ -111,8 +99,11 @@ $pg = Db::pg();
 $wheres = [
     'EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)',
     'u.archived_at IS NULL',
+    // MASTER SWITCH (Visibility model): a private profile is owner-only —
+    // no card, no pin, no teaser dot, for members too; admins excepted.
+    "(u.profile_visibility = 'public' OR u.id = :vuid OR :vadmin = 1)",
 ];
-$params = [];
+$params = [':vuid' => $viewerUserId, ':vadmin' => $isAdmin ? 1 : 0];
 
 if ($insts) {
     // Match the full list (profile_instruments) OR the featured highlights (profile_highlights),
@@ -162,26 +153,60 @@ $selectDistance = '';
 $orderBy = $sort === 'joined_desc' ? 'u.created_at DESC, u.id DESC' : 'u.created_at ASC, u.id ASC';
 if ($lat !== null && $lng !== null) {
     // earthdistance: point(lng, lat) <@> point(lng, lat) returns miles.
-    // Geo-filter implicitly hides users we can't see location for (their
-    // lat/lng never enter the query); that's correct — they're invisible
-    // on the map but still surface in the un-filtered list.
-    $selectDistance = ', (point(u.lng, u.lat) <@> point(:lng, :lat)) AS distance_mi';
-    // Privacy: a user only appears on the map when their precision for THIS audience isn't 'private'
-    // (both audiences now default to city; individuals can dial down to state/private).
-    // Anon keeps non-public members in the radius — they render as anonymized
-    // 'join to see' teasers (Ian 6/12); members-audience still drops
-    // members-precision-private pins here.
-    $wheres[] = '(u.lat IS NOT NULL AND u.lng IS NOT NULL AND (point(u.lng, u.lat) <@> point(:lng, :lat)) <= :radius
-                  AND (u.profile_layout IS NULL OR u.profile_layout @> \'["location"]\'::jsonb)
-                  AND (:authed = 0 OR COALESCE(u.location_members_precision, \'city\') <> \'private\'))';
+    //
+    // TRILATERATION GUARD (Ian 6/12 "as secure as possible"): the radius test
+    // and the ranked distance run on the COARSENED point — the same precision
+    // the viewer's pin/card displays — never on true coordinates. Probing
+    // radii from shifted centers can therefore never resolve a member beyond
+    // what they chose to show this audience. Admins keep true coordinates.
+    if ($isAdmin) {
+        $pt = 'point(u.lng, u.lat)';
+    } elseif ($audience === 'public') {
+        // Opt-ins at their public dial; non-opt-ins ('private') only ever
+        // reach the PIN feed as anonymous dots — test those at the dot's own
+        // ~11km rounding.
+        $pt = "point(
+            CASE COALESCE(u.location_public_precision, 'private')
+                 WHEN 'street'  THEN u.lng
+                 WHEN 'state'   THEN round(u.lng::numeric, 0)::float8
+                 WHEN 'private' THEN round(u.lng::numeric, 1)::float8
+                 ELSE                round(u.lng::numeric, 2)::float8 END,
+            CASE COALESCE(u.location_public_precision, 'private')
+                 WHEN 'street'  THEN u.lat
+                 WHEN 'state'   THEN round(u.lat::numeric, 0)::float8
+                 WHEN 'private' THEN round(u.lat::numeric, 1)::float8
+                 ELSE                round(u.lat::numeric, 2)::float8 END)";
+    } else {
+        $pt = "point(
+            CASE COALESCE(u.location_members_precision, 'city')
+                 WHEN 'street' THEN u.lng
+                 WHEN 'state'  THEN round(u.lng::numeric, 0)::float8
+                 ELSE               round(u.lng::numeric, 2)::float8 END,
+            CASE COALESCE(u.location_members_precision, 'city')
+                 WHEN 'street' THEN u.lat
+                 WHEN 'state'  THEN round(u.lat::numeric, 0)::float8
+                 ELSE               round(u.lat::numeric, 2)::float8 END)";
+    }
+    $selectDistance = ", ($pt <@> point(:lng, :lat)) AS distance_mi";
+    // A members-precision-'private' location is off the map for EVERYONE but
+    // the owner — members, anon dots, and admins alike (ruling 4's standing
+    // exception). The layout flag (Location block removed) is the same.
+    $wheres[] = "(u.lat IS NOT NULL AND u.lng IS NOT NULL AND ($pt <@> point(:lng, :lat)) <= :radius
+                  AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
+                  AND (u.id = :vuid OR COALESCE(u.location_members_precision, 'city') <> 'private'))";
     $orderBy  = 'distance_mi ASC';
     $params[':lat'] = $lat; $params[':lng'] = $lng; $params[':radius'] = $radius;
-    $params[':authed'] = $viewerUserId !== 0 ? 1 : 0;
 }
 
-// Viewer audience/oversight — computed once; shared by the pin feed and the list.
-$audience = $viewerUserId !== 0 ? 'members' : 'public';
-$isAdmin  = Auth::isAdmin();   // admins see every member at full precision unless they set it private
+// The STACK (paginated cards) shows only members visible to this audience:
+// for anon that means public-finder opt-ins ("Public sees" dial ≠ private) —
+// non-opt-ins appear ONLY as anonymous dots in the pin feed (Ian 6/12 pm:
+// "show dots for anon, keep finder stack vis only"). The pin feed keeps the
+// shared $wheres (no opt-in cut) so the dots still plot.
+$listWheres = $wheres;
+if ($audience === 'public' && !$isAdmin) {
+    $listWheres[] = "COALESCE(u.location_public_precision, 'private') <> 'private'";
+}
 
 // Map-pin feed: coarsened coords for the ENTIRE filtered set (not just the current
 // page), so all matching members plot. Slim payload — no highlights, no pagination.
@@ -195,7 +220,7 @@ if (!empty($_GET['pins'])) {
     foreach ($pg->query("SELECT user_id, visibility, data FROM profile_sections WHERE key = 'dropoffs'")->fetchAll() as $dr) {
         $dropoffsByUser[(int)$dr['user_id']] = ['vis' => (string)$dr['visibility'], 'data' => (string)$dr['data']];
     }
-    $pinSql = "SELECT u.id, u.display_name, u.slug,
+    $pinSql = "SELECT u.id, u.display_name, u.slug, u.profile_visibility,
                       u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                       u.lat, u.lng, u.location_members_precision, u.location_public_precision,
                       (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
@@ -207,11 +232,11 @@ if (!empty($_GET['pins'])) {
     $pins = [];
     while ($pr = $pStmt->fetch()) {
         // Drop-off points this viewer may see (honors the drop-off block's visibility).
-        $kids = dir_visible_dropoffs($dropoffsByUser[(int)$pr['id']] ?? null, $pr, $viewerUserId, $isAdmin, $audience);
+        $kids = dir_visible_dropoffs($dropoffsByUser[(int)$pr['id']] ?? null, $pr, $vArr);
 
         // Home pin at this viewer's precision; null when the Location block is off the
         // profile (opted off the map) or private for this audience.
-        $disp = dir_member_display($pr, $viewerUserId, $isAdmin, $audience);
+        $disp = dir_member_display($pr, $vArr);
         if ($disp && $disp['lat'] !== null && $disp['lng'] !== null) {
             // Visible to this viewer — full card. Drop-offs fan out as children.
             $pin = [
@@ -248,44 +273,42 @@ if (!empty($_GET['pins'])) {
         }
 
         // Truly hidden for this viewer. A member who removed the Location block AND has no
-        // visible drop-offs stays off the map entirely. Otherwise: logged-out viewers get an
-        // anonymized CITY pin (density without identity) + a "sign in" nudge; the message
-        // reflects whether the member is members-only or fully private. Logged-in members
-        // keep the member-precision behavior (no gated pins).
+        // visible drop-offs stays off the map entirely. Logged-out viewers get an anonymous
+        // coarse DOT (~11km rounding — density without identity) for members-only members.
+        // Public never sees more than members: a members-precision-'private' location gets
+        // no dot either, and the message never discloses WHICH setting the member chose.
         if (empty($pr['loc_on_profile'])) continue;
-        if ($audience !== 'public') continue;
+        if ($audience !== 'public' || $isAdmin) continue;
+        if ((Block::precisionFromInput($pr['location_members_precision']) ?? 'city') === 'private') continue;
         $gLat = Block::coarsen($pr['lat'] !== null ? (float)$pr['lat'] : null, 1);
         $gLng = Block::coarsen($pr['lng'] !== null ? (float)$pr['lng'] : null, 1);
         if ($gLat === null || $gLng === null) continue;
-        $membersPrivate = (Block::precisionFromInput($pr['location_members_precision']) ?? 'city') === 'private';
         $pins[] = [
             'lat'     => (float)$gLat,
             'lng'     => (float)$gLng,
             'gated'   => true,
-            'message' => $membersPrivate
-                ? 'This member has their profile set to private.'
-                : 'This member is only showing their profile to members.',
+            'message' => 'This member is only visible to signed-in members.',
         ];
     }
     profile_app_json(200, ['pins' => $pins, 'total' => count($pins)]);
 }
 
-$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url, u.header_lights,
+$sql = "SELECT u.id, u.uuid, u.display_name, u.avatar_url, u.banner_url, u.header_lights, u.profile_visibility,
                u.location_text, u.location_address, u.location_city, u.location_region, u.location_country, u.location_postcode,
                u.lat, u.lng, u.location_members_precision, u.location_public_precision, u.slug,
                (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb) AS loc_on_profile
                $selectDistance
         FROM users u
-        WHERE " . implode(' AND ', $wheres) . "
+        WHERE " . implode(' AND ', $listWheres) . "
         ORDER BY $orderBy
         LIMIT $pageSize OFFSET $offset";
 $stmt = $pg->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
-// Total count (no distance — separate query). Reuses $wheres / $params so
-// it matches the filtered result set.
-$countSql = "SELECT COUNT(*) FROM users u WHERE " . implode(' AND ', $wheres);
+// Total count (no distance — separate query). Reuses $listWheres / $params so
+// it matches the visible stack, never the dot population.
+$countSql = "SELECT COUNT(*) FROM users u WHERE " . implode(' AND ', $listWheres);
 $cStmt = $pg->prepare($countSql);
 $cStmt->execute($params);
 $total = (int)$cStmt->fetchColumn();
@@ -323,12 +346,12 @@ if ($rows) {
         $svis = (isset($socVis[$suid]) && in_array($socVis[$suid], ['public', 'members', 'private'], true)) ? $socVis[$suid] : 'members';
         // Contact links require LOGIN — never to anonymous viewers, even when the
         // socials block is 'public' (Ian 2026-06-11: "must be scrape proof"). Anon
-        // gets zero links so emails/handles can't be bulk-harvested off the 667-row
-        // directory once the go-live gate comes off. Owner/admin always; logged-in
-        // members see public + members-visibility links.
-        $canSee = ($suid === $viewerUserId) || $isAdmin
-            || ($audience === 'members' && in_array($svis, ['public', 'members'], true));
-        if (!$canSee) continue;
+        // gets zero links so emails/handles can't be bulk-harvested off the bulk
+        // directory. Deliberately STRICTER than the per-profile rule (anon drops
+        // even 'public' links here); within that, the module's truth table decides.
+        $aud = Visibility::audience($vArr, $suid);
+        if ($aud === 'public') continue;
+        if (!Visibility::audienceCanSee($aud, $svis)) continue;
         // Contact PII (email/phone) NEVER ships in the BULK directory, even to
         // members (Ian 2026-06-11: "scrape proof"): one logged-in account would
         // otherwise harvest every member's email in ~4 paged calls. These live on
@@ -343,8 +366,9 @@ if ($rows) {
 
     foreach ($rows as $r) {
         $subjectId = (int)$r['id'];
-        // Per-audience precision (owner→street, admin→street unless private, else coarsened/hidden).
-        $disp = dir_member_display($r, $viewerUserId, $isAdmin, $audience);
+        // Per-audience precision via the Visibility module (owner→street,
+        // admin→street unless members-private, else dial-coarsened/hidden).
+        $disp = dir_member_display($r, $vArr);
         $loc  = $disp
             ? ['text' => $disp['text'], 'lat' => $disp['lat'], 'lng' => $disp['lng'], 'zoom' => $disp['zoom'], 'kind' => $disp['kind']]
             : ['hidden' => true];
@@ -355,17 +379,8 @@ if ($rows) {
             $dist = round(dir_haversine_mi((float)$lat, (float)$lng, (float)$disp['lat'], (float)$disp['lng']), 1);
         }
 
-        // PUBLIC audience: a member who hasn't opted into the public finder
-        // (public precision unset/private) is an anonymized 'join to see' card —
-        // same UI, zero identity (Ian 6/12). Their pin teaser ships separately.
-        $publicOptIn = (Block::precisionFromInput($r['location_public_precision'] ?? null) ?? 'private') !== 'private';
-        if ($audience === 'public' && !$isAdmin && !$publicOptIn) {
-            $results[] = [
-                'gated'       => true,
-                'distance_mi' => $dist,
-            ];
-            continue;
-        }
+        // (Per-member anonymous teaser CARDS removed, Ian 6/12 pm: anon non-opt-ins
+        // appear only as coarse dots in the pin feed — the stack is visible profiles only.)
 
         $results[] = [
             'uuid'         => $r['uuid'],

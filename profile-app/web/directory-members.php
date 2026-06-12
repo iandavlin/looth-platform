@@ -291,22 +291,8 @@ function dirAviFallback(img) {
 function renderResults(items, append) {
   const wrap = document.getElementById('dir-results');
   const html = items.map(it => {
-    // Anonymized teaser card (anon viewers, non-public members — Ian 6/12):
-    // same card chrome, zero identity, the join CTA where the name would be.
-    if (it.gated) {
-      const d = (typeof it.distance_mi === 'number')
-        ? `<span class="dir-card__dist">${it.distance_mi < 1 ? '<1' : Math.round(it.distance_mi)} mi</span>` : '';
-      return `<div class="dir-card dir-card--gated">
-        <div class="dir-card__row">
-          <div class="avi-sm avi-sm--lock" aria-hidden="true">🔒</div>
-          <div class="dir-card__main">
-            <span class="dir-card__name">Looth member</span>
-            <span class="dir-card__loc">Join to see this luthier</span>
-          </div>${d}
-        </div>
-        <a class="dir-card__joincta" href="https://www.patreon.com/c/theloothgroup/membership" target="_blank" rel="noopener">Join on Patreon &rarr;</a>
-      </div>`;
-    }
+    // (Per-member teaser cards removed, Ian 6/12 pm: the anon stack is visible
+    // profiles only; members-only members appear as anonymous dots on the map.)
     const dn = decodeEnt(it.display_name) || 'Member';
     const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
     const avi = it.avatar_url

@@ -38,6 +38,8 @@ $rows = $pg->query("
        AND EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)
        AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
        AND COALESCE(u.location_public_precision, 'private') <> 'private'   -- NULL = never consented = members-only (Ian 6/12)
+       AND u.profile_visibility = 'public'                                 -- master switch: private = owner-only everywhere
+       AND COALESCE(u.location_members_precision, 'city') <> 'private'     -- public never sees more than members
      GROUP BY cell_lat, cell_lng
 ")->fetchAll();
 
