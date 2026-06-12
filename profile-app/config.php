@@ -24,10 +24,18 @@ define('LG_PROFILE_APP_ENV_LOADED', true);
  */
 function looth_issue_bounce_if_needed(): void {
     if (PHP_SAPI === 'cli' || headers_sent()) return;
-    if (!empty($_COOKIE['looth_id'])) return;                  // already have identity
     $hasWp = false;
     foreach ($_COOKIE as $n => $_v) { if (strncmp($n, 'wordpress_logged_in_', 20) === 0) { $hasWp = true; break; } }
     if (!$hasWp) return;                                       // genuine anonymous viewer — no bounce
+    if (!empty($_COOKIE['looth_id'])) {
+        // A PRESENT token only counts if it VERIFIES. An expired (or
+        // pre-key-rotation) token sitting in the cookie used to block the
+        // re-mint forever — a logged-in member rendered as a stranger on
+        // their own profile, no editor (Danny West, 6/12). Clear it and
+        // fall through to the bounce; the one-shot guard still stops loops.
+        if (class_exists('\Looth\ProfileApp\Auth') && \Looth\ProfileApp\Auth::claims() !== null) return;
+        setcookie('looth_id', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
+    }
     if (!empty($_COOKIE['looth_issue_tried'])) return;         // one-shot guard: stale session / mint failure can't loop
     setcookie('looth_issue_tried', '1', ['expires' => time() + 120, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
     $ret = $_SERVER['REQUEST_URI'] ?? '/';
