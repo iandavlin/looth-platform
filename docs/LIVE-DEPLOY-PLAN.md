@@ -116,11 +116,11 @@ re-derive on live from scratch; that would silently lose rulings.
    UPDATEs.
 5. `/srv/profile-app-media` rsync dev → live (15 MB).
 
-## 3b. WP-side delta — RULED: wire to existing, never copy the WP DB
+## 3b. WP-side delta — RECOMMENDED: wire to existing, never copy the WP DB
 
-Ian floated copying dev's WordPress state to live (6/12); recommendation
-accepted framing: **live's WP DATABASE is canonical and is never
-overwritten** — dev's WP is a 6/11 snapshot, and a dump-over would erase
+Ian floated copying dev's WordPress state to live (6/12, undecided —
+AWAITING HIS CALL). Recommendation: **live's WP DATABASE is canonical and
+is never overwritten** — dev's WP is a 6/11 snapshot, and a dump-over would erase
 everything members did on live since (posts, signups, webhook state), ship
 QA residue/dev URLs, and break every wp-id-keyed table (bridge, persons).
 Copy CODE and CONFIG deliberately instead:
