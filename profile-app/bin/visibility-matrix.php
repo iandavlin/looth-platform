@@ -224,6 +224,16 @@ check('S1 file resume member 200',  req('member', '/profile-media/resumes/' . $U
 check('S1 me/location anon 401',  req('anon',  '/profile-api/v0/me/location')[0] === 401);
 check('S1 me/location owner 200', req('owner', '/profile-api/v0/me/location')[0] === 200);
 
+// Admin front-end edit (act-as surface, Ian 6/12): admins only, profile-content
+// endpoints only, the editor page opens for any profile.
+[$c, ] = req('admin', '/profile-api/v0/me/about?as=' . $UUID, 'PATCH', ['text' => 'Matrix fixture about text']);
+check('S1 admin act-as PATCH about 200', $c === 200, "code=$c");
+check('S1 member act-as PATCH 403', req('member', '/profile-api/v0/me/about?as=' . $UUID, 'PATCH', ['text' => 'x'])[0] === 403);
+check('S1 anon act-as PATCH 401',   req('anon',   '/profile-api/v0/me/about?as=' . $UUID, 'PATCH', ['text' => 'x'])[0] === 401);
+check('S1 admin act-as social endpoint 403 (not actable)', req('admin', '/profile-api/v0/me/messages?as=' . $UUID)[0] === 403);
+[$c, $b] = req('admin', '/u/' . SLUG . '?admin_edit=1');
+check('S1 admin front-end editor opens', $c === 200 && strpos($b, 'lg-shell--owner') !== false && strpos($b, 'Admin edit') !== false, "code=$c");
+
 check('S1 hub search anon: found (discussion public)', suggest_has('anon'));
 check('S1 hub search member: found', suggest_has('member'));
 

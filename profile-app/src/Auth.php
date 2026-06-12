@@ -60,6 +60,23 @@ final class Auth
         return $row ?: null;
     }
 
+    /**
+     * Endpoints an administrator may drive ON BEHALF OF another member via
+     * ?as=<uuid> (front-end admin profile editing, Ian 6/12). PROFILE CONTENT
+     * only — social actions (connections, messages, notifications, mutes),
+     * claim, and practice endpoints are deliberately NOT actable: admin edit
+     * must never impersonate a member socially.
+     */
+    public const ADMIN_EDIT_AS_ENDPOINTS = [
+        'me-about.php', 'me-avatar.php', 'me-banner.php', 'me-catalog.php',
+        'me-connect.php',            // the connect-INFO block (read + vis PATCH only)
+        'me-craft.php', 'me-credentials.php', 'me-discussion-visibility.php',
+        'me-dropoffs.php', 'me-freeform.php', 'me-gallery.php', 'me-header.php',
+        'me-highlights.php', 'me-instruments.php', 'me-layout.php', 'me-lights.php',
+        'me-location.php', 'me-location-search.php', 'me-name.php', 'me-resume.php',
+        'me-scenes.php', 'me-section-order.php', 'me-skills.php', 'me-socials.php',
+    ];
+
     /** Required-auth helper for API endpoints. 401s if no user resolved. */
     public static function requireUser(): array
     {
@@ -70,6 +87,35 @@ final class Auth
             echo json_encode(['error' => 'auth_required']);
             exit;
         }
+
+        // ADMIN FRONT-END EDIT (Ian 6/12): an administrator acting on another
+        // member's profile appends ?as=<uuid>; the endpoint then operates on
+        // THAT member's row. One choke point, admin-only, allowlisted
+        // endpoints only, every use audit-logged. Everyone else: 403.
+        $as = $_GET['as'] ?? '';
+        if (is_string($as) && $as !== '') {
+            $deny = static function (int $code, string $err): void {
+                http_response_code($code);
+                header('Content-Type: application/json');
+                echo json_encode(['error' => $err]);
+                exit;
+            };
+            if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $as)) {
+                $deny(400, 'invalid_as');
+            }
+            if (!self::isAdmin()) $deny(403, 'admin_only');
+            $script = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+            if (!in_array($script, self::ADMIN_EDIT_AS_ENDPOINTS, true)) $deny(403, 'endpoint_not_actable');
+            $stmt = Db::pg()->prepare('SELECT * FROM users WHERE uuid = :u AND archived_at IS NULL');
+            $stmt->execute([':u' => strtolower($as)]);
+            $subject = $stmt->fetch();
+            if (!$subject) $deny(404, 'subject_not_found');
+            error_log(sprintf('[admin-edit] admin user %d (%s) acting on user %d via %s %s',
+                (int)$u['id'], (string)$u['uuid'], (int)$subject['id'],
+                (string)($_SERVER['REQUEST_METHOD'] ?? '?'), $script));
+            return $subject;
+        }
+
         return $u;
     }
 

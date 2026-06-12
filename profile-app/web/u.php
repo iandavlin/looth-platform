@@ -61,11 +61,21 @@ if ($isOwner) {
     $role = Visibility::role($vArr, $subjectId);   // admin | member | public
 }
 
+// ADMIN FRONT-END EDIT (Ian 6/12): an administrator can open ANY profile in
+// the real editor (?admin_edit=1). The page renders exactly as the owner's
+// "Me" view; every /me/* save the editor fires is rewritten client-side to
+// carry ?as=<subject uuid>, which Auth::requireUser honors for admins on the
+// profile-content allowlist (audit-logged). Social actions stay the admin's
+// own — the act-as surface excludes them.
+$adminEditing = !$isOwner && $role === 'admin' && isset($_GET['admin_edit']);
+if ($adminEditing) $role = 'me';
+
 // Editor chrome (left Sections palette, inline-edit hints)
-// shows ONLY in true edit mode: the owner on their own "Me" view. In View-as
-// Member/Public the owner sees the profile EXACTLY as that audience does — no
-// sections bar — while the slim "View as" switcher stays so they can return.
-$editing = $isOwner && $role === 'me';
+// shows ONLY in true edit mode: the owner on their own "Me" view (or an
+// admin in admin-edit). In View-as Member/Public the owner sees the profile
+// EXACTLY as that audience does — no sections bar — while the slim "View as"
+// switcher stays so they can return.
+$editing = ($isOwner && $role === 'me') || $adminEditing;
 
 // Subject tier badge: not resolvable from the spine post tier-drop — needs a
 // membership-tier lookup. Passed null for now (header renders no badge). FLAG.
@@ -78,7 +88,13 @@ $viewLink = fn(string $v): string => '/u/' . rawurlencode($slugSafe) . '?view=' 
 // Social actions (Connect / Message) — server-rendered widget from the social lane.
 // Self-suppresses for the owner viewing their own page; auth-gated when logged out.
 // Rendered inside the header card (threaded through the block renderer).
-$socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$row['uuid']);
+$socialActions = Social::renderProfileActions(
+    // Under admin-edit, pass the subject as "viewer" so the widget self-
+    // suppresses (Connect/Message buttons are clutter inside the editor and
+    // must never read as actable-on-behalf-of).
+    $adminEditing ? (string)$row['uuid'] : ($viewer['uuid'] ?? null),
+    (string)$row['uuid']
+);
 
 // Discussion-author posting visibility (public|member) — the owner's preference for
 // whether LOGGED-OUT viewers see their real identity on DISCUSSION (forum) posts.
@@ -88,7 +104,7 @@ $socialActions = Social::renderProfileActions($viewer['uuid'] ?? null, (string)$
 // read it defensively so this page never fatals before that migration lands, and so it
 // lights up automatically once the column exists.
 $discussionVis = 'member';
-if ($isOwner) {
+if ($isOwner || $adminEditing) {
     $colChk = $pg->query("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='discussion_visibility' LIMIT 1");
     if ($colChk && $colChk->fetchColumn()) {
         $dq = $pg->prepare('SELECT discussion_visibility FROM users WHERE id = :i');
@@ -103,6 +119,29 @@ if ($isOwner) {
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($displayName) ?> · Looth</title>
+<?php if ($adminEditing): ?>
+<script>
+/* Admin-edit transport shim: every editor save targets /profile-api/v0/me/*;
+   rewrite them to carry ?as=<subject> so the server acts on the profile being
+   edited (admin-only, allowlisted, audit-logged server-side). Must be defined
+   before any editor script fires a fetch. */
+(function () {
+  var AS = <?= json_encode(strtolower((string)$row['uuid'])) ?>;
+  var origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    try {
+      var url = (typeof input === 'string') ? input : (input && input.url) || '';
+      if (url.indexOf('/profile-api/v0/me') === 0) {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'as=' + AS;
+        if (typeof input !== 'string') input = new Request(url, input);
+        else input = url;
+      }
+    } catch (e) {}
+    return origFetch.call(this, input, init);
+  };
+})();
+</script>
+<?php endif; ?>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <!-- Leaflet from CDN (standalone shell has no WP head to enqueue from) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
@@ -518,8 +557,30 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
 <main class="main" id="lg-main">
   <div class="lg-shell<?= $editing ? ' lg-shell--owner' : '' ?>">
 
-    <?php if ($isOwner): ?>
+    <?php if ($role === 'admin' && !$adminEditing): ?>
+      <!-- Admin affordance: open ANY profile in the real front-end editor. -->
+      <div class="lg-viewas" role="group" aria-label="Admin controls">
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl" style="color:#f0c987">Admin</span>
+          <span class="lg-viewas__note">Viewing as administrator.</span>
+          <a class="lg-vchip" style="background:var(--lg-sage);color:#fff;text-decoration:none"
+             href="/u/<?= rawurlencode($slugSafe) ?>?admin_edit=1">Edit profile (admin)</a>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($isOwner || $adminEditing): ?>
       <div class="lg-viewas" role="group" aria-label="Profile controls">
+        <?php if ($adminEditing): ?>
+        <div class="lg-viewas__row">
+          <span class="lg-viewas__lbl" style="color:#f0c987">Admin edit</span>
+          <span class="lg-viewas__note">You are editing <b><?= looth_h($displayName) ?></b>'s profile as an administrator. Every save is logged.</span>
+          <a class="lg-vchip" style="background:rgba(255,255,255,.12);color:#fff;text-decoration:none" href="/u/<?= rawurlencode($slugSafe) ?>">Exit admin edit</a>
+          <?php if ($editing): ?>
+          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
+          <?php endif; ?>
+        </div>
+        <?php else: ?>
         <div class="lg-viewas__row">
           <span class="lg-viewas__lbl">View as</span>
           <span class="lg-viewas__seg">
@@ -531,6 +592,7 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
           <?php endif; ?>
         </div>
+        <?php endif; /* /adminEditing banner vs View-as */ ?>
         <?php
           // Profile visibility = the whole-profile DEFAULT; each section's own chip can
           // override it downward (Members-only / Private). Say so right here (Ian 6/11).
