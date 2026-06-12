@@ -410,6 +410,11 @@
                 referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
           <?php endif; ?>
+          <?php /* Guitardle is DECOMMISSIONED for launch (Ian 6/12) — fast
+                   follow. To remount it stacked under the featured video:
+                   if ($row_id === 'video-promo-members') { $gdle_compact = true; require __DIR__ . '/_gdle-promo.php'; }
+                   (the partial + modal + embed leaderboard are all live-ready;
+                   a 'guitardle' row in config.json renders the standalone shape). */ ?>
         </div>
         <div class="vpromo__copy">
           <?= $html /* trusted: sanitized by dash on save; shortcodes expanded above */ ?>
@@ -419,119 +424,16 @@
 <?php video_promo_end: ?>
 
 <?php elseif ($layout === 'guitardle'): ?>
-    <?php /* id anchor lets the Hub teaser (and shares) deep-link /archive-poc/#guitardle */ ?>
-    <section class="row row--guitardle" id="guitardle" data-row-id="<?= h($row_id) ?>">
+    <section class="row row--guitardle" data-row-id="<?= h($row_id) ?>">
       <header class="row__head">
         <h2 class="row__title"><?= h($row['title'] ?: 'Guitardle') ?></h2>
         <span class="row__subtitle">the daily guitar phrase game</span>
       </header>
-      <?php /* COMPACT promo (Ian 6/12: 'button on the front page with a small
-               top-5 leaderboard' — the embedded game + stats column read as
-               dead space). Icon + pitch + Play button + weekly top 5; the game
-               itself opens in the centered modal below. The iframe src is set
-               lazily on first open and the modal hides (never destroys) on
-               close, so a mid-game peek can't forfeit the round. Embed carries
-               its own top-5 strip under the game (guitardle/index.html), so
-               the Hub sheet inherits the leaderboard too. */ ?>
-      <div class="gdle-promo">
-        <img class="gdle-promo__icon gdle-side-art" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="" aria-hidden="true" loading="lazy" width="512" height="512">
-        <div class="gdle-promo__main">
-          <p class="gdle-promo__pitch">Six guesses, one guitar phrase a day. Wins score points &mdash; Hardcore counts double, board resets Monday.</p>
-          <button type="button" class="gdle-promo__play" id="gdle-play">Play today's Guitardle &rarr;</button>
-        </div>
-        <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
-          <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
-          <ol class="gdle-side-board" id="gdle-side-board"></ol>
-          <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
-        </aside>
-      </div>
-
-      <div class="gdle-modal" id="gdle-modal" hidden role="dialog" aria-modal="true" aria-label="Guitardle — daily guitar phrase game">
-        <div class="gdle-modal__back" data-gdle-close></div>
-        <div class="gdle-modal__panel">
-          <div class="gdle-modal__row">
-            <span class="gdle-modal__title"><img class="gdle-modal__ic" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="">Guitardle</span>
-            <button type="button" class="gdle-modal__x" data-gdle-close aria-label="Close">&times;</button>
-          </div>
-          <iframe class="gdle-frame" id="gdle-frame"
-                  data-src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
-                  title="Guitardle — daily guitar phrase game"
-                  scrolling="no"></iframe>
-        </div>
-      </div>
-      <script>
-      (function () {
-          addEventListener('message', function (e) {
-              if (e.origin !== location.origin) return;
-              if (!e.data || e.data.type !== 'guitardle:height' || !(e.data.height > 0)) return;
-              var f = document.getElementById('gdle-frame');
-              if (f) f.style.height = Math.ceil(e.data.height) + 'px';
-          });
-
-          function fillBoard() {
-              fetch('/archive-api/v0/guitardle-board', { credentials: 'same-origin' })
-                  .then(function (r) { return r.ok ? r.json() : null; })
-                  .then(function (b) {
-                      if (!b) return;
-                      var list = document.getElementById('gdle-side-board');
-                      var empty = document.getElementById('gdle-side-empty');
-                      var leaders = (b.leaders || []).slice(0, 5);   // promo card = top 5
-                      list.innerHTML = '';
-                      empty.hidden = leaders.length > 0;
-                      leaders.forEach(function (l, i) {
-                          var li = document.createElement('li');
-                          li.className = 'gdle-side-row' + (i === 0 ? ' is-first' : '');
-                          var rank = document.createElement('span');
-                          rank.className = 'gdle-side-row__rank';
-                          rank.textContent = i === 0 ? '👑' : (i + 1);
-                          var name = document.createElement(l.profile_url ? 'a' : 'span');
-                          name.className = 'gdle-side-row__name';
-                          name.textContent = l.name;
-                          if (l.profile_url) name.href = l.profile_url;
-                          var pts = document.createElement('span');
-                          pts.className = 'gdle-side-row__pts';
-                          pts.textContent = l.points + ' pts · ' + l.wins + 'W';
-                          li.append(rank, name, pts);
-                          list.appendChild(li);
-                      });
-                  }).catch(function () {});
-          }
-
-          // Modal open/close. The iframe src loads ONCE on first open and the
-          // modal only hides after that — destroying it would forfeit a round
-          // in progress (refresh-forfeit rule).
-          var modal = document.getElementById('gdle-modal');
-          var frame = document.getElementById('gdle-frame');
-          function openGame() {
-              if (frame && !frame.src) frame.src = frame.dataset.src;
-              modal.hidden = false;
-              document.body.classList.add('gdle-modal-lock');
-          }
-          function closeGame() {
-              modal.hidden = true;
-              document.body.classList.remove('gdle-modal-lock');
-              setTimeout(fillBoard, 1500);   // a just-finished round shows up
-          }
-          var play = document.getElementById('gdle-play');
-          if (play) play.addEventListener('click', openGame);
-          modal.addEventListener('click', function (e) {
-              if (e.target.closest('[data-gdle-close]')) closeGame();
-          });
-          addEventListener('keydown', function (e) {
-              if (e.key === 'Escape' && !modal.hidden) closeGame();
-          });
-          // Hub-teaser style deep link still works: /front-page/#guitardle=play
-          if (location.hash === '#guitardle=play') openGame();
-
-          fillBoard();
-          // The iframe writing localStorage at game end fires `storage` here —
-          // refresh the board after the score POST lands.
-          addEventListener('storage', function (e) {
-              if (!e.key || e.key.indexOf('guitardle_') !== 0) return;
-              setTimeout(fillBoard, 2000);
-          });
-      })();
-      </script>
+      <?php /* Body = the shared promo partial (full three-column shape). The
+               front page currently mounts Guitardle INSIDE the What's-New
+               container instead (Ian 6/12) — this row stays renderable for
+               when a standalone placement returns. */ ?>
+      <?php $gdle_compact = false; require __DIR__ . '/_gdle-promo.php'; ?>
     </section>
 
 <?php else: /* default rail */
