@@ -946,7 +946,8 @@ if ($reply_rx_items) {
 $video_yt = [];
 $vid_ids = [];
 foreach ($topics as $_r) {
-    if (($_r['card_type'] ?? '') === 'content' && ($_r['content_kind'] ?? '') === 'video') {
+    // shorty = video-link CPT; same inline-play treatment (Buck 6/12 parity).
+    if (($_r['card_type'] ?? '') === 'content' && in_array(($_r['content_kind'] ?? ''), ['video', 'shorty'], true)) {
         $vid_ids[] = (int)$_r['topic_id'];
     }
 }
@@ -956,7 +957,7 @@ if ($vid_ids) {
         // Prefer the engine's stored yt_id (commit 936b965 — 340/341 coverage, sourced
         // from ACF youtube_link → v2 embed block → post_content at index time). Keep the
         // body_text regex only as a fallback for any not-yet-reindexed row.
-        $vst = $db->prepare("SELECT id, yt_id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind = 'video'");
+        $vst = $db->prepare("SELECT id, yt_id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind IN ('video','shorty')");
         $vst->execute($vid_ids);
         $yt_re = '~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i';
         foreach ($vst->fetchAll() as $vr) {
@@ -1221,6 +1222,12 @@ $header_cat = $scoped_forum
         $c_time    = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
         $c_author  = htmlspecialchars((string)$topic['author_name']);
         $c_excerpt = feed_op_excerpt($topic);
+        // Video-link kinds: an excerpt that's just the pasted provider URL is
+        // noise under a playable cover — suppress it (Buck 6/12; pairs with the
+        // shorty facade above).
+        if (in_array($c_kind, ['video', 'shorty'], true) && preg_match('~^https?://\S+$~', html_entity_decode($c_excerpt))) {
+            $c_excerpt = '';
+        }
         $c_likes   = (int)$topic['like_count'];
         $c_dur     = (int)($topic['duration_min'] ?? 0);
         $c_tier    = (string)($topic['content_tier'] ?? '');
@@ -1244,7 +1251,7 @@ $header_cat = $scoped_forum
         $c_is_gated  = (($rankmap[$c_tier] ?? 0) > ($GLOBALS['LG_HUB_VIEWER_RANK'] ?? 0));
         $c_tier_lbl  = ['lite' => 'Lite', 'pro' => 'Pro'][$c_tier] ?? ucfirst((string)$c_tier);
         // Inline-play id only for NON-gated videos (gated → overlay, never the embed).
-        $c_yt        = (!$c_is_gated && $c_kind === 'video') ? ($video_yt[$c_id] ?? null) : null;
+        $c_yt        = (!$c_is_gated && in_array($c_kind, ['video', 'shorty'], true)) ? ($video_yt[$c_id] ?? null) : null;
     ?>
     <?php /* FLAT card contract (docs/hub-mobile-desktop-split.md): every fc-* region is a
              DIRECT child of .feed-card so desktop (forums.css ≥641) and mobile (Buck's
