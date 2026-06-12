@@ -518,8 +518,10 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
          lazily when a composer opens (forums.js, with a plain-textarea fallback), so
          blocking first paint on a CDN stylesheet cost ~770ms on mobile Lighthouse.
          media-swap keeps the element's cascade position; print never matches first. */ ?>
+<?php if ((lg_bb_mirror_whoami()['authenticated'] ?? false) === true): /* anon has no composer — no editor assets at all (craft gate, Ian 6/12) */ ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"></noscript>
+<?php endif; ?>
 <link rel="stylesheet" href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.css?v=<?= bb_mirror_asset_ver('forums.css') ?>">
 <?php /* Mobile presentation layer (Buck) — flat-card → FB app-card via grid-template-areas.
          MUST be a media-gated <head> <link> so it paints on first load (deferring it via
@@ -617,7 +619,18 @@ function bb_mirror_chrome_footer(): void
 
 <?php bb_mirror_new_topic_modal(); ?>
 
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" defer></script>
+<?php if ((lg_bb_mirror_whoami()['authenticated'] ?? false) === true): ?>
+<?php /* Quill loads AFTER first paint settles (load+idle) — members only. By
+         composer tap-time it's been ready for seconds, so Buck's synchronous
+         tap-focus iOS keyboard path is untouched; forums.js already has the
+         plain-textarea fallback if a tap somehow beats the idle load.
+         Anon never loads it (no composer exists). Ian 6/12. */ ?>
+<script>
+(function(){var go=function(){(window.requestIdleCallback||function(f){setTimeout(f,600)})(function(){
+  var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js';document.head.appendChild(s);});};
+if(document.readyState==='complete')go();else window.addEventListener('load',go,{once:true});})();
+</script>
+<?php endif; ?>
 <!-- Single source of the forum base path for forums.js (self-links, lazy fetches). -->
 <script>window.LG_FORUM_BASE = <?= json_encode(LG_BB_MIRROR_PUBLIC_PATH) ?>;</script>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
