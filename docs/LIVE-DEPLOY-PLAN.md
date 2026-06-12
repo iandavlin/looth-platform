@@ -24,8 +24,10 @@ Ships: profile-app, archive-poc (front/hub/search), bb-mirror (forums),
 events, lg-shared (canonical header), the WP mu-plugins they pair with,
 poller lane, nginx snippets (repo: `platform/nginx/`), PG databases
 `profile_app` + `looth`, media store `/srv/profile-app-media`, thumb-app.
-Total footprint measured on dev today: **< 200 MB** (live needs ~20 GB free
-for years of growth; WP + its 3.5 GB MySQL already live there).
+Total footprint measured on dev today: **< 200 MB** (+~400 MB Postgres
+packages). **Live disk VERIFIED 6/12 (Ian ran df): 15.3 GB free of 29 GB
+(48% used), R2 uploads mounted off-disk → ~15 GB free post-deploy. Disk is
+a settled question — no cleanup needed for the cut.**
 
 Does NOT ship: dev cookie gate (but see 2.4!), mailpit (live mail must go to
 real SMTP — verify), chrome-dev, code-servers, team accounts, mint-DEV
