@@ -69,7 +69,7 @@ if (!function_exists('bb_mirror_avatar')) {
             // (a 300px/149KB BB original was shipping into 40px circles —
             // craft gate IMG-RAW, Ian 6/12). Non-uploads URLs pass through.
             if (preg_match('#/wp-content/uploads/(.+)$#', (string)$u, $m)) {
-                $u = '/img.php?s=' . rawurlencode($m[1]) . '&w=' . max(32, $size * 2);
+                $u = '/img.php?s=' . rawurlencode($m[1]) . '&w=96';   // smallest resizer bucket; avatars render 32-48px
             }
             return sprintf(
                 '<img class="avatar-init avatar-init--img" src="%s" width="%d" height="%d" alt="" loading="lazy" decoding="async">',

@@ -1,152 +1,114 @@
 <?php
 /**
- * img.php — on-the-fly image resizer for Hub feed covers (and any uploads image).
+ * On-the-fly cover-image resizer for the Hub feed (Ian 2026-06-11).
  *
- * Feed covers were serving full-res originals (3024px phone photos, ~9 MB/page).
- * This routes them through a width-capped WebP transcode with a local disk cache.
+ * Deployed at /var/www/dev/img.php (served by the looth-dev WP pool, which can
+ * read the R2-backed uploads + write the cache). Behind the dev cookie gate.
  *
- * Contract (emitted by lg_cover_src() in forums/_feed.php):
- *     /img.php?s=<path-under-wp-content/uploads>&w=<width>
+ * The Hub feed stored full-resolution upload URLs (3024px phone photos served
+ * into 434px cards = ~9 MB/page). This reads the original, downscales to a
+ * clamped width, and serves cached WebP. Also normalises http:// upload URLs to
+ * a same-origin https request (kills the mixed-content warnings).
  *
- * Runs on the looth-dev FPM pool (the WP pool) because it is in the `loothdevs`
- * group and can read the R2 uploads mount; the bb-mirror pool cannot.
- * Reads originals from /var/www/dev/wp-content/uploads/, caches WebP under
- * /var/cache/lg-img/, serves with a long immutable cache header.
+ *   /img.php?s=<uploads-relative-path>&w=<400|600|800|1200>
  *
- * Fails SOFT: on any error (missing/oversized/undecodable source, no GD) it
- * 302-redirects to the original URL so the card still shows an image.
- *
- * Ian 2026-06-11 (cover-resize thread; finished by the bespoke-cutover coordinator).
+ * Source copy lives in the bespoke-cutover branch at
+ * bb-mirror/cover-img-resizer.php for review/versioning.
  */
-
 declare(strict_types=1);
 
-const UPLOADS_DIR = '/var/www/dev/wp-content/uploads';
-const CACHE_DIR   = '/var/cache/lg-img';
-const MIN_W       = 64;
-const MAX_W       = 2000;
-const MAX_SRC     = 40 * 1024 * 1024; // skip pathological originals (>40 MB)
+const UPLOADS = '/var/www/dev/wp-content/uploads';
+const CACHE   = UPLOADS . '/_rzcache';
+const QUALITY = 82;
+const ALLOWED_W = [96, 240, 400, 480, 600, 800, 960, 1200, 1600];  // small buckets: avatars 96, rails 240/480 (craft gate 6/12)
+const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 
-/** Redirect to the untouched original and stop. The card still renders. */
-function passthrough(string $rel): never
+$s = (string)($_GET['s'] ?? '');
+$w = (int)($_GET['w'] ?? 800);
+if (!in_array($w, ALLOWED_W, true)) {
+    $w = 800;
+}
+
+// Last-resort: send the browser to the original so the <img> never breaks.
+$orig_url = '/wp-content/uploads/' . ltrim($s, '/');
+function fallback(string $url): never
 {
-    // $rel is the validated uploads-relative path; rawurlencode each segment.
-    $safe = implode('/', array_map('rawurlencode', explode('/', $rel)));
-    header('Location: /wp-content/uploads/' . $safe, true, 302);
-    header('Cache-Control: no-store');
+    header('Location: ' . $url, true, 302);
     exit;
 }
 
-function fail(int $code): never
-{
-    http_response_code($code);
-    header('Cache-Control: no-store');
-    exit;
+if ($s === '' || str_contains($s, '..') || str_contains($s, "\0")) {
+    fallback($orig_url);
 }
 
-// --- parse + sanitise -------------------------------------------------------
-$rel = isset($_GET['s']) ? (string) $_GET['s'] : '';
-$rel = ltrim($rel, '/');
-$w   = isset($_GET['w']) ? (int) $_GET['w'] : 800;
-$w   = max(MIN_W, min(MAX_W, $w));
-
-// Reject anything that could escape the uploads root or hit a dotfile.
-if ($rel === '' || str_contains($rel, '..') || str_contains($rel, "\0") || str_starts_with($rel, '.')) {
-    fail(400);
-}
-if (!preg_match('/\.(jpe?g|png|gif|webp)$/i', $rel)) {
-    fail(400);
+// Resolve + hard-validate the source stays inside the uploads tree.
+$real = realpath(UPLOADS . '/' . ltrim($s, '/'));
+$base = realpath(UPLOADS);
+if ($real === false || $base === false
+    || strncmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) !== 0) {
+    fallback($orig_url);
 }
 
-$src = UPLOADS_DIR . '/' . $rel;
-// Defence in depth: the real resolved path must still sit under uploads.
-$realUploads = realpath(UPLOADS_DIR);
-$realSrc     = realpath($src);
-if ($realUploads === false || $realSrc === false || !str_starts_with($realSrc, $realUploads . '/')) {
-    fail(404);
+$ext = strtolower(pathinfo($real, PATHINFO_EXTENSION));
+if (!in_array($ext, ALLOWED_EXT, true)) {
+    fallback($orig_url);
 }
 
-if (!function_exists('imagecreatefromstring') || !function_exists('imagewebp')) {
-    passthrough($rel); // GD/WebP unavailable — let the browser fetch the original
-}
-
-$srcStat = @stat($realSrc);
-if ($srcStat === false) {
-    fail(404);
-}
-if ($srcStat['size'] > MAX_SRC) {
-    passthrough($rel);
-}
-
-// --- cache lookup -----------------------------------------------------------
-// Key on path+width+source-mtime so a re-uploaded original busts the cache.
-$key   = sha1($rel . '|' . $w . '|' . $srcStat['mtime']);
-$cache = CACHE_DIR . '/' . substr($key, 0, 2) . '/' . $key . '.webp';
-
-function serve_webp(string $file): never
-{
+$serve = static function (string $file): never {
     header('Content-Type: image/webp');
     header('Cache-Control: public, max-age=31536000, immutable');
-    header('Content-Length: ' . (string) filesize($file));
+    header('Content-Length: ' . filesize($file));
     readfile($file);
     exit;
+};
+
+$key       = sha1($real . '|' . (filemtime($real) ?: 0) . '|' . $w) . '.webp';
+$cachefile = CACHE . '/' . $key;
+if (is_file($cachefile)) {
+    $serve($cachefile);
 }
 
-if (is_file($cache)) {
-    serve_webp($cache);
+$info = @getimagesize($real);
+if ($info === false) {
+    fallback($orig_url);
+}
+[$ow, $oh] = $info;
+
+$src_im = match ($ext) {
+    'jpg', 'jpeg' => @imagecreatefromjpeg($real),
+    'png'         => @imagecreatefrompng($real),
+    'webp'        => @imagecreatefromwebp($real),
+    'gif'         => @imagecreatefromgif($real),
+    default       => false,
+};
+if (!$src_im) {
+    fallback($orig_url);
 }
 
-// --- decode + resize --------------------------------------------------------
-$raw = @file_get_contents($realSrc);
-if ($raw === false) {
-    passthrough($rel);
-}
-$im = @imagecreatefromstring($raw);
-unset($raw);
-if ($im === false) {
-    passthrough($rel);
-}
-
-$sw = imagesx($im);
-$sh = imagesy($im);
-if ($sw < 1 || $sh < 1) {
-    imagedestroy($im);
-    passthrough($rel);
-}
-
-if ($sw <= $w) {
-    // Never upscale; just transcode at native size to WebP.
-    $dst = $im;
+if ($ow <= $w) {
+    $dst = $src_im;                              // already small — just re-encode
 } else {
-    $dw  = $w;
-    $dh  = (int) round($sh * ($w / $sw));
-    $dst = imagecreatetruecolor($dw, $dh);
+    $nw  = $w;
+    $nh  = max(1, (int)round($oh * ($w / $ow)));
+    $dst = imagecreatetruecolor($nw, $nh);
     imagealphablending($dst, false);
     imagesavealpha($dst, true);
-    imagecopyresampled($dst, $im, 0, 0, 0, 0, $dw, $dh, $sw, $sh);
-    imagedestroy($im);
+    imagecopyresampled($dst, $src_im, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
 }
 
-// --- write cache (atomic) + serve ------------------------------------------
-@mkdir(dirname($cache), 02775, true);
-$tmp = $cache . '.' . getmypid() . '.tmp';
-if (imagewebp($dst, $tmp, 82)) {
-    @rename($tmp, $cache);
+if (!is_dir(CACHE)) {
+    @mkdir(CACHE, 0775, true);
+}
+// Write to a temp file then rename so concurrent requests never serve a partial.
+$tmp = $cachefile . '.' . getmypid() . '.tmp';
+$ok  = @imagewebp($dst, $tmp, QUALITY);
+imagedestroy($src_im);
+if ($dst !== $src_im) {
     imagedestroy($dst);
-    if (is_file($cache)) {
-        serve_webp($cache);
-    }
 }
 
-// Last resort: stream the encode straight to the client without caching.
-imagedestroy($dst);
-@unlink($tmp);
-header('Content-Type: image/webp');
-header('Cache-Control: public, max-age=86400');
-$im2 = @imagecreatefromstring(@file_get_contents($realSrc) ?: '');
-if ($im2 !== false) {
-    imagewebp($im2, null, 82);
-    imagedestroy($im2);
-    exit;
+if ($ok && @rename($tmp, $cachefile)) {
+    $serve($cachefile);
 }
-passthrough($rel);
+@unlink($tmp);
+fallback($orig_url);
