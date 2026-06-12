@@ -95,6 +95,10 @@ if ($mode === 'author') {
             SELECT kind, title, NULL, NULL, url, COALESCE(last_activity, published_at), id
               FROM discovery.content_item
              WHERE tier IN ($tin) AND title ILIKE :like2
+               -- kind='misc' = sponsor plumbing (product/page rows for the
+               -- sponsor-page carousels), not user-facing in the Hub (Ian
+               -- 6/12: only sponsor-POSTS) — matches the feed union.
+               AND kind <> 'misc'
         ) z
          ORDER BY ts DESC NULLS LAST
          LIMIT 8";

@@ -688,7 +688,11 @@ if ($scoped_forum) {
           FROM discovery.content_item c
           LEFT JOIN rx crx ON crx.post_type = c.cpt AND crx.item_id = c.id
          WHERE c.tier IN ($tier_in)
-           AND c.kind <> 'event' -- events have their own page (Ian 2026-06-11)
+           -- events have their own page (Ian 6/11); kind='misc' = sponsor
+           -- plumbing (sponsor-product/-page rows feed the sponsor-page
+           -- carousels, NOT user-facing — Ian 6/12: only sponsor-POSTS join
+           -- the Hub). Matches the Type-facet exclusion above.
+           AND c.kind NOT IN ('event', 'misc')
            $q_content
       ) u
       $hub_where
