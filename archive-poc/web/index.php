@@ -782,12 +782,17 @@ foreach ($main_rows as $row):
           <?php include __DIR__ . "/_render-main-row.php"; ?>
         </div>
       </div>
-<?php if (!$is_member && defined('LG_HUB_TEASER') && !empty(LG_HUB_TEASER['enabled']) && !empty(LG_HUB_TEASER['items'])): ?>
+<?php /* Hub teaser shows BOTH audiences (Ian 6/12), sitting after the bento =
+         just before the rails in both row orders. Join-flavored copy is
+         anon-only; members get neutral lines. */ ?>
+<?php if (defined('LG_HUB_TEASER') && !empty(LG_HUB_TEASER['enabled']) && !empty(LG_HUB_TEASER['items'])): ?>
       <section class="row row--hub-teaser" data-row-id="hub-teaser">
         <div class="lg-hubt__head">
           <p class="lg-hubt__eyebrow">The Hub</p>
           <h2 class="lg-hubt__title">What members are talking about</h2>
-          <p class="lg-hubt__sub">Real bench problems, candid answers. Join to reply and see who you&rsquo;re talking to.</p>
+          <p class="lg-hubt__sub"><?= $is_member
+            ? 'Real bench problems, candid answers — jump in.'
+            : 'Real bench problems, candid answers. Join to reply and see who you&rsquo;re talking to.' ?></p>
         </div>
         <div class="lg-hubt__grid">
           <?php foreach (array_slice(LG_HUB_TEASER['items'], 0, 6) as $lg_ht): ?>
@@ -798,7 +803,7 @@ foreach ($main_rows as $row):
             </div>
             <h3 class="lg-hubt__t"><?= h((string)($lg_ht['title'] ?? '')) ?></h3>
             <p class="lg-hubt__ex"><?= h((string)($lg_ht['excerpt'] ?? '')) ?></p>
-            <div class="lg-hubt__by">Private member &middot; join to see who</div>
+            <?php if (!$is_member): ?><div class="lg-hubt__by">Private member &middot; join to see who</div><?php endif; ?>
           </article>
           <?php endforeach; ?>
         </div>

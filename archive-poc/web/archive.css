@@ -3355,48 +3355,48 @@ body.view-discover:not(.is-member) .lg-bento__events { order: 1; }
 
 /* ── Hub teaser ── */
 body.view-discover:not(.is-member) .row--hub-teaser { margin: 34px 0 10px; }
-body.view-discover:not(.is-member) .lg-hubt__eyebrow {
+body.view-discover .lg-hubt__eyebrow {
   font: 700 11px/1 var(--lg-font-sans); letter-spacing: .15em; text-transform: uppercase;
   color: var(--lg-sage-d, #6f7c54); margin: 0 0 8px;
 }
-body.view-discover:not(.is-member) .lg-hubt__title { margin: 0 0 4px; font: 400 26px/1.15 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
-body.view-discover:not(.is-member) .lg-hubt__sub { margin: 0 0 18px; font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); max-width: 560px; }
-body.view-discover:not(.is-member) .lg-hubt__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-body.view-discover:not(.is-member) .lg-hubt__card {
+body.view-discover .lg-hubt__title { margin: 0 0 4px; font: 400 26px/1.15 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover .lg-hubt__sub { margin: 0 0 18px; font: 400 14.5px/1.5 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); max-width: 560px; }
+body.view-discover .lg-hubt__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+body.view-discover .lg-hubt__card {
   display: flex; flex-direction: column;
   background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #ebe9e2);
   border-radius: 10px; padding: 15px 16px 13px;
 }
-body.view-discover:not(.is-member) .lg-hubt__top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
-body.view-discover:not(.is-member) .lg-hubt__chip {
+body.view-discover .lg-hubt__top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+body.view-discover .lg-hubt__chip {
   font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
   padding: 4px 9px; border-radius: 999px;
   background: var(--lg-sage-tint, #f0f2e9); color: var(--lg-sage-d, #6f7c54);
 }
-body.view-discover:not(.is-member) .lg-hubt__replies { margin-left: auto; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); }
-body.view-discover:not(.is-member) .lg-hubt__t { margin: 0 0 7px; font: 600 15.5px/1.3 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
-body.view-discover:not(.is-member) .lg-hubt__ex {
+body.view-discover .lg-hubt__replies { margin-left: auto; font: 600 11.5px/1 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b); }
+body.view-discover .lg-hubt__t { margin: 0 0 7px; font: 600 15.5px/1.3 var(--lg-font-serif); color: var(--lg-charcoal, #1a1d1a); }
+body.view-discover .lg-hubt__ex {
   margin: 0 0 12px; font: 400 13.5px/1.55 var(--lg-font-sans); color: var(--lg-ink, #323532);
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1 1 auto;
 }
-body.view-discover:not(.is-member) .lg-hubt__by {
+body.view-discover .lg-hubt__by {
   font: 500 12px/1.2 var(--lg-font-sans); color: var(--lg-mute, #6b6f6b);
   border-top: 1px solid var(--lg-line, #ebe9e2); padding-top: 10px;
 }
-body.view-discover:not(.is-member) .lg-hubt__cta { display: flex; justify-content: center; margin-top: 20px; }
-body.view-discover:not(.is-member) .lg-hubt__more {
+body.view-discover .lg-hubt__cta { display: flex; justify-content: center; margin-top: 20px; }
+body.view-discover .lg-hubt__more {
   display: inline-block; font: 700 13px/1 var(--lg-font-sans); text-decoration: none;
   color: var(--lg-sage-d, #6f7c54); border: 1.5px solid var(--lg-sage-d, #6f7c54);
   border-radius: 999px; padding: 11px 20px;
 }
-body.view-discover:not(.is-member) .lg-hubt__more:hover { background: var(--lg-sage-tint, #f0f2e9); }
+body.view-discover .lg-hubt__more:hover { background: var(--lg-sage-tint, #f0f2e9); }
 
 @media (max-width: 1080px) {
   body.view-discover:not(.is-member) [data-row-id="video-promo-public"] .vpromo { grid-template-columns: 1fr; }
-  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr 1fr; }
+  body.view-discover .lg-hubt__grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 640px) {
-  body.view-discover:not(.is-member) .lg-hubt__grid { grid-template-columns: 1fr; }
+  body.view-discover .lg-hubt__grid { grid-template-columns: 1fr; }
 }
 
 /* Inside the bento cell the events list stacks vertically (deck style),
