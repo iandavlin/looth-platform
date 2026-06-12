@@ -3649,11 +3649,26 @@ html[data-lguser-theme="dark"] .gdle-side-empty { color: #9aab7f; }
 
 /* ── Guitardle stacked under the featured video (What's-New container, Ian 6/12) ── */
 .gdle-block--stack { margin-top: 18px; display: grid; gap: 12px; text-align: left; }
-.gdle-stack__head { display: flex; align-items: baseline; gap: 9px; }
-.gdle-stack__ic { width: 30px; height: 30px; border-radius: 7px; align-self: center; }
-.gdle-stack__title { font: 700 19px/1.2 var(--lg-font-serif, Georgia, serif); color: var(--lg-ink); }
-.gdle-stack__sub { font-size: 12.5px; color: var(--lg-mute, #6b6f6b); }
-.gdle-block--stack .gdle-promo__play { justify-self: start; }
+/* The icon+title header IS the play button (Ian 6/12: no separate green pill) */
+.gdle-stack__btn {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 11px;
+  width: 100%;
+  padding: 14px 18px;
+  background: #fff;
+  border: 1px solid var(--lg-line, #e4e6e0);
+  border-radius: 16px;
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 2px 6px rgba(26, 32, 23, .10), 0 10px 28px rgba(26, 32, 23, .14);
+  transition: box-shadow .15s, transform .12s;
+}
+.gdle-stack__btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(26, 32, 23, .12), 0 14px 34px rgba(26, 32, 23, .18); }
+.gdle-stack__btn:active { transform: translateY(0); }
+.gdle-stack__ic { width: 44px; height: 44px; border-radius: 10px; align-self: center; }
+.gdle-stack__title { font: 700 24px/1.2 var(--lg-font-serif, Georgia, serif); color: var(--lg-ink); }
+.gdle-stack__sub { font-size: 13.5px; color: var(--lg-mute, #6b6f6b); }
+html[data-lguser-theme="dark"] .gdle-stack__btn { background: #1d211b; border-color: #2e3429; }
+html[data-lguser-theme="dark"] .gdle-stack__title { color: #e5e7e1; }
 .gdle-block--stack .gdle-promo__board { width: 100%; }
 
 /* "Put me back on the map" CTA on the teaser tile (Ian 6/12) — amber primary

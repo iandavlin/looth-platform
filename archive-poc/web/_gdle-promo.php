@@ -38,12 +38,13 @@ for ($gdle_i = 1; $gdle_i <= 5; $gdle_i++) {
 ?>
 <div class="gdle-block<?= $gdle_compact ? ' gdle-block--stack' : '' ?>" id="guitardle">
   <?php if ($gdle_compact): ?>
-    <div class="gdle-stack__head">
+    <?php /* The whole icon+title header IS the play button (Ian 6/12 —
+             replaced the separate green pill). */ ?>
+    <button type="button" class="gdle-stack__btn" id="gdle-play" aria-label="Play today's Guitardle">
       <img class="gdle-stack__ic" src="/archive-poc/guitardle/assets/guitardle-icon-512.webp" alt="" aria-hidden="true" loading="lazy">
       <span class="gdle-stack__title">Guitardle</span>
       <span class="gdle-stack__sub">the daily guitar phrase game</span>
-    </div>
-    <button type="button" class="gdle-promo__play" id="gdle-play">Play today's Guitardle &rarr;</button>
+    </button>
     <aside class="gdle-card gdle-promo__board" aria-label="Guitardle weekly top 5">
       <h3 class="gdle-card__title">🏆 Weekly top 5</h3>
       <ol class="gdle-side-board" id="gdle-side-board"><?= $gdle_slots ?></ol>
