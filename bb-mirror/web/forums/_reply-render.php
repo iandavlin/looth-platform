@@ -70,6 +70,8 @@ if (!function_exists('bb_mirror_avatar')) {
             // craft gate IMG-RAW, Ian 6/12). Non-uploads URLs pass through.
             if (preg_match('#/wp-content/uploads/(.+)$#', (string)$u, $m)) {
                 $u = '/img.php?s=' . rawurlencode($m[1]) . '&w=96';   // smallest resizer bucket; avatars render 32-48px
+            } elseif (str_starts_with((string)$u, '/profile-media/')) {
+                $u .= (str_contains((string)$u, '?') ? '&' : '?') . 'w=96';   // profile-app media.php resize bucket
             }
             return sprintf(
                 '<img class="avatar-init avatar-init--img" src="%s" width="%d" height="%d" alt="" loading="lazy" decoding="async">',
