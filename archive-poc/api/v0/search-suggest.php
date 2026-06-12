@@ -20,13 +20,32 @@ $LIMIT    = 3;
 
 // ---- Author name search ------------------------------------------------
 // Fuzzy match on person.display_name. Weighted by how many posts they have.
+//
+// VISIBILITY MASK (Ian 6/12, visibility refactor): author identity follows
+// the same rules as everywhere else. The flags live on forums.person (the
+// Hub's synced cache, profile-app owns the source fields):
+//   - profile_visibility 'private' (master switch) -> never a search hit,
+//     for ANY viewer. Missing row fails open to 'public' for this flag but
+//     CLOSED for the anon mask below.
+//   - logged-out viewers only see authors who chose PUBLIC discussion
+//     identity (discussion_visibility) -- same mask as the Hub feed; a
+//     missing forums.person row hides the author from anon (leak-safe).
+// PG-only (the SQLite lane has no forums schema; PG is the live backend).
 $authors = [];
+$lgAnon  = !(lg_archive_poc_whoami()['authenticated'] ?? false);
+$visJoin = ''; $visWhere = '';
+if (lg_archive_poc_is_pg($db)) {
+    $visJoin  = 'LEFT JOIN forums.person fp ON fp.id = p.id';
+    $visWhere = " AND COALESCE(fp.profile_visibility, 'public') <> 'private'";
+    if ($lgAnon) $visWhere .= " AND COALESCE(fp.discussion_visibility, 'member') = 'public'";
+}
 $as = $db->prepare("
     SELECT p.id, p.display_name, p.slug, p.avatar_url,
            COUNT(ci.id) AS post_count
     FROM person p
+    $visJoin
     LEFT JOIN content_item ci ON ci.author_id = p.id
-    WHERE p.display_name $nameLike ?
+    WHERE p.display_name $nameLike ? $visWhere
     GROUP BY p.id
     ORDER BY post_count DESC
     LIMIT ?
