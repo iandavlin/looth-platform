@@ -55,7 +55,7 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'lg-bento__map-btn lg-bento__map-join';
-    var label = hasPlace ? 'Put me back on the map' : 'Add my location';
+    var label = 'Put me on the map';
     btn.textContent = label;
     btn.addEventListener('click', function () {
       btn.disabled = true;
