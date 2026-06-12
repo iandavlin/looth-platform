@@ -47,8 +47,10 @@ function hub_query_params(): array
     $out = [];
     if (!empty($f['types']))   $out['type']   = implode(',', $f['types']);
     if (!empty($f['cats']))    $out['cat']    = implode(',', $f['cats']);
+    if (!empty($f['leaves']))  $out['leaf']   = implode(',', $f['leaves']);
     if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
+    if (!empty($f['saved']))   $out['saved']  = 1;
     return $out;
 }
 
