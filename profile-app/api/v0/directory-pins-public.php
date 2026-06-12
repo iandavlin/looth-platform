@@ -37,7 +37,7 @@ $rows = $pg->query("
        AND u.lat IS NOT NULL AND u.lng IS NOT NULL
        AND EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)
        AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
-       AND COALESCE(u.location_public_precision, 'city') <> 'private'
+       AND COALESCE(u.location_public_precision, 'private') <> 'private'   -- NULL = never consented = members-only (Ian 6/12)
      GROUP BY cell_lat, cell_lng
 ")->fetchAll();
 

@@ -157,3 +157,15 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 }
 .dir-join-card__join:hover { background: #f2c476; }
 .dir-join-card__signin { font: 600 13px/1 var(--lg-font-sans, system-ui, sans-serif); color: #6b7c52; }
+
+/* Anonymized "join to see" cards (anon viewers, non-public members — Ian 6/12) */
+.dir-card--gated { opacity: .92; }
+.dir-card--gated .avi-sm--lock { display: flex; align-items: center; justify-content: center;
+  background: #efece4; font-size: 15px; }
+.dir-card--gated .dir-card__name { color: #8a8478; font-weight: 600; }
+.dir-card--gated .dir-card__loc { color: #a9a294; font-size: 12.5px; }
+.dir-card__joincta { display: inline-block; margin: 8px 0 2px;
+  background: var(--lg-amber, #ecb351); color: #4a3c10; text-decoration: none;
+  font: 700 12px/1 var(--lg-font-sans, system-ui, sans-serif);
+  padding: 7px 12px; border-radius: 999px; }
+.dir-card__joincta:hover { background: #f2c476; }

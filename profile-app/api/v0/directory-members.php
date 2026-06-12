@@ -38,7 +38,9 @@ function dir_member_display(array $r, int $viewerUserId, bool $isAdmin, string $
         $precision = $mp === 'private' ? 'private' : 'street';
     } else {
         $raw = $audience === 'members' ? $r['location_members_precision'] : $r['location_public_precision'];
-        $precision = Block::precisionFromInput($raw) ?? 'city';   // default precision is now city for both audiences
+        // Defaults diverge by audience (Ian 6/12): members-city, public-PRIVATE —
+        // the public finder is explicit opt-in; never-touched rows stay members-only.
+        $precision = Block::precisionFromInput($raw) ?? ($audience === 'members' ? 'city' : 'private');
     }
     $place = [
         'address'  => $r['location_address'],
@@ -166,10 +168,12 @@ if ($lat !== null && $lng !== null) {
     $selectDistance = ', (point(u.lng, u.lat) <@> point(:lng, :lat)) AS distance_mi';
     // Privacy: a user only appears on the map when their precision for THIS audience isn't 'private'
     // (both audiences now default to city; individuals can dial down to state/private).
+    // Anon keeps non-public members in the radius — they render as anonymized
+    // 'join to see' teasers (Ian 6/12); members-audience still drops
+    // members-precision-private pins here.
     $wheres[] = '(u.lat IS NOT NULL AND u.lng IS NOT NULL AND (point(u.lng, u.lat) <@> point(:lng, :lat)) <= :radius
                   AND (u.profile_layout IS NULL OR u.profile_layout @> \'["location"]\'::jsonb)
-                  AND (CASE WHEN :authed = 1 THEN COALESCE(u.location_members_precision, \'city\')
-                                             ELSE COALESCE(u.location_public_precision, \'city\') END) <> \'private\')';
+                  AND (:authed = 0 OR COALESCE(u.location_members_precision, \'city\') <> \'private\'))';
     $orderBy  = 'distance_mi ASC';
     $params[':lat'] = $lat; $params[':lng'] = $lng; $params[':radius'] = $radius;
     $params[':authed'] = $viewerUserId !== 0 ? 1 : 0;
@@ -349,6 +353,18 @@ if ($rows) {
         $dist = null;
         if ($disp && $lat !== null && $lng !== null && $disp['lat'] !== null && $disp['lng'] !== null) {
             $dist = round(dir_haversine_mi((float)$lat, (float)$lng, (float)$disp['lat'], (float)$disp['lng']), 1);
+        }
+
+        // PUBLIC audience: a member who hasn't opted into the public finder
+        // (public precision unset/private) is an anonymized 'join to see' card —
+        // same UI, zero identity (Ian 6/12). Their pin teaser ships separately.
+        $publicOptIn = (Block::precisionFromInput($r['location_public_precision'] ?? null) ?? 'private') !== 'private';
+        if ($audience === 'public' && !$isAdmin && !$publicOptIn) {
+            $results[] = [
+                'gated'       => true,
+                'distance_mi' => $dist,
+            ];
+            continue;
         }
 
         $results[] = [
