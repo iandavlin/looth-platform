@@ -8,6 +8,18 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     profile_app_json(405, ['error' => 'method_not_allowed']);
 }
 
+// LOCKED DOWN (Ian 6/12): this was an open uuid→identity oracle — anyone with a
+// collected uuid could batch-resolve names/avatars/bios anonymously, forever.
+// Allowed callers now: logged-in members, and our own server-side consumers
+// (archive-poc comments, bb-mirror person-sync / hub-filters), which all call
+// via loopback (https://127.0.0.1/... → REMOTE_ADDR 127.0.0.1). Nothing a
+// browser legitimately does changes.
+$lgUsersViewer   = \Looth\ProfileApp\Visibility::viewer();
+$lgUsersInternal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
+if (!$lgUsersInternal && $lgUsersViewer['id'] === 0) {
+    profile_app_json(401, ['error' => 'auth_required']);
+}
+
 // Batch user lookup. Resolves author identity for many users at once (BB-mirror
 // threads, author bylines, etc.). Single round-trip, cap at 100.
 //
@@ -22,16 +34,23 @@ $rawUuids = $_GET['uuids']  ?? '';
 $rawWpIds = $_GET['wp_ids'] ?? '';
 $byWp     = (!is_string($rawUuids) || $rawUuids === '') && is_string($rawWpIds) && $rawWpIds !== '';
 
-$shape = static function (array $r) use ($byWp): array {
+$shape = static function (array $r) use ($byWp, $lgUsersViewer, $lgUsersInternal): array {
+    $isPrivate = (($r['profile_visibility'] ?? 'public') === 'private');
     $item = [
         'uuid'         => $r['uuid'],
-        'slug'         => $r['slug'] ?: null,
+        // A private profile's /u/ page 404s for everyone but owner/admin — don't
+        // hand out a dead link. Identity fields stay: bylines on forum/comment
+        // surfaces are governed by discussion_visibility, not the master switch.
+        'slug'         => ($isPrivate && !$lgUsersInternal && empty($lgUsersViewer['admin'])) ? null : ($r['slug'] ?: null),
         'display_name' => $r['display_name'] ?? null,
         'avatar_url'   => $r['avatar_url'] ?? null,
         'bio'          => $r['at_a_glance'] ?? null,   // single-source author bio → bylines/author box
         // Discussion-author mask preference (public|member, default member). Carried so the
         // archive-poc person-sync can copy it into forums.person for the Hub logged-out mask.
         'discussion_visibility' => (($r['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member',
+        // Master switch passthrough — server-side consumers (person-sync, search)
+        // use this to drop private profiles from search/list surfaces.
+        'profile_visibility'    => $isPrivate ? 'private' : 'public',
     ];
     if ($byWp) $item['wp_user_id'] = (int) $r['wp_user_id'];   // map back to the post author
     return $item;
@@ -49,7 +68,7 @@ if ($byWp) {
 
     $ph = implode(',', array_fill(0, count($wpIds), '?'));
     $st = Db::pg()->prepare("
-        SELECT b.wp_user_id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance, u.discussion_visibility
+        SELECT b.wp_user_id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance, u.discussion_visibility, u.profile_visibility
         FROM users u
         JOIN wp_user_bridge b ON b.user_id = u.id
         WHERE b.wp_user_id IN ($ph) AND u.archived_at IS NULL
@@ -72,7 +91,7 @@ if ($byWp) {
 
     $ph = implode(',', array_fill(0, count($uuids), '?'));
     $st = Db::pg()->prepare("
-        SELECT uuid, slug, display_name, avatar_url, at_a_glance, discussion_visibility
+        SELECT uuid, slug, display_name, avatar_url, at_a_glance, discussion_visibility, profile_visibility
         FROM users
         WHERE uuid IN ($ph) AND archived_at IS NULL
     ");

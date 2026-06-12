@@ -14,22 +14,23 @@ if (!is_string($uuid) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 }
 $uuid = strtolower($uuid);
 
-$idStmt = Db::pg()->prepare('SELECT id FROM users WHERE uuid = :u');
+$idStmt = Db::pg()->prepare('SELECT id, profile_visibility FROM users WHERE uuid = :u');
 $idStmt->execute([':u' => $uuid]);
-$id = $idStmt->fetchColumn();
-if (!$id) profile_app_json(404, ['error' => 'not_found']);
+$idRow = $idStmt->fetch();
+if (!$idRow) profile_app_json(404, ['error' => 'not_found']);
+$id = (int)$idRow['id'];
 
-$full = Profile::loadFull((int)$id);
-
-// Determine viewer role.
-$viewer = Auth::currentUser();
-if (!$viewer) {
-    $role = 'public';
-} elseif (strtolower($viewer['uuid']) === $uuid) {
-    $role = 'me';
-} else {
-    // 'friend' graph doesn't exist yet — friends fall through to member.
-    $role = 'member';
+// MASTER SWITCH (Visibility module, Ian 6/12): a private profile answers exactly
+// like a uuid that doesn't exist — owner + admin excepted.
+$vArr = \Looth\ProfileApp\Visibility::viewer();
+if (!\Looth\ProfileApp\Visibility::profileVisible($vArr, ['id' => $id, 'profile_visibility' => (string)$idRow['profile_visibility']])) {
+    profile_app_json(404, ['error' => 'not_found']);
 }
+
+$full = Profile::loadFull($id);
+
+// Viewer role from the one module: me | admin | member | public.
+$viewer = Auth::currentUser();
+$role   = \Looth\ProfileApp\Visibility::role($vArr, $id);
 
 profile_app_json(200, Profile::renderForViewer($full, $role, $viewer ? (int)$viewer['id'] : 0, (int)$id));

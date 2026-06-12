@@ -21,16 +21,17 @@ use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Social;
 use Looth\ProfileApp\Block;   // composable-layout caddy (availableBlocks + LAYOUT_BLOCKS)
+use Looth\ProfileApp\Visibility;
 
 $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
 
 $pg = Db::pg();
-$q = $pg->prepare('SELECT id, uuid, display_name, slug FROM users WHERE slug = :s');
+$q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility FROM users WHERE slug = :s');
 $q->execute([':s' => $slug]);
 $row = $q->fetch();
 if (!$row && ctype_digit($slug)) {
-    $q = $pg->prepare('SELECT id, uuid, display_name, slug FROM users WHERE id = :i');
+    $q = $pg->prepare('SELECT id, uuid, display_name, slug, profile_visibility FROM users WHERE id = :i');
     $q->execute([':i' => (int)$slug]);
     $row = $q->fetch();
 }
@@ -41,14 +42,23 @@ looth_issue_bounce_if_needed();   // mint looth_id for logged-in WP users who la
 $viewer    = Auth::currentUser();
 $isOwner   = $viewer && strtolower((string)$viewer['uuid']) === strtolower((string)$row['uuid']);
 
+// MASTER SWITCH (Visibility module, Ian 6/12): a private profile is OWNER-ONLY —
+// for everyone else (members included; admins excepted) this page answers exactly
+// like a slug that doesn't exist, so existence can't be probed by guessing names.
+$vArr = Visibility::viewer();
+if (!Visibility::profileVisible($vArr, ['id' => $subjectId, 'profile_visibility' => (string)$row['profile_visibility']])) {
+    http_response_code(404); echo 'not found'; exit;
+}
+
 // Effective viewer role. Owner gets View-as (?view=public|member|me, default me);
-// everyone else is member (signed-in) or public (logged-out). The SAME role flows
-// into the one gate — looth_render_profile_blocks() does the rest.
+// admins render everything (ruling 4); everyone else is member (signed-in) or
+// public (logged-out). The SAME role flows into the one gate —
+// looth_render_profile_blocks() does the rest.
 if ($isOwner) {
     $view = $_GET['view'] ?? 'me';
     $role = in_array($view, ['public', 'member', 'me'], true) ? $view : 'me';
 } else {
-    $role = $viewer ? 'member' : 'public';
+    $role = Visibility::role($vArr, $subjectId);   // admin | member | public
 }
 
 // Editor chrome (left Sections palette, inline-edit hints)

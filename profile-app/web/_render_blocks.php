@@ -648,10 +648,14 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
     $exH = trim((string)($loc['hours']   ?? ''));
     $exN = trim((string)($loc['note']    ?? ''));
 
-    // Precision for THIS viewer.
-    if ($isOwner)               $prec = 'street';
-    elseif ($role === 'public') $prec = (string)$loc['public_precision'];
-    else                        $prec = (string)$loc['members_precision'];   // member / friend
+    // Precision for THIS viewer — the ONE rule (Visibility module): owner street,
+    // admin street-unless-members-private, member/public their audience dial,
+    // public never out-resolves members.
+    $prec = \Looth\ProfileApp\Visibility::precisionForAudience(
+        $role === 'friend' ? 'member' : $role,
+        (string)$loc['members_precision'],
+        (string)$loc['public_precision']
+    );
 
     $disp = $has ? Block::locationDisplay($loc['place'], $prec) : null;
     if ($disp === null && !$isOwner) return;                                  // private for this audience
