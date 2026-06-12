@@ -323,10 +323,31 @@
       if (t === 'IFRAME' || t === 'VIDEO') return true;
       return !!(el.querySelector && el.querySelector('iframe, video'));
     }
+    var fsLandTimer = null;
     function onFs() {
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-      if (fsEl && isMedia(fsEl)) release();      // fullscreen video → sensor owns rotation
-      else if (!fsEl) lockPortrait();            // back in the app → portrait
+      if (fsEl && isMedia(fsEl)) {
+        release();                               // lift our portrait lock first
+        // FORCE landscape (like the YouTube app) — Buck 2026-06-12: sensor-only
+        // release left fullscreen portrait on his phone. Conditions have changed
+        // since the v30/v32 bounce rounds: the deploy auto-reload that killed
+        // fullscreen mid-test is gone and fullscreen is stable now, so a
+        // delayed, re-checked lock is safe to try. Works even while the
+        // installed app still carries the OLD portrait manifest (fullscreen
+        // grants orientation-lock permission). If this ever warps the player
+        // back out again, delete THIS timer block only — release-only above is
+        // the fallback (sensor rotation).
+        if (fsLandTimer) clearTimeout(fsLandTimer);
+        fsLandTimer = setTimeout(function () {
+          fsLandTimer = null;
+          var el = document.fullscreenElement || document.webkitFullscreenElement;
+          if (!el || !isMedia(el)) return;       // already exited — don't touch
+          try { var p = so.lock('landscape'); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+        }, 400);
+      } else if (!fsEl) {
+        if (fsLandTimer) { clearTimeout(fsLandTimer); fsLandTimer = null; }
+        lockPortrait();                          // back in the app → portrait
+      }
     }
     document.addEventListener('fullscreenchange', onFs, false);
     document.addEventListener('webkitfullscreenchange', onFs, false);

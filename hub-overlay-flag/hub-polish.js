@@ -2209,7 +2209,7 @@
       card.setAttribute('data-lg-vidpromo', '1');
       if (card.classList.contains('feed-card--gated') || card.getAttribute('data-gated') === '1') continue;
       var cover = card.querySelector('.fc-cover');
-      if (!cover || cover.classList.contains('fc-cover--video') || cover.classList.contains('fc-cover--gated')) continue;
+      if (!cover || cover.classList.contains('fc-cover--gated')) continue;
       var ex = card.querySelector('.fc-excerpt');
       if (!ex) continue;
       var id = '', hideEls = [];
@@ -2231,12 +2231,18 @@
           if (cand2 && /^https?:\/\/\S+$/.test(t)) { id = cand2; hideEls.push(ps[p2]); break; }
         }
       }
-      if (!id) continue;
-      cover.classList.add('fc-cover--video');
-      cover.setAttribute('data-yt-play', id);
-      try { if (getComputedStyle(cover).position === 'static') cover.style.position = 'relative'; } catch (e) {}
+      var isVideoCover = cover.classList.contains('fc-cover--video');
+      if (!isVideoCover) {
+        if (!id) continue;
+        cover.classList.add('fc-cover--video');
+        cover.setAttribute('data-yt-play', id);
+        try { if (getComputedStyle(cover).position === 'static') cover.style.position = 'relative'; } catch (e) {}
+        promoted = true;
+      }
+      // The raw URL is noise on ANY card whose cover already plays the video —
+      // server-rendered video kinds show it too (Buck 2026-06-12), not just the
+      // shorty cards this pass promotes.
       for (var h = 0; h < hideEls.length; h++) hideEls[h].style.display = 'none';
-      promoted = true;
     }
     if (promoted) {
       // nudge the autoplay engine's childList observer so new hosts get observed

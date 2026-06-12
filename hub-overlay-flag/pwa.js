@@ -66,7 +66,7 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=194', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=195', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
@@ -88,7 +88,7 @@
   inject('looth-tabbar-js', '/bottom-nav.js?v=21');
 
   if (mobileish) {
-    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=34');
+    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=35');
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
     idle('looth-prof-sheet-js', '/profile-sheet.js?v=7');      // /u/ profile sheet
