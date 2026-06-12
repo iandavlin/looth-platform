@@ -181,14 +181,21 @@ function refreshCapState() {
     notice.style.display = capped ? '' : 'none';
 }
 
+// Visibly disable the checkbox once today's game is underway (first click)
+// or finished — the mode you started with is the mode you're scored on.
+// Re-enabled by tomorrow's fresh load.
+function lockHardcoreToggle() {
+    document.getElementById('hardcore-toggle').disabled = true;
+}
+
 function initHardcoreToggle() {
     HARDCORE = localStorage.getItem('guitardle_hardcore') === '1';
     const box = document.getElementById('hardcore-toggle');
     box.checked = HARDCORE;
     box.addEventListener('change', () => {
-        // No mid-game switching (either direction — flipping it off would be
-        // a cap escape hatch, flipping it on could instantly starve a game).
-        if (state.moves > 0 && !state.gameOver) {
+        // Backstop for the disabled attribute: never switch mid-game (off =
+        // cap escape hatch, on = could instantly starve a live game).
+        if (state.moves > 0 || state.gameOver) {
             box.checked = HARDCORE;
             return;
         }
@@ -231,6 +238,7 @@ function postScore(won, streak) {
                 won:       !!won,
                 moves:     moves,
                 streak:    streak,
+                hardcore:  HARDCORE,   // 2× points on the weekly board
             }),
         });
     }).catch(() => {});
@@ -315,6 +323,7 @@ function incrementMoves() {
     renderMoves();
     updateScoreBox(state.moves);
     refreshCapState();
+    lockHardcoreToggle();   // mode is committed from the first click
     // Refresh-forfeit marker: from the first move on, bailing out of the page
     // before an end state counts as a loss (cleared in the end-state handlers).
     localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: todayString(), moves: state.moves }));
@@ -575,6 +584,7 @@ function handleLoss() {
 }
 
 function showEndState(won, streak) {
+    lockHardcoreToggle();
     guessAreaEl.style.display     = 'none';
     vowelInstructEl.style.display = 'none';
     keyboardEl.style.display      = 'none';
@@ -645,6 +655,7 @@ function handleForfeit(movesMade) {
 function showAlreadyPlayed(result) {
     state.gameOver = true;
     localStorage.removeItem(ACTIVE_KEY);
+    lockHardcoreToggle();
 
     // Reveal all tiles
     phraseRowEl.querySelectorAll('.tile.blank').forEach(tile => {

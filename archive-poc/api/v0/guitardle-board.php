@@ -6,8 +6,8 @@
  * on every front-page load, so it must be fast). Read-only over
  * discovery.guitardle_results joined to discovery.person for display names.
  *
- * Score math (Ian 6/11): each WIN is worth (11 − moves) points, floor 1; a
- * loss is 0. Weekly score = sum of points, week = ISO week (resets Monday).
+ * Score math (Ian 6/11): each WIN is worth (11 − moves) points, floor 1 —
+ * DOUBLED for hardcore-mode wins; a loss is 0. Weekly score = sum of points, week = ISO week (resets Monday).
  * Ties: fewer total moves on wins, then who got there first.
  *
  * Full ranked list — no top-N cap (Ian: "do the entire count").
@@ -34,7 +34,7 @@ try {
     $pdo = lg_likes_pdo();
     $st  = $pdo->query(
         "SELECT COALESCE(NULLIF(p.display_name, ''), 'Member') AS name,
-                SUM(GREATEST(11 - r.moves, 1)) FILTER (WHERE r.won)::int AS points,
+                SUM(GREATEST(11 - r.moves, 1) * (CASE WHEN r.hardcore THEN 2 ELSE 1 END)) FILTER (WHERE r.won)::int AS points,
                 COUNT(*) FILTER (WHERE r.won)::int                       AS wins,
                 COALESCE(SUM(r.moves) FILTER (WHERE r.won), 0)::int      AS win_moves,
                 MIN(r.moves) FILTER (WHERE r.won)::int                   AS best_moves

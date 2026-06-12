@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS guitardle_results (
   won         BOOLEAN NOT NULL,
   moves       INTEGER NOT NULL CHECK (moves BETWEEN 1 AND 99),
   streak      INTEGER NOT NULL DEFAULT 0 CHECK (streak >= 0),
+  hardcore    BOOLEAN NOT NULL DEFAULT false,  -- opt-in capped-reveal mode; wins worth 2x on the board (client-claimed, like moves)
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (wp_user_id, play_date)
 );

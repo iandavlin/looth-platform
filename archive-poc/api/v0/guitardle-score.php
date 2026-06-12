@@ -98,6 +98,7 @@ $phraseId = isset($body['phrase_id']) ? (int) $body['phrase_id'] : 0;
 $won      = !empty($body['won']);
 $moves    = isset($body['moves']) ? (int) $body['moves'] : 0;
 $streak   = isset($body['streak']) ? max(0, (int) $body['streak']) : 0;
+$hardcore = !empty($body['hardcore']);
 if ($moves < 1 || $moves > 99 || $phraseId < 0 || $phraseId > 100000) {
     lg_gdle_json(['ok' => false, 'error' => 'bad_request'], 400);
 }
@@ -105,10 +106,10 @@ if ($moves < 1 || $moves > 99 || $phraseId < 0 || $phraseId > 100000) {
 // ---- Record (first result of the day wins) ----------------------------------
 try {
     $st = lg_comments_pdo()->prepare(
-        'INSERT INTO guitardle_results (wp_user_id, play_date, phrase_id, won, moves, streak)
-         VALUES (?, CURRENT_DATE, ?, ?, ?, ?)
+        'INSERT INTO guitardle_results (wp_user_id, play_date, phrase_id, won, moves, streak, hardcore)
+         VALUES (?, CURRENT_DATE, ?, ?, ?, ?, ?)
          ON CONFLICT (wp_user_id, play_date) DO NOTHING');
-    $st->execute([$uid, $phraseId, $won ? 'true' : 'false', $moves, $streak]);
+    $st->execute([$uid, $phraseId, $won ? 'true' : 'false', $moves, $streak, $hardcore ? 'true' : 'false']);
     $recorded = $st->rowCount() > 0;
 } catch (Throwable $e) {
     error_log('[lg-guitardle] ' . $e->getMessage());
