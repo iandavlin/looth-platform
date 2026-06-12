@@ -234,18 +234,17 @@
         $ev_start = (int)($it['event_start_at'] ?? 0);
         $ev_end   = (int)($it['event_end_at'] ?? 0) ?: ($ev_start ? $ev_start + 3600 : 0);
         $ev_loc   = trim((string)($it['event_region'] ?? ''));
-        // Tier-gate the Zoom URL: only viewers entitled to the event's tier get
-        // the join link. Everyone else (incl. logged-out) clicks through to the
-        // event post, which carries its own upgrade gate. Never leak Zoom anon.
+        // Card → the event post page for everyone (Ian 6/12); the post carries
+        // RSVP/join and its own upgrade gate. The Zoom URL only rides the
+        // calendar ICS, tier-gated. Never leak Zoom anon.
         $ev_viewer_tier = $GLOBALS['LG_VIEWER_TIER'] ?? 'public';
         $ev_rank    = ['public' => 0, 'lite' => 1, 'pro' => 2];
         $ev_gated   = ($ev_rank[$tier] ?? 0) > ($ev_rank[$ev_viewer_tier] ?? 0);
         $ev_can_join = !$ev_gated && !empty($it['event_join_url']);
-        $ev_href    = $ev_can_join ? $it['event_join_url'] : ($it['url'] ?: '#');
+        $ev_href    = $it['url'] ?: '#';
         $ev_cal_url = $ev_can_join ? $it['event_join_url'] : ($it['url'] ?: '');
-        $ev_cta     = $ev_can_join ? 'Join →' : ($ev_gated ? 'Details →' : 'RSVP →');
-        $ev_newtab  = $ev_can_join ? ' target="_blank" rel="noopener"' : ''; ?>
-        <a class="ecard" href="<?= h($ev_href) ?>"<?= $ev_newtab ?>>
+        $ev_cta     = $ev_gated ? 'Details →' : 'RSVP →'; ?>
+        <a class="ecard" href="<?= h($ev_href) ?>">
           <div class="ecard__date">
             <span class="ecard__mon"><?= h($blk['mon']) ?></span>
             <span class="ecard__day"><?= h($blk['day']) ?></span>
