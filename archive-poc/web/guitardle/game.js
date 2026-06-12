@@ -34,10 +34,11 @@ let scoreAuth   = { authenticated: false, nonce: '' };
 // still server-gated, so spoofing ?aud only changes which puzzle you see.
 const AUD_MEMBER = new URLSearchParams(location.search).get('aud') === 'm';
 
-// In-progress marker for the refresh-forfeit rule: set on the first move,
-// cleared on any end state. Present at load for today = the player bailed
-// mid-game (refresh/close) — that counts as a loss, with a warning card.
-const ACTIVE_KEY = 'guitardle_active';
+// Saved-game snapshot (Ian 6/12: refresh-PROOF, the forfeit rule is gone).
+// Written on every move, cleared on any end state. A reload mid-game restores
+// the exact position. Keyed to date + phrase id, so a stale save from another
+// day or the other audience track is discarded, never replayed.
+const SAVE_KEY = 'guitardle_game';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  STATE
@@ -361,9 +362,63 @@ function incrementMoves() {
     updateScoreBox(state.moves);
     refreshCapState();
     lockHardcoreToggle();   // mode is committed from the first click
-    // Refresh-forfeit marker: from the first move on, bailing out of the page
-    // before an end state counts as a loss (cleared in the end-state handlers).
-    localStorage.setItem(ACTIVE_KEY, JSON.stringify({ date: todayString(), moves: state.moves }));
+    saveGame();             // refresh-proof: every move snapshots the position
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SAVED GAME (refresh-proof)
+// ─────────────────────────────────────────────────────────────────────────────
+function saveGame() {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+        date:      todayString(),
+        phraseId:  PHRASE_ID,
+        hardcore:  HARDCORE,
+        moves:     state.moves,
+        revealed:  [...state.revealedLetters],
+        purchased: [...state.purchasedVowels],
+    }));
+}
+
+function clearSavedGame() {
+    localStorage.removeItem(SAVE_KEY);
+}
+
+// Restore a mid-game snapshot from earlier today. Replays the saved position
+// onto the board: tiles, keyboard key states, move count, hardcore lock.
+function restoreSavedGame() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); }
+    catch (e) { /* corrupt save — treat as none */ }
+    if (!saved) return;
+    if (saved.date !== todayString() || saved.phraseId !== PHRASE_ID) {
+        clearSavedGame();   // another day / other audience track / resequenced
+        return;
+    }
+
+    // The mode you started with is the mode you resume in.
+    HARDCORE = !!saved.hardcore;
+    const box = document.getElementById('hardcore-toggle');
+    box.checked = HARDCORE;
+    localStorage.setItem('guitardle_hardcore', HARDCORE ? '1' : '0');
+
+    state.moves           = saved.moves | 0;
+    state.revealedLetters = new Set(saved.revealed || []);
+    state.purchasedVowels = new Set(saved.purchased || []);
+
+    state.revealedLetters.forEach(letter => {
+        revealTiles(letter);
+        const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
+        if (keyEl) { keyEl.classList.add('used'); keyEl.disabled = true; }
+    });
+    state.purchasedVowels.forEach(letter => {
+        const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
+        if (keyEl) keyEl.classList.add('purchased');
+    });
+
+    renderMoves();
+    updateScoreBox(state.moves);
+    refreshCapState();
+    if (state.moves > 0) lockHardcoreToggle();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -591,7 +646,7 @@ function updateStreak(won) {
 // ─────────────────────────────────────────────────────────────────────────────
 function handleWin() {
     state.gameOver = true;
-    localStorage.removeItem(ACTIVE_KEY);
+    clearSavedGame();
     exitGuessMode(false);
 
     phraseRowEl.querySelectorAll('.tile.editable').forEach(tile => {
@@ -606,7 +661,7 @@ function handleWin() {
 
 function handleLoss() {
     state.gameOver = true;
-    localStorage.removeItem(ACTIVE_KEY);
+    clearSavedGame();
     exitGuessMode(false);
 
     phraseRowEl.querySelectorAll('.tile.blank, .tile.editable').forEach(tile => {
@@ -651,47 +706,12 @@ function showEndState(won, streak) {
     endStateEl.style.display = 'flex';
 }
 
-// The player made at least one move and then left/refreshed the page — that
-// counts as a loss (anti-reroll rule, Ian 6/11). Record it, lock the board,
-// and say WHY on the card so it never feels like a bug.
-function handleForfeit(movesMade) {
-    state.gameOver = true;
-    state.moves = Math.max(1, movesMade);
-    renderMoves();
-    updateScoreBox(state.moves);
-    localStorage.removeItem(ACTIVE_KEY);
-
-    // Reveal the phrase in loss styling
-    phraseRowEl.querySelectorAll('.tile.blank').forEach(tile => {
-        tile.classList.remove('blank');
-        tile.classList.add('revealed-loss');
-        tile.textContent = tile.dataset.letter;
-    });
-
-    guessAreaEl.style.display     = 'none';
-    vowelInstructEl.style.display = 'none';
-    keyboardEl.style.display      = 'none';
-    gameMainEl.classList.add('game-over');
-    document.querySelectorAll('.key').forEach(k => { k.disabled = true; });
-
-    updateStreak(false);
-    postScore(false, 0);
-
-    const lossCard = document.getElementById('result-loss');
-    lossCard.querySelector('.result-emoji').textContent    = '⚠️';
-    lossCard.querySelector('.result-headline').textContent = 'Game forfeited';
-    lossCard.querySelector('.result-subline').textContent  =
-        'Leaving or refreshing mid-game counts as a loss. Come back tomorrow!';
-    lossCard.style.display = 'flex';
-    endStateEl.style.display = 'flex';
-}
-
 // Show a locked end state when the player has already played today.
 // Reveals the full phrase but shows no move count or score. `result`
 // (optional, from the server) personalizes the recap for members.
 function showAlreadyPlayed(result) {
     state.gameOver = true;
-    localStorage.removeItem(ACTIVE_KEY);
+    clearSavedGame();
     lockHardcoreToggle();
 
     // Reveal all tiles
@@ -973,7 +993,7 @@ function initInstructions() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
     // Testing door: ?reset=1 wipes this browser's guitardle state (streaks,
-    // played-today lock, forfeit marker), then strips itself from the URL —
+    // played-today lock, saved game), then strips itself from the URL —
     // ONE-SHOT, so refreshing the tab doesn't keep re-wiping the lock and
     // granting endless replays. For members the server lock below still
     // rules: a recorded result locks the day no matter what storage says.
@@ -988,16 +1008,6 @@ async function init() {
     initEmbedMode();
     initScoreSync();   // fire-and-forget; nonce arrives long before game end
     initBoard();       // fire-and-forget; crown chip pops in when it lands
-
-    // Native leave-page prompt while a game is live (≥1 move, not over) —
-    // the last chance to back out before the refresh-forfeit rule bites.
-    // Works from inside the iframe: the parent page's reload/close asks too.
-    window.addEventListener('beforeunload', (e) => {
-        if (state.moves > 0 && !state.gameOver) {
-            e.preventDefault();
-            e.returnValue = '';
-        }
-    });
     await loadPhrase();
 
     renderPhrase();
@@ -1010,20 +1020,14 @@ async function init() {
     updateScoreBox(0);
     renderMoves();
 
-    // Already finished today → locked recap. Otherwise, an in-progress marker
-    // from today means the player refreshed mid-game — forfeit (a loss).
-    const active = (() => {
-        try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || 'null'); }
-        catch (e) { return null; }
-    })();
+    // Already finished today → locked recap. Otherwise restore any mid-game
+    // snapshot from earlier today — refresh/close is a non-event, the game
+    // resumes exactly where it was (Ian 6/12: forfeit rule retired).
     if (localStorage.getItem('guitardle_lastPlayed') === todayString()) {
-        localStorage.removeItem(ACTIVE_KEY);   // stale marker from a finished game
+        clearSavedGame();   // stale save from a finished game
         showAlreadyPlayed();
-    } else if (active && active.date === todayString()) {
-        handleForfeit((active.moves | 0) || 1);
-    } else if (active) {
-        localStorage.removeItem(ACTIVE_KEY);   // marker from a previous day — that
-                                               // game simply never happened server-side
+    } else {
+        restoreSavedGame();
     }
 
     // SERVER lock for members: localStorage is wipeable (reset door, site-data
