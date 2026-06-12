@@ -536,7 +536,7 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           // override it downward (Members-only / Private). Say so right here (Ian 6/11).
           $hVis  = Block::normalizeVis(Block::headerCeiling($subjectId));
           $hNote = $hVis === 'public'  ? 'Public is the default for your whole profile — each section can override this to Members-only or Private with its own chip.'
-                 : ($hVis === 'private' ? 'Only you can see your profile, regardless of section settings.'
+                 : ($hVis === 'private' ? 'Only you (and site admins) can see your profile. You\'re removed from the directory, the map, and search until you switch back.'
                  : 'Members-only is the default for your whole profile — each section can override this to Private with its own chip. Set Public to let anyone view it.');
         ?>
         <div class="lg-viewas__row">

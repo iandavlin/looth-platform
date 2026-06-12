@@ -53,6 +53,19 @@ if (!$fields) profile_app_json(400, ['error' => 'nothing_to_update']);
 
 $result = Block::saveHeader((int)$user['id'], $fields);
 
+// ONE DIAL (Ian 6/12): the profile-visibility chip IS the master switch.
+// 'private' = owner-only EVERYWHERE (page, directory, map, search, gated
+// files — enforced via Visibility); 'public'/'members' = listed, with the
+// chip acting as the section ceiling as before. Written together so the
+// chip and the master column can never disagree.
+if (array_key_exists('visibility', $fields)) {
+    Db::pg()->prepare("UPDATE users SET profile_visibility = :pv, updated_at = now() WHERE id = :i")
+        ->execute([
+            ':pv' => Block::visFromInput($fields['visibility']) === 'private' ? 'private' : 'public',
+            ':i'  => (int)$user['id'],
+        ]);
+}
+
 // Single-source author bio: mirror at_a_glance → WP user `description` (the
 // "about author" box). Best-effort — never blocks the API (mirrors me-name).
 $wpId = 0;
