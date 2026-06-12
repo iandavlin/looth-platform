@@ -198,7 +198,8 @@
       "query": {
         "exclude_kinds": [
           "discussion",
-          "misc"
+          "misc",
+          "event"
         ],
         "sort": "newest",
         "limit": 12
