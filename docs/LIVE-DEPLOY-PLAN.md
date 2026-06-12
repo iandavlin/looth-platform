@@ -1,5 +1,12 @@
 # LIVE DEPLOY — audit + plan (drafted 2026-06-12, visibility-refactor session)
 
+> **SUPERSEDED AS RUNBOOK (6/12 pm doc audit): `cutover/cut-day-runbook.md`
+> is the canonical cut document** — blue-green (new box, adopt live's DBs,
+> flip traffic), PG rebuilt from adopted live WP. This file remains as the
+> 6/12 audit record (findings, fixes, verifications); its net-new material
+> was appended to the runbook as the 6/12 addendum. §3 (carry-dev-PG) and
+> the in-place framing are the superseded parts.
+
 Ian 6/12: "we are just about ready to start deploying on the live server…
 audit and test." This is that audit + the sequenced plan. Companions it does
 NOT duplicate: `profile-app/CUTOVER-CHECKLIST.md` (slice-3 data migration

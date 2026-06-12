@@ -1,1 +1,1 @@
-/home/ubuntu/.claude/skills/write-article/SKILL.md
+/home/ubuntu/.claude/skills/write-article-v2/SKILL.md

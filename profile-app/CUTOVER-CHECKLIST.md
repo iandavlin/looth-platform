@@ -1,5 +1,10 @@
 # profile-app — slice 3 cutover checklist
 
+> 6/12 doc audit: the CANONICAL cut document is `cutover/cut-day-runbook.md`
+> (blue-green, adopt live DBs, PG rebuild). This checklist stays authoritative
+> for the slice-3 DATA detail it owns (xprofile migration, avatar backfill,
+> sponsor store re-apply, post-cutover smokes) — referenced from the runbook.
+
 This is the working doc for the **slice 3** cutover. Populated in slice 2.75
 so context isn't lost between sessions. None of this is run yet — slice 2.75
 only *writes* the migration; slice 3 *runs* it.

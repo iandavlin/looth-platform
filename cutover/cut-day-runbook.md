@@ -172,3 +172,50 @@ AND right-sized. This is the payoff of all the prep.**
   (62e42ff/24bdac8); box size = trial-measured (m7a.medium vs large).
 - OPEN: run the m7a.medium trial to get the peak-RAM number; lg-stripe-billing /
   thumb-app fold-vs-clone (HELD).
+
+---
+
+## ADDENDUM 2026-06-12 (visibility-refactor session, doc-audit merge)
+
+This runbook is CANONICAL for the cut (doc audit, docs/DOC-AUDIT-2026-06-12.md);
+docs/LIVE-DEPLOY-PLAN.md (written 6/12 before this lane's work was found)
+carries a superseded banner. Net-new items from 6/12, fold into the phases:
+
+1. **TEST GATE (add to the go/no-go):** the visibility matrix —
+   `LG_MATRIX_HOST=https://<host> php profile-app/bin/visibility-matrix.php`
+   — 66 asserts, 4 viewers × all surfaces over live HTTP, provisions its own
+   QA fixture. GREEN required before flip; re-run morning after. Dev is the
+   reference green.
+2. **PG REBUILD ratified harder:** the 6/12 visibility refactor moved the
+   rulings into CODE + COLUMN DEFAULTS (members-only starting state
+   c8977cd, one-dial fold, precision rules in src/Visibility.php), so a
+   rebuild from adopted live WP lands them automatically. Re-apply after
+   rebuild: the 2 public-finder opt-ins (Ian, Buck — hand-set), the
+   karriker location repair (`sudo -u profile-app php
+   profile-app/bin/fix-divergent-locations.php --apply` — evidence-guarded,
+   re-runnable), matrix fixture (self-provisions).
+3. **Secrets (F6):** mint FRESH on the new box — dev's values are exposed
+   to every team chat. Set: /etc/looth/jwt pair, lg-internal,
+   lg-archive-poc, lg-profile-app, WP profile_hook_secret. NOT WP salts;
+   adopted-DB sessions survive, looth_id auto-mints off the WP cookie
+   (bridge reconcile must run before flip).
+4. **Timers:** install `platform/systemd/bb-mirror-reconcile.*` AND
+   `platform/systemd/lg-person-vis-refresh.*` (new 6/12 — identity/
+   visibility cache convergence; proven on dev). No gate env file on live.
+   Plus weekly geoipupdate.
+5. **nginx:** snippets are repo-tracked (platform/nginx/); the new box
+   needs `map → $loothdev_is_authorized = 1` (gate neutralization) +
+   the still-unapplied rate-limit conf (profile-app/deploy example).
+6. **Hardcoded-host bugs fixed 6/12** (login interstitial, reports From:)
+   — ensure the deployed checkout is ≥ commit 94a688d.
+7. **Buck overlay JS inventory** (/var/www/dev/*.js on dev = live-truth):
+   privacy-sheet, directory-desktop, fp pieces, app-mobile-fixes,
+   pwa/sw — ship with the pages; do NOT copy the stale bespoke fork copies.
+8. **WP-side delta list** (plugins/mu-plugins/options/conversions/sponsor
+   ACF disable): docs/LIVE-DEPLOY-PLAN.md §3b — still valid under adopt
+   (the adopted DB is live's; dev's WP DB still never ships).
+9. **Verifications already banked 6/12:** new-box disk 15.3 GB free ✓,
+   r2:loothgroup mounted ✓, dev matrix 66/66 ✓, dev-hostname grep clean ✓.
+10. **OPEN with Ian (6/12):** confirm ip-172-31-45-223 IS the new box;
+    confirm PG rebuild (post-refactor) over carry; `/` routing at launch;
+    BB retirement order; F1 clamp ruling.
