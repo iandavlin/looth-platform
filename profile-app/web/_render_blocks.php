@@ -968,7 +968,7 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     echo '<div class="lg-idrow">';
     echo '<div class="lg-idrow__pic">';
     if ($avatar) {
-        echo '<img src="' . looth_h((string)$avatar) . '" alt="' . looth_h($name) . '" width="96" height="96" data-ini="' . looth_h(looth_initials($name)) . '" onerror="this.replaceWith(document.createTextNode(this.dataset.ini))">';
+        echo '<img src="' . looth_h((string)$avatar . (str_contains((string)$avatar,'?') ? '&' : '?') . 'w=240') . '" alt="' . looth_h($name) . '" width="96" height="96" data-ini="' . looth_h(looth_initials($name)) . '" onerror="this.replaceWith(document.createTextNode(this.dataset.ini))">';
     } else {
         echo looth_h(looth_initials($name));
     }
@@ -1165,7 +1165,7 @@ function looth_render_practice_header_block(array $header, string $role, string 
 
     echo '<div class="lg-idrow">';
     echo '<div class="lg-idrow__pic">';
-    if ($avatar) echo '<img src="' . looth_h((string)$avatar) . '" alt="' . looth_h($name) . '" width="96" height="96" data-ini="' . looth_h(looth_initials($name)) . '" onerror="this.replaceWith(document.createTextNode(this.dataset.ini))">';
+    if ($avatar) echo '<img src="' . looth_h((string)$avatar . (str_contains((string)$avatar,'?') ? '&' : '?') . 'w=240') . '" alt="' . looth_h($name) . '" width="96" height="96" data-ini="' . looth_h(looth_initials($name)) . '" onerror="this.replaceWith(document.createTextNode(this.dataset.ini))">';
     else echo looth_h(looth_initials($name));
     echo '</div>';
 

@@ -287,7 +287,13 @@ function lg_shared_render_site_header(array $ctx): void
                   data-lg-account-btn>
             <span class="lg-chrome__avatar" aria-hidden="true">
               <?php if ($avatar_url !== null && $avatar_url !== ''): ?>
-                <img src="<?= $h($avatar_url) ?>"
+                <?php /* profile-media avatars take ?w= resize buckets (craft
+                         gate 6/12): the chrome slot is 30px — 96 covers 3x.
+                         Non-profile-media URLs (gravatar, BB) pass through. */
+                      $lg_av = str_starts_with((string)$avatar_url, '/profile-media/')
+                          ? $avatar_url . (str_contains((string)$avatar_url, '?') ? '&' : '?') . 'w=96'
+                          : $avatar_url; ?>
+                <img src="<?= $h($lg_av) ?>"
                      alt="<?= $h($display_name) ?>"
                      width="30" height="30">
               <?php else: ?>

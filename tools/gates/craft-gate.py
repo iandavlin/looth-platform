@@ -110,6 +110,8 @@ async def audit(path, viewer, gate, member):
     page = next(p for p in pages if p["type"] == "page")
     async with __import__("websockets").connect(page["webSocketDebuggerUrl"], max_size=None) as ws:
         t = Tab(ws)
+        await t.send("Network.enable")
+        await t.send("Network.setCacheDisabled", {"cacheDisabled": True})   # cold-load truth: a cached run undercounts KB
         await t.send("Network.clearBrowserCookies")
         cookies = [("loothdev_auth", gate)] + (member if viewer == "member" else [])
         for n, v in cookies:
@@ -133,8 +135,15 @@ def check(label, data):
     for i in data["imgs"]:
         if not i["visible"] or not i["nw"] or not i["rw"]:
             continue
+        # Small-asset floor: <=160px naturals (avatars at the resizer's
+        # smallest bucket) are correct retina delivery, never meaningful KB.
+        if i["nw"] <= 160:
+            continue
         need = i["rw"] * i["dpr"]
-        kb = next((r["kb"] for r in data["res"] if i["src"].split("?")[0] in r["url"]), 0)
+        # match the FULL url (path-only matching pinned every /img.php?... to
+        # the same — usually biggest — resource and invented 52KB avatars)
+        kb = next((r["kb"] for r in data["res"] if i["src"] == r["url"]),
+             next((r["kb"] for r in data["res"] if i["src"].split("?")[0] in r["url"] and "?" not in i["src"]), 0))
         if i["nw"] > need * OVERSIZE_RATIO and kb >= OVERSIZE_MIN_KB:
             v.append(f"IMG-OVERSIZE   {label}  {i['src'][-70:]}  natural={i['nw']}px rendered={i['rw']}px@{i['dpr']}x ({kb}KB)")
         if "/wp-content/uploads/" in i["src"] and "/img.php" not in i["src"] and kb >= OVERSIZE_MIN_KB:

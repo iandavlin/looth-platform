@@ -294,12 +294,14 @@ function renderResults(items, append) {
     // (Per-member teaser cards removed, Ian 6/12 pm: the anon stack is visible
     // profiles only; members-only members appear as anonymous dots on the map.)
     const dn = decodeEnt(it.display_name) || 'Member';
+    // profile-media resize buckets (craft gate 6/12): avatars 96, banners 480
+    const rs = (u,w) => u ? u + (u.indexOf('?')>=0?'&':'?') + 'w=' + w : u;
     const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
     const avi = it.avatar_url
-      ? `<img class="avi-sm" src="${escH(it.avatar_url)}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
+      ? `<img class="avi-sm" src="${escH(rs(it.avatar_url,96))}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
       : `<div class="avi-sm">${ini}</div>`;
     const banner = it.banner_url
-      ? `<div class="dir-card__banner"><img src="${escH(it.banner_url)}" alt=""></div>`
+      ? `<div class="dir-card__banner"><img src="${escH(rs(it.banner_url,480))}" alt=""></div>`
       : '';
     const links = (it.links||[]).map(l => {
       const href = socUrl(l.kind, l.value);
