@@ -12,6 +12,11 @@
 declare(strict_types=1);
 require __DIR__.'/../config.php';
 
+// HTML must never be heuristically cached (no header at all = browsers cache
+// at their own discretion — stale front pages after every config edit, Ian
+// 6/12). Assets stay long-cached via their own versioned-URL nginx block.
+header('Cache-Control: no-cache, must-revalidate');
+
 
 // DEMO MODE: ?demo=1 loads demo-activity.json instead of the live endpoint.
 if (isset($_GET['demo'])) {
