@@ -81,7 +81,7 @@
     var subEl = host.querySelector('.lg-bento__map-sub');
     if (!canvas) return;
     host.classList.add('is-live');
-    if (titleEl) titleEl.textContent = 'Makers near you';
+    if (titleEl) titleEl.textContent = 'Luthiers near you';
     if (subEl) subEl.textContent = loc.source === 'ip'
       ? 'Based on your location — the closest luthiers and shops:'
       : 'You’re on the map. The closest luthiers and shops:';

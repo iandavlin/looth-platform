@@ -690,7 +690,7 @@ foreach ($main_rows as $row):
           <div class="lg-fp-map__canvas"></div>
           <img class="lg-bento__map-img" src="/archive-poc/member-map-teaser.webp" alt="" loading="lazy">
           <div class="lg-bento__map-copy">
-            <h2 class="lg-bento__map-title"><?= $is_member ? 'Makers near you' : 'Luthiers everywhere' ?></h2>
+            <h2 class="lg-bento__map-title">Luthiers near you</h2>
             <p class="lg-bento__map-sub"><?= $is_member ? 'You&rsquo;re on the map. The closest luthiers and shops:' : 'Find members and shops near you.' ?></p>
             <div class="lg-fp-map__list"></div>
             <button type="button" class="lg-bento__map-btn" data-action="open-member-map">Open the member map</button>
