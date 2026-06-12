@@ -115,7 +115,7 @@
   "cta_public": [
     {
       "label": "Join Looth Group",
-      "url": "https://www.patreon.com/cw/theloothgroup/membership",
+      "url": "https://www.patreon.com/c/theloothgroup/membership",
       "style": "primary",
       "action": ""
     },
@@ -144,7 +144,7 @@
         "side": "video-right",
         "video_id": "2IBxue3zPxE",
         "aspect": "16x9",
-        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar makers, for guitar makers.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working makers.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/cw/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
+        "html": "<p class=\"vp-eyebrow\">Welcome</p><h3>Built by guitar makers, for guitar makers.</h3><p>The Looth Group is where serious luthiers and builders share tools, techniques, and the candid conversations you cannot find on YouTube. It is a working community — not a marketing channel.</p><ul><li>The full archive of build threads, repair tutorials, and shop-tested fixes.</li><li>Member video library — long-form workshops from working makers.</li><li>Downloads: plans, jigs, templates, and reference files.</li><li>Active discussion forum where questions actually get answered.</li></ul><p><a class=\"vp-cta\" href=\"https://www.patreon.com/c/theloothgroup/membership\">Join Looth Group →</a><a class=\"vp-cta vp-cta--secondary\" href=\"https://loothgroup.com/looth-group-weekly/\">Weekly email</a></p>"
       }
     },
     {

@@ -77,7 +77,7 @@ return [
     ],
 
     'cta_public' => [
-        ['label' => 'Join Looth Group',     'url' => 'https://www.patreon.com/cw/theloothgroup/membership', 'style' => 'primary'],
+        ['label' => 'Join Looth Group',     'url' => 'https://www.patreon.com/c/theloothgroup/membership', 'style' => 'primary'],
         ['label' => 'Weekly Newsletter',    'url' => 'https://loothgroup.com/looth-group-weekly/',          'style' => 'secondary'],
         ['label' => 'Search the Archive',   'url' => '#search', 'style' => 'ghost', 'action' => 'open-search-modal'],
     ],
