@@ -3137,6 +3137,7 @@ body.view-discover .lg-bento__events .rail { overflow-x: auto; }
 body.view-discover .lg-bento .row { margin: 0; }
 body.view-discover .lg-bento__map {
   position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+  isolation: isolate; /* trap Leaflet z-400/1000 panes below the sticky chrome (z-40) */
   min-height: 280px; border-radius: 14px; overflow: hidden;
   border: 1px solid var(--lg-line, #ebe9e2); background: var(--fp-img-ph, #d4ccb8);
 }
