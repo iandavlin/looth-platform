@@ -52,6 +52,24 @@ if (!function_exists('lg_cover_src')) {
     }
 }
 
+if (!function_exists('lg_cover_srcset')) {
+    /**
+     * srcset/sizes for a feed cover: the browser picks 400w for the ~381px
+     * desktop slot and phones at 1x, 800w for retina/wide — same image, same
+     * crop, right resolution (craft gate IMG-OVERSIZE; Ian 6/12 go). Only for
+     * URLs lg_cover_src routed through /img.php; external URLs emit nothing.
+     */
+    function lg_cover_srcset(?string $resized): string
+    {
+        if (!$resized || !str_starts_with($resized, '/img.php?')) return '';
+        $u400 = preg_replace('/&w=\d+$/', '&w=400', $resized);
+        $u800 = preg_replace('/&w=\d+$/', '&w=800', $resized);
+        return ' srcset="' . htmlspecialchars($u400, ENT_QUOTES) . ' 400w, '
+                           . htmlspecialchars($u800, ENT_QUOTES) . ' 800w"'
+             . ' sizes="(max-width: 640px) 100vw, 400px"';
+    }
+}
+
 if (!function_exists('lg_cover_dims')) {
     /**
      * width/height attrs for a feed cover <img> so the browser reserves the
@@ -1349,13 +1367,13 @@ $header_cat = $scoped_forum
       <time class="fc-time lg-card-time"><?= $c_time ?></time>
       <?php if ($c_yt): /* NON-gated video → facade: thumb + play; forums.js swaps iframe on click (no embed up front) */ ?>
         <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($c_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
           <?php if ($c_dur > 0): ?><span class="fc-dur"><?= (int)$c_dur ?> min</span><?php endif; ?>
         </div>
       <?php elseif ($c_is_gated): /* GATED → locked teaser: dimmed thumb + lock overlay; links to the standalone page which carries its own paywall. NO inline play, no excerpt, no engagement. */ ?>
         <a class="fc-cover feed-card__cover fc-cover--gated" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= htmlspecialchars($c_tier_lbl) ?> members only">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <span class="fc-gate">
             <span class="fc-gate__lock" aria-hidden="true">&#128274;</span>
             <span class="fc-gate__t"><?= htmlspecialchars($c_tier_lbl) ?> members only</span>
@@ -1364,7 +1382,7 @@ $header_cat = $scoped_forum
         </a>
       <?php elseif (!empty($c_img)): ?>
         <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
@@ -1471,7 +1489,7 @@ $header_cat = $scoped_forum
                but now unused. */ ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>

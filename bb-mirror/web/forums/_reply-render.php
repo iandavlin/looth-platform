@@ -65,6 +65,12 @@ if (!function_exists('bb_mirror_avatar')) {
     {
         if ($avatar_url !== null && $avatar_url !== '') {
             $u = function_exists('lg_bb_mirror_safe_avatar') ? lg_bb_mirror_safe_avatar($avatar_url) : $avatar_url;
+            // Route uploads-hosted avatars through the resizer at 2x the slot
+            // (a 300px/149KB BB original was shipping into 40px circles —
+            // craft gate IMG-RAW, Ian 6/12). Non-uploads URLs pass through.
+            if (preg_match('#/wp-content/uploads/(.+)$#', (string)$u, $m)) {
+                $u = '/img.php?s=' . rawurlencode($m[1]) . '&w=' . max(32, $size * 2);
+            }
             return sprintf(
                 '<img class="avatar-init avatar-init--img" src="%s" width="%d" height="%d" alt="" loading="lazy" decoding="async">',
                 htmlspecialchars((string)$u), $size, $size
