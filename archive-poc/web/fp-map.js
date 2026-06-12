@@ -40,11 +40,18 @@
   }
 
   // 1) member's own location → 2) IP geolocation fallback.
+  // A member who STOWED the Location section opted off the map — honor that
+  // fully: no You pin AND no IP-guess either; the static teaser stays (Ian
+  // 6/12). The IP fallback is for viewers with no location record at all.
   function resolveLocation() {
     return j('/profile-api/v0/me/location', { credentials: 'same-origin' })
-      .then(function (b) { return pickMe(b); })
+      .then(function (b) {
+        if (b && b.in_layout === false) return { optedOut: true };
+        return pickMe(b);
+      })
       .catch(function () { return null; })
       .then(function (loc) {
+        if (loc && loc.optedOut) return null;
         if (loc) return loc;
         return j('https://get.geojs.io/v1/ip/geo.json')
           .then(function (g) {
