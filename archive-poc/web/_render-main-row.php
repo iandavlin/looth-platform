@@ -429,19 +429,96 @@
                makes the game postMessage its height up; the listener sizes
                the frame so the block never double-scrolls. */ ?>
       <?php /* aud=m|p picks the audience's daily phrase track (logged-out gets
-               a different puzzle). Cosmetic: score recording is server-gated. */ ?>
-      <iframe class="gdle-frame" id="gdle-frame"
-              src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
-              title="Guitardle — daily guitar phrase game"
-              loading="lazy"
-              scrolling="no"></iframe>
+               a different puzzle). Cosmetic: score recording is server-gated.
+               The side panel (weekly leaders + your stats) shares the column —
+               board from /archive-api/v0/guitardle-board, stats read straight
+               from the game's localStorage (same origin as the iframe). */ ?>
+      <div class="gdle-duo">
+        <iframe class="gdle-frame" id="gdle-frame"
+                src="/archive-poc/guitardle/index.html?embed=1&amp;aud=<?= $is_member ? 'm' : 'p' ?>&amp;v=<?= @filemtime(__DIR__ . '/guitardle/game.js') ?>"
+                title="Guitardle — daily guitar phrase game"
+                loading="lazy"
+                scrolling="no"></iframe>
+        <aside class="gdle-side" aria-label="Guitardle leaderboard and stats">
+          <section class="gdle-card">
+            <h3 class="gdle-card__title">🏆 Weekly Leaders</h3>
+            <p class="gdle-card__sub">Win = 11&minus;moves pts &middot; Hardcore 2&times; &middot; resets Monday</p>
+            <ol class="gdle-side-board" id="gdle-side-board"></ol>
+            <p class="gdle-side-empty" id="gdle-side-empty" hidden>No wins yet this week &mdash; be the first!</p>
+          </section>
+          <section class="gdle-card">
+            <h3 class="gdle-card__title">Your stats</h3>
+            <div class="gdle-stats">
+              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="played">0</span><span class="gdle-stat__l">Played</span></div>
+              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="winrate">0%</span><span class="gdle-stat__l">Win rate</span></div>
+              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="streak">0</span><span class="gdle-stat__l">Streak</span></div>
+              <div class="gdle-stat"><span class="gdle-stat__n" data-gdle-stat="best">0</span><span class="gdle-stat__l">Best</span></div>
+            </div>
+          </section>
+        </aside>
+      </div>
       <script>
-      addEventListener('message', function (e) {
-          if (e.origin !== location.origin) return;
-          if (!e.data || e.data.type !== 'guitardle:height' || !(e.data.height > 0)) return;
-          var f = document.getElementById('gdle-frame');
-          if (f) f.style.height = Math.ceil(e.data.height) + 'px';
-      });
+      (function () {
+          addEventListener('message', function (e) {
+              if (e.origin !== location.origin) return;
+              if (!e.data || e.data.type !== 'guitardle:height' || !(e.data.height > 0)) return;
+              var f = document.getElementById('gdle-frame');
+              if (f) f.style.height = Math.ceil(e.data.height) + 'px';
+          });
+
+          function fillBoard() {
+              fetch('/archive-api/v0/guitardle-board', { credentials: 'same-origin' })
+                  .then(function (r) { return r.ok ? r.json() : null; })
+                  .then(function (b) {
+                      if (!b) return;
+                      var list = document.getElementById('gdle-side-board');
+                      var empty = document.getElementById('gdle-side-empty');
+                      var leaders = b.leaders || [];
+                      list.innerHTML = '';
+                      empty.hidden = leaders.length > 0;
+                      leaders.forEach(function (l, i) {
+                          var li = document.createElement('li');
+                          li.className = 'gdle-side-row' + (i === 0 ? ' is-first' : '');
+                          var rank = document.createElement('span');
+                          rank.className = 'gdle-side-row__rank';
+                          rank.textContent = i === 0 ? '👑' : (i + 1);
+                          var name = document.createElement('span');
+                          name.className = 'gdle-side-row__name';
+                          name.textContent = l.name;
+                          var pts = document.createElement('span');
+                          pts.className = 'gdle-side-row__pts';
+                          pts.textContent = l.points + ' pts · ' + l.wins + 'W';
+                          li.append(rank, name, pts);
+                          list.appendChild(li);
+                      });
+                  }).catch(function () {});
+          }
+
+          // The game saves its stats in localStorage on this same origin.
+          function fillStats() {
+              var g = function (k, d) { return localStorage.getItem('guitardle_' + k) || d; };
+              var played = parseInt(g('gamesPlayed', '0'), 10);
+              var won    = parseInt(g('gamesWon', '0'), 10);
+              var set = function (k, v) {
+                  var el = document.querySelector('[data-gdle-stat="' + k + '"]');
+                  if (el) el.textContent = v;
+              };
+              set('played', played);
+              set('winrate', (played > 0 ? Math.round(won / played * 100) : 0) + '%');
+              set('streak', g('streak', '0'));
+              set('best', g('bestStreak', '0'));
+          }
+
+          fillBoard();
+          fillStats();
+          // The iframe writing localStorage at game end fires `storage` here —
+          // refresh the stats at once and the board after the score POST lands.
+          addEventListener('storage', function (e) {
+              if (!e.key || e.key.indexOf('guitardle_') !== 0) return;
+              fillStats();
+              setTimeout(fillBoard, 2000);
+          });
+      })();
       </script>
     </section>
 
