@@ -44,7 +44,8 @@ $ctx    = [
     'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
 ];
 
-$regions = lg_events_regions();
+// $regions/lg_events_regions() no longer queried — the chip row is gone
+// (Ian 6/12); the helper stays in lib for the deep-link filter + weekly.
 
 /* Render one bucket of cards. */
 $render_bucket = static function (bool $past) use ($active_region, $h): void {
@@ -94,13 +95,9 @@ $render_bucket = static function (bool $past) use ($active_region, $h): void {
     <h1 class="lg-evland__head">Events</h1>
     <p class="lg-evland__sub">Live builds, clinics, and community calls. Click any event for details and the join link.</p>
 
-    <div class="lg-evland__filters">
-        <a class="lg-evland__chip <?= $active_region === '' ? 'lg-evland__chip--active' : '' ?>" href="<?= $h($base_url) ?>">All regions</a>
-        <?php foreach ($regions as $slug => $name): ?>
-            <a class="lg-evland__chip <?= $active_region === $slug ? 'lg-evland__chip--active' : '' ?>"
-               href="<?= $h($base_url . '?ev_region=' . rawurlencode($slug)) ?>"><?= $h($name) ?></a>
-        <?php endforeach; ?>
-    </div>
+    <?php /* Region filter chips removed (Ian 2026-06-12): too few events to split
+             by region. ?ev_region= deep links still filter (parsing kept above),
+             and each card still shows its region pin — only the chip row is gone. */ ?>
 
     <section class="lg-evland__section">
         <h2 class="lg-evland__section-h">Upcoming</h2>
