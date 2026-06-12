@@ -715,7 +715,9 @@ require __DIR__ . '/_chrome.php'; ?>
 // Bento logged-in layout (Buck's pick, Ian-greenlit 2026-06-11): members get a
 // featured-member band after the welcome promo, and the events row pairs with
 // a member-map tile in a two-up bento grid, Loothalong link pinned on top.
-$lg_fm = ($is_member && defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])) ? LG_FEATURED_MEMBER : null;
+// Featured-member band shows BOTH audiences (Ian 6/12) — it follows whichever
+// welcome promo the viewer got (member What's-New / public Classic Landing).
+$lg_fm = (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])) ? LG_FEATURED_MEMBER : null;
 foreach ($main_rows as $row):
     $layout = $row['layout'] ?? 'rail';
     $row_id = $row['id'] ?? '';
@@ -772,7 +774,7 @@ foreach ($main_rows as $row):
 <?php else: ?>
 <?php include __DIR__ . "/_render-main-row.php"; ?>
 <?php endif; ?>
-<?php if ($lg_fm && $row_id === 'video-promo-members'): ?>
+<?php if ($lg_fm && ($row_id === 'video-promo-members' || $row_id === 'video-promo-public')): ?>
       <section class="row row--featured-member" data-row-id="featured-member">
         <div class="lg-fm">
           <span class="lg-fm__badge">Featured member</span>
@@ -780,7 +782,9 @@ foreach ($main_rows as $row):
           <div class="lg-fm__body">
             <h2 class="lg-fm__name"><?= h((string)($lg_fm['name'] ?? '')) ?></h2>
             <div class="lg-fm__role"><?= h((string)($lg_fm['role'] ?? '')) ?></div>
-            <?php if (!empty($lg_fm['where'])): ?><div class="lg-fm__where"><?= h((string)$lg_fm['where']) ?></div><?php endif; ?>
+            <?php /* Location is members-visibility profile data (per-user privacy
+                     ruling) — never render it to the logged-out page. */ ?>
+            <?php if ($is_member && !empty($lg_fm['where'])): ?><div class="lg-fm__where"><?= h((string)$lg_fm['where']) ?></div><?php endif; ?>
             <?php if (!empty($lg_fm['bio'])): ?><p class="lg-fm__bio"><?= h((string)$lg_fm['bio']) ?></p><?php endif; ?>
           </div>
           <?php if (!empty($lg_fm['cta_href'])): ?>

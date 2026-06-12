@@ -370,6 +370,12 @@
              : []);
         $side    = $cfg['side']     ?? 'video-right';
         $vid     = trim((string)($cfg['video_id'] ?? ''));
+        // Instagram embed (Ian 6/12): `instagram` accepts a post URL or bare
+        // shortcode and takes precedence over video_id (which stays in config
+        // as the easy revert). Renders IG's /embed/ doc — no embed.js needed.
+        $ig      = trim((string)($cfg['instagram'] ?? ''));
+        if ($ig !== '' && preg_match('~instagram\.com/(?:p|reel|tv)/([A-Za-z0-9_-]+)~', $ig, $igm)) $ig = $igm[1];
+        if ($ig !== '' && !preg_match('~^[A-Za-z0-9_-]{5,40}$~', $ig)) $ig = '';
         $html    = (string)($cfg['html'] ?? '');
         $aspect  = $cfg['aspect']   ?? '16x9';
         $viewer_tier = $GLOBALS['LG_VIEWER_TIER'] ?? 'public';
@@ -389,7 +395,7 @@
                  . '</div>';
         }, $html);
 
-        if ($vid === '' && trim($html) === '') goto video_promo_end;
+        if ($vid === '' && $ig === '' && trim($html) === '') goto video_promo_end;
 ?>
     <section class="row row--video-promo row--video-promo--<?= h($side) ?>" data-row-id="<?= h($row_id) ?>">
       <?php if (!empty($row['title'])): ?>
@@ -397,7 +403,18 @@
       <?php endif; ?>
       <div class="vpromo">
         <div class="vpromo__video">
-          <?php if ($vid !== ''): ?>
+          <?php if ($ig !== ''): ?>
+            <p class="vpromo__label">From Instagram</p>
+            <div class="vpromo__embed vpromo__embed--instagram">
+              <iframe
+                src="https://www.instagram.com/p/<?= h($ig) ?>/embed/"
+                title="Instagram post"
+                allow="encrypted-media"
+                loading="lazy"
+                scrolling="no"
+                referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+          <?php elseif ($vid !== ''): ?>
             <p class="vpromo__label">Featured video</p>
             <div class="vpromo__embed vpromo__embed--<?= h($aspect) ?>">
               <iframe
