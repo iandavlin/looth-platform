@@ -1,11 +1,28 @@
 # LIVE DEPLOY — audit + plan (drafted 2026-06-12, visibility-refactor session)
 
-> **SUPERSEDED AS RUNBOOK (6/12 pm doc audit): `cutover/cut-day-runbook.md`
-> is the canonical cut document** — blue-green (new box, adopt live's DBs,
-> flip traffic), PG rebuilt from adopted live WP. This file remains as the
-> 6/12 audit record (findings, fixes, verifications); its net-new material
-> was appended to the runbook as the 6/12 addendum. §3 (carry-dev-PG) and
-> the in-place framing are the superseded parts.
+> **CANONICAL CUT DOCUMENT (re-confirmed 6/12 pm after Ian answered the
+> decision list).** Plot history: the doc audit found cutover/cut-day-runbook.md
+> (blue-green/new-box, 6/9) and briefly made it canonical — then Ian
+> confirmed ip-172-31-45-223 IS old live (no second box exists) and ruled
+> IN-PLACE / ONE DB. The cutover lane's batches + LIVE-INVENTORY remain
+> reference; its blue-green model is not pursued.
+>
+> ## THE SIX RULINGS (Ian, 6/12 pm — do not relitigate)
+> 1. ip-172-31-45-223 = old live itself (54.157.13.77). No second box.
+> 2. Deploy IN PLACE on live, apps wired to the ONE real WP DB; revert =
+>    remove nginx includes (old site stays current — one DB, no divergence).
+>    RAM check (free -h) before committing the window.
+> 3. Postgres REBUILT on live from live's CURRENT WP data (not carried from
+>    dev). Re-apply after: Ian+Buck finder opt-ins, karriker fix
+>    (bin/fix-divergent-locations.php --apply), QA fixtures.
+> 4. Live `/` serves the NEW FRONT PAGE (the bento), both audiences.
+> 5. Old BB paths: ONE generic redirect → /hub/ (plus the existing
+>    /members/<slug> → /u/<slug> per-profile redirect). Nav already
+>    doesn't link them.
+> 6. F1 CLOSED on principle: where the member has a dial, THE DIAL DECIDES
+>    (public street = public street, no fuzzing). Only the 2 dial-less
+>    legacy practice-section locations stay coarse-for-anon until /p/
+>    wakes up and they grow a dial. Nothing to build.
 
 Ian 6/12: "we are just about ready to start deploying on the live server…
 audit and test." This is that audit + the sequenced plan. Companions it does
@@ -97,31 +114,29 @@ conveniences (the jwt signing key itself DOES ship — new pair).
    which overlays are product (privacy-sheet, directory-desktop, fp pieces,
    app-mobile-fixes) and ship them to live's web root with the pages.
 
-## 3. Data plan — CARRY dev's Postgres, top off from live's WP
+## 3. Data plan — REBUILD Postgres on live from live's WP (RULED 6/12 pm)
 
-**Dev's PG is the canonical product state** — it holds every ruling executed
-in data: the 1,896 members-only flips, the location-section repair, person
-visibility caches, comments/reactions, discussion-visibility choices. Do NOT
-re-derive on live from scratch; that would silently lose rulings.
+(Supersedes this section's earlier carry-dev-PG draft. Rationale: the 6/12
+refactor moved every ruling into CODE + COLUMN DEFAULTS — members-only
+starting state, one-dial, precision rules — so a fresh build lands them
+automatically, with zero dev test residue and maximally fresh member data.)
 
-1. Freeze window starts: announce, stop dev writers.
-2. `pg_dump` `profile_app` + `looth` on dev → restore on live.
-3. Re-point at live WP (configs do this by hostname) and run the
-   **idempotent top-offs** against live's CURRENT WP/BB data, in order:
-   a. `reconcile-bridge.php` (wp_user_id ↔ profile user; new live signups
-      since the 6/11 dev snapshot get provisioned).
-   b. `migrate-from-xprofile.php --commit` (fills the NEW users only).
-   c. **FULL person resync** (stale-person-after-reload rule) +
-      `backfill-profile-visibility.php` (both flags).
-   d. Social/DM top-off — fold the DM strip-HTML/unescape fixes in FIRST
-      (standing 6/11 rule), then run.
-   e. `backfill-avatars.php` — live HAS the real BB avatar files dev never
-      had; expect real URLs to replace Gravatar fallbacks.
-   f. Comments/likes top-off (comments-db lane scripts).
-4. Hand-jigger the 6 never-geocoded users (checklist) — use
-   `bin/fix-divergent-locations.php` semantics (evidence-guarded) not raw
-   UPDATEs.
-5. `/srv/profile-app-media` rsync dev → live (15 MB).
+Build order on live (the same pipeline that built dev), inside the freeze:
+1. Apply schema: profile-app sql/ migrations in order; bb-mirror schema;
+   archive-poc discovery schema.
+2. profile-app: provision/xprofile migrate (`migrate-from-xprofile.php
+   --commit`), `snapshot-location-from-bb.php`, geocode pass,
+   `reconcile-bridge.php`, `backfill-avatars.php` (live HAS the real BB
+   avatar files), social migrate w/ the DM strip-HTML fixes folded FIRST.
+3. bb-mirror: forum sync + FULL person resync +
+   `backfill-profile-visibility.php`.
+4. archive-poc: indexer/backfill (content), comments migrate.
+5. RE-APPLIES (the only data the rebuild can't derive): Ian + Buck public
+   finder opt-ins (2 UPDATEs), karriker repair
+   (`bin/fix-divergent-locations.php --apply`), hand-jigger the 6
+   never-geocoded users, QA fixtures (matrix self-provisions).
+6. `/srv/profile-app-media` rsync dev → live (15 MB — galleries/QA media;
+   avatars regenerate from live's own files).
 
 ## 3b. WP-side delta — RULED (Ian 6/12): wire to the EXISTING live WP DB
 

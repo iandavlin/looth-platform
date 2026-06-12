@@ -1,5 +1,12 @@
 # MASTER CUT-DAY RUNBOOK (live-deploy lane)
 
+> **MODEL SUPERSEDED 6/12 pm (Ian's decision list): there is NO second box —
+> ip-172-31-45-223 IS old live. Ruled: IN-PLACE / ONE-DB on the existing
+> live box; canonical cut doc = docs/LIVE-DEPLOY-PLAN.md (six rulings at
+> top).** This file's LIVE-INVENTORY, BATCH results, env-parameterize fixes
+> and the 6/12 addendum items remain valid reference; the new-box/DNS-swing
+> phases are not pursued.
+
 End-to-end ordered playbook for the cut. Each step tagged **[DEV✓]** (verified on
 dev) / **[LIVE]** (Ian runs on the new/old box) / **[OPEN]** (decision needed).
 Model = **ADOPT live's DBs** onto a new self-contained box, then flip traffic.
