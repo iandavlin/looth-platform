@@ -1072,6 +1072,32 @@ function feed_save_btn(string $postType, int $itemId): void
 // partial) so the lazy full-thread endpoint can emit reply reactions too. Required
 // below at the "-- Helpers --" include.
 
+// Sponsor rail (Ian 2026-06-12): in STREAM view sponsors move OUT of the feed
+// into this fixed right-hand rail (logo tiles linking to /sponsors/<slug>/);
+// mosaic keeps the inline spotlight cards (sponsor-cards.js) as discovery.
+// Server-rendered ALWAYS, CSS decides per layout — html[data-lg-hublayout] is
+// set pre-paint by the boot script, so neither layout flashes the other's
+// treatment. The list mirrors sponsor-cards.js SPONSORS (same assets/links).
+function hub_render_sponsor_rail(): void
+{
+    $sponsors = [
+        ['slug' => 'total-vise',            'name' => 'Total Vise',            'img' => '/wp-content/uploads/2024/06/Sponor-Banner-Total-Vise-300x108.webp',   'w' => 300, 'h' => 108],
+        ['slug' => 'stewmac',               'name' => 'StewMac',               'img' => '/wp-content/uploads/2024/06/Sidebar-Affiliate-Stew-Mac-300x108.webp', 'w' => 300, 'h' => 108],
+        ['slug' => 'go-acoustic-audio',     'name' => 'Go Acoustic Audio',     'img' => '/wp-content/uploads/2024/06/Sponsor-Go-Acoustic-300x80.webp',         'w' => 300, 'h' => 80],
+        ['slug' => 'strings-micro-factory', 'name' => 'Strings Micro Factory', 'img' => '/wp-content/uploads/2024/06/SMF-Logo-Horizontal-624x192.jpg',         'w' => 624, 'h' => 192],
+        ['slug' => 'gluboost',              'name' => 'GluBoost',              'img' => '/wp-content/uploads/2026/04/gluboost-logo-624x163.png',               'w' => 624, 'h' => 163],
+    ];
+    echo '<aside class="hub-sponsor-rail" aria-label="Our sponsors">';
+    echo '<h2 class="hsr-head">Our sponsors</h2>';
+    foreach ($sponsors as $s) {
+        echo '<a class="hsr-tile" href="/sponsors/' . htmlspecialchars($s['slug'], ENT_QUOTES) . '/">'
+           . '<img src="' . htmlspecialchars($s['img'], ENT_QUOTES) . '" alt="' . htmlspecialchars($s['name'], ENT_QUOTES) . '"'
+           . ' loading="lazy" width="' . (int)$s['w'] . '" height="' . (int)$s['h'] . '">'
+           . '</a>';
+    }
+    echo '</aside>';
+}
+
 // Forum feed URL, appending ?fid=<id> when the slug is shared by >1 forum.
 function feed_forum_url(array $f, array $slug_freq): string
 {
@@ -1200,6 +1226,8 @@ $header_cat = $scoped_forum
       <button class="forum-header__new-post lg-newpost" type="button" data-ntm-open aria-haspopup="dialog">+ New post</button>
     <?php endif; ?>
   </nav>
+
+  <?php if (!$scoped_forum) hub_render_sponsor_rail(); // hub front door only; CSS shows it in stream view ?>
 
   <?php foreach ($hub_author_headers as $_hah) hub_render_author_header($_hah, $hub_filters, $sort_param); ?>
 

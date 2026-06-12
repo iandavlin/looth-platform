@@ -3028,6 +3028,58 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
   }
 }
 
+/* ── Sponsor rail (Ian 2026-06-12: sponsors OUT of the stream feed, into a
+   right-hand rail; mosaic keeps the inline spotlight cards as discovery).
+   The aside is server-rendered on every hub load; these rules decide which
+   treatment paints — both keyed on pre-paint state (the boot script's
+   data-lg-hublayout + the media query), so neither layout flashes.
+   The rail is position:fixed in the right gutter of the 1100px reading
+   column: out of flow, so it can never shift feed content (zero CLS). ── */
+.feed-page .hub-sponsor-rail { display: none; }
+@media (min-width: 641px) {
+  /* Stream pulls the INLINE sponsor cards (sponsor-cards.js .lg-sponsor-card)
+     out of the feed at every desktop width — the rail replaces them where it
+     fits. Mobile (≤640) and mosaic keep them untouched. !important because the
+     hub-polish overlay's C3-leftover '.feed-page .feed-card{display:block
+     !important}' otherwise outranks the hide (dies at the C3 absorb). */
+  html[data-lg-hublayout="stream"] .feed-page .feed .lg-sponsor-card { display: none !important; }
+}
+@media (min-width: 1570px) {
+  /* 1100px column + 2×(200px rail + gaps) — below this the gutter can't hold
+     the rail without crowding the cards, so sponsors sit this band out. */
+  html[data-lg-hublayout="stream"] .feed-page .hub-sponsor-rail {
+    display: block;
+    position: fixed;
+    top: 132px;                          /* clears the sticky chrome + sort bar */
+    left: calc(50% + 550px + 24px);      /* right gutter of the centered column */
+    width: 200px;
+    max-height: calc(100vh - 156px);
+    overflow: auto;
+  }
+  .hub-sponsor-rail .hsr-head {
+    margin: 0 0 10px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    letter-spacing: .09em; text-transform: uppercase;
+    color: var(--lguser-mute, var(--lg-mute, #6b6f6b));
+    padding-bottom: 7px;
+    border-bottom: 2px solid var(--lg-amber, #ecb351);
+  }
+  .hub-sponsor-rail .hsr-tile {
+    display: flex; align-items: center; justify-content: center;
+    height: 84px; margin: 0 0 10px; padding: 0 14px;
+    background: #fff;                    /* logos are designed for white slabs */
+    border: 1px solid var(--lguser-line, var(--lg-line, #e3ddd0));
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(26, 29, 26, .08);
+  }
+  .hub-sponsor-rail .hsr-tile img {
+    display: block; max-width: 100%; max-height: 56px; width: auto; height: auto;
+  }
+  .hub-sponsor-rail .hsr-tile:hover {
+    border-color: var(--lguser-accent, var(--lg-sage-d, #6b7c52));
+  }
+}
+
 
 /* ── cream-sage: forum-parent prominence (brand-accent left bar + colored
       parent label + category icon). 9 categories map onto the 3 brand accent
