@@ -116,6 +116,14 @@ $range = static function (string $from, string $to): string {
 .lg-wk__back{display:inline-block;margin:0 0 18px;color:#6b7163;text-decoration:none;font-size:14px}
 .lg-wk__back:hover{color:var(--lg-charcoal)}
 .lg-wk__mail{display:block;width:100%;border:1px solid var(--lg-line);border-radius:14px;background:#fff;height:1200px}
+.lg-wk__sub-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--lg-charcoal,#2f3128);border-radius:14px;padding:16px 18px;margin:0 0 18px}
+.lg-wk__sub-txt{flex:1 1 240px;display:flex;flex-direction:column;gap:2px}
+.lg-wk__sub-txt b{color:#fff;font-size:15px}
+.lg-wk__sub-txt small{color:#b8bdac;font-size:12.5px}
+.lg-wk__sub-bar input[type=email]{flex:1 1 220px;border:0;border-radius:999px;padding:11px 16px;font-size:14px}
+.lg-wk__sub-bar button{border:0;border-radius:999px;background:var(--lg-sage,#87986a);color:#fff;font-weight:700;font-size:14px;padding:11px 22px;cursor:pointer}
+.lg-wk__sub-bar button:hover{filter:brightness(1.06)}
+.lg-wk__hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
 </style>
 </head>
 <body class="lg-weekly-page">
@@ -123,6 +131,35 @@ $range = static function (string $from, string $to): string {
 <?php lg_shared_render_site_header($ctx); ?>
 
 <main id="lg-main" class="lg-wk">
+<?php if (!$authed): ?>
+    <?php /* Logged-out signup (Ian 6/12): the digest is public to READ; this
+             captures non-member emails into the CRM's non-member list with
+             double opt-in. Members are auto-subscribed at signup — they never
+             see this bar. */ ?>
+    <form class="lg-wk__sub-bar" id="lg-wk-sub">
+        <div class="lg-wk__sub-txt"><b>Get the Weekly Digest in your inbox</b>
+            <small>Free — luthier events, new videos, and shop talk, every week.</small></div>
+        <input type="text" name="website" class="lg-wk__hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <input type="email" name="email" required placeholder="you@example.com" aria-label="Email address">
+        <button type="submit">Subscribe</button>
+    </form>
+    <script>
+    (function(){var f=document.getElementById('lg-wk-sub');if(!f)return;
+      f.addEventListener('submit',function(e){e.preventDefault();
+        var b=f.querySelector('button');b.disabled=true;b.textContent='Subscribing\u2026';
+        var data=new URLSearchParams();data.set('action','lg_weekly_signup');
+        data.set('email',f.email.value);data.set('website',f.website.value);
+        fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},body:data.toString()})
+        .then(function(r){return r.json()}).then(function(j){
+          if(j&&j.ok){f.innerHTML='<div class="lg-wk__sub-txt"><b>'+
+            (j.state==='subscribed'?'You\u2019re subscribed \u2713':'Check your inbox \u2709')+'</b><small>'+
+            (j.state==='subscribed'?'The next digest will land in your inbox.':'Click the confirmation link we just sent and you\u2019re in.')+'</small></div>';}
+          else{b.disabled=false;b.textContent='Subscribe';alert(j&&j.error==='bad_email'?'That email doesn\u2019t look right.':'Could not subscribe \u2014 try again.');}
+        }).catch(function(){b.disabled=false;b.textContent='Subscribe';});
+      });})();
+    </script>
+<?php endif; ?>
 <?php if ($slug !== '' && !$issue): ?>
     <a class="lg-wk__back" href="/weekly/all/">&larr; All digests</a>
     <h1 class="lg-wk__head">Not found</h1>

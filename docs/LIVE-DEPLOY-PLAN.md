@@ -92,7 +92,11 @@ conveniences (the jwt signing key itself DOES ship — new pair).
    to every team chat):** `/etc/looth/jwt-{private,public}.pem` (new pair),
    `/etc/lg-internal-secret`, `/etc/lg-archive-poc-secret`,
    `/etc/lg-profile-app-secret`, WP `profile_hook_secret` option, R2 token
-   (live's own, already exists). Rate-limit conf for /profile-api +
+   (live's own, already exists). **PLUS (found 6/12 pm): rotate the Amazon
+   SES credentials — dev's FluentSMTP held LIVE SES creds (only the dev
+   mail-cap firewall prevented real sends). Dev now defaults to a mailpit
+   connection (wp option fluentmail-settings); live keeps SES — verify the
+   default connection on live is SES at cut.** Rate-limit conf for /profile-api +
    location-search (checklist item, still unapplied even on dev).
    **These are NOT WordPress salts (Ian 6/12).** wp-config, WP salts, the WP
    DB and the domain are untouched — every member's existing

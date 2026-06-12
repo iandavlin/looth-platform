@@ -61,3 +61,57 @@ add_action('wp_ajax_lg_event_reminder_signup', function () {
         wp_send_json(['ok' => false, 'error' => 'crm_error'], 500);
     }
 });
+
+/**
+ * ANON weekly-digest signup (Ian 6/12: "offer it to logged out") —
+ * wp_ajax_nopriv: email capture from the public /weekly/ page into the
+ * "Non Member Weekly Email Subscriber" list, DOUBLE OPT-IN (pending +
+ * confirmation email) so it's consent-clean and spam-resistant. Honeypot
+ * field + same-origin + a light per-IP rate limit.
+ */
+const LG_WEEKLY_NONMEMBER_LIST_ID = 7;   // wp_fc_lists: "Non Member Weekly Email Subscriber"
+
+add_action('wp_ajax_nopriv_lg_weekly_signup', 'lg_weekly_signup_handler');
+add_action('wp_ajax_lg_weekly_signup',        'lg_weekly_signup_handler');  // logged-in fallback: same flow
+function lg_weekly_signup_handler() {
+    $src  = $_SERVER['HTTP_ORIGIN'] ?? ($_SERVER['HTTP_REFERER'] ?? '');
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    if ($src !== '' && parse_url($src, PHP_URL_HOST) !== $host) {
+        wp_send_json(['ok' => false, 'error' => 'bad_origin'], 403);
+    }
+    if (!function_exists('FluentCrmApi')) wp_send_json(['ok' => false, 'error' => 'crm_unavailable'], 500);
+
+    // Honeypot: real users never fill "website".
+    if (trim((string)($_POST['website'] ?? '')) !== '') wp_send_json(['ok' => true]);   // silently swallow bots
+
+    $email = sanitize_email((string)($_POST['email'] ?? ''));
+    if (!$email || !is_email($email)) wp_send_json(['ok' => false, 'error' => 'bad_email'], 422);
+
+    // Per-IP rate limit: 5 signups/hour.
+    $ipKey = 'lg_wk_signup_' . md5($_SERVER['REMOTE_ADDR'] ?? '');
+    $n = (int) get_transient($ipKey);
+    if ($n >= 5) wp_send_json(['ok' => false, 'error' => 'slow_down'], 429);
+    set_transient($ipKey, $n + 1, HOUR_IN_SECONDS);
+
+    try {
+        $api = FluentCrmApi('contacts');
+        $existing = $api->getContact($email);
+        if ($existing && $existing->status === 'subscribed') {
+            // Already a confirmed contact: just attach the list, no re-confirm spam.
+            $existing->attachLists([LG_WEEKLY_NONMEMBER_LIST_ID]);
+            wp_send_json(['ok' => true, 'state' => 'subscribed']);
+        }
+        $contact = $api->createOrUpdate([
+            'email'  => $email,
+            'status' => 'pending',
+            'lists'  => [LG_WEEKLY_NONMEMBER_LIST_ID],
+        ]);
+        if ($contact && method_exists($contact, 'sendDoubleOptinEmail')) {
+            $contact->sendDoubleOptinEmail();
+        }
+        wp_send_json(['ok' => true, 'state' => 'pending']);
+    } catch (\Throwable $e) {
+        error_log('[lg-weekly-signup] ' . $e->getMessage());
+        wp_send_json(['ok' => false, 'error' => 'crm_error'], 500);
+    }
+}
