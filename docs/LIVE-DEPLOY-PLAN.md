@@ -45,7 +45,11 @@ conveniences (the jwt signing key itself DOES ship — new pair).
    - **How person-sync / reconcile / backfills are scheduled** — NO systemd
      timer or cron exists on dev for them (they've been run by hand all
      month). Live needs explicit timers: person resync, events sync,
-     whoami-purge consumers, geoipupdate.
+     whoami-purge consumers, geoipupdate. Context (Ian asked 6/12): the
+     request path IS direct WP↔app API + push hooks — timers only cover the
+     pull-based CACHES (forums.person identity/visibility copies, GeoIP
+     freshness). Ian runs the full backfills at cut; a ~15-min person/
+     visibility timer + weekly geoipupdate keep them converged after.
    - Live SMTP path for profile-app `@mail()` (reports) + sudo-queue pings.
    - Poller lane standing gaps (memory): profile-app nginx route, discovery
      ownership, audit_log key.
@@ -60,6 +64,16 @@ conveniences (the jwt signing key itself DOES ship — new pair).
    `/etc/lg-profile-app-secret`, WP `profile_hook_secret` option, R2 token
    (live's own, already exists). Rate-limit conf for /profile-api +
    location-search (checklist item, still unapplied even on dev).
+   **These are NOT WordPress salts (Ian 6/12).** wp-config, WP salts, the WP
+   DB and the domain are untouched — every member's existing
+   `wordpress_logged_in` cookie stays valid through the cut; nobody re-logs
+   in. The new apps mint their `looth_id` fast-path token silently off the
+   existing WP cookie on first touch (the bounce already live on dev) —
+   which is why reconcile-bridge is STEP ONE of the top-off order.
+   **No search-replace pass** (asked 6/12): the WP DB doesn't move, and the
+   remaining dev-hostname strings in app code are the dev halves of
+   env-branches that must stay; the grep audit (clean as of today) is the
+   pre-cut check, not a replace.
 6. **PG on live**: install PG16, create roles per pool user, apply the two
    databases by RESTORE (see §3), then the ownership question — at cut,
    collapse file+role ownership to www-data and switch peer-auth DSNs to
