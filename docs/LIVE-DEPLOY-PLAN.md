@@ -211,6 +211,9 @@ Gap inventory line (rerun near cut to catch newer content):
 - **Phase C — flip:** include the snippets, apply the `/` routing decision,
   `nginx -t && reload`. CDN/cache purge if fronted.
 - **Phase D — TEST GATE (the "test" half of Ian's ask):**
+  - `tools/gates/run-all.sh` — ALL gates, one entry (visibility matrix +
+    web-craft gate; docs/CRAFT-STANDARD.md). The craft gate needs its PAGES
+    host param pointed at live (same LG_MATRIX_HOST pattern).
   - `LG_MATRIX_HOST=https://loothgroup.com php profile-app/bin/visibility-matrix.php`
     — the same 66-assert gate that guards dev, against live, with a live QA
     fixture user. **GREEN or roll back.**
