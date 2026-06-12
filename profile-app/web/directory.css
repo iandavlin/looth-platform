@@ -137,16 +137,13 @@ body { background: var(--lg-cream); color: var(--lg-ink); }
 .dir-light--stop .dir-light__dot  { background: #c0492f; box-shadow: 0 0 0 3px rgba(192,73,47,.16); }
 .dir-light--maybe .dir-light__dot { background: var(--lg-amber); box-shadow: 0 0 0 3px rgba(224,168,60,.2); }
 
-/* ── Anonymous (logged-out) map view — Strava pattern (Ian 6/12) ──────────
-   The map is the page: real aggregated density, no identities. Filters,
-   member list and sort are members-only chrome — hidden for anon. */
-body.dir--anon .dir-filterbar,
-body.dir--anon .dir-app,
-body.dir--anon #dir-more { display: none; }
-body.dir--anon .dir-map { height: min(72vh, 720px); }
+/* ── Anonymous (logged-out) finder — Ian 6/12: the PUBLIC luthier finder is
+   the product. Anon gets the full directory UI (named pins at each member's
+   public precision, list, filters — all server-coarsened); the only anon
+   extra is the floating join card. */
 .dir-join-card {
-  position: relative; z-index: 500;
-  margin: -86px 18px 18px auto; width: min(360px, calc(100% - 36px));
+  position: fixed; right: 18px; bottom: 18px; z-index: 1100;
+  width: min(360px, calc(100% - 36px));
   background: #fff; border: 1px solid #e3ddd0; border-radius: 14px;
   padding: 14px 16px; box-shadow: 0 10px 30px rgba(26, 29, 26, .22);
 }

@@ -443,49 +443,15 @@ async function loadPage(page, append) {
 }
 
 // All matching members' pins (not just the current page) — plotted on the map.
+// SAME flow logged-in and logged-out (Ian 6/12: the public luthier finder is
+// the product): the API serves the anon audience public-precision pins and
+// cards with no uuids; per-member privacy is enforced server-side.
 async function loadPins() {
   if (!dirMap) return;
-  if (!DIR_AUTHED) {                       // Strava pattern: aggregate, de-identified
-    const res = await fetch('/profile-api/v0/directory/pins-public');
-    const d = await res.json();
-    plotPublicCells(d.cells || [], d.count || 0);
-    return;
-  }
   const sp = filterQs(); sp.set('pins', '1');
   const res = await fetch('/profile-api/v0/directory/members?' + sp.toString(), {credentials:'include'});
   const d = await res.json();
   plotPins(d.pins || []);
-}
-
-// Anonymous map layer: one marker per member at their ~11km grid cell —
-// markercluster aggregates them into honest count bubbles at every zoom.
-// No names, no slugs, nothing clickable-through; every click is the join
-// prompt. (Server payload carries only [lat, lng, count].)
-function plotPublicCells(cells, total) {
-  if (!dirMap) return;
-  dirCluster.clearLayers();
-  const meta = document.getElementById('dir-meta');
-  if (meta) meta.textContent = total + ' luthiers worldwide';
-  const cnt = document.getElementById('dir-join-count');
-  if (cnt && total) cnt.textContent = total;
-  const joinHtml =
-    '<div style="font-weight:700;font-size:13px;color:#1f1d1a;margin-bottom:4px">Luthiers here</div>' +
-    '<div style="font-size:12px;color:#6b6f6b;margin-bottom:8px">Join to see who they are and what they build.</div>' +
-    '<a href="https://www.patreon.com/c/theloothgroup/membership" target="_blank" rel="noopener" ' +
-    'style="display:inline-block;background:#ecb351;color:#4a3c10;font-weight:700;font-size:12.5px;' +
-    'padding:8px 14px;border-radius:999px;text-decoration:none">Join on Patreon &rarr;</a>';
-  const pts = [];
-  cells.forEach(c => {
-    const lat = c[0], lng = c[1], n = c[2];
-    if (typeof lat !== 'number' || typeof lng !== 'number') return;
-    for (let i = 0; i < n; i++) {
-      const m = L.marker([lat, lng], {icon: pinIconGated});
-      m.bindPopup(joinHtml, {closeButton: true});
-      dirCluster.addLayer(m);
-    }
-    pts.push([lat, lng]);
-  });
-  if (pts.length > 1) dirMap.fitBounds(pts, {padding: [40, 40], maxZoom: 5});
 }
 
 function applyFilters() {
@@ -642,7 +608,7 @@ function plotPins(pins) {
 }
 
 // Initialize map + first list load.
-document.addEventListener('DOMContentLoaded', () => { initDirMap(); if (DIR_AUTHED) loadPage(1, false); });
+document.addEventListener('DOMContentLoaded', () => { initDirMap(); loadPage(1, false); });
 
 // Location autocomplete via OSM Nominatim (server-proxied /me/location/search) — replaces the
 // broken Google Places widget. Fills #dir-lat/#dir-lng on pick, then applyFilters(). No API key.

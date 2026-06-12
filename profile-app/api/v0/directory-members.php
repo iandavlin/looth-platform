@@ -79,15 +79,18 @@ function dir_visible_dropoffs(?array $do, array $r, int $viewerUserId, bool $isA
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 
-// LOGIN REQUIRED (Ian 2026-06-11): anonymously, this endpoint handed out the
-// full member list — all UUIDs, names and coarse locations — which are also
-// the keys to /profile-media/ file URLs (enumeration risk, Buck paywall
-// audit). Members-only now; anon consumers (front-page map tile) fall back
-// to their static teaser. Per-user privacy filtering of the RESULTS stays
-// the profile-app lane's file-level enforcement work.
-$viewer       = Auth::requireUser();   // 401s anon
-$viewerUserId = (int)$viewer['id'];
-$role         = 'member';
+// PUBLIC LUTHIER FINDER (Ian 2026-06-12, supersedes the 6/11 login wall):
+// logged-out visitors ARE the finder's audience — customers looking for a
+// luthier don't have accounts. Anonymous requests get the PUBLIC-audience
+// view: only what each member's location_public_precision allows (city
+// default, 'private' = invisible), names + slugs are public-profile data.
+// What the 6/11 lockdown was actually protecting against is handled
+// surgically instead: anon payloads carry NO uuid (the /profile-media file
+// key) and no connection state; file-level auth on gated media remains the
+// profile-app follow-up.
+$viewer       = Auth::currentUser();   // null = anonymous (public audience)
+$viewerUserId = $viewer !== null ? (int)$viewer['id'] : 0;
+$role         = $viewer !== null ? 'member' : 'public';
 
 $lat    = isset($_GET['lat']) ? (float)$_GET['lat'] : null;
 $lng    = isset($_GET['lng']) ? (float)$_GET['lng'] : null;
@@ -394,6 +397,14 @@ if ($viewerUuid && $results) {
             ? ['state' => 'self', 'id' => null]
             : ($stateByUuid[$it['uuid']] ?? ['state' => 'none', 'id' => null]);
     }
+    unset($it);
+}
+
+// Anonymous viewers never receive uuids — they're the key space for
+// /profile-media file URLs (Buck 6/11 audit). Slugs (public profile links)
+// are the anon identifier; the connect block above is already login-only.
+if ($viewerUserId === 0) {
+    foreach ($results as &$it) { unset($it['uuid']); }
     unset($it);
 }
 
