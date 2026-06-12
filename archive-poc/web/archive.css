@@ -664,6 +664,53 @@ body.view-grid .arc-page { padding-top: 24px; }
 }
 .cal-menu__item:hover { background: var(--lg-sage-tint); }
 
+/* "Report a bug or suggestion" modal — all token-driven so the dark gates
+   flow through with no extra rules */
+.fb-modal {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45);
+  padding: 16px;
+}
+.fb-modal__card {
+  width: 100%; max-width: 460px;
+  background: var(--lg-card-bg, #fff);
+  border: 1px solid var(--lg-line);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+  padding: 20px;
+}
+.fb-modal__title { font: 700 18px/1.3 var(--lg-font-serif); color: var(--lg-ink); margin: 0 0 12px; }
+.fb-modal__form { display: flex; flex-direction: column; gap: 12px; }
+.fb-modal__kinds { display: flex; gap: 8px; }
+.fb-kind {
+  font: 600 12px/1 var(--lg-font-sans); color: var(--lg-ink);
+  border: 1px solid var(--lg-line); border-radius: 999px;
+  padding: 7px 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.fb-kind:has(input:checked) { background: var(--lg-sage-tint); border-color: var(--lg-sage-d); }
+.fb-modal__form textarea {
+  font: 400 14px/1.5 var(--lg-font-sans); color: var(--lg-ink);
+  background: var(--fp-input-bg, #fff);
+  border: 1px solid var(--lg-line); border-radius: 8px;
+  padding: 10px 12px; resize: vertical; min-height: 110px;
+}
+.fb-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.fb-modal__status { font: 400 12px/1.4 var(--lg-font-sans); color: var(--lg-rust); margin: 0; }
+.fb-modal__done { font: 600 14px/1.4 var(--lg-font-sans); color: var(--lg-sage-d); margin: 0; }
+.fb-modal__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.fb-btn {
+  font: 600 13px/1 var(--lg-font-sans);
+  background: var(--lg-sage-d); color: var(--lg-cream, #fff);
+  border: 1px solid var(--lg-sage-d); border-radius: 8px;
+  padding: 10px 16px; cursor: pointer;
+}
+.fb-btn:hover { filter: brightness(1.06); }
+.fb-btn[disabled] { opacity: 0.6; cursor: default; }
+.fb-btn--ghost { background: transparent; color: var(--lg-ink); border-color: var(--lg-line); }
+.fb-btn--ghost:hover { background: var(--lg-sage-tint); filter: none; }
+
 /* --- Mobile billboard --- */
 @media (max-width: 720px) {
   .billboard { height: auto; min-height: 480px; }

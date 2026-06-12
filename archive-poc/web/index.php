@@ -177,6 +177,43 @@ elseif ($preview_as === 'pro'  && $edit_capable) { $is_member = true; $viewer_ti
 $GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
 $GLOBALS['LG_EDIT_CAPABLE'] = $edit_capable;
 
+// ---- "Report a bug or suggestion" modal POST → email ---------------------
+// The destination address lives ONLY here, server-side — it must never appear
+// in HTML/JS. On dev, mail lands in the local mailpit catcher (/mailpit/);
+// real delivery starts at cutover when the box gets real SMTP.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'feedback') {
+    header('Content-Type: application/json');
+    // Honeypot: real users never see (or fill) the "website" field.
+    if (trim((string)($_POST['website'] ?? '')) !== '') { echo json_encode(['ok' => true]); exit; }
+    $kind = ($_POST['kind'] ?? '') === 'bug' ? 'Bug report' : 'Suggestion';
+    $msg  = trim((string)($_POST['message'] ?? ''));
+    if ($msg === '' || strlen($msg) > 5000) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Write a few words first (5000 chars max).']); exit;
+    }
+    $ip   = $_SERVER['REMOTE_ADDR'] ?? '?';
+    $cool = sys_get_temp_dir() . '/lg_fb_' . md5($ip);
+    if (is_file($cool) && time() - (int)@filemtime($cool) < 60) {
+        http_response_code(429);
+        echo json_encode(['ok' => false, 'error' => 'One message a minute, please — try again shortly.']); exit;
+    }
+    @touch($cool);
+    $who = !empty($whoami['authenticated'])
+        ? sprintf('%s (wp user %s, tier %s)', $whoami['display_name'] ?? 'member', $whoami['wp_user_id'] ?? '?', $viewer_tier)
+        : 'anonymous visitor';
+    $body = $msg . "\n\n--\nFrom: " . $who
+          . "\nPage: " . ($_SERVER['HTTP_REFERER'] ?? '/front-page/')
+          . "\nUA: "   . substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 200)
+          . "\nIP: "   . $ip . "\nTime: " . gmdate('c');
+    $ok = @mail('ian.davlin@gmail.com',
+        '[Looth] ' . $kind . ' from the front page',
+        $body,
+        "From: Looth Group <noreply@loothgroup.com>\r\nReply-To: noreply@loothgroup.com");
+    if (!$ok) http_response_code(500);
+    echo json_encode($ok ? ['ok' => true] : ['ok' => false, 'error' => 'Could not send — try again later.']);
+    exit;
+}
+
 // ---- Run all rows --------------------------------------------------------
 $rows_full_config = archive_poc_load_rows_full(__DIR__ . '/../rows.json');
 $rows_config = $rows_full_config['rows'] ?? [];

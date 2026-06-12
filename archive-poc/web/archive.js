@@ -1318,6 +1318,73 @@ if (ssrPresent && !hasFilters) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 })();
 
+// --- "Report a bug or suggestion" modal ([data-feedback] CTA) ---
+// POSTs to /front-page/ (handled server-side at the top of index.php) so the
+// destination address never appears client-side. The CTA's href (Hub
+// composer) stays as the no-JS fallback.
+(function () {
+  let modal = null;
+  function close() { if (modal) { modal.remove(); modal = null; } }
+  function open() {
+    close();
+    modal = document.createElement('div');
+    modal.className = 'fb-modal';
+    modal.innerHTML =
+      '<div class="fb-modal__card" role="dialog" aria-modal="true" aria-labelledby="fb-title">' +
+        '<h3 class="fb-modal__title" id="fb-title">Report a bug or suggestion</h3>' +
+        '<form class="fb-modal__form">' +
+          '<div class="fb-modal__kinds" role="radiogroup" aria-label="Type">' +
+            '<label class="fb-kind"><input type="radio" name="kind" value="bug" checked> Bug</label>' +
+            '<label class="fb-kind"><input type="radio" name="kind" value="suggestion"> Suggestion</label>' +
+          '</div>' +
+          '<textarea name="message" rows="5" required maxlength="5000" ' +
+            'placeholder="What\'s broken, missing, or worth building?"></textarea>' +
+          '<input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="fb-hp">' +
+          '<p class="fb-modal__status" hidden></p>' +
+          '<div class="fb-modal__actions">' +
+            '<button type="button" class="fb-btn fb-btn--ghost" data-cancel>Cancel</button>' +
+            '<button type="submit" class="fb-btn">Send</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    document.body.appendChild(modal);
+    const form   = modal.querySelector('form');
+    const status = modal.querySelector('.fb-modal__status');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal || e.target.closest('[data-cancel]')) close();
+    });
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('[type=submit]');
+      btn.disabled = true; btn.textContent = 'Sending…';
+      const fd = new FormData(form);
+      fd.set('action', 'feedback');
+      let ok = false, err = '';
+      try {
+        const res = await fetch('/front-page/', { method: 'POST', body: fd, credentials: 'same-origin' });
+        const j = await res.json().catch(() => ({}));
+        ok = !!j.ok; err = j.error || '';
+      } catch (_) {}
+      if (ok) {
+        form.innerHTML = '<p class="fb-modal__done">Thanks — sent.</p>';
+        setTimeout(close, 1800);
+      } else {
+        btn.disabled = false; btn.textContent = 'Send';
+        status.hidden = false;
+        status.textContent = err || 'Could not send — try again later.';
+      }
+    });
+    modal.querySelector('textarea').focus();
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-feedback]');
+    if (!a) return;
+    e.preventDefault();
+    open();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+})();
+
 // === Search modal — faceted suggest (Authors / Posts / Discussions) ===
 (function () {
   const modal   = document.getElementById('search-modal');
