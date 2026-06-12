@@ -42,14 +42,18 @@ conveniences (the jwt signing key itself DOES ship — new pair).
 3. **VERIFY before cut** (couldn't fully resolve from dev):
    - `_materialize.php` / `_sync.php` wp-load path→host maps include the
      LIVE WP path (`/var/www/looth-live`?) — confirm the live entry.
-   - **How person-sync / reconcile / backfills are scheduled** — NO systemd
-     timer or cron exists on dev for them (they've been run by hand all
-     month). Live needs explicit timers: person resync, events sync,
-     whoami-purge consumers, geoipupdate. Context (Ian asked 6/12): the
-     request path IS direct WP↔app API + push hooks — timers only cover the
-     pull-based CACHES (forums.person identity/visibility copies, GeoIP
-     freshness). Ian runs the full backfills at cut; a ~15-min person/
-     visibility timer + weekly geoipupdate keep them converged after.
+   - **Scheduling — SHORED UP (Ian 6/12 "do we need to shore that up?" →
+     yes, done):** dev already ran `bb-mirror-reconcile.timer` (10 min,
+     posts-changed sync — my first sweep missed it by name). The gap it
+     left (stale person identity/visibility when a member renames or flips
+     a dial without posting) is now covered by
+     `platform/systemd/lg-person-vis-refresh.{service,timer}` — 15 min,
+     installed + proven on dev (journal: 502 resolved). Live install =
+     copy both unit pairs + `systemctl enable --now`; no gate env file on
+     live. Remaining for live only: weekly geoipupdate (example conf in
+     profile-app/deploy/). Context: the request path IS direct WP↔app API +
+     push hooks — timers only converge the pull-based caches; Ian runs the
+     full backfills at cut.
    - Live SMTP path for profile-app `@mail()` (reports) + sudo-queue pings.
    - Poller lane standing gaps (memory): profile-app nginx route, discovery
      ownership, audit_log key.
