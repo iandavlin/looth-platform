@@ -2800,7 +2800,7 @@
 (function () {
   'use strict';
   var mqDesk = window.matchMedia('(min-width: 641px)');
-  var ord = 0, mo = null, bucketed = false, moving = false;
+  var ord = 0, mo = null, bucketed = false, moving = false, rr = 0;
 
   function feedEl() { return document.querySelector('.feed-page .feed'); }
   function isStream() {
@@ -2822,9 +2822,22 @@
     return best;
   }
 
-  function place(card, cols) {
+  // Deterministic sorts (new/old/hot — anything but random) read top-down, so
+  // shortest-column fill scrambles them: a load-more batch of OLDER cards pours
+  // into whichever column is shortest and ends up visually above newer cards
+  // next door ("Newest is out of order after load more", Ian 6/12). Round-robin
+  // keeps row bands in feed order and vertical position tracking recency.
+  // Random has no order to preserve — shortest-column keeps its bottoms even.
+  // No data-lg-sort attr (stale HTML) → legacy shortest-column fill.
+  function orderedSort(feed) {
+    var s = feed.getAttribute('data-lg-sort') || '';
+    return s !== '' && s !== 'random';
+  }
+
+  function place(card, cols, feed) {
     if (!card.hasAttribute('data-lg-ord')) card.setAttribute('data-lg-ord', String(ord++));
-    shortest(cols).appendChild(card);
+    if (orderedSort(feed)) { cols[rr % cols.length].appendChild(card); rr++; }
+    else shortest(cols).appendChild(card);
   }
 
   function unbucket(feed) {
@@ -2866,7 +2879,8 @@
       cols.push(d);
     }
     feed.classList.add('feed--pinned');
-    for (var c = 0; c < cards.length; c++) place(cards[c], cols);
+    rr = 0;   // fresh buckets → round-robin restarts at the left column
+    for (var c = 0; c < cards.length; c++) place(cards[c], cols, feed);
     bucketed = true;
     moving = false;
   }
@@ -2899,7 +2913,7 @@
           if (node.nodeType === 1 && node.parentNode === feed &&
               node.classList && node.classList.contains('feed-card')) {
             if (!cols) cols = liveCols(feed);
-            if (cols.length) { moving = true; place(node, cols); moving = false; }
+            if (cols.length) { moving = true; place(node, cols, feed); moving = false; }
           }
         }
       }

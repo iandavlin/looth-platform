@@ -1236,7 +1236,10 @@ $header_cat = $scoped_forum
     <p class="bb-mirror__empty">No recent activity.</p>
 
   <?php else: ?>
-  <div class="feed">
+  <?php /* data-lg-sort: forums.js §9 reads this to pick column fill — deterministic
+           sorts (new/old/hot) get round-robin so the mosaic reads in feed order;
+           random keeps shortest-column fill (even bottoms, no order to preserve). */ ?>
+  <div class="feed" data-lg-sort="<?= htmlspecialchars($sort_param, ENT_QUOTES) ?>">
 
     <?php foreach ($topics as $topic):
       // ---- Content card (article / video / event / sponsor-post) ----
