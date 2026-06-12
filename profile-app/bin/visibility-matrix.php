@@ -265,7 +265,9 @@ $p = pin_state('anon');
 check('S2 pins anon: dot only (no name)', !$p['named'] && $p['dot'], json_encode($p));
 $p = pin_state('member');
 check('S2 pins member: named (members city)', $p['named'] && !$p['dot'], json_encode($p));
-check('S2 pins-public: cell ABSENT', !public_cell());
+// pins-public aggregates the SAME population as the finder's anon dots
+// (Ian 6/12 pm): a members-only member IS an anonymous cell.
+check('S2 pins-public: cell present (anonymous aggregate)', public_cell());
 
 // Trilateration guard: anon radius runs on the COARSENED point (10.1,10.1),
 // ~4.9 mi from the true (10.05,10.05). A 2-mile probe centered on the TRUE
@@ -298,6 +300,7 @@ check('S3 dir list member: ABSENT', !in_list('member'));
 check('S3 dir list admin: present', in_list('admin'));
 $p = pin_state('anon');
 check('S3 pins anon: NO dot (gone entirely)', !$p['named'] && !$p['dot'], json_encode($p));
+check('S3 pins-public: cell ABSENT (master private)', !public_cell());
 
 check('S3 file gallery member 404', req('member', '/profile-media/gallery/' . $UUID . '/qa.png')[0] === 404);
 check('S3 file gallery admin 200',  req('admin',  '/profile-media/gallery/' . $UUID . '/qa.png')[0] === 200);

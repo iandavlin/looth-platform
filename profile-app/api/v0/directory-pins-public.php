@@ -10,14 +10,14 @@ declare(strict_types=1);
  * Privacy contract (strictly coarser than anything already public):
  *   - NO names, slugs, UUIDs, or anything clickable-through. Payload is
  *     grid cells only: [lat, lng, count].
- *   - Coordinates rounded to 1 decimal (~11 km cells) — coarser than the
- *     'city' precision the product already defines as the public default.
- *   - Honors every per-user control the members map honors: location section
- *     on the profile (or never-customized default), and
- *     location_public_precision <> 'private'.
- *   - Aggregate of public-by-choice coarse positions; cells are NOT filtered
- *     by count because an ~11km anonymous dot carries less information than
- *     the city name those members already chose to show publicly.
+ *   - Coordinates rounded to 1 decimal (~11 km cells).
+ *   - POPULATION = the same set the finder already shows anon as anonymous
+ *     teaser DOTS (Ian 6/12 pm ruling): members-map members — location on
+ *     the layout, members-precision not 'private', master switch not
+ *     private. Aggregating that set into count cells is strictly LESS
+ *     information than the finder's own per-member dots at the same
+ *     rounding. (The original public-opt-in-only filter predated the dots
+ *     ruling and left this layer near-empty — 2 cells vs 659 finder dots.)
  *
  * Cacheable: the aggregate changes slowly; 15 min public cache.
  */
@@ -37,9 +37,8 @@ $rows = $pg->query("
        AND u.lat IS NOT NULL AND u.lng IS NOT NULL
        AND EXISTS (SELECT 1 FROM profiles p WHERE p.user_id = u.id)
        AND (u.profile_layout IS NULL OR u.profile_layout @> '[\"location\"]'::jsonb)
-       AND COALESCE(u.location_public_precision, 'private') <> 'private'   -- NULL = never consented = members-only (Ian 6/12)
        AND u.profile_visibility = 'public'                                 -- master switch: private = owner-only everywhere
-       AND COALESCE(u.location_members_precision, 'city') <> 'private'     -- public never sees more than members
+       AND COALESCE(u.location_members_precision, 'city') <> 'private'     -- members-private = off every map (ruling 4 exception)
      GROUP BY cell_lat, cell_lng
 ")->fetchAll();
 

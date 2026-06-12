@@ -126,8 +126,19 @@
       .catch(function () { return {}; })
       .then(function (who) {
         var myUuid = (who && (who.uuid || (who.user && who.user.uuid))) || null;
-        return j('/profile-api/v0/directory/members?lat=' + loc.lat + '&lng=' + loc.lng + '&page_size=9')
-          .then(function (d) { loadLeaflet(loc, myUuid, (d && d.items) || []); });
+        var authed = !!(who && who.authenticated);
+        // Logged-out (or whoami-unbridged: leak-safe direction): the Strava
+        // density layer — the SAME population the finder shows anon as
+        // anonymous dots, aggregated into ~11km count cells. Zero identity;
+        // the join nudge is real density, not an empty map (Ian 6/12).
+        var densityP = authed
+          ? Promise.resolve(null)
+          : j('/profile-api/v0/directory/pins-public').catch(function () { return null; });
+        return densityP.then(function (density) {
+          if (density) loc.anonDensity = density;
+          return j('/profile-api/v0/directory/members?lat=' + loc.lat + '&lng=' + loc.lng + '&page_size=9')
+            .then(function (d) { loadLeaflet(loc, myUuid, (d && d.items) || []); });
+        });
       });
   }).catch(function () { /* teaser stays */ });
 
@@ -150,17 +161,34 @@
     if (!canvas) return;
     host.classList.add('is-live');
     if (titleEl) titleEl.textContent = 'Luthiers near you';
-    if (subEl) subEl.textContent = loc.noMarker
-      ? 'Your general area — we don’t know or store your location until you add it.'
-      : (loc.source === 'ip'
-        ? 'Based on your location — the closest luthiers and shops:'
-        : 'You’re on the map. The closest luthiers and shops:');
+    var density = loc.anonDensity || null;
+    if (subEl) subEl.textContent = density
+      ? ((density.count ? density.count + ' luthiers and shops are on the member map' : 'Luthiers and shops worldwide')
+         + ' — join to see who’s near you.')
+      : (loc.noMarker
+        ? 'Your general area — we don’t know or store your location until you add it.'
+        : (loc.source === 'ip'
+          ? 'Based on your location — the closest luthiers and shops:'
+          : 'You’re on the map. The closest luthiers and shops:'));
 
     var map = L.map(canvas, { scrollWheelZoom: false, zoomControl: true })
       .setView([loc.lat, loc.lng], Math.min(11, Math.max(8, (loc.zoom || 10) - 1)));
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
+
+    // Anonymous density cells (logged-out): soft dots sized by member count,
+    // no tooltip, no identity, nothing clickable-through.
+    if (density && density.cells) {
+      density.cells.forEach(function (c) {
+        if (!num(c[0]) || !num(c[1])) return;
+        L.circleMarker([c[0], c[1]], {
+          radius: Math.min(13, 4 + 2 * Math.sqrt(c[2] || 1)),
+          stroke: false, fillColor: '#87986a', fillOpacity: 0.5,
+          interactive: false
+        }).addTo(map);
+      });
+    }
 
     if (!loc.noMarker) {
       var meLabel = loc.source === 'ip' ? 'Near you' : 'You';
