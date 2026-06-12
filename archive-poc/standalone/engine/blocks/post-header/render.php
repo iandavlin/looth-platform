@@ -31,6 +31,28 @@ $image_id = (int) ($args['image_id'] ?? 0);
 $tagline  = trim((string) ($args['tagline'] ?? ''));
 $show_read_time = !empty($args['show_read_time']);
 
+/* ── CPT type badge ─────────────────────────────────────────────────
+   A small "kind" chip in the eyebrow (Loothprint / Article / Video / …)
+   for every managed CPT, so a post reads the same on its own page as it
+   does on a Hub card. Labels mirror the Hub vocabulary (the $kind_label
+   map in bb-mirror/web/forums/_feed.php); CPTs not in that map fall back
+   to a title-cased slug. get_post_type() resolves on both paths — WP
+   natively, and the standalone renderer injects post_type into the
+   post_context it hands the shim. */
+$post_type  = $post_id > 0 && function_exists('get_post_type') ? (string) get_post_type($post_id) : '';
+$type_label = [
+    'post-imgcap'      => 'Article',
+    'post-type-videos' => 'Video',
+    'sponsor-post'     => 'Sponsor',
+    'loothprint'       => 'Loothprint',
+    'loothcuts'        => 'Loothcut',
+    'document'         => 'Document',
+    'useful_links'     => 'Link',
+    'member-benefit'   => 'Benefit',
+    'shorty'           => 'Short',
+    'event'            => 'Event',
+][$post_type] ?? ($post_type !== '' ? ucwords(str_replace(['-', '_'], ' ', $post_type)) : '');
+
 /* ── Hero image: explicit image_id, else featured image, else nothing. ── */
 $photo_url = '';
 $photo_alt = '';
@@ -114,10 +136,7 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
     if (is_array($tier_raw)) {
         foreach ($tier_raw as $t) {
             if (!is_object($t)) continue;
-            // Tier chip browses archive-poc (/archive/?tier=<vocab>); the facet
-            // vocab is lite|pro|public, so strip the WP taxonomy's "looth-" prefix.
-            $tslug = preg_replace('/^looth-/', '', (string) $t->slug);
-            $tier_terms[] = ['name' => (string) $t->name, 'slug' => (string) $t->slug, 'url' => '/archive/?tier=' . rawurlencode((string) $tslug)];
+            $tier_terms[] = ['name' => (string) $t->name, 'slug' => (string) $t->slug, 'url' => (string) (get_term_link($t) ?: '#')];
         }
     }
 
@@ -129,13 +148,9 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
         if (is_array($terms)) {
             foreach ($terms as $t) {
                 if (!is_object($t)) continue;
-                $slug = (string) ($t->slug ?? '');
                 $tags[] = [
                     'name' => (string) $t->name,
-                    // Tag pills browse the archive-poc surface (/archive/?tag=<slug>),
-                    // not WP's legacy Search-&-Filter term archive. The blob carries
-                    // the slug; fall back to the term link only if it's somehow absent.
-                    'url'  => $slug !== '' ? '/archive/?tag=' . rawurlencode($slug) : (string) (get_term_link($t) ?: '#'),
+                    'url'  => (string) (get_term_link($t) ?: '#'),
                     'tax'  => (string) $tax,
                 ];
             }
@@ -402,8 +417,11 @@ if ($variant === 'sponsor') {
 <?= $ind ?>    <img class="lg-post-header__photo" src="<?= Renderer::attr($photo_url) ?>" alt="<?= Renderer::attr($photo_alt) ?>" loading="eager" fetchpriority="high" />
 <?php endif; ?>
 <?= $ind ?>    <div class="lg-post-header__scrim" aria-hidden="true"></div>
-<?php if ($tier_terms): ?>
+<?php if ($tier_terms || $type_label !== ''): ?>
 <?= $ind ?>    <div class="lg-post-header__eyebrow">
+<?php if ($type_label !== ''): ?>
+<?= $ind ?>      <span class="lg-post-header__chip lg-post-header__chip--type lg-post-header__chip--type--<?= Renderer::attr($post_type) ?>"><?= htmlspecialchars($type_label, ENT_QUOTES, 'UTF-8') ?></span>
+<?php endif; ?>
 <?php foreach ($tier_terms as $tier): ?>
 <?= $ind ?>      <a class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>" href="<?= Renderer::attr($tier['url']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></a>
 <?php endforeach; ?>
