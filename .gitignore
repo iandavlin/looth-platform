@@ -32,3 +32,4 @@ id_ed25519*
 # coordinator: stray dumps/archives — never track
 *.sqlite.bak.*
 download-*.tar.gz
+live-bundle/v2-layouts-bundle.json

@@ -163,6 +163,27 @@ Dev's WP DB still never ships anywhere. Code + config carry deliberately:
 5. **Form 38 hub-anon snippet is LIVE-only already** — do not port from
    dev; verify it survives plugin updates.
 
+## 3c. Conversion carry — patch by ID, never reconvert (Ian 6/12 pm)
+
+All 674 layout-converted posts are live-origin (IDs predate the snapshot;
+conversion added META in place). Carry = `tools/export-v2-layouts.php` on
+dev (one JSON bundle, raw meta bytes, content-md5 per post) →
+`tools/apply-v2-layouts.php` on live (dry-run default; slug+type guard per
+row, byte-exact $wpdb write, drift report for posts edited on live since).
+Round-trip proven on dev: 674/674 ok. Regenerate the bundle AT the cut —
+do not use a stale one. After applying: archive-poc materializer re-render
++ lg-layout-v2 epoch bump.
+
+GAPS (= content created on live after the snapshot — Ian: "discussions and
+maybe a couple videos and an article"): discussions need NO conversion
+(forum rebuild carries them); the few videos/articles get converted on dev
+from a per-post pull (no DB reload — a full reload would re-break the
+6/11-casualty list) or on live post-flip via the shipped pipeline. Gap
+inventory line for Ian on live:
+  wp db query "SELECT ID,post_type,post_date,post_name FROM wp_posts
+    WHERE post_date>'2026-06-10' AND post_status='publish'
+    AND post_type NOT IN ('revision','attachment','topic','reply','forum')"
+
 ## 4. Cut-day sequence
 
 - **Phase A — prep (days before, zero user impact):** PG + roles + restore
