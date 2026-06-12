@@ -15,17 +15,12 @@ final class Profile
     public const LOCATION_VIS_VALUES = ['public', 'members', 'private'];
     public const SOCIAL_KINDS      = ['instagram','youtube','bandcamp','web','email','phone','x','tiktok','facebook','patreon','linktree'];
 
-    /** Viewer role can see section of given visibility. */
+    /** Viewer role can see section of given visibility. Delegates to Visibility — the one truth table. */
     public static function canSee(string $role, string $visibility): bool
     {
-        // role: 'me' | 'friend' | 'member' | 'public'
-        switch ($role) {
-            case 'me':     return true;
-            case 'friend': return $visibility !== 'private';   // friend logic = !private; member fallback handled at resolve-time
-            case 'member': return $visibility === 'public' || $visibility === 'members';
-            case 'public': return $visibility === 'public';
-            default:       return $visibility === 'public';
-        }
+        // role: 'me' | 'admin' | 'friend' | 'member' | 'public'
+        if ($role === 'friend') return $visibility !== 'private';   // legacy friend graph: !private
+        return Visibility::audienceCanSee($role, $visibility);
     }
 
     /** Explicit claim. Slice 1.5 dropped the auto-seed; About starts inactive. */

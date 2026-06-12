@@ -406,11 +406,11 @@ final class Block
      *   'private' → owner-only; nothing renders to others.
      *   'gate'    → members-only; a logged-out visitor gets the join/sign-in gate.
      *   'render'  → render; blocks then refine DOWN per their own effective vis.
-     * @param string $role 'me'|'member'|'friend'|'public'
+     * @param string $role 'me'|'admin'|'member'|'friend'|'public'
      */
     public static function gateDecision(string $role, string $headerVis): string
     {
-        if ($role === 'me') return 'render';
+        if ($role === 'me' || $role === 'admin') return 'render';   // admins see everything (Ian 6/12 ruling 4)
         switch ($headerVis) {
             case 'private': return 'private';                       // owner only
             case 'members': return $role === 'public' ? 'gate' : 'render';
