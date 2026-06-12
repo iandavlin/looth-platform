@@ -103,20 +103,18 @@ final class Block
     }
 
     /**
-     * Default block order when the user has no explicit layout — opt-in / start-minimal:
-     * every block that already HAS content, in canonical order (empties live in the caddy).
-     * A brand-new empty profile seeds with just 'about' so there's a place to begin.
+     * Default block order when the user has no explicit layout.
+     *
+     * LAUNCH DEFAULT (Ian 6/12): a never-arranged profile auto-places ONLY the
+     * Location block, and only when a location is actually set — every other
+     * block is opt-in from the caddy, even when imported data could populate
+     * it (the BB-friendship import was auto-surfacing a Connections grid on
+     * ~1,200 profiles nobody had arranged). Surfacing is a member's choice;
+     * the imported data itself stays intact for when they opt in.
      */
     public static function defaultLayout(int $userId): array
     {
-        $out = [];
-        foreach (array_keys(self::LAYOUT_BLOCKS) as $key) {
-            // Curation blocks (Skills / Services / Instruments / Music) are always opt-in:
-            // they start in the caddy with nothing set, never auto-placed even if populated.
-            if (isset(self::CATALOG_BLOCKS[$key])) continue;
-            if (self::blockHasContent($userId, $key)) $out[] = $key;
-        }
-        return $out ?: ['about'];
+        return self::blockHasContent($userId, 'location') ? ['location'] : [];
     }
 
     /**

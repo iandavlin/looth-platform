@@ -188,6 +188,18 @@ lgq("UPDATE forums.person SET discussion_visibility = 'public' WHERE id = " . SU
 pgq("UPDATE users SET discussion_visibility = 'public' WHERE id = " . SUBJ_ID);
 person_backfill();
 
+// ───────────── S0: launch default layout (never-arranged profile) ───────────
+echo "\n== S0 LAUNCH DEFAULT (profile_layout NULL -> Location only, Ian 6/12)\n";
+[, $b] = req('member', '/u/' . SLUG);
+check('S0 default layout: location renders',       strpos($b, 'lg-block--location') !== false);
+check('S0 default layout: about NOT auto-placed',   strpos($b, 'Matrix fixture about text') === false);
+check('S0 default layout: gallery NOT auto-placed', strpos($b, 'data-block="gallery"') === false);
+check('S0 default layout: connect NOT auto-placed', strpos($b, 'lg-block--connect') === false);
+
+// The rest of the matrix asserts SECTION-VISIBILITY enforcement, which needs
+// the blocks ON the layout — so the fixture becomes an "arranged" profile.
+pgq("UPDATE users SET profile_layout = '[\"about\",\"location\",\"gallery\"]'::jsonb WHERE id = " . SUBJ_ID);
+
 // ─────────────────────────── S1: public-finder opt-in ───────────────────────
 echo "\n== S1 OPT-IN (chip public, Public-sees=city, gallery=members, resume=members, about=public)\n";
 
