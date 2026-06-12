@@ -65,3 +65,8 @@
 
 .lg-join__link { color: #2563eb; text-decoration: none; }
 .lg-join__link:hover { text-decoration: underline; }
+
+/* Connect-your-Patreon instruction steps (Ian 2026-06-12) */
+.lg-join__steps { margin: 18px 0 22px; padding-left: 22px; display: grid; gap: 12px;
+  font-size: 15.5px; line-height: 1.55; color: var(--lg-ink, #323532); }
+.lg-join__steps li::marker { font-weight: 700; color: var(--lg-sage-d, #6b7c52); }

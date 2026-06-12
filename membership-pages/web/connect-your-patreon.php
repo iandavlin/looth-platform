@@ -7,8 +7,11 @@
  * page). join.php's funnel is intentionally left untouched for now — this is a
  * sibling, not a move.
  *
- * ADMIN-ONLY pre-launch (manage_options) via _admin-gate.php. Drives the poller's
- * authorize-entry contract (coord §3n):
+ * PUBLIC + standalone (Ian 2026-06-12): logged-OUT patrons land here to link
+ * their Patreon to a Looth account — joining (the Patreon pledge itself) and
+ * connecting are two different things; every "Join" button goes straight to
+ * Patreon, and THIS page owns the clear how-to + what-to-expect copy.
+ * Drives the poller's authorize-entry contract (coord §3n):
  *   CTA → GET /patreon-connect?return=/connect-your-patreon/  (302 → Patreon OAuth).
  *   Callback returns to <return>?onboarded=<status>, status ∈
  *     { success | already_onboarded | not_a_patron | email_collision | fail }.
@@ -19,14 +22,20 @@ require __DIR__ . '/../config.php';
 require __DIR__ . '/../lib/whoami.php';
 require '/srv/lg-shared/site-header.php';
 require '/srv/lg-shared/site-footer.php';
-require __DIR__ . '/_admin-gate.php';
 
 $h   = 'lg_membership_h';
 $ctx = lg_membership_header_ctx('');
-lg_membership_prelaunch_gate_or_exit($ctx);   // pre-launch: admins only
 
 $patreon_connect = '/patreon-connect?return=/connect-your-patreon/';   // poller authorize-entry (coord §3n)
-$become_patron   = 'https://patreon.com/loothgroup/membership';
+$become_patron   = 'https://www.patreon.com/c/theloothgroup/membership';   // canonical join link (= wp_options lgpo_patreon_link)
+// Stuck-contact address — the poller's configured contact (lgpo_contact_email).
+$contact_email = 'info@loothgroup.com';
+try {
+    $st = lg_membership_db()->prepare("SELECT option_value FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "options WHERE option_name = 'lgpo_contact_email' LIMIT 1");
+    $st->execute();
+    $opt = (string) ($st->fetchColumn() ?: '');
+    if ($opt !== '') $contact_email = $opt;
+} catch (Throwable $e) {}
 $manage_url      = '/manage-subscription/';
 $signin_url      = '/wp-login.php?redirect_to=' . rawurlencode($manage_url);
 
@@ -90,12 +99,21 @@ $asset_v = (string) (@filemtime(__DIR__ . '/join.css') ?: '1');
     <?php else: /* start */ ?>
 
         <section class="lg-join__card lg-join__card--start">
-            <p class="lg-join__lede">Already a Looth Group patron on Patreon? Connect it to create your account and get instant access.</p>
+            <p class="lg-join__lede">Already a Looth Group patron? Linking your Patreon creates your account here and unlocks everything your tier includes. It takes about two minutes.</p>
+
+            <ol class="lg-join__steps">
+                <li><strong>Make sure your pledge is active.</strong> Your membership itself lives on Patreon — if you haven't joined yet, <a class="lg-join__link" href="<?= $h($become_patron) ?>" target="_blank" rel="noopener">join on Patreon</a> first, then come back here.</li>
+                <li><strong>Click the button below</strong> and authorize with the <em>same Patreon account</em> you pledge with. You'll bounce to Patreon and right back.</li>
+                <li><strong>Check your email.</strong> We create your Looth account on the spot and send a link to set your password — it usually arrives within a couple of minutes (peek at spam if not).</li>
+                <li><strong>Sign in.</strong> Your content opens up as soon as you set the password and sign in — no waiting period.</li>
+            </ol>
+
             <div class="lg-join__primary">
                 <a class="lg-join__cta lg-join__cta--primary" href="<?= $h($patreon_connect) ?>">Connect your Patreon &rarr;</a>
             </div>
+
             <p class="lg-join__secondary">
-                Not a patron yet? <a class="lg-join__link" href="<?= $h($become_patron) ?>" target="_blank" rel="noopener">Become a patron &rarr;</a>
+                Good to know: if you've <em>just</em> pledged or changed your tier on Patreon, give it up to an hour to sync over — connecting still works right away, and your access level catches up on the next sync. Stuck? We'll sort it: <a class="lg-join__link" href="mailto:<?= $h($contact_email) ?>"><?= $h($contact_email) ?></a>.
             </p>
         </section>
 

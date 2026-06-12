@@ -60,7 +60,9 @@ const LG_MS_PAGES = [
     // built surfaces (verbatim ports already landed)
     'membership-guide'               => ['membership-guide.php',               'admin',  'public'],
     'manage-subscription'            => ['manage-subscription.php',            'member', 'member'],  // already live; flag no-op
-    'connect-your-patreon'           => ['connect-your-patreon.php',           'admin',  'member'],
+    // PUBLIC both columns (Ian 2026-06-12): logged-OUT patrons must reach the
+    // connect instructions — it's the landing for "already a patron?" links.
+    'connect-your-patreon'           => ['connect-your-patreon.php',           'public', 'public'],
     'affiliate-earnings'             => ['affiliate-earnings.php',             'admin',  'member'],
     'request-refund'                 => ['request-refund.php',                 'admin',  'member'],
     'welcome'                        => ['welcome.php',                        'admin',  'public'],  // transient post-checkout landing

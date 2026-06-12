@@ -36,7 +36,7 @@ $patreon_connect = '/patreon-connect/?return=/join/'; // poller authorize-entry 
 // (lgpo_patreon_link), the SAME value manage-subscription's "Manage on Patreon"
 // CTA uses. Was hardcoded to a wrong slug (patreon.com/loothgroup/membership,
 // 404). Falls back to the campaign URL if the option is unreadable.
-$become_patron = 'https://www.patreon.com/cw/theloothgroup';
+$become_patron = 'https://www.patreon.com/c/theloothgroup/membership';
 try {
     $st = lg_membership_db()->prepare("SELECT option_value FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "options WHERE option_name = 'lgpo_patreon_link' LIMIT 1");
     $st->execute();
@@ -106,18 +106,21 @@ $asset_v = (string) (@filemtime(__DIR__ . '/join.css') ?: '1');
     <?php else: /* start — no/unknown onboarded param: the join funnel */ ?>
 
         <section class="lg-join__card lg-join__card--start">
-            <p class="lg-join__lede">The Looth Group is a member-supported community for luthiers and instrument techs. Connect your Patreon to create your account and get instant access.</p>
+            <p class="lg-join__lede">The Looth Group is a member-supported community for luthiers and instrument techs. Membership runs through Patreon.</p>
 
-            <?php /* PRIMARY action slot — Patreon at launch; Stripe "Subscribe" later. */ ?>
+            <?php /* PRIMARY action slot — JOINING happens on Patreon (Ian 2026-06-12:
+                     join and connect are two different things); Stripe "Subscribe"
+                     swaps into this slot at go-live. */ ?>
             <div class="lg-join__primary">
                 <?php if ($primary_mode === 'patreon'): ?>
-                    <a class="lg-join__cta lg-join__cta--primary" href="<?= $h($patreon_connect) ?>">Connect your Patreon &rarr;</a>
+                    <a class="lg-join__cta lg-join__cta--primary" href="<?= $h($become_patron) ?>" target="_blank" rel="noopener">Join on Patreon &rarr;</a>
                 <?php endif; /* $primary_mode === 'stripe' → Subscribe (Stripe checkout) goes here at go-live */ ?>
             </div>
 
-            <?php /* SECONDARY slot — light "become a patron" nudge for non-patrons. */ ?>
+            <?php /* SECONDARY slot — existing patrons go link their account on the
+                     dedicated instruction page. */ ?>
             <p class="lg-join__secondary">
-                Not a patron yet? <a class="lg-join__link" href="<?= $h($become_patron) ?>" target="_blank" rel="noopener">Become a patron &rarr;</a>
+                Already a patron? <a class="lg-join__link" href="/connect-your-patreon/">Connect your Patreon to unlock your account &rarr;</a>
             </p>
         </section>
 
