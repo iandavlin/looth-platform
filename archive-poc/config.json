@@ -206,17 +206,23 @@
       }
     },
     {
-      "id": "frets-row",
-      "title": "Frets",
+      "id": "latest-public-posts",
+      "title": "Latest posts",
       "type": "static",
       "layout": "rail",
       "column": "",
       "audience": "public",
       "query": {
-        "tag": "fret",
-        "tag_match": "prefix",
         "sort": "newest",
-        "limit": 10
+        "limit": 8,
+        "exclude_kinds": [
+          "discussion",
+          "misc",
+          "event"
+        ],
+        "tier_in": [
+          "public"
+        ]
       }
     },
     {
@@ -225,66 +231,11 @@
       "type": "static",
       "layout": "discussions",
       "column": "",
-      "audience": "both",
+      "audience": "members",
       "query": {
         "kind": "discussion",
         "sort": "active",
         "limit": 8
-      }
-    },
-    {
-      "id": "most-liked",
-      "title": "Most-liked of all time",
-      "type": "static",
-      "layout": "rail",
-      "column": "",
-      "audience": "public",
-      "query": {
-        "sort": "liked",
-        "limit": 10,
-        "min_likes": 1
-      }
-    },
-    {
-      "id": "acoustic-guitar-row",
-      "title": "Acoustic Guitar",
-      "type": "static",
-      "layout": "rail",
-      "column": "",
-      "audience": "public",
-      "query": {
-        "tag": "acoustic-guitar",
-        "tag_match": "prefix",
-        "sort": "newest",
-        "limit": 10
-      }
-    },
-    {
-      "id": "acoustic-builders-club-row",
-      "title": "Acoustic Guitar Builders Club",
-      "type": "static",
-      "layout": "rail",
-      "column": "",
-      "audience": "public",
-      "query": {
-        "tag": "acoustic-guitar-builders-club",
-        "tag_match": "exact",
-        "sort": "newest",
-        "limit": 10
-      }
-    },
-    {
-      "id": "electric-builds-row",
-      "title": "Electric Builds",
-      "type": "static",
-      "layout": "rail",
-      "column": "",
-      "audience": "public",
-      "query": {
-        "tag": "electric",
-        "tag_match": "prefix",
-        "sort": "newest",
-        "limit": 10
       }
     },
     {
@@ -293,7 +244,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "members",
       "query": {
         "tag": "mandolin",
         "tag_match": "prefix",
@@ -307,7 +258,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "members",
       "query": {
         "author": 8,
         "sort": "newest",
