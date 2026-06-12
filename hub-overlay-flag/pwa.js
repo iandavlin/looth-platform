@@ -88,7 +88,7 @@
   inject('looth-tabbar-js', '/bottom-nav.js?v=21');
 
   if (mobileish) {
-    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=33');
+    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=34');
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
     idle('looth-prof-sheet-js', '/profile-sheet.js?v=7');      // /u/ profile sheet

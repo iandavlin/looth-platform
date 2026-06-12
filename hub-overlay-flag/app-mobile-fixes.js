@@ -215,8 +215,12 @@
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
       if (fsEl) return;
       try {
-        var so = screen.orientation;
-        if (so && so.unlock) so.unlock();      // leaving → back to natural rotation
+        // When the standalone orientation manager (below) is active it owns the
+        // exit transition (re-locks portrait); a plain unlock here would undo it.
+        if (!window.__lgOrientMgr) {
+          var so = screen.orientation;
+          if (so && so.unlock) so.unlock();    // leaving → back to natural rotation
+        }
       } catch (e) {}
       // The fullscreen churn can leave the page slightly pinch-zoomed with the
       // layout feeling "off" (Buck). If the visual viewport didn't land back at
@@ -286,6 +290,47 @@
     }
     try { if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', function () { setTimeout(onRotate, 130); }); } catch (e) {}
     window.addEventListener('orientationchange', function () { setTimeout(onRotate, 130); });
+  })();
+
+  // ── Installed-app orientation manager (Buck 2026-06-12): landscape fullscreen ──
+  // The PWA manifest used to say "orientation":"portrait" — the OS held the app
+  // portrait even during video fullscreen, so LANDSCAPE WAS IMPOSSIBLE in the
+  // installed app (and the rotate-phone path above never fires there: a
+  // portrait-locked webview never reports an orientation change). Forcing
+  // lock('landscape') instead bounced the YT player out (v30/v32, settled 6/11).
+  // The fix flips the default: manifest is now "any", and the APP locks itself
+  // to portrait at runtime (allowed for installed apps outside fullscreen).
+  // While a video/iframe is fullscreen the lock is RELEASED, so the sensor
+  // rotates the player natively — exactly the mobile-browser behavior that was
+  // stable all along. Exit re-locks portrait. Browser tabs: lock() rejects →
+  // permanent no-op (the browser already rotates fullscreen video natively).
+  // Phones/tablets only; desktop never touches orientation.
+  (function () {
+    if (!window.matchMedia('(pointer:coarse)').matches) return;
+    var standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+    if (!standalone) return;
+    var so = screen.orientation;
+    if (!so || !so.lock) return;
+    window.__lgOrientMgr = true;   // the exit handler above defers to us
+    function lockPortrait() {
+      try { var p = so.lock('portrait-primary'); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    }
+    function release() { try { so.unlock(); } catch (e) {} }
+    function isMedia(el) {
+      if (!el) return false;
+      var t = (el.tagName || '').toUpperCase();
+      if (t === 'IFRAME' || t === 'VIDEO') return true;
+      return !!(el.querySelector && el.querySelector('iframe, video'));
+    }
+    function onFs() {
+      var fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl && isMedia(fsEl)) release();      // fullscreen video → sensor owns rotation
+      else if (!fsEl) lockPortrait();            // back in the app → portrait
+    }
+    document.addEventListener('fullscreenchange', onFs, false);
+    document.addEventListener('webkitfullscreenchange', onFs, false);
+    lockPortrait();
   })();
 
   // Mobile reactions: the old visual-only "heart, hold for more options" floating
