@@ -43,9 +43,36 @@ if ($s === '' || str_contains($s, '..') || str_contains($s, "\0")) {
 
 // Resolve + hard-validate the source stays inside the uploads tree.
 $real = realpath(UPLOADS . '/' . ltrim($s, '/'));
+// BB discussion-attachment URLs are VIRTUAL (bb_medias/... served by BB's
+// media handler); the real bytes live under fea-submissions/ with the same
+// basename. Without this remap, those covers 302'd to the full-res original
+// (craft gate caught a 394KB/1871px one in a 375px slot — 6/12).
+if ($real === false && str_starts_with(ltrim($s, '/'), 'bb_medias/')) {
+    $real = realpath(UPLOADS . '/fea-submissions/' . basename($s));
+    if ($real === false) {
+        // Only WP's sized variants exist for some attachments — take the widest.
+        $stem = pathinfo(basename($s), PATHINFO_FILENAME);
+        $bext = pathinfo(basename($s), PATHINFO_EXTENSION);
+        $best = 0; $pick = false;
+        foreach ((glob(UPLOADS . '/fea-submissions/' . $stem . '-*x*.' . $bext) ?: []) as $cand) {
+            if (preg_match('/-(\d+)x\d+\.' . preg_quote($bext, '/') . '$/', $cand, $mm) && (int)$mm[1] > $best) {
+                $best = (int)$mm[1]; $pick = $cand;
+            }
+        }
+        if ($pick !== false) $real = realpath($pick);
+    }
+}
 $base = realpath(UPLOADS);
-if ($real === false || $base === false
-    || strncmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) !== 0) {
+// Containment: inside the uploads tree OR the R2 uploads mount (symlinked
+// subdirs resolve into the mount; dev + live mountpoints both allowed).
+$lg_contained = static function (?string $r) use ($base): bool {
+    if (!$r) return false;
+    foreach (array_filter([$base, '/mnt/loothgroup-uploads-dev', '/mnt/r2-uploads']) as $root) {
+        if (strncmp($r, $root . DIRECTORY_SEPARATOR, strlen($root) + 1) === 0) return true;
+    }
+    return false;
+};
+if ($real === false || $base === false || !$lg_contained($real)) {
     fallback($orig_url);
 }
 
@@ -74,12 +101,14 @@ if ($info === false) {
 }
 [$ow, $oh] = $info;
 
-$src_im = match ($ext) {
-    'jpg', 'jpeg' => @imagecreatefromjpeg($real),
-    'png'         => @imagecreatefrompng($real),
-    'webp'        => @imagecreatefromwebp($real),
-    'gif'         => @imagecreatefromgif($real),
-    default       => false,
+// Decode by ACTUAL mime, not filename: uploads carry misnamed files (a JPEG
+// with a .webp name 302'd to its 394KB original — craft gate, 6/12).
+$src_im = match ($info['mime'] ?? '') {
+    'image/jpeg' => @imagecreatefromjpeg($real),
+    'image/png'  => @imagecreatefrompng($real),
+    'image/webp' => @imagecreatefromwebp($real),
+    'image/gif'  => @imagecreatefromgif($real),
+    default      => false,
 };
 if (!$src_im) {
     fallback($orig_url);
