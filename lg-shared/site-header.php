@@ -208,6 +208,12 @@ function lg_shared_render_site_header(array $ctx): void
         <li><a href="<?= $h($href) ?>"<?= $is_active ? ' class="is-active" aria-current="page"' : '' ?>><?= $h($label) ?></a></li>
         <?php endforeach; ?>
         <li><a href="https://loothtool.com/">Loothtool</a></li>
+        <?php if (!$authenticated): /* Phone-condense (≤640) hides the header
+              Sign-in button, which left anon phones with NO sign-in path —
+              the drawer carries it there. CSS keeps this hidden >640 where
+              the real button exists. */ ?>
+        <li class="lg-chrome__menu-signin"><a href="/wp-login.php">Sign in</a></li>
+        <?php endif; ?>
       </ul>
     </nav>
 

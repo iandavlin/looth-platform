@@ -341,10 +341,15 @@ body { margin: 0; }
 }
 
 /* --- Phone condense (≤640, the site-wide mobile cutoff): drop the wordmark +
-   sign-in label too, where the logo + actions + hamburger need every pixel. --- */
+   sign-in label too, where the logo + actions + hamburger need every pixel.
+   The drawer's .lg-chrome__menu-signin item (anon-only, markup-gated) takes
+   over as the sign-in path at exactly this cutoff — 641-820 still shows the
+   real button, so the drawer item stays hidden there. --- */
+.lg-chrome__menu-signin { display: none; }
 @media (max-width: 640px) {
   .lg-chrome__wordmark { display: none; }
   .lg-chrome__signin { display: none; }
+  .lg-chrome__menu-signin { display: block; }
 }
 
 /* --- Live banner sits above the sticky header --- */
