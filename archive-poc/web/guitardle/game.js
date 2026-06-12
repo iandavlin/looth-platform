@@ -1002,3 +1002,6 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// 2026-06-13 buck: embed-mode card is now content-sized via style.css body.is-embed block (no JS change; this note bumps mtime for the iframe ?v= cache-bust).
+// 6/12 pass 2: color-scheme light (force-dark fix) + hardcore contrast + side art — mtime bump again.

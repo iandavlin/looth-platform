@@ -17,7 +17,7 @@
 
     --red:            #FE654F;  /* accent — use sparingly              */
 
-    --key-used-bg:    #9CA3AF;  /* used consonant / revealed vowel     */
+    --key-used-bg:    #9FAC8C;  /* used consonant / revealed vowel — sage-muted, on-palette */
     --key-used-text:  #ffffff;
 
     --text-dark:      #1f2d14;  /* primary text                        */
@@ -52,6 +52,7 @@
 html {
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
+    color-scheme: light;   /* belt-and-suspenders with the meta: no auto-dark */
 }
 
 body {
@@ -116,15 +117,15 @@ body {
 }
 
 .menu-icon-btn svg {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     display: block;
-    color: #AEBF90;
+    color: #87986A;
     transition: color 0.12s;
 }
 
 .menu-icon-btn:hover svg {
-    color: #87986A;
+    color: #6B7C52;
 }
 
 /* Dropdown — positioned absolutely via JS, sits outside game-wrap */
@@ -410,7 +411,7 @@ height: 36px;
 }
 
 .vowel-instruction {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 400;
     color: var(--text-muted);
     text-align: center;
@@ -1011,6 +1012,33 @@ body.is-embed {
     min-height: 0;
 }
 
+/* In the front-page iframe the card is CONTENT-SIZED, not viewport-sized:
+   the standalone page's fill-the-card layout (min-height 680 + the guess
+   area's margin-top:auto) left a large empty band mid-card during play and
+   a mostly-empty 700px card in the played/forfeited end states (the
+   ResizeObserver posts .game-wrap's bottom edge, which could never shrink
+   below the min-height). Fixed gaps replace the auto-push; the standalone
+   page keeps the original design. */
+body.is-embed .game-wrap {
+    min-height: 0;
+    max-height: none;
+    margin: 16px auto;
+}
+body.is-embed .game-main {
+    flex: 0 0 auto;
+}
+body.is-embed .guess-area {
+    margin-top: 36px;
+}
+/* Helper lines cluster tight above the keyboard instead of floating */
+body.is-embed .game-main .vowel-instruction {
+    margin-top: 14px;
+    margin-bottom: 4px;
+}
+body.is-embed .refresh-warning {
+    margin: 2px 16px 8px;
+}
+
 /* ============================================================
    WEEKLY LEADERBOARD (crown chip in the menu bar + overlay)
    ============================================================ */
@@ -1108,17 +1136,20 @@ body.is-embed {
 
 /* ── Hardcore mode (opt-in reveal cap) ──────────────────────── */
 .hardcore-row {
-    margin: 14px 0 16px;
-    padding: 10px 12px;
-    background: #FBF3DF;
+    margin: 14px 0 18px;
+    padding: 11px 12px;
+    background: #F9EECB;
+    border: 1.5px solid #D9B765;
     border-radius: 10px;
 }
 .hardcore-label {
     display: flex;
     gap: 10px;
     align-items: flex-start;
-    font-size: 0.85rem;
-    line-height: 1.4;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.45;
+    color: #1a1408;        /* explicit near-black — don't let auto-dark half-invert it */
     cursor: pointer;
 }
 .hardcore-label input {
