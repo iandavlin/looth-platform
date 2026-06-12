@@ -749,17 +749,24 @@ foreach ($main_rows as $row):
           <?php /* One-click event-reminder signup (Ian 6/12): logged-in only —
                    we know the member's email; mu-plugin lg-event-reminders.php
                    adds them to the FluentCRM Event Reminder list. */ ?>
-          <button type="button" class="lg-bento__remind" id="lg-ev-remind">&#128276; Email me event reminders</button>
+          <button type="button" class="lg-bento__remind" id="lg-ev-remind" data-on="0">&#128276; Email me event reminders</button>
           <script>
           (function(){var b=document.getElementById('lg-ev-remind');if(!b)return;
-            if(localStorage.getItem('lg-ev-remind')==='1'){b.textContent='\u2713 Event reminders on';b.classList.add('is-on');b.disabled=true;}
-            b.addEventListener('click',function(){b.disabled=true;b.textContent='Signing you up\u2026';
-              fetch('/wp-admin/admin-ajax.php',{method:'POST',credentials:'same-origin',
-                headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=lg_event_reminder_signup'})
+            var AJ='/wp-admin/admin-ajax.php';
+            function paint(on){b.dataset.on=on?'1':'0';b.classList.toggle('is-on',on);
+              b.textContent=on?'\u2713 Event reminders on \u2014 tap to turn off':'\uD83D\uDD14 Email me event reminders';b.disabled=false;}
+            // real CRM state on load (toggle = source of truth, not localStorage)
+            fetch(AJ+'?action=lg_event_reminder_state',{credentials:'same-origin'})
+              .then(function(r){return r.json()}).then(function(j){if(j&&j.ok)paint(!!j.on);}).catch(function(){});
+            b.addEventListener('click',function(){
+              var want=b.dataset.on!=='1';b.disabled=true;b.textContent=want?'Signing you up\u2026':'Turning off\u2026';
+              fetch(AJ,{method:'POST',credentials:'same-origin',
+                headers:{'Content-Type':'application/x-www-form-urlencoded'},
+                body:'action=lg_event_reminder_signup&on='+(want?'1':'0')})
               .then(function(r){return r.json()}).then(function(j){
-                if(j&&j.ok){b.textContent='\u2713 Event reminders on';b.classList.add('is-on');localStorage.setItem('lg-ev-remind','1');}
-                else{b.textContent='Could not sign you up \u2014 tap to retry';b.disabled=false;}
-              }).catch(function(){b.textContent='Could not sign you up \u2014 tap to retry';b.disabled=false;});
+                if(j&&j.ok)paint(!!j.on);
+                else{b.textContent='Something went wrong \u2014 tap to retry';b.disabled=false;}
+              }).catch(function(){b.textContent='Something went wrong \u2014 tap to retry';b.disabled=false;});
             });})();
           </script>
           <?php endif; ?>

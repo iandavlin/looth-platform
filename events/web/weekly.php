@@ -48,25 +48,27 @@ $issue  = null;
 $issues = [];
 $title  = 'Weekly Digest — The Looth Group';
 
+/* VIS-1 (Ian 6/12 pm): the digest is PUBLIC — logged-out visitors see the
+   email view too; the gates live on the click-throughs (tiered posts, hub,
+   event zoom). Anon serves get the forum-author bylines masked (discussion-
+   identity rule). */
 $emailHtml = '';
-if ($authed) {
-    if ($slug === '' && !$showAll) $slug = lg_weekly_latest_slug($db);   // default = CURRENT issue (Ian 6/12)
-    if ($slug !== '') {
-        $issue = lg_weekly_issue($db, $slug);
-        if (!$issue) { http_response_code(404); }
-        else {
-            $title = (string)$issue['post']['post_title'] . ' — The Looth Group';
-            $emailHtml = lg_weekly_campaign_html($db, $issue['data']);
-        }
-    } else {
-        $issues = lg_weekly_issues($db);
+if ($slug === '' && !$showAll) $slug = lg_weekly_latest_slug($db);   // default = CURRENT issue (Ian 6/12)
+if ($slug !== '') {
+    $issue = lg_weekly_issue($db, $slug);
+    if (!$issue) { http_response_code(404); }
+    else {
+        $title = (string)$issue['post']['post_title'] . ' — The Looth Group';
+        $emailHtml = lg_weekly_campaign_html($db, $issue['data'], !$authed);
     }
+} else {
+    $issues = lg_weekly_issues($db);
 }
 
 /* /weekly/<slug>/raw — the email document itself, verbatim, for the iframe.
    Same member gate; anon gets nothing. */
 if ($rawMode) {
-    if (!$authed || !$issue || $emailHtml === '') { http_response_code(404); header('Content-Type: text/plain'); echo 'not found'; exit; }
+    if (!$issue || $emailHtml === '') { http_response_code(404); header('Content-Type: text/plain'); echo 'not found'; exit; }
     header('Content-Type: text/html; charset=UTF-8');
     header('Cache-Control: private, max-age=300');
     echo $emailHtml;
@@ -121,14 +123,7 @@ $range = static function (string $from, string $to): string {
 <?php lg_shared_render_site_header($ctx); ?>
 
 <main id="lg-main" class="lg-wk">
-<?php if (!$authed): ?>
-    <div class="lg-wk__gate">
-        <h1>The Weekly Digest is for members</h1>
-        <p>Sign in to read this week&rsquo;s curated round-up of events, videos, and shop talk.</p>
-        <a href="/wp-login.php?redirect_to=<?= $h(rawurlencode('https://' . LG_EVENTS_HOST . $path)) ?>">Sign in</a>
-    </div>
-
-<?php elseif ($slug !== '' && !$issue): ?>
+<?php if ($slug !== '' && !$issue): ?>
     <a class="lg-wk__back" href="/weekly/all/">&larr; All digests</a>
     <h1 class="lg-wk__head">Not found</h1>
     <p class="lg-wk__sub">That digest doesn&rsquo;t exist (or isn&rsquo;t published).</p>

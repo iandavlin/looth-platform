@@ -130,7 +130,7 @@ function lg_weekly_latest_slug(PDO $db): string
  * page serves this in an isolated iframe so it displays "just like the email"
  * (Ian 6/12) — with the email-only unsubscribe footer line removed.
  */
-function lg_weekly_campaign_html(PDO $db, array $issueData): string
+function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = false): string
 {
     $cid = (int)($issueData['campaign_id'] ?? 0);
     if ($cid < 1) return '';
@@ -141,5 +141,13 @@ function lg_weekly_campaign_html(PDO $db, array $issueData): string
     // Email-only chrome: drop anchors that point at unsubscribe/preference
     // endpoints (meaningless on the web view), keep everything else verbatim.
     $html = preg_replace('#<a\b[^>]*href="[^"]*unsubscribe[^"]*"[^>]*>.*?</a>#is', '', $html) ?? $html;
+    if ($maskAuthors) {
+        // ANON view (vis-1 digest, Ian 6/12): forum-author bylines follow the
+        // discussion-identity mask — logged-out viewers never see a forum
+        // author's name/profile link here, same rule as the Hub. The byline
+        // anchors are the /members/<slug>/forums/ links the email builder
+        // emits; everything else (event hosts, video authors) is public.
+        $html = preg_replace('#<a\b[^>]*href="[^"]*/members/[^"]*"[^>]*>.*?</a>#is', 'a Looth member', $html) ?? $html;
+    }
     return $html;
 }
