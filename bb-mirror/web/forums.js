@@ -1313,6 +1313,22 @@
     ntmCancel.addEventListener('click', ntmHideOverlay);
     ntmBackdrop.addEventListener('click', ntmHideOverlay);
 
+    // ── Composer deep-link: /hub/?compose[=<forum-slug>] ────────────────────
+    // Off-hub surfaces (front-page What's-New CTAs) land here instead of the
+    // legacy WP new-post pages: the composer opens on arrival, preselected to
+    // the slug's forum when given (e.g. ?compose=suggestion-box-bug-reporting).
+    (function () {
+      var m = /[?&]compose(?:=([^&#]*))?(?:&|#|$)/.exec(location.search);
+      if (!m) return;
+      var slug = decodeURIComponent(m[1] || '');
+      var id = null;
+      if (slug && ntmForumList) {
+        var r = ntmForumList.querySelector('input[name="forum_id"][data-slug="' + slug.replace(/"/g, '') + '"]');
+        if (r) id = parseInt(r.value, 10);
+      }
+      ntmShowOverlay(id);
+    })();
+
     // ── Quick-add workflow tags (councilyes / weeklyyes) ─────────────────────
     // Each button toggles its tag in/out of the comma-separated #ntm-tags field.
     var ntmQuickTags = document.getElementById('ntm-quicktags');
