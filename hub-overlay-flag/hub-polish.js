@@ -2187,6 +2187,90 @@
     });
     host.appendChild(ov);
   }
+  // ── Inline-play video-link cards (Buck 2026-06-12) ──────────────────────────
+  // Some ENTITLED content cards (e.g. kind "shorty") render as a bare thumbnail
+  // + the raw youtube URL in the excerpt — the video only plays after clicking
+  // through. Promote the cover into a real video host
+  // (.fc-cover--video[data-yt-play]) so the existing mobile autoplay/unmute/
+  // auto-stop/single-video machinery plays it RIGHT ON THE CARD, and hide the
+  // raw link text. Gated teasers are never touched (their payload has no URL
+  // anyway). Mobile only; desktop = coord lane (server fix asked: _feed.php
+  // should emit data-yt-play for these kinds, which makes this pass a no-op).
+  function lgYtIdFromUrl(u) {
+    var m = (u || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?[^#\s]*v=|embed\/|shorts\/|live\/))([\w-]{6,})/);
+    return m ? m[1] : '';
+  }
+  function promoteVideoLinkCards() {
+    if (!window.matchMedia('(max-width:640px)').matches) return;
+    var cards = document.querySelectorAll('.feed-card--content:not([data-lg-vidpromo])');
+    var promoted = false;
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      card.setAttribute('data-lg-vidpromo', '1');
+      if (card.classList.contains('feed-card--gated') || card.getAttribute('data-gated') === '1') continue;
+      var cover = card.querySelector('.fc-cover');
+      if (!cover || cover.classList.contains('fc-cover--gated')) continue;
+      var ex = card.querySelector('.fc-excerpt');
+      if (!ex) continue;
+      var id = '', hideEls = [];
+      var links = ex.querySelectorAll('a[href]');
+      for (var k = 0; k < links.length; k++) {
+        var cand = lgYtIdFromUrl(links[k].getAttribute('href'));
+        if (!cand) continue;
+        if (!id) id = cand;
+        // hide the matched anchor (its whole <p> when the link is all it holds)
+        var par = links[k].parentElement;
+        hideEls.push((par && par.tagName === 'P' && par.textContent.trim() === (links[k].textContent || '').trim()) ? par : links[k]);
+      }
+      if (!id) {
+        // raw text URL (this kind's excerpt isn't even autolinked)
+        var ps = ex.querySelectorAll('p');
+        for (var p2 = 0; p2 < ps.length; p2++) {
+          var t = (ps[p2].textContent || '').trim();
+          var cand2 = lgYtIdFromUrl(t);
+          if (cand2 && /^https?:\/\/\S+$/.test(t)) { id = cand2; hideEls.push(ps[p2]); break; }
+        }
+      }
+      var isVideoCover = cover.classList.contains('fc-cover--video');
+      if (!isVideoCover) {
+        if (!id) continue;
+        cover.classList.add('fc-cover--video');
+        cover.setAttribute('data-yt-play', id);
+        try { if (getComputedStyle(cover).position === 'static') cover.style.position = 'relative'; } catch (e) {}
+        promoted = true;
+      }
+      // The raw URL is noise on ANY card whose cover already plays the video —
+      // server-rendered video kinds show it too (Buck 2026-06-12), not just the
+      // shorty cards this pass promotes.
+      for (var h = 0; h < hideEls.length; h++) hideEls[h].style.display = 'none';
+    }
+    if (promoted) {
+      // nudge the autoplay engine's childList observer so new hosts get observed
+      var root = document.getElementById('hub-feed-results') || document.querySelector('.feed');
+      if (root) {
+        var n = document.createElement('i');
+        n.style.display = 'none';
+        root.appendChild(n);
+        setTimeout(function () { if (n.parentNode) n.parentNode.removeChild(n); }, 0);
+      }
+    }
+  }
+  var lgVidPromoMo = null;
+  function wireVideoLinkCards() {
+    if (!window.matchMedia('(max-width:640px)').matches) return;
+    promoteVideoLinkCards();
+    setTimeout(promoteVideoLinkCards, 800); setTimeout(promoteVideoLinkCards, 2500);
+    if (!lgVidPromoMo && 'MutationObserver' in window) {
+      var t = null;
+      var root = document.getElementById('hub-feed-results') || document.querySelector('.feed') || document.body;
+      lgVidPromoMo = new MutationObserver(function () {
+        if (t) return;
+        t = setTimeout(function () { t = null; promoteVideoLinkCards(); }, 250);
+      });
+      lgVidPromoMo.observe(root, { childList: true, subtree: true });
+    }
+  }
+
   function wireVideoAutoplay() {
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (document.body.getAttribute('data-lg-vidauto')) return;
@@ -3869,6 +3953,7 @@
     wireFastFilters();
     reopenFiltersIfFlagged();
     wireVideoAutoStop();
+    wireVideoLinkCards();
     wireVideoAutoplay();
     wireDesktopVideoHover();
     enforceSingleVideo();
