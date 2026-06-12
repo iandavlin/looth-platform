@@ -646,7 +646,7 @@
       // CPT / content cards CLICK THROUGH to the full post (Ian 6/6). Real links +
       // controls work; a bare-area click navigates to the post.
       if (card.classList.contains('feed-card--content')) {
-        if (ev.target.closest('a, button, input, textarea, label, select, [data-comments], .feed-card__compact-expand')) return;
+        if (ev.target.closest('a, button, input, textarea, label, select, [data-comments], .feed-card__compact-expand, .lg-card-actions')) return;
         var href = card.getAttribute('data-href');
         if (href) window.location.href = href;
         return;
@@ -2771,7 +2771,10 @@
     // The replies-count controls ALWAYS open the modal; for everything else,
     // real controls (reactions, read-more, composer, author links…) self-handle
     // and only title/excerpt/cover taps open it.
-    var viaReplies = e.target.closest('.feed-card__expand, .fc-facepile');
+    // .lg-act-replies joins the always-open set (Buck 6/11): hub-polish wires it with
+    // stopPropagation, so this only catches the unwired window on a fresh infinite-
+    // scroll card — belt + suspenders, no double-open.
+    var viaReplies = e.target.closest('.feed-card__expand, .fc-facepile, .lg-act-replies');
     if (!viaReplies) {
       if (e.target.closest('button, input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, .feed-card__read-more, .fc-readmore, a[href*="/u/"]')) return;
       if (!e.target.closest('.fc-title, .feed-card__title, .feed-card__op-excerpt, .fc-excerpt, .fc-cover, .feed-card__cover')) return;
