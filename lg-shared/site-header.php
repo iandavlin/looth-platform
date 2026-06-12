@@ -196,7 +196,8 @@ function lg_shared_render_site_header(array $ctx): void
         // with aria-current + .is-active (consumers pass $active_nav). Loothtool
         // is external — it has no slug and is never marked active.
         $nav_items = [
-            'stream'   => ['/stream/',            'Stream'],
+            // 'stream' removed 6/12 — /stream/ is retired (301 → /hub/); the
+            // nav was advertising a dead route next to the Hub it bounces to.
             'hub'      => ['/hub/',               'The Hub'],
             'events'   => ['/events/',            'Events'],
             'members'  => ['/directory/members/', 'The Map'],

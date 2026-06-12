@@ -33,7 +33,9 @@ $LOGO = LG_ARCHIVE_POC_LOGO_URL;
         <h3 class="lg-chrome-foot__h">About</h3>
         <ul>
           <li><a href="/about/">About</a></li>
-          <li><a href="/lgjoin/">Membership</a></li>
+          <?php /* Join funnel = the Patreon canonical (Ian 6/12; /lgjoin/ is
+                   admin-gated pre-launch — anon was hitting a gate stub). */ ?>
+          <li><a href="https://www.patreon.com/c/theloothgroup/membership">Membership</a></li>
           <li><a href="/contact/">Contact</a></li>
         </ul>
       </div>
