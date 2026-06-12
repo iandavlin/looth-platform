@@ -197,6 +197,7 @@ foreach (['anon', 'member', 'owner', 'admin'] as $v) {
 }
 [, $b] = req('anon', '/u/' . SLUG);
 check('S1 page anon: about visible',        strpos($b, 'Matrix fixture about text') !== false);
+check('S1 page anon: location at the Public-sees dial (city)', strpos($b, 'Matrix Reef') !== false);
 check('S1 page anon: gallery (members) hidden', strpos($b, 'data-block="gallery"') === false);
 [, $b] = req('member', '/u/' . SLUG);
 check('S1 page member: gallery visible',    strpos($b, 'data-block="gallery"') !== false);
