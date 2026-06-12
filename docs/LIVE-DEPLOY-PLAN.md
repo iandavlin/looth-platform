@@ -176,10 +176,13 @@ do not use a stale one. After applying: archive-poc materializer re-render
 
 GAPS (= content created on live after the snapshot — Ian: "discussions and
 maybe a couple videos and an article"): discussions need NO conversion
-(forum rebuild carries them); the few videos/articles get converted on dev
-from a per-post pull (no DB reload — a full reload would re-break the
-6/11-casualty list) or on live post-flip via the shipped pipeline. Gap
-inventory line for Ian on live:
+(forum rebuild carries them). The few videos/articles go through THE SAME
+GUIDED CONVERSION PROCESS as the corpus (Ian corrected 6/12: conversion was
+a hand-steered lane — imgcap rules, figure numbering, chapter work — NOT a
+script): a conversion-lane session on dev, pre-cut, sources pulled per-post
+(no DB reload — a full reload re-breaks the 6/11 casualty list), output
+QA'd then folded into the bundle. Budget a session for it, not minutes.
+Gap inventory line for Ian on live:
   wp db query "SELECT ID,post_type,post_date,post_name FROM wp_posts
     WHERE post_date>'2026-06-10' AND post_status='publish'
     AND post_type NOT IN ('revision','attachment','topic','reply','forum')"
