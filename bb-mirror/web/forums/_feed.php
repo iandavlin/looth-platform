@@ -52,6 +52,45 @@ if (!function_exists('lg_cover_src')) {
     }
 }
 
+if (!function_exists('lg_cover_dims')) {
+    /**
+     * width/height attrs for a feed cover <img> so the browser reserves the
+     * box before the photo arrives. Unsized lazy covers grew cards 200-500px
+     * as each image loaded, shoving content + re-balancing the mosaic (the
+     * Hub scroll-jump, Buck 6/11 — his hub-nojump.js 280px-placeholder shim
+     * retires once these land). Dims = getimagesize on the uploads source,
+     * scaled to the img.php w= target; img.php never upscales, so width is
+     * min(w, original). Reads the R2 uploads MOUNT directly (allow_other) —
+     * the /var/www/dev/wp-content path img.php uses is 2770 looth-dev:loothdevs
+     * and this pool runs as bb-mirror, which can't traverse it; same files
+     * (uploads symlinks to the mount). Repoint at cut alongside img.php's
+     * UPLOADS const. Memoized per request; external (non-uploads) URLs emit
+     * nothing and degrade exactly as before.
+     */
+    function lg_cover_dims(?string $url, int $w = 800): string
+    {
+        static $memo = [];
+        if (!$url) return '';
+        $clean = preg_replace('/[?#].*$/', '', $url);
+        if (!preg_match('#/wp-content/uploads/(.+)$#', $clean, $m)) return '';
+        $key = $m[1] . '|' . $w;
+        if (isset($memo[$key])) return $memo[$key];
+        $out  = '';
+        $base = realpath('/mnt/loothgroup-uploads-dev');
+        $real = realpath('/mnt/loothgroup-uploads-dev/' . urldecode($m[1]));
+        if ($real !== false && $base !== false
+            && strncmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) === 0) {
+            $info = @getimagesize($real);
+            if ($info && (int)$info[0] > 0 && (int)$info[1] > 0) {
+                $tw = min($w, (int)$info[0]);
+                $th = (int)round((int)$info[1] * $tw / (int)$info[0]);
+                if ($th > 0) $out = ' width="' . $tw . '" height="' . $th . '"';
+            }
+        }
+        return $memo[$key] = $out;
+    }
+}
+
 if (!function_exists('lg_cover_loading_attrs')) {
     /**
      * Lazy-loading the FIRST feed cover delays the page's LCP element behind
@@ -1037,16 +1076,17 @@ function feed_render_tags(array $tags): void
 // Server-render the mobile action bar (Like / N replies / Share) that hub-polish.js
 // used to inject client-side (the post-paint flash). Markup MUST stay in lockstep
 // with hub-polish.js buildActions() — JS now only WIRES the present row, never builds
-// it (mobile-only via .lg-card-actions CSS; display:none at desktop). $reply_count is
-// 0 for content cards → "Reply".
-function feed_action_bar(int $reply_count): void
+// it (mobile-only via .lg-card-actions CSS; display:none at desktop). Content cards
+// pass $zero_label='Comment' (Buck 6/11 audit H4: they read identically to a 0-reply
+// discussion as "Reply", but their tap opens the comments surface, not a composer).
+function feed_action_bar(int $reply_count, string $zero_label = 'Reply'): void
 {
     // Thumbs-up, not a heart: the Like applies a 👍 reaction so the icon matches
     // (Buck 2026-06-11 — was swapped client-side; canonical now, his replace no-ops).
     static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
     static $ICO_REPLIES = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>';
     static $ICO_SHARE   = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
-    $label = $reply_count === 0 ? 'Reply' : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
+    $label = $reply_count === 0 ? $zero_label : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
     echo '<div class="feed-card__actions lg-card-actions">'
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
@@ -1250,6 +1290,7 @@ $header_cat = $scoped_forum
         $c_title   = htmlspecialchars((string)$topic['topic_title']);
         $c_kind    = (string)($topic['content_kind'] ?? 'content');
         $c_img     = lg_cover_src($topic['card_image'] ?? null);
+        $c_dims    = lg_cover_dims($topic['card_image'] ?? null);
         $c_time    = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
         $c_author  = htmlspecialchars((string)$topic['author_name']);
         $c_excerpt = feed_op_excerpt($topic);
@@ -1304,13 +1345,13 @@ $header_cat = $scoped_forum
       <time class="fc-time lg-card-time"><?= $c_time ?></time>
       <?php if ($c_yt): /* NON-gated video → facade: thumb + play; forums.js swaps iframe on click (no embed up front) */ ?>
         <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($c_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
           <?php if ($c_dur > 0): ?><span class="fc-dur"><?= (int)$c_dur ?> min</span><?php endif; ?>
         </div>
       <?php elseif ($c_is_gated): /* GATED → locked teaser: dimmed thumb + lock overlay; links to the standalone page which carries its own paywall. NO inline play, no excerpt, no engagement. */ ?>
         <a class="fc-cover feed-card__cover fc-cover--gated" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= htmlspecialchars($c_tier_lbl) ?> members only">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
           <span class="fc-gate">
             <span class="fc-gate__lock" aria-hidden="true">&#128274;</span>
             <span class="fc-gate__t"><?= htmlspecialchars($c_tier_lbl) ?> members only</span>
@@ -1319,7 +1360,7 @@ $header_cat = $scoped_forum
         </a>
       <?php elseif (!empty($c_img)): ?>
         <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
@@ -1332,7 +1373,7 @@ $header_cat = $scoped_forum
                  Server-rendered (counts + action row) — wired by forums.js / hub-polish.js. */ ?>
         <div class="fc-actions">
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
-          <?php feed_action_bar(0); ?>
+          <?php feed_action_bar(0, 'Comment'); ?>
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id); ?>
           <?php if ($c_can_comment): ?>
             <button type="button" class="feed-card__comments-btn" data-comments
@@ -1369,6 +1410,7 @@ $header_cat = $scoped_forum
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
       $card_image  = lg_cover_src($topic['card_image'] ?? null);
+      $card_dims   = lg_cover_dims($topic['card_image'] ?? null);
 
       // One teaser reply (newest); full thread lazy-loads via ?replies=<id>.
       $teaser    = $reply_teaser[$topic_id] ?? null;
@@ -1425,7 +1467,7 @@ $header_cat = $scoped_forum
                but now unused. */ ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
