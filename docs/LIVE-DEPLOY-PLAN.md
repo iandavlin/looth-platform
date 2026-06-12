@@ -182,7 +182,16 @@ a hand-steered lane — imgcap rules, figure numbering, chapter work — NOT a
 script): a conversion-lane session on dev, pre-cut, sources pulled per-post
 (no DB reload — a full reload re-breaks the 6/11 casualty list), output
 QA'd then folded into the bundle. Budget a session for it, not minutes.
-Gap inventory line for Ian on live:
+
+GAP WORKLIST (live inventory run 6/12, snapshot ~5/28 — Ian was right that
+dev is ~2 weeks old; the '6/11 reload' note in tooling docs was wrong):
+  CONVERT (6): videos 71302 (3d-scanning demo), 71434 (council-of-elders
+  2.0 apr), 71529 (lfd multiple-shop); imgcap article 71368 (f5-l mandolin
+  binding); sponsor-posts 71320 (guitartek), 71540 (total-vise).
+  NO WORK: events 71243/71248/71627 (events bridge), weekly_email
+  71337/71571 (type never converted), wp_global_styles 71339 (WP internal).
+  Sources: wp export --post__in= on live → posts/_inbox/gap-posts.xml.
+Gap inventory line (rerun near cut to catch newer content):
   wp db query "SELECT ID,post_type,post_date,post_name FROM wp_posts
     WHERE post_date>'2026-06-10' AND post_status='publish'
     AND post_type NOT IN ('revision','attachment','topic','reply','forum')"
