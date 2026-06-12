@@ -245,3 +245,20 @@ Not a chat replacement (no prior chat existed), but a scope expansion + rename w
 - **Reason:** Ian 6/8 — one owner per surface kills the desktop↔mobile `fc-*` contract-announce dance (root of the mobile-flash/gray-box regressions). Transfer ran AFTER the 13-commit push (clean pushed tree, no in-flight).
 - **Carried over:** `docs/handoff-desktop-to-buck.md` (full inventory + conventions + checklist) = buck-COORD's absorb-briefing; both features (discussion-visibility + anon Phase 1) shipped + on origin/main before the flip.
 - **Lost:** nothing material — all three lanes' work was committed + pushed; conventions are in the handoff doc + the split docs.
+
+## 2026-06-12 ~12:00 — coordinator handoff (compaction)
+
+- **Retiring:** the fable coordinator session (ran the 6/12 visibility/front-page day; wrote
+  `SESSION-HANDOFF-visibility-refactor.md` at Ian's direction before compaction).
+- **Successor:** coordinator `570f18a3-5649-4c1a-8063-d28c5839f7b5` (this entry's author; opener "I need a new coord").
+- **State at handoff:** main @ 5086aba, unpushed 0. Working tree: front-page lane's in-flight
+  "Add to calendar" chooser (archive.css/js, uncommitted), guitardle fast-follow note in
+  archive-poc/SESSION-HANDOFF.md (uncommitted), index.sqlite dual-write churn, plus the front-page
+  lane's report `reply-to-coordinator-front-page.md` (untracked, awaiting processing).
+- **The line:** the VISIBILITY REFACTOR (`SESSION-HANDOFF-visibility-refactor.md`) — four locked
+  rulings, one Visibility.php module, master switch, file-store auth, matrix test = definition of
+  done. No more surface-by-surface patches.
+- **Open Ian decisions parked:** map data fixes (1 wrong-state + 16 state-coarse, /tmp/map-divergent.json);
+  6 junk-slug shorties need titles; LIVE-NOW banner Zoom link + ICS-keeps-Zoom (front-page lane flags);
+  anon map tile as join funnel (idea).
+- **Lost:** in-session reasoning; destinations are in the handoff doc + memory.

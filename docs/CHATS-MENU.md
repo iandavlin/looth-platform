@@ -15,7 +15,7 @@ coordinator bookkeeping + lineage logging.
 
 | Lane | Find it by (outliner title) | Session ID | Owns / now |
 |---|---|---|---|
-| **coordinator** *(this chat)* | *please review my last coord chat…* | `9ed18876-0f64-480f-bab2-e9c6d90b07cf` | cross-cutting contract, routing, dev sysadmin. Successor to `ecafaa30` / `de317117`. |
+| **coordinator** *(this chat)* | *I need a new coord* | `570f18a3-5649-4c1a-8063-d28c5839f7b5` | cross-cutting contract, routing, dev sysadmin. Spawned 6/12 ~12:00, successor to the fable coord (visibility-refactor handoff author). Prior: `9ed18876` / `ecafaa30` / `de317117`. |
 | **archive-poc (PG)** | *Briefing archive-poc-pg* | `05b7f8d2-9c86-473f-aa7f-b66ca5f35738` | PG read-cutover + `_sync` PG writer + indexer taxonomy populate (a55871e/d97e63d). SQLite retirement HELD. |
 | ~~hub~~ → **folded into hub-COORD** | *(was Briefing hub-fold-cpts)* | `9645be99` *(retired)* | unified /hub/ feed work absorbed by hub-COORD — one Hub-desktop owner. |
 | **comments + reactions (ENGINE)** *(edit+delete)* | *comments+reactions ENGINE (edit+delete)* | *pending — Ian confirm (cand. `6c51fab9` / `d0ba32af`)* | backend provider: store + endpoints + palette + gating. Successor to `1c86c753`. Shipped comment **edit + soft-delete** (`5b262c0`) + modal UI wiring (`a652b1c`) — local, awaiting push. New contract: modal emits `{lgCommentsCount:n}` postMessage for SURFACE's badge to listen. |
