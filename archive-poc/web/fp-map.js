@@ -25,6 +25,10 @@
   // me/location nests coords under `place`; tolerate other shapes too.
   function pickMe(b) {
     if (!b || typeof b !== 'object') return null;
+    // Owner removed the Location section from their profile = opted off the
+    // map — no personal You pin either; fall through to the IP fallback so
+    // the tile still centers somewhere sensible (Ian 6/12).
+    if (b.in_layout === false) return null;
     var cands = [b.place, b, b.display, b.pin, b.map, b.coarse, b.exact];
     for (var i = 0; i < cands.length; i++) {
       var c = cands[i];

@@ -15,6 +15,11 @@ $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'GET') {
     $block = Block::loadLocation((int)$user['id']);
     if ($block === null) profile_app_json(404, ['error' => 'not_found']);
+    // Removing the Location section from the profile opts the owner off the
+    // map entirely (the directory enforces that server-side). Surface it here
+    // so own-pin consumers (front-page You pin) honor it too — additive flag,
+    // the editor's GET shape is unchanged (Ian 6/12).
+    $block['in_layout'] = in_array('location', Block::profileLayout((int)$user['id']), true);
     profile_app_json(200, $block);
 }
 
