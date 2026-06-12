@@ -35,15 +35,12 @@
   var STYLE_ID = 'looth-push-style';
 
   /* ----- environment gates (mirror /pwa.js) ------------------------------ */
-  var hasPush = ('serviceWorker' in navigator) &&
-                ('PushManager' in window) &&
-                ('Notification' in window);
-
-  var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-                     window.navigator.standalone === true;
-  // Mobile-only gate: narrow viewport AND a coarse (touch) pointer.
-  var isMobile = window.matchMedia('(max-width: 640px)').matches &&
-                 window.matchMedia('(pointer: coarse)').matches;
+  // NOTE (perf, v2): these are ASSIGNED inside boot(), not at eval time —
+  // matchMedia at top-level forces style recalc mid-load and was costing
+  // ~1.7s of attributed bootup on a throttled mobile run (perf lane 6/11).
+  var hasPush = false;
+  var isStandalone = false;
+  var isMobile = false;
 
   function dismissed() {
     try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch (e) { return false; }
@@ -205,23 +202,41 @@
   }
 
   /* ----- boot ------------------------------------------------------------ */
-  // Hard no-op while the feature is off or unsupported / not applicable.
-  if (!PUSH_ENABLED || !hasRealKey() || !hasPush) return;
+  // v2 perf: eval is define-only. ALL environment probing (matchMedia,
+  // localStorage, Notification.permission) and any work happens at idle,
+  // never during page bootup.
+  function boot() {
+    hasPush = ('serviceWorker' in navigator) &&
+              ('PushManager' in window) &&
+              ('Notification' in window);
 
-  // Already allowed: silently (re)sync the subscription on every load — no
-  // prompt, no UI, anywhere the user has granted. Keeps the server table fresh.
-  if (Notification.permission === 'granted') { resyncSilently(); return; }
-  // Hard no: never nag a denied permission.
-  if (Notification.permission === 'denied') return;
+    // Hard no-op while the feature is off or unsupported / not applicable.
+    if (!PUSH_ENABLED || !hasRealKey() || !hasPush) return;
 
-  // permission === 'default": invite ONLY inside the installed app on a phone,
-  // so we never double-prompt against the mobile-web install banner.
-  if (!isStandalone || !isMobile) return;
-  if (dismissed() || alreadyEnabled()) return;
+    // Already allowed: silently (re)sync the subscription on every load — no
+    // prompt, no UI, anywhere the user has granted. Keeps the server table fresh.
+    if (Notification.permission === 'granted') { resyncSilently(); return; }
+    // Hard no: never nag a denied permission.
+    if (Notification.permission === 'denied') return;
 
-  function start() {
+    isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                   window.navigator.standalone === true;
+    // Mobile-only gate: narrow viewport AND a coarse (touch) pointer.
+    isMobile = window.matchMedia('(max-width: 640px)').matches &&
+               window.matchMedia('(pointer: coarse)').matches;
+
+    // permission === 'default': invite ONLY inside the installed app on a phone,
+    // so we never double-prompt against the mobile-web install banner.
+    if (!isStandalone || !isMobile) return;
+    if (dismissed() || alreadyEnabled()) return;
+
     if (document.body) showPrompt();
     else document.addEventListener('DOMContentLoaded', showPrompt);
   }
-  start();
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(boot, { timeout: 4000 });
+  } else {
+    setTimeout(boot, 1200);
+  }
 })();

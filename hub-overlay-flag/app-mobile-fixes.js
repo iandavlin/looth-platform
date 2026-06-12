@@ -205,14 +205,30 @@
   // Mobile only — desktop never locks orientation.
   (function () {
     if (!window.matchMedia('(max-width:640px)').matches && !window.matchMedia('(pointer:coarse)').matches) return;
+    // NO orientation lock on fullscreen entry — settled empirically over three
+    // rounds (Buck 2026-06-11): any parent-page lock('landscape') during a
+    // YT-button fullscreen makes the player warp back out (v30 + v32 both
+    // bounced; v31 without the lock was stable). YouTube fullscreen rotates
+    // natively when the phone's auto-rotate is on / it's held sideways, and
+    // our rotate-the-phone path below still force-fullscreens to landscape.
     function onFsChange() {
       var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+      if (fsEl) return;
       try {
         var so = screen.orientation;
-        if (fsEl) {
-          if (so && so.lock) so.lock('landscape').catch(function () {});   // entering → landscape
-        } else {
-          if (so && so.unlock) so.unlock();                               // leaving → back to natural/portrait
+        if (so && so.unlock) so.unlock();      // leaving → back to natural rotation
+      } catch (e) {}
+      // The fullscreen churn can leave the page slightly pinch-zoomed with the
+      // layout feeling "off" (Buck). If the visual viewport didn't land back at
+      // 1:1, force it: momentarily clamp max-scale, then restore.
+      try {
+        if (window.visualViewport && Math.abs(window.visualViewport.scale - 1) > 0.02) {
+          var m = document.querySelector('meta[name="viewport"]');
+          if (m) {
+            var orig = m.getAttribute('content') || 'width=device-width, initial-scale=1';
+            m.setAttribute('content', orig + ', maximum-scale=1');
+            setTimeout(function () { m.setAttribute('content', orig); }, 250);
+          }
         }
       } catch (e) {}
     }
@@ -237,12 +253,32 @@
       if (document.fullscreenElement || document.webkitFullscreenElement) return null;
       return document.querySelector('.fc-cover--video iframe.fc-video') || document.querySelector('iframe.fc-video');
     }
-    function reqFs(el) { var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen; if (fn) { try { fn.call(el); } catch (e) {} } }
+    // byRotate: true only while a fullscreen WE started (phone turned sideways)
+    // is active. The portrait→exit shortcut below applies ONLY to those — a
+    // fullscreen the user started via YouTube's own button must never be exited
+    // by orientation noise (locks snapping the orientation made us bounce
+    // straight back out — Buck 2026-06-11).
+    var byRotate = false, lastExit = 0;
+    function reqFs(el) { var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitEnterFullscreen; if (fn) { try { fn.call(el); byRotate = true; } catch (e) {} } }
     function exitFs() { var fn = document.exitFullscreen || document.webkitExitFullscreen; if (fn) { try { fn.call(document); } catch (e) {} } }
+    // After ANY fullscreen exit, clear the rotate flag and hold off auto
+    // re-entry briefly — otherwise exiting while the phone is physically
+    // sideways can immediately fullscreen the video again ("stuck").
+    function onAnyFsChange() {
+      if (!(document.fullscreenElement || document.webkitFullscreenElement)) {
+        lastExit = Date.now();
+        byRotate = false;
+      }
+    }
+    document.addEventListener('fullscreenchange', onAnyFsChange, false);
+    document.addEventListener('webkitfullscreenchange', onAnyFsChange, false);
     function onRotate() {
       try {
-        if (isLandscape()) { var v = playingVid(); if (v) reqFs(v); }
-        else {
+        if (isLandscape()) {
+          if (Date.now() - lastExit < 1500) return; // user just exited — respect it
+          var v = playingVid(); if (v) reqFs(v);
+        }
+        else if (byRotate) {
           var fs = document.fullscreenElement || document.webkitFullscreenElement;
           if (fs && fs.classList && fs.classList.contains('fc-video')) exitFs();
         }

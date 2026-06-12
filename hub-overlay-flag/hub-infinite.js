@@ -31,9 +31,13 @@
   var loading = false, done = false, errored = false, io = null;
 
   // Pre-load buffer: start fetching the next page when the bottom of the feed
-  // comes within this many px of the viewport. ~3-4 cards of runway so new
-  // cards are already in place before the user scrolls to them (seamless).
-  var PRELOAD = 1500;
+  // comes within this many px of the viewport, so new cards are already in
+  // place before the user scrolls to them (seamless). Desktop gets a much
+  // longer runway (Buck 2026-06-11: "~5 cards below the screen") — masonry
+  // columns burn vertical px 3-4x faster than the single mobile column, and
+  // the wider margin also gives the image/teaser prefetchers (hub-nojump,
+  // hub-polish previews) time to settle new cards while still off-screen.
+  var PRELOAD = window.matchMedia('(min-width:641px)').matches ? 3200 : 1500;
 
   function liveFeed() { return document.querySelector('.feed'); }
   function liveMore() { return document.querySelector('.feed-more'); }
