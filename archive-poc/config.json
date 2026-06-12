@@ -189,12 +189,28 @@
       }
     },
     {
+      "id": "recent-posts-row",
+      "title": "Most recent posts",
+      "type": "static",
+      "layout": "rail",
+      "column": "",
+      "audience": "members",
+      "query": {
+        "exclude_kinds": [
+          "discussion",
+          "misc"
+        ],
+        "sort": "newest",
+        "limit": 12
+      }
+    },
+    {
       "id": "frets-row",
       "title": "Frets",
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "public",
       "query": {
         "tag": "fret",
         "tag_match": "prefix",
@@ -221,7 +237,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "public",
       "query": {
         "sort": "liked",
         "limit": 10,
@@ -234,7 +250,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "public",
       "query": {
         "tag": "acoustic-guitar",
         "tag_match": "prefix",
@@ -248,7 +264,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "public",
       "query": {
         "tag": "acoustic-guitar-builders-club",
         "tag_match": "exact",
@@ -262,7 +278,7 @@
       "type": "static",
       "layout": "rail",
       "column": "",
-      "audience": "both",
+      "audience": "public",
       "query": {
         "tag": "electric",
         "tag_match": "prefix",
