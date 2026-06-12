@@ -39,15 +39,65 @@
     return null;
   }
 
+  // Logged-in member who's NOT on the map (section stowed, or no place ever
+  // picked): swap the teaser copy for a one-click "put me on the map" CTA —
+  // it re-adds the Location section via me/layout; with a place already
+  // stored that's instantly back on the map (reload shows the live pin),
+  // otherwise it walks them to their profile to pick one (Ian 6/12).
+  function showJoinCta(meLoc) {
+    var copy = host.querySelector('.lg-bento__map-copy');
+    if (!copy || copy.querySelector('.lg-bento__map-join')) return;
+    var hasPlace = !!(meLoc && meLoc.place && num(meLoc.place.lat) && num(meLoc.place.lng));
+    var sub = copy.querySelector('.lg-bento__map-sub');
+    if (sub) sub.textContent = hasPlace
+      ? 'You\u2019re not on the map right now \u2014 luthiers near you can\u2019t find your shop.'
+      : 'You\u2019re not on the map yet \u2014 add your location so nearby luthiers can find you.';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lg-bento__map-btn lg-bento__map-join';
+    var label = hasPlace ? 'Put me back on the map' : 'Add my location';
+    btn.textContent = label;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Adding\u2026';
+      j('/profile-api/v0/me/layout', { credentials: 'same-origin' })
+        .then(function (g) {
+          var order = (g && g.layout) || [];
+          if (order.indexOf('location') < 0) order.push('location');
+          return fetch('/profile-api/v0/me/layout', {
+            method: 'PUT', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: order })
+          });
+        })
+        .then(function (r) {
+          if (!r.ok) throw new Error(String(r.status));
+          if (hasPlace) { location.reload(); return; }   // live map + You pin on repaint
+          // No place stored yet — the section is on the profile now; go pick one.
+          return j('/profile-api/v0/whoami', { credentials: 'same-origin' })
+            .catch(function () { return {}; })
+            .then(function (who) {
+              var slug = who && (who.slug || (who.user && who.user.slug));
+              location.href = slug ? '/u/' + encodeURIComponent(slug) : '/profile/edit';
+            });
+        })
+        .catch(function () { btn.disabled = false; btn.textContent = label; });
+    });
+    var open = copy.querySelector('[data-action="open-member-map"]');
+    copy.insertBefore(btn, open || null);
+  }
+
   // 1) member's own location → 2) IP geolocation fallback.
   // A member who STOWED the Location section opted off the map — honor that
   // fully: no You pin AND no IP-guess either; the static teaser stays (Ian
-  // 6/12). The IP fallback is for viewers with no location record at all.
+  // 6/12), plus the one-click rejoin CTA above.
   function resolveLocation() {
     return j('/profile-api/v0/me/location', { credentials: 'same-origin' })
       .then(function (b) {
-        if (b && b.in_layout === false) return { optedOut: true };
-        return pickMe(b);
+        if (b && b.in_layout === false) { showJoinCta(b); return { optedOut: true }; }
+        var me = pickMe(b);
+        if (b && !me) { showJoinCta(b); return { optedOut: true }; }   // authed, no usable place → CTA + teaser (no IP guess)
+        return me;
       })
       .catch(function () { return null; })
       .then(function (loc) {

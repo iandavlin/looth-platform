@@ -3582,3 +3582,12 @@ html[data-lguser-theme="dark"] .gdle-side-empty { color: #9aab7f; }
 .gdle-stack__sub { font-size: 12.5px; color: var(--lg-mute, #6b6f6b); }
 .gdle-block--stack .gdle-promo__play { justify-self: start; }
 .gdle-block--stack .gdle-promo__board { width: 100%; }
+
+/* "Put me back on the map" CTA on the teaser tile (Ian 6/12) — amber primary
+   above the quieter Open-the-member-map button; one-click me/layout re-add. */
+body.view-discover .lg-bento__map-join {
+  background: var(--lg-amber, #ecb351); color: #4a3c10; border: 0;
+  font-weight: 700; margin-bottom: 8px;
+}
+body.view-discover .lg-bento__map-join:hover { background: #f2c476; }
+body.view-discover .lg-bento__map-join:disabled { opacity: .7; cursor: default; }
