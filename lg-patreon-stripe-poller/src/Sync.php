@@ -64,4 +64,48 @@ final class Sync
         }
         return $results;
     }
+
+    /**
+     * Re-arbitrate every Patreon-sourced member.
+     *
+     * all() only visits lg_membership customers (Stripe), so a Patreon-only
+     * member is never re-run through the Arbiter by the poller's own cron.
+     * Role/source drift — a lapsed manual grant, a stale non-winning tier
+     * role left over from a prior tier, a missed BB member-type transition —
+     * would then sit uncorrected until the opt-in LGPO Patreon API cron next
+     * ran (and that cron is off whenever lgpo_auto_sync_enabled is unchecked).
+     * This makes the poller self-sufficient.
+     *
+     * Re-arbitrates from PERSISTED sources only; it does NOT re-poll Patreon
+     * for pledge churn (active→former) — that is the LGPO sync engine's job
+     * (it hits the campaign-members API). This only keeps WP roles consistent
+     * with whatever the sources already say.
+     *
+     * @return array{swept:int, errors:int}
+     */
+    public static function allPatreon(): array
+    {
+        global $wpdb;
+        $ids = $wpdb->get_col( $wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND meta_value = %s",
+            'payment_source',
+            'patreon'
+        ) );
+
+        $swept  = 0;
+        $errors = 0;
+        foreach ( $ids as $id ) {
+            $id = (int) $id;
+            if ( $id <= 0 ) {
+                continue;
+            }
+            try {
+                Arbiter::sync( $id );
+                $swept++;
+            } catch ( Throwable $e ) {
+                $errors++;
+            }
+        }
+        return [ 'swept' => $swept, 'errors' => $errors ];
+    }
 }
