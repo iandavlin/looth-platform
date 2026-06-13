@@ -151,8 +151,8 @@
   ],
   "signup_banner": {
     "title": "Join the Looth community",
-    "body": "Free to read. Sign up for full access to articles, videos, and the forum.",
-    "cta_label": "Join \u2014 it's free",
+    "body": "Sign up for full access to articles, videos, and the forum.",
+    "cta_label": "Join",
     "cta_url": "https://looth.live/membership"
   }
 }

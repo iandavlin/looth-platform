@@ -493,6 +493,25 @@ require __DIR__ . '/_chrome.php'; ?>
     <a class="signup-banner__cta" href="<?= h($signup_banner['cta_url']) ?>"><?= h($signup_banner['cta_label']) ?> →</a>
   </div>
 </aside>
+<?php elseif ($is_member):
+    // Personal greeting for logged-in viewers — symmetric to the anon signup
+    // banner. display_name comes from /whoami (server-side). Use FIRST name only:
+    // the legacy name-field system backfilled business names into profile
+    // display_name for many members (e.g. "Buck Van Laarhoven VL Guitar Repair"),
+    // so the first word is the only token that's reliably the person, not the
+    // business. (Source cleanup of profile-app display_name is a separate task.)
+    // Falls back to a name-less greeting if whoami is unreachable.
+    $lg_greet = trim((string) ($whoami['display_name'] ?? ''));
+    $lg_greet = $lg_greet !== '' ? preg_split('~\s+~', $lg_greet)[0] : '';
+?>
+<aside class="signup-banner signup-banner--member" role="region" aria-label="Welcome">
+  <div class="signup-banner__inner">
+    <div>
+      <strong class="signup-banner__title">Welcome back<?= $lg_greet !== '' ? ', ' . h($lg_greet) : '' ?>.</strong>
+      <span class="signup-banner__body">Here&rsquo;s what&rsquo;s new in the Looth community.</span>
+    </div>
+  </div>
+</aside>
 <?php endif; ?>
 <main class="arc-page" id="main">
 
