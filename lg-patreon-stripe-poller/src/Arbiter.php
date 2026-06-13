@@ -17,6 +17,31 @@ final class Arbiter
 {
     private const TIER_ROLES = [ 'looth1', 'looth2', 'looth3', 'looth4' ];
 
+    /**
+     * Explicit tier precedence. Higher number wins. Do NOT rely on lexical
+     * ordering of the role slugs — a future tier named outside the looth<n>
+     * pattern (or a re-slug) would silently mis-rank under strcmp. Precedence
+     * lives here, in one place, as data.
+     */
+    private const TIER_RANK = [
+        'looth1' => 1,
+        'looth2' => 2,
+        'looth3' => 3,
+        'looth4' => 4,
+    ];
+
+    /** Precedence rank for a tier; unknown/null tiers rank below every tier. */
+    public static function tierRank( ?string $tier ): int
+    {
+        return ( $tier !== null && isset( self::TIER_RANK[ $tier ] ) ) ? self::TIER_RANK[ $tier ] : 0;
+    }
+
+    /** Test/seam: winning tier across a source=>tier map (pure, no WP). */
+    public static function winningTierForSources( array $sources ): ?string
+    {
+        return self::computeWinningTier( $sources );
+    }
+
     public static function sync(int $wpUserId): array
     {
         $user = get_user_by( 'id', $wpUserId );
@@ -117,7 +142,7 @@ final class Arbiter
         $best = null;
         foreach ( self::TIER_ROLES as $role ) {
             if ( in_array( $role, $roles, true ) ) {
-                if ( $best === null || strcmp( $role, $best ) > 0 ) {
+                if ( $best === null || self::tierRank( $role ) > self::tierRank( $best ) ) {
                     $best = $role;
                 }
             }
@@ -141,7 +166,7 @@ final class Arbiter
         if ( $old === null ) {
             return true;  // first-ever tier assignment, paid
         }
-        return strcmp( $new, $old ) > 0;
+        return self::tierRank( $new ) > self::tierRank( $old );
     }
 
     /**
@@ -162,7 +187,7 @@ final class Arbiter
             if ( ! in_array( $tier, self::TIER_ROLES, true ) ) {
                 continue;
             }
-            if ( $best === null || strcmp( $tier, $best ) > 0 ) {
+            if ( $best === null || self::tierRank( $tier ) > self::tierRank( $best ) ) {
                 $best = $tier;
             }
         }
