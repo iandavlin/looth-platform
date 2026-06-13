@@ -60,23 +60,32 @@ origin or keep local), my `cutover/lanes/` lane-OS docs (uncommitted), a dirty `
 - **AWS key** — Ian's call: dead key, no action (caveat: still authenticates AWS-side).
 
 ## 🧩 Open loose ends
-- **bb-mirror C2/H6 still needs its own push** — it's the bespoke-cutover worktree (different branch).
+- 🔴 **URGENT — push bb-mirror's bespoke-cutover worktree.** Its 5 security commits (C2/H6/H7/SSRF) +
+  1 *uncommitted* `_feed.php` edit run LIVE but exist ONLY in `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror`
+  — one `git reset`/worktree-prune from loss (buck-zone map finding). `git push origin bespoke-cutover`.
+- **buck zone FULLY mapped** → operating manual `cutover/lanes/lane-buck-surfaces.md` + audit
+  `docs/BUCK-SURFACES-AUDIT-2026-06-13.md`. Map flagged NEW launch issues: a plaintext **Anthropic API key**
+  in `loothtool-ads/CREDENTIALS.md`; `/profile-media` zero-auth + anon directory leaks 668 UUIDs; a live
+  WS3 route with no handler; ~229 `.bak` files HTTP-fetchable. Push backend is 100% dark (no root cron).
 - forum-visibility gate is HELD OUT of run-all but the rate-limit flake is now fixed → it can be
   **re-wired as GATE 4/4** once confirmed stable (3× green). Comment in run-all.sh explains.
 - wire `archive-poc/bin/gate-anon-leak.py` into run-all (held while gate suite stabilized).
 - systemd timer for `reconcile-pg.php` (dev: looth-dev; live at cut).
 - commit + (maybe) push the lane-OS docs + decide audit-report-to-origin.
 
-## ✂️ Cut status (HELD by Ian; resume after the 3 lanes)
-- `LIVE-DEPLOY-PLAN.md` is **DEAD** — rebuild the deploy plan from verified box facts, not the doc.
-- The cut-plan re-audit was started then STOPPED (resumable run `wf_d8bb4ddb-ea9`) — it verifies which
-  cut-plan claims are real-on-box vs future-promises; finish it to feed the new plan.
-- The doc sweep surfaced cut knowledge in stale docs (master-path-map, briefing-live-deploy,
-  BB-DECOMMISSION-INVENTORY) → raw material for the new plan.
-- Six strategic rulings to RE-CONFIRM with Ian (from memory, not the dead doc): in-place/one-DB on old
-  live, PG rebuilt from live WP, `/` = new front page, BB → one `/hub/` redirect, F1 = the visibility
-  dial decides, cut = idempotent top-off.
-- `/run-now` + `/send-gift-codes` IP-lock + `reconcile-setup.sql` schema apply = cut-time tasks.
+## ✂️ Cut — the plan is now WRITTEN → `docs/DEPLOY-PLAN.md` (supersedes the DEAD `LIVE-DEPLOY-PLAN.md`)
+- **Strategy (Ian 6/13): NEW box + DNS flip**, not in-place — REVERSES the old "no second box" ruling.
+- New box = dev's CODE + **live's WP secret keys + the JWT key + live's current users/sessions** — required
+  to keep existing logins valid (Ian: respect logged-in state). Same domain (DNS flip) keeps the cookie flowing.
+- **Data path: direct MySQL read to live** (`/etc/lg-topoff.conf` creds, NO SSH). Fresh copy already on disk:
+  `backups/looth_import_2026-06-13_154612.sql.gz` (build/test data; still needs a final top-off at flip).
+- Wire-swaps (mailpit→SMTP, dev-R2-clone→real-R2, gate OFF, real secrets, SSL, URL rewrite across WP+apps),
+  the sequence, and the rollback (low TTL + go/no-go window) are all in `docs/DEPLOY-PLAN.md`.
+- ⚠️ **OPEN: verify the refresh-JWT** re-mints cleanly for expired / wrong-key / absent JWT + a valid WP
+  cookie (the wrong-key case is new at cut). Offered to test — not yet done. This is load-bearing.
+- Re-confirm rulings: PG from live WP · `/`=new front · BB→`/hub/` · F1=dial · idempotent top-off.
+- Cut-plan re-audit STOPPED/resumable (`wf_d8bb4ddb-ea9`). Salvage detail from `briefing-live-deploy.md`
+  + `master-path-map.md` (the doc sweep flagged them). `/run-now` IP-lock + `reconcile-setup.sql` = cut-time.
 
 ## Gate suite (`tools/gates/run-all.sh`)
 3 wired: visibility-matrix, craft-gate, infra-sec — all GREEN (loopback exemption fixed the flake).
