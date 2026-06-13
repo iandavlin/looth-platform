@@ -106,6 +106,13 @@ if ($method === 'PUT' || $method === 'DELETE') {
 }
 
 // ── CREATE (POST) ───────────────────────────────────────────────────────────
+// CSRF: the same wp_rest nonce the PUT/DELETE path verifies (X-WP-Nonce header).
+// rest_do_request() below runs the BuddyBoss handler in-process and so bypasses
+// the REST nonce gate — verify here. The client fetches this nonce from auth.php.
+if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
+    reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
+}
+
 $topic_id = (int) ($body['topic_id'] ?? 0);
 $content  = trim((string) ($body['content'] ?? ''));
 $reply_to = (int) ($body['reply_to'] ?? 0);
