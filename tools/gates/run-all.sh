@@ -13,5 +13,10 @@ echo
 echo "=== GATE 3/3: infra-sec gate (cookie auth / source disclosure / cdp) ==="
 bash "$(dirname "$0")/infra-sec-gate.sh" || red=1
 echo
+# bb-mirror forum-visibility gate (C2/H6) is HELD OUT of the runner: it passes
+# standalone but flakes RED in-sequence — the gate's own /hub/ renders call
+# /whoami from loopback and trip infra's new limit_req zone. Re-wire as GATE 4/4
+# ONLY after infra exempts 127.0.0.1 from the rate-limits. Run manually meanwhile:
+#   bash /srv/bb-mirror/bin/forum-visibility-gate.sh
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 echo "############ ALL GATES GREEN ############"
