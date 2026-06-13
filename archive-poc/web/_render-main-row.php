@@ -127,7 +127,7 @@ if (!function_exists('fp_img')) {
             <?php if ($target && !empty($target['title'])): ?>
               <h3 class="acard__title"><?= h($target['title']) ?></h3>
             <?php endif; ?>
-            <?php if (!empty($it['excerpt'])): ?>
+            <?php if (!$is_gated && !empty($it['excerpt'])): /* excerpt = baked body prose; never to a non-entitled viewer */ ?>
               <p class="acard__excerpt"><?= h($it['excerpt']) ?></p>
             <?php endif; ?>
             <?php
@@ -220,7 +220,8 @@ if (!function_exists('fp_img')) {
       </div>
     </section>
 
-<?php elseif ($layout === 'billboard'): $it = $row['items'][0]; $tier = strtolower($it['tier'] ?? 'public'); $kind = $it['kind']; ?>
+<?php elseif ($layout === 'billboard'): $it = $row['items'][0]; $tier = strtolower($it['tier'] ?? 'public'); $kind = $it['kind'];
+        $is_gated = lg_archive_poc_is_gated($tier, $GLOBALS['LG_VIEWER_TIER'] ?? 'public'); ?>
     <section class="row row--billboard" data-row-id="<?= h($row_id) ?>">
       <div class="billboard__search">
         <form class="topbar" id="topbar-hero" autocomplete="off" onsubmit="return false">
@@ -237,7 +238,7 @@ if (!function_exists('fp_img')) {
             <?php if ($tier !== 'public'): ?><span class="billboard__tier billboard__tier--<?= h($tier) ?>"><?= h(tier_label($tier)) ?></span><?php endif; ?>
           </span>
           <h2 class="billboard__title"><?= h($it['title'] ?: '(untitled)') ?></h2>
-          <?php if (!empty($it['excerpt'])): ?>
+          <?php if (!$is_gated && !empty($it['excerpt'])): /* baked body prose — gate it */ ?>
             <p class="billboard__excerpt"><?= h(mb_substr($it['excerpt'], 0, 180)) ?><?= mb_strlen($it['excerpt']) > 180 ? '…' : '' ?></p>
           <?php endif; ?>
           <div class="billboard__meta">
@@ -360,6 +361,7 @@ if (!function_exists('fp_img')) {
         $is_stale = $last > 0 && (time() - $last) > 86400 * 30;
         $badge_label = $last ? ($is_stale ? 'Quiet · ' . rel_time($last) : 'Active · ' . rel_time($last)) : 'New';
         $badge_class = $is_stale ? 'dcard__badge--quiet' : 'dcard__badge--active';
+        $is_gated = lg_archive_poc_is_gated($it['tier'] ?? 'public', $GLOBALS['LG_VIEWER_TIER'] ?? 'public');
 ?>
         <a class="dcard" href="<?= h($it['url'] ?: '#') ?>">
           <div class="dcard__head">
@@ -367,7 +369,7 @@ if (!function_exists('fp_img')) {
             <span class="dcard__author"><?= h($author) ?></span>
           </div>
           <h3 class="dcard__title"><?= h($it['title']) ?></h3>
-          <p class="dcard__excerpt"><?= h($it['excerpt'] ?: '') ?></p>
+          <?php if (!$is_gated): /* discussion body prose — gate it */ ?><p class="dcard__excerpt"><?= h($it['excerpt'] ?: '') ?></p><?php endif; ?>
           <div class="dcard__foot">
             <span class="dcard__replies">💬 <?= $replies ?> <?= $replies === 1 ? 'reply' : 'replies' ?></span>
             <span class="dcard__badge <?= $badge_class ?>"><?= h($badge_label) ?></span>

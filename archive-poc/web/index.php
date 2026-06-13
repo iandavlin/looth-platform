@@ -365,7 +365,12 @@ function jsonld_item(array $it): array {
         'url'      => $it['url'],
         'headline' => $it['title'],
     ];
-    if (!empty($it['excerpt']))     $obj['description'] = mb_substr($it['excerpt'], 0, 280);
+    // description = baked body prose; emit only when the viewer is entitled.
+    // The isAccessibleForFree flag below still marks gated items for crawlers —
+    // we just don't ship the gated body text into the structured data.
+    if (!empty($it['excerpt']) && !lg_archive_poc_is_gated($it['tier'] ?? 'public', $GLOBALS['LG_VIEWER_TIER'] ?? 'public')) {
+        $obj['description'] = mb_substr($it['excerpt'], 0, 280);
+    }
     if (!empty($it['thumb_url']) && empty($it['thumb_broken'])) $obj['image'] = $it['thumb_url'];
     if (!empty($it['author_name'])) {
         $obj['author'] = ['@type' => 'Person', 'name' => $it['author_name']];

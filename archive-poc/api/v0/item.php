@@ -18,7 +18,12 @@ $ts = $db->prepare("SELECT t.slug, t.label FROM content_tag ct JOIN tag t ON t.i
 $ts->execute([$id]);
 $tags = $ts->fetchAll();
 
-send_json([
+// Viewer tier (anon→public, admin→pro). The 800-char body_preview and the
+// excerpt are gated body prose; a viewer below the content's tier must get
+// neither (gate_payload NULLs both when gated). One cached whoami call.
+$viewer_tier = lg_archive_poc_viewer_tier(lg_archive_poc_whoami());
+
+send_json(lg_archive_poc_gate_payload([
     'id'            => (int)$r['id'],
     'kind'          => $r['kind'],
     'subkind'       => $r['subkind'],
@@ -40,4 +45,4 @@ send_json([
     'duration_min'  => $r['duration_min'] !== null ? (int)$r['duration_min'] : null,
     'has_download'  => (int)$r['has_download'] === 1,
     'tags'          => $tags,
-]);
+], $viewer_tier));

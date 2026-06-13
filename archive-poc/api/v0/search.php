@@ -133,11 +133,17 @@ if ($ids) {
     }
 }
 
+// Viewer tier (anon→public, admin→pro). Gates the prose `excerpt` per item so a
+// viewer below the content's tier never receives gated body text — the excerpt
+// is baked from the first 220 chars of the full body (and, for videos, can carry
+// the raw youtube embed URL). One whoami call, statically cached for the request.
+$viewer_tier = lg_archive_poc_viewer_tier(lg_archive_poc_whoami());
+
 // Shape items for the frontend.
 $items = [];
 foreach ($rows as $r) {
     $rid = (int)$r['id'];
-    $items[] = [
+    $items[] = lg_archive_poc_gate_payload([
         'id'            => $rid,
         'kind'          => $r['kind'],
         'subkind'       => $r['subkind'],
@@ -161,7 +167,7 @@ foreach ($rows as $r) {
         'forum'         => $r['forum_label']    ?: null,
         'subforum'      => $r['subforum_label'] ?: null,
         'tags'          => $tags_by_id[$rid] ?? [],
-    ];
+    ], $viewer_tier);
 }
 
 // Facets are derived from the FULL filtered set (not just current page).

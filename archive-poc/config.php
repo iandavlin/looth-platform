@@ -151,6 +151,36 @@ function lg_archive_poc_viewer_tier(?array $whoami): string {
 }
 }
 
+// Is $content_tier ABOVE $viewer_tier? (anon already failed CLOSED to 'public'
+// in lg_archive_poc_viewer_tier). THE one tier_rank map — every render + API
+// surface calls this instead of re-inlining its own {public,lite,pro} ladder,
+// so the gate can never drift between surfaces.
+if (!function_exists('lg_archive_poc_is_gated')) {
+function lg_archive_poc_is_gated(?string $content_tier, ?string $viewer_tier): bool {
+    static $rank = ['public' => 0, 'lite' => 1, 'pro' => 2];
+    $c = $rank[strtolower((string)$content_tier)] ?? 0;
+    $v = $rank[strtolower((string)$viewer_tier)] ?? 0;
+    return $c > $v;
+}
+}
+
+// Leak guard for JSON card/item payloads: when the viewer is below the content's
+// tier, NULL the prose fields (excerpt / body_preview) and the embedded video id
+// (yt_id — and an excerpt can itself carry a raw youtube embed URL, so stripping
+// it covers that too). Viewer-RELATIVE: an entitled viewer keeps the full
+// payload. Only keys already present are touched, so it's safe on any card
+// shape. THE single choke point for /archive-api/v0/{search,item}; SSR templates
+// call lg_archive_poc_is_gated() directly to guard their <p>excerpt</p> emit.
+if (!function_exists('lg_archive_poc_gate_payload')) {
+function lg_archive_poc_gate_payload(array $item, string $viewer_tier): array {
+    if (!lg_archive_poc_is_gated($item['tier'] ?? 'public', $viewer_tier)) return $item;
+    foreach (['excerpt', 'body_preview', 'yt_id'] as $k) {
+        if (array_key_exists($k, $item)) $item[$k] = null;
+    }
+    return $item;
+}
+}
+
 // ---------- hostname → filesystem map (for thumb localization) ----------
 if (!function_exists('lg_archive_poc_host_to_path_map')) {
 function lg_archive_poc_host_to_path_map(): array {
