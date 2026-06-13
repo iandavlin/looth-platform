@@ -26,6 +26,7 @@ if ( file_exists( LGPO_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
 }
 
 // Patreon side: existing sync engine and cron (LGPO_*).
+require_once LGPO_PLUGIN_DIR . 'includes/campaign-filter.php';
 require_once LGPO_PLUGIN_DIR . 'includes/class-lgpo-sync-engine.php';
 require_once LGPO_PLUGIN_DIR . 'includes/class-lgpo-sync-cron.php';
 add_action( 'init', [ 'LGPO_Sync_Cron', 'init' ] );
@@ -888,7 +889,11 @@ function lgpo_handle_callback() {
             }
 
             $member_campaign_id = $resource['relationships']['campaign']['data']['id'] ?? '';
-            if ( false && ! empty( $campaign_id ) && $member_campaign_id !== $campaign_id ) {
+            // Only provision off a membership in OUR campaign. The identity
+            // endpoint lists memberships across every creator the user backs,
+            // so without this a patron of any foreign creator would be granted
+            // a paid Looth tier. Fails open only when lgpo_campaign_id is unset.
+            if ( ! lgpo_membership_matches_campaign( (string) $member_campaign_id, (string) $campaign_id ) ) {
                 continue;
             }
 
