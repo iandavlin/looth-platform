@@ -40,6 +40,32 @@ final class Mint
      *         a signing failure (unreadable key, encode error) so the caller
      *         can return 502 and the WP login hook degrades gracefully.
      */
+    /**
+     * Canonical `sub` for a WP user: the STORED users.uuid reached via
+     * wp_user_bridge. Deliberately email-INDEPENDENT — it never recomputes
+     * UUIDv5(email), so a WP email change cannot drift the token subject away
+     * from the stored identity (the G4 silent-logout bug). Returns null when no
+     * profile-app identity is bridged to this wp_user_id.
+     *
+     * THE single source of truth for the token subject. The WP-side minter
+     * (profile-auth.php, Decision 2 option (b)) MUST resolve `sub` to this same
+     * value — never to looth_auth_compute_uuid($email) — or a member who
+     * changed their email gets a token whose sub ≠ stored uuid and renders
+     * silently anonymous on their own profile. Pinned by bin/test-identity.php.
+     */
+    public static function subForWpUserId(int $wpUserId): ?string
+    {
+        if ($wpUserId < 1) return null;
+        $stmt = Db::pg()->prepare('
+            SELECT u.uuid
+            FROM users u JOIN wp_user_bridge b ON b.user_id = u.id
+            WHERE b.wp_user_id = :w
+        ');
+        $stmt->execute([':w' => $wpUserId]);
+        $uuid = $stmt->fetchColumn();
+        return $uuid === false ? null : strtolower((string)$uuid);
+    }
+
     public static function mintForWpUserId(int $wpUserId): ?array
     {
         if ($wpUserId < 1) return null;
