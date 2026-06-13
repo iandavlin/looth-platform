@@ -91,21 +91,54 @@ if (!function_exists('lg_cover_dims')) {
         if (!$url) return '';
         $clean = preg_replace('/[?#].*$/', '', $url);
         if (!preg_match('#/wp-content/uploads/(.+)$#', $clean, $m)) return '';
-        $key = $m[1] . '|' . $w;
-        if (isset($memo[$key])) return $memo[$key];
-        $out  = '';
+        $rel = $m[1];
+        // Original [w,h], resolved at most ONCE per image: per-request memo
+        // backed by a tmpfs cache (lg_cover_dims_resolve), so getimagesize()
+        // touches the R2 mount only on a cold image — not once per card per
+        // render. That per-card mount read was the hub's #1 server cost
+        // (FPM slowlog 6/13: lg_cover_dims realpath+getimagesize, ~1s/page).
+        if (!array_key_exists($rel, $memo)) $memo[$rel] = lg_cover_dims_resolve($rel);
+        $dim = $memo[$rel];
+        if (!$dim) return '';
+        $tw = min($w, $dim[0]);
+        $th = (int)round($dim[1] * $tw / $dim[0]);
+        return $th > 0 ? ' width="' . $tw . '" height="' . $th . '"' : '';
+    }
+}
+
+if (!function_exists('lg_cover_dims_resolve')) {
+    /**
+     * Original [w,h] for an uploads-relative path, or null. tmpfs-cached so the
+     * getimagesize() through the R2 mount runs only on a cold image. Dimensions
+     * never change for a given uploads URL (a new image is a new URL), so the
+     * cache is TTL-only with NO per-render stat — a stat/realpath would itself
+     * be a FUSE→R2 round-trip, the exact cost we're removing. Mirrors the whoami
+     * tmpfs-cache idiom in config.php. Path-containment check stays; it now runs
+     * once per image instead of once per card per render. [] = cached "no dims".
+     */
+    function lg_cover_dims_resolve(string $rel): ?array
+    {
+        $cacheFile = '/dev/shm/bb-imgdims-' . sha1($rel) . '.json';
+        if (is_readable($cacheFile) && (time() - filemtime($cacheFile)) < 604800) {
+            $d = json_decode((string)file_get_contents($cacheFile), true);
+            return (is_array($d) && isset($d[0], $d[1])) ? [(int)$d[0], (int)$d[1]] : null;
+        }
+        $val  = null;
         $base = realpath('/mnt/loothgroup-uploads-dev');
-        $real = realpath('/mnt/loothgroup-uploads-dev/' . urldecode($m[1]));
+        $real = realpath('/mnt/loothgroup-uploads-dev/' . urldecode($rel));
         if ($real !== false && $base !== false
             && strncmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) === 0) {
             $info = @getimagesize($real);
             if ($info && (int)$info[0] > 0 && (int)$info[1] > 0) {
-                $tw = min($w, (int)$info[0]);
-                $th = (int)round((int)$info[1] * $tw / (int)$info[0]);
-                if ($th > 0) $out = ' width="' . $tw . '" height="' . $th . '"';
+                $val = [(int)$info[0], (int)$info[1]];
             }
         }
-        return $memo[$key] = $out;
+        $tmp = $cacheFile . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($tmp, json_encode($val ?? [])) !== false) {
+            @chmod($tmp, 0600);
+            @rename($tmp, $cacheFile);
+        }
+        return $val;
     }
 }
 
