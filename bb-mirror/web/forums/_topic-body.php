@@ -22,8 +22,15 @@ if (!$tid) {
     exit;
 }
 
+// Forum-visibility gate (C2): a topic body is readable only when its parent
+// forum is PUBLIC. Hidden/private forums 404 — same gate the single-topic page
+// and feed read paths use (JOIN forums.forum … WHERE f.visibility='public').
 $stmt = $db->prepare(
-    "SELECT content_html FROM forums.topic WHERE id = :id AND status = 'publish' LIMIT 1"
+    "SELECT t.content_html
+       FROM forums.topic t
+       JOIN forums.forum f ON f.id = t.forum_id
+      WHERE t.id = :id AND t.status = 'publish' AND f.visibility = 'public'
+      LIMIT 1"
 );
 $stmt->bindValue(':id', $tid, PDO::PARAM_INT);
 $stmt->execute();
