@@ -151,6 +151,17 @@ Full ianhates teardown (WP user + customer + FK-linked rows) is in earlier sessi
 
 ## Recent history
 
+- **2026-06-13 (audit fixes)** — 4 committed-not-pushed: (1) HIGH re-enabled the
+  per-campaign Patreon filter in the OAuth onboard (`false &&` was disabling it →
+  any creator's patron got a paid tier); pure predicate `lgpo_membership_matches_campaign()`
+  in `includes/campaign-filter.php`. (2) audit_log wipe-preview was keyed on a
+  non-existent `customer_id` column (TestChecklist) → aligned to `subject_type/subject_id`
+  (canonical teardown was already correct). (3) Arbiter tier precedence now explicit
+  `TIER_RANK` map, not `strcmp`. (4) Tick pass 2.5: `Sync::allPatreon()` re-arbitrates
+  Patreon-only members hourly (Stripe-only sweep never visited them). New WP-free tests
+  in `tests/` (`bash tests/run.sh`, 19 asserts GREEN). **OPEN cross-lane:** `/run-now` +
+  `/send-gift-codes` are shared-secret but not IP-locked at nginx → infra lane. **Cut
+  checklist:** confirm `lgpo_campaign_id` is set on LIVE (it's `4833198` on dev).
 - **2026-05-09 (security audit)** — `/refund-request` rate limit, `Tick` GET_LOCK, `lg_processed_events` table + dup detection, `refund_window_days` clamp 1–90. Reverted commit `a545d39` (laptop's stale membership-guide snapshot) — server's working tree is canonical for that work.
 - **2026-05-04** — gift-management UI shipped: `[lg_my_gifts]` dashboard, `/me/gift-*` endpoints, `/gift-auth` for login-before-Stripe, gift-buy form (`[lg_gift]`), gift-redemption (`[lg_redeem_gift]`), customer-role lockdown. See `git log --grep gift`.
 - Earlier — see `git log` and the companion repo's PICKUP for cross-cutting context.
