@@ -58,6 +58,7 @@ final class Whoami
         $hdrName = 'HTTP_' . strtoupper(str_replace('-', '_', self::WP_USER_ID_HEADER));
         $wpRaw   = $_SERVER[$hdrName] ?? '';
         if ($wpRaw === '' || !ctype_digit((string)$wpRaw)) return null;
+        if (!self::clientIsLoopback()) return null;   // trusted-header bypass is loopback-only
         if (!self::verifyInternalAuth()) return null;
         $wpUserId = (int) $wpRaw;
         if ($wpUserId < 1) return null;
@@ -225,6 +226,26 @@ final class Whoami
         $d = json_decode($body, true);
         if (!is_array($d) || empty($d['tier'])) return null;
         return $d;
+    }
+
+    /**
+     * True only when the request originates from the loopback interface.
+     *
+     * The trusted X-LG-WP-User-Id bypass impersonates any member by id, so it
+     * must never be reachable from the public internet — yet /whoami is itself
+     * a PUBLIC endpoint (it also serves anon/JWT viewers), so nginx can't
+     * allow/deny the whole location. The genuine caller is the WP shim, which
+     * always reaches profile-app over https://127.0.0.1 (with a Host header),
+     * so a real trusted-header request has REMOTE_ADDR = 127.0.0.1 / ::1. An
+     * external client can present a guessed or leaked shared secret but cannot
+     * source from loopback — so the secret alone no longer grants the bypass.
+     * Defense-in-depth layered behind hash_equals(); request a /whoami
+     * limit_req zone from the infra lane for the brute-force surface.
+     */
+    public static function clientIsLoopback(): bool
+    {
+        $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+        return $ip === '127.0.0.1' || $ip === '::1' || $ip === '::ffff:127.0.0.1';
     }
 
     /**
