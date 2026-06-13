@@ -62,7 +62,9 @@ origin or keep local), my `cutover/lanes/` lane-OS docs (uncommitted), a dirty `
 ## 🧩 Open loose ends
 - 🔴 **URGENT — push bb-mirror's bespoke-cutover worktree.** Its 5 security commits (C2/H6/H7/SSRF) +
   1 *uncommitted* `_feed.php` edit run LIVE but exist ONLY in `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror`
-  — one `git reset`/worktree-prune from loss (buck-zone map finding). `git push origin bespoke-cutover`.
+  — one `git reset`/worktree-prune from loss (buck-zone map finding). ROUTED to the bb-mirror lane to
+  commit + `git push origin bespoke-cutover`. Coordinator took a safety snapshot of the uncommitted edit
+  → `/home/ubuntu/coord-snapshots/` (durable). Do NOT commit it from the coordinator seat — it's the lane's.
 - **buck zone FULLY mapped** → operating manual `cutover/lanes/lane-buck-surfaces.md` + audit
   `docs/BUCK-SURFACES-AUDIT-2026-06-13.md`. Map flagged NEW launch issues: a plaintext **Anthropic API key**
   in `loothtool-ads/CREDENTIALS.md`; `/profile-media` zero-auth + anon directory leaks 668 UUIDs; a live
