@@ -25,6 +25,11 @@ require_once __DIR__.'/indexer.php';   // archive_poc_resolve_category() — sha
 
 if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 
+// --force overrides the shrink safety check (below) for an intentional
+// large reduction (e.g. a CPT was retired). Without it, a rebuild that would
+// leave content_item at <50% of its prior size aborts and rolls back.
+$FORCE = in_array('--force', $argv ?? [], true);
+
 if (!function_exists('wp_get_attachment_image_url')) {
     if (!isset($_SERVER['HTTP_HOST'])) $_SERVER['HTTP_HOST'] = LG_ARCHIVE_POC_HOST;
     if (!isset($_SERVER['REQUEST_URI'])) $_SERVER['REQUEST_URI'] = '/';
@@ -72,12 +77,13 @@ if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'pgsql') {
     exit(1);
 }
 
-// Idempotent rebuild. CASCADE walks the FK chain in one shot. Skipping
-// RESTART IDENTITY because looth-dev (the writer) doesn't own the tag
-// sequence — only the schema owner (archive-poc) can reset it. The
-// sequence drift across re-runs is inconsequential; nothing external
-// pins tag.id values.
-$db->exec('TRUNCATE content_tag, content_item, tag, person CASCADE');
+// Pre-count: how many items the live feed has RIGHT NOW. The TRUNCATE +
+// rebuild happens inside one transaction (opened below) so a mid-run failure
+// rolls the wipe back and the feed survives; this count additionally guards
+// against a *successful* but near-empty rebuild silently blanking the feed
+// (e.g. WP returns nothing transiently — no exception, just zero rows).
+$pre_count = (int) $db->query('SELECT count(*) FROM content_item')->fetchColumn();
+echo "content_item rows before rebuild: $pre_count\n";
 
 // --- Helpers --------------------------------------------------------------
 
@@ -331,6 +337,17 @@ $ins_ctag = $db->prepare('
 ');
 
 $db->beginTransaction();
+
+// Wipe + rebuild atomically. PG TRUNCATE is transactional, so it lives INSIDE
+// the open transaction: if anything in the rebuild loop throws, the txn is
+// rolled back (PDO rolls back an open txn when the script dies) and the wipe is
+// undone — the live feed is left exactly as it was. (Pre-fix this TRUNCATE ran
+// before beginTransaction, so a mid-run error blanked the feed permanently.)
+// CASCADE walks the FK chain; RESTART IDENTITY is skipped because looth-dev (the
+// writer) doesn't own the tag sequence — sequence drift is inconsequential,
+// nothing external pins tag.id values.
+$db->exec('TRUNCATE content_tag, content_item, tag, person CASCADE');
+
 $count_by_kind = [];
 $total = 0;
 
@@ -479,6 +496,23 @@ while (true) {
     $offset += $batch_size;
     if ($total % 2000 < $batch_size) echo "  processed: $total\n";
 }
+
+// Refuse to leave the feed emptier than we found it. A zero-row rebuild over
+// existing content is always a bug; a >50% shrink is suspicious enough to
+// require --force. Either way we ROLL BACK (undoing the TRUNCATE), so the old
+// data is untouched.
+if ($pre_count > 0 && $total === 0) {
+    $db->rollBack();
+    fwrite(STDERR, "ABORT: rebuild produced 0 rows over $pre_count existing — rolled back, feed untouched.\n");
+    exit(1);
+}
+if (!$FORCE && $pre_count > 0 && $total < (int)($pre_count / 2)) {
+    $db->rollBack();
+    fwrite(STDERR, "ABORT: rebuild would shrink content_item $pre_count → $total (>50% loss). "
+                 . "Rolled back, feed untouched. Re-run with --force if intentional.\n");
+    exit(1);
+}
+
 $db->commit();
 
 // tsvector is GENERATED STORED on content_item, so the FTS index is already
