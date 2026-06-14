@@ -1421,7 +1421,7 @@ $header_cat = $scoped_forum
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
       <?php if (!$c_is_gated): /* gated cards: suppress excerpt/tags/engagement — locked teaser carries no payload */ ?>
         <?php if ($c_excerpt !== ''): ?>
-          <div class="fc-excerpt feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
+          <div class="fc-excerpt feed-card__op"><a class="feed-card__op-excerpt-link" href="<?= htmlspecialchars($c_url) ?>" tabindex="-1"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></a></div>
         <?php endif; ?>
         <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
         <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot.
