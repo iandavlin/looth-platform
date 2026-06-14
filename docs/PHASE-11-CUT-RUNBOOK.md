@@ -60,6 +60,10 @@ Companions: `docs/dev2-build-checklist.md` (gotcha detail + phase history), `doc
     c. **bb-mirror re-backfill** (content_html paragraph fix `9510cbf`) + **person-resync** (stale author names after reload).
     d. **PG grant** (front-page discussion row): `GRANT USAGE ON SCHEMA forums TO "archive-poc";`
        `GRANT SELECT ON forums.topic, forums.forum TO "archive-poc";` — else front page 500s for members.
+       **⚠️ CONFIRMED LIVE on dev2 6/14:** the grant did NOT survive the PG data restore → front page 500'd for every
+       logged-in member (anon was fine — only the `$is_member` path hits `forums.topic`). GRANTs are role privileges,
+       NOT in a data dump → **re-apply after ANY PG restore** (build, top-off, the cut). Confirm: `sudo -u postgres psql
+       -d looth -tAc "select has_schema_privilege('archive-poc','forums','USAGE');"` (f = missing). Script: `tools/cut/forums-grant.sql`.
     e. **NOTE — steps that read WP `home_url` (11b reindex/materialize) run in step 13a, AFTER the URL flip.** The rest of
        11 (bridge, grant, bb-mirror) is host-independent and can run here.
 
