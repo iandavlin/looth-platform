@@ -254,7 +254,12 @@ foreach ($rows_config as $row) {
         'video-promo'      => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'video-promo',  'tag' => null, 'query' => $row['query'] ?? null],
         // Daily Guitardle game — static iframe embed of /archive-poc/guitardle/
         'guitardle'        => ['title' => $row['title'] ?? '', 'items' => [], 'layout' => 'guitardle',    'tag' => null],
-        default            => archive_poc_run_row($db, $row),
+        // Discussions row: forum threads live in forums.* (PG), NOT content_item
+        // (topic→discussion sync dropped 2026-06-05), so it has its own runner that
+        // sources forums.topic + deep-links each card to /hub/<forum>/<topic>/.
+        default            => (($row['layout'] ?? '') === 'discussions')
+                                ? archive_poc_run_discussions($db, $row, $is_member)
+                                : archive_poc_run_row($db, $row),
     };
     $rendered['id'] = $row['id'] ?? '';
     $rendered_rows[] = $rendered;

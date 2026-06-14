@@ -234,6 +234,71 @@ function archive_poc_run_row(PDO $db, array $row, array $resolved_tags = []): ar
 }
 
 
+
+/**
+ * Active-discussions row. Discussions are NOT in content_item: the topic→discussion
+ * sync was DROPPED 2026-06-05 (Hub-fold lane) — forum threads now live only in
+ * forums.* in PG. So we source the cards straight from forums.topic, and each card's
+ * href is the single-topic Hub deep-link /hub/<forum_slug>/<topic_slug>/ — built to
+ * match bb-mirror feed_topic_url() exactly so it lands on the same view as clicking
+ * the thread inside the Hub. The Hub enforces visibility server-side on that page, so
+ * the deep-link is leak-safe; the card itself only emits title + (tier-gated) excerpt.
+ *
+ * PG-only: the SQLite revert path has no forums schema → return an empty row.
+ * $is_member mirrors the Hub's logged-out author mask (member-visibility authors
+ * show as "Private member" to anon, same as lg_bb_mirror_mask_visibility()).
+ */
+function archive_poc_run_discussions(PDO $db, array $row, bool $is_member = false): array {
+    $title  = $row['title'] ?? 'Active discussions';
+    $layout = $row['layout'] ?? 'discussions';
+    $q      = is_array($row['query'] ?? null) ? $row['query'] : [];
+    $limit  = max(1, min(50, (int) ($q['limit'] ?? 8)));
+
+    if (!lg_archive_poc_is_pg($db)) {
+        return ['title' => $title, 'items' => [], 'tag' => null, 'layout' => $layout, 'limit' => $limit];
+    }
+
+    $order = (($q['sort'] ?? 'active') === 'newest')
+        ? 'ORDER BY t.created_at DESC NULLS LAST, t.id DESC'
+        : 'ORDER BY t.last_active_at DESC NULLS LAST, t.id DESC';
+
+    // forum 3876 is the Hub's excluded admin/suggestion forum (mirrors _feed.php).
+    $sql = "
+        SELECT t.id,
+               t.title,
+               LEFT(t.content_text, 240)                       AS excerpt,
+               COALESCE(t.author_name, 'Member')               AS author_name,
+               t.author_id,
+               t.reply_count,
+               " . lg_ts_sel($db, 't.last_active_at', 'last_activity') . ",
+               t.tier_gate                                     AS tier,
+               COALESCE(p.discussion_visibility, 'member')     AS discussion_visibility,
+               '/hub/' || f.slug || '/' || t.slug || '/'       AS url
+          FROM forums.topic t
+          JOIN forums.forum f  ON f.id = t.forum_id
+          LEFT JOIN forums.person p ON p.id = t.author_id
+         WHERE t.status = 'publish'
+           AND f.visibility = 'public'
+           AND t.forum_id <> 3876
+         $order
+         LIMIT $limit";
+    $items = $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
+    // Logged-out author mask for member-visibility threads (Hub parity).
+    if (!$is_member) {
+        foreach ($items as &$it) {
+            if (($it['discussion_visibility'] ?? '') === 'member') {
+                $it['author_name'] = 'Private member';
+                $it['author_id']   = 0;
+            }
+        }
+        unset($it);
+    }
+
+    return ['title' => $title, 'items' => $items, 'tag' => null, 'layout' => $layout, 'limit' => $limit];
+}
+
+
 /**
  * Hero billboard. Returns a single item:
  *   1. First post in featured_post_ids that exists in the index.
