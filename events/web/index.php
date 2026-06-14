@@ -39,7 +39,8 @@ $ctx    = [
     'msg_unread'    => null,
     'notif_unread'  => null,
     'logo_url'      => LG_EVENTS_LOGO,
-    'profile_url'   => '/profile/edit',
+    // Viewer's public profile (convergence doc); /profile/edit is only the slug-less fallback.
+    'profile_url'   => !empty($who['slug']) ? '/u/' . rawurlencode((string)$who['slug']) : '/profile/edit',
     'active_nav'    => 'events',                                   // coord §0a
     'logout_url'    => $authed ? '/wp-login.php?action=logout' : null,
 ];
