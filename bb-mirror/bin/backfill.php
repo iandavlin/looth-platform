@@ -19,6 +19,12 @@
 
 require __DIR__ . '/../config.php';
 
+// Share the body formatter (decode -> kses -> wpautop) with the live sync path
+// so this full-walk backfill can't drift from materializers.php — the prior
+// duplicated `wp_kses_post(decode(...))` is how the paragraph-collapse fix went
+// missing on one path. bb_mirror_content_html() lives there.
+require_once __DIR__ . '/../lib/materializers.php';
+
 if (PHP_SAPI !== 'cli') { fwrite(STDERR, "CLI only\n"); exit(2); }
 if (!function_exists('get_post_meta')) {
     fwrite(STDERR, "Run via: sudo -u www-data wp eval-file " . __FILE__ . "\n");
@@ -248,7 +254,7 @@ foreach ($topics as $t) {
     $stmt_topic->execute([
         (int)$t->ID, $fid,
         (string)$t->post_name, decode_entities((string)$t->post_title),
-        wp_kses_post(decode_entities((string)$t->post_content)), $body_text,  // sanitize in (match materializers.php)
+        bb_mirror_content_html((string)$t->post_content), $body_text,  // decode->kses->wpautop (shared w/ materializers.php)
         $featured_url,
         $author_id ?: null, '', '',
         $m['_bbp_anonymous_name'] ?? null,
@@ -332,7 +338,7 @@ foreach ($replies as $r) {
     $stmt_reply->execute([
         (int)$r->ID, $tid, $fid,
         (int)($m['_bbp_reply_to'] ?? 0) ?: null,
-        wp_kses_post(decode_entities((string)$r->post_content)), $body_text,  // sanitize in (match materializers.php)
+        bb_mirror_content_html((string)$r->post_content), $body_text,  // decode->kses->wpautop (shared w/ materializers.php)
         $author_id ?: null, '', '',
         $m['_bbp_anonymous_name'] ?? null,
         (string)$r->post_status,

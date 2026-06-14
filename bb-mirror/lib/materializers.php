@@ -21,6 +21,31 @@ function _bb_mirror_decode(?string $s): ?string {
     return $s === null ? null : html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
+/**
+ * Materialize a post body into the display-ready HTML we store in content_html.
+ *
+ * bbPress/BuddyBoss store post_content RAW — paragraph breaks are bare "\n\n"
+ * with no <p>/<br> — and apply wpautop on DISPLAY. The Hub renders content_html
+ * verbatim and WP-free (no wpautop available at render), so the paragraph
+ * structure MUST be baked in here at sync, or every newline collapses into one
+ * wall of text (the paragraph-collapse regression class — CRAFT, gated in
+ * tools/gates/hub-content-paragraph-gate.sh).
+ *
+ * Order: decode entities -> wp_kses_post (sanitize; can resurrect entity-encoded
+ * tags so it runs on the decoded string) -> wpautop (format). wpautop leaves
+ * already-blocked HTML (BuddyBoss modern composer bodies that ship <p>/<div>)
+ * intact, so this is safe for both raw-text and pre-structured bodies.
+ *
+ * SINGLE source of truth for the body column: BOTH write paths
+ * (bb_mirror_upsert_topic/reply here AND bin/backfill.php's full walk) call this
+ * — the prior duplication of `wp_kses_post(decode(...))` across the two files is
+ * exactly how the wpautop step went missing twice.
+ */
+function bb_mirror_content_html(?string $raw): ?string {
+    if ($raw === null) return null;
+    return wpautop(wp_kses_post((string)_bb_mirror_decode($raw)));
+}
+
 function _bb_mirror_visibility(?string $meta, string $post_status): string {
     if ($meta === 'public' || $meta === 'private' || $meta === 'hidden') return $meta;
     if ($post_status === 'hidden')  return 'hidden';
@@ -392,7 +417,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
     $sql = bb_mirror_upsert_sql('topic', $cols);
     $db->prepare($sql)->execute([
         $id, $forum_id, $p->post_name, _bb_mirror_decode($p->post_title),
-        wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text, $featured_url,
+        bb_mirror_content_html($p->post_content), $body_text, $featured_url,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
         bb_mirror_bool(!empty($m['_lg_anon'])),
@@ -432,7 +457,7 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $sql = bb_mirror_upsert_sql('reply', $cols);
     $db->prepare($sql)->execute([
         $id, $topic_id, $forum_id, (int)($m['_bbp_reply_to'] ?? 0) ?: null,
-        wp_kses_post(_bb_mirror_decode($p->post_content)), $body_text,
+        bb_mirror_content_html($p->post_content), $body_text,
         (int)$p->post_author ?: null, $person['name'], $person['slug'],
         $m['_bbp_anonymous_name'] ?? null,
         bb_mirror_bool(!empty($m['_lg_anon'])),
