@@ -4,6 +4,23 @@
 
 > Companion repo: [`lg-stripe-billing`](https://github.com/iandavlin/lg-stripe-billing) (Slim API). Cross-cutting picture is in its PICKUP.
 
+## 2026-06-14 — onboard double-account dedupe
+
+- **Fix (`62203b7`, lane/login-poller):** OAuth onboard now ADOPTS an existing WP
+  account matched by Patreon email or Patreon user-id (stamp linkage meta, apply
+  tier via arbiter, log in) instead of minting a second one. Removed the
+  same-patreon-id fall-through that could still mint; flipped email-collision
+  from "contact admin" to reuse. Human review kept only for: email bound to a
+  DIFFERENT Patreon id, or a privileged (admin) account. Deployed to the live
+  dev plugin dir (`/var/www/dev/wp-content/plugins/...`, looth-dev:loothdevs 660).
+- **Merged mikelle.davlin on dev:** canonical = wp **1848** (orig). Re-pointed
+  profile bridge (profile_app.wp_user_bridge user 1844 → wp 1848). Neutralized
+  loser wp **1905** WITHOUT `wp user delete`: caps→`a:0:{}`, password scrambled,
+  sessions deleted, patreon meta renamed `*_merged`, `lgpo_merged_into=1848`.
+  Snapshot: `/tmp/mikelle-merge-20260614/`. Only affected member (dupe-email
+  query returns just her). LIVE merge still TODO (or handled at cut via the
+  bridge-gate whitelist — Ian's call).
+
 ## State
 
 WordPress plugin at `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/` on `dev.loothgroup.com` (php-fpm pool `php8.3-fpm-looth-dev.sock`). Two databases: WordPress (`wp_*`, accessed via `$wpdb`) and `lg_membership` (own PDO via `LGMS\Db::pdo()`). The plugin's hourly cron (`lgms_poll_tick` → `Tick::run`) is the heart: pulls Stripe events, sweeps expired entitlements, calls back to Slim's `/v1/reconcile-pending`, and runs the customer sync.
