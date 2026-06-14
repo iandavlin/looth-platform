@@ -52,17 +52,24 @@ Companions: `docs/dev2-build-checklist.md` (gotcha detail + phase history), `doc
          lifecycle nuke) is owned by the **poller/Patreon-onboard lane** (root cause: onboard mints a 2nd WP user for an
          existing Patreon email). Re-scan for new dup-email members at the cut: `SELECT user_email,COUNT(*) c FROM wp_users
          WHERE user_email<>'' GROUP BY user_email HAVING c>1;`.
-    b. **archive-poc discovery index URLs** → `loothgroup.com`: reindex from live (preferred), OR `dev.→loothgroup.com`
-       search-replace on url/thumb columns in PG `discovery.content_item` + `article_blobs`. Verify front page = 0 off-host links.
+    b. **archive-poc discovery index URLs** → `loothgroup.com`: **REINDEX, don't search-replace.** `bin/indexer.php`/
+       `backfill.php` build `url` from `get_permalink()` (WP `home_url`), so `bin/reindex-all.php` + `bin/materialize-all.php`
+       rebuild all url/thumb/`article_blobs` at the correct host natively. **⚠️ ORDERING: this MUST run AFTER the WP-URL
+       flip (step 12)** — else it bakes in `dev2`. (Scope if you ever must search-replace instead: ~702 url + 691 thumb_url
+       rows + body_text/blobs — fragile, fallback only.) Verify front page = 0 `dev.`/`dev2.` links after.
     c. **bb-mirror re-backfill** (content_html paragraph fix `9510cbf`) + **person-resync** (stale author names after reload).
     d. **PG grant** (front-page discussion row): `GRANT USAGE ON SCHEMA forums TO "archive-poc";`
        `GRANT SELECT ON forums.topic, forums.forum TO "archive-poc";` — else front page 500s for members.
-    e. **conversions / materialize / reindex** as needed; confirm standalone article render.
+    e. **NOTE — steps that read WP `home_url` (11b reindex/materialize) run in step 13a, AFTER the URL flip.** The rest of
+       11 (bridge, grant, bb-mirror) is host-independent and can run here.
 
 ## D. Cut window — host/secrets/SSL flip
 12. **WP URL:** flip `WP_HOME`/`WP_SITEURL` constants (wp-config) `dev2.loothgroup.com` → `loothgroup.com`.
     Content already carries `loothgroup.com` (from the live dump) → no content search-replace to live needed
     (the dev2 search-replace was test-only). Remove the dev2 shim.
+12a. **Reindex now that `home_url`=loothgroup.com** (deferred from 11b — these read WP permalinks):
+    `sudo -u looth-dev wp eval-file /srv/archive-poc/bin/reindex-all.php` then `… bin/materialize-all.php`
+    (rebuilds discovery `url`/`thumb_url`/`article_blobs` at the live host). Spot-check the front page for 0 off-host links.
 13. **gate OFF** (nginx cookie-gate maps) — live has no gate. **Delete `/etc/lg-loothdev-gate.env`** + drop the
     `LG_LOOTHDEV_GATE_TOKEN` from the reconcile/vis units.
 14. **R2:** real uploads bucket/token with **write**; remount rw.
