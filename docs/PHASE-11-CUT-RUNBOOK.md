@@ -42,7 +42,16 @@ Companions: `docs/dev2-build-checklist.md` (gotcha detail + phase history), `doc
 11. **Data steps (order matters):**
     a. **Identity-bridge reconcile AFTER the top-off:** `sudo -u profile-app php /srv/profile-app/bin/reconcile-bridge.php`
        then `sudo WP_PATH=/var/www/dev /srv/profile-app/bin/backfill-looth-uuid.sh` (idempotent; exits non-zero unless
-       GATE GREEN). Watch dup-WP-account collisions on `users.primary_email` UNIQUE → dedup decision, not a re-run.
+       GATE GREEN).
+       - **Dup-WP-account note (investigated 6/14 — NOT a cut blocker):** `wp_user_bridge.user_id` is the PK (one profile
+         = one WP account), so a member with two WP accounts on the same email bridges only ONE; the other is orphaned →
+         anon at whoami. Scope on the live-derived data = **exactly ONE member**: mikelle.davlin (wp **1848** orphaned /
+         **1905** bridged) — both her Patreon onboard double-accounts (same `lgpo_patreon_user_id`, both active). The
+         bridge-backfill GATE will flag the orphan. **Cut action:** whitelist that one `wp_user_id` so step 11a doesn't
+         red; the real member-merge (pick canonical, neutralize the other via NON-delete — `wp user delete` fires the
+         lifecycle nuke) is owned by the **poller/Patreon-onboard lane** (root cause: onboard mints a 2nd WP user for an
+         existing Patreon email). Re-scan for new dup-email members at the cut: `SELECT user_email,COUNT(*) c FROM wp_users
+         WHERE user_email<>'' GROUP BY user_email HAVING c>1;`.
     b. **archive-poc discovery index URLs** → `loothgroup.com`: reindex from live (preferred), OR `dev.→loothgroup.com`
        search-replace on url/thumb columns in PG `discovery.content_item` + `article_blobs`. Verify front page = 0 off-host links.
     c. **bb-mirror re-backfill** (content_html paragraph fix `9510cbf`) + **person-resync** (stale author names after reload).
