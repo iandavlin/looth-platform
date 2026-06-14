@@ -169,9 +169,14 @@ at `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror` as instant rollback (`ln -
   Read-only deploy key persists (fine — prod pulls, never pushes). Other apps (archive-poc, profile-app, …) are still
   plain files — git-manage them the same way if we want uniform git deploys for prod.
 
-### Phase 10 — verify (TODO)
-- ☐ `tools/gates/run-all.sh` (repoint at dev2) green · real WP login + /whoami tiers · front/hub/profile/events render · payments test-mode.
-- ☐ ⚠️ refresh-JWT **wrong-key** case (open blocker per DEPLOY-PLAN).
+### Phase 10 — verify (PARTLY DONE)
+- ✅ **Anon web sweep (6/14, self-serve from dev):** source-disclosure all locked (`config.php`/`wp-config.php`/`.git/config`
+  → 403/404); front/hub/events/article render 200; images resolve from R2; front uses the resizer + srcset.
+  - ⚠️ Note (NOT a cut blocker, NOT dev2-specific): events + standalone-article images are raw `/wp-content/uploads`
+    (no resizer/srcset) — same on dev; pre-existing craft-debt for the events + standalone lanes (passes the gate on budget).
+- ☐ **Member-viewer (needs dev2 WP login):** `tools/gates/run-all.sh` member half · real WP login + `/whoami` tier ladder
+  (anon/lite/pro) · member craft surfaces · payments test-mode.
+- ☐ ⚠️ refresh-JWT **wrong-key** case (open blocker per DEPLOY-PLAN) — needs dev2 shell; the one true open verify item.
 
 ---
 
