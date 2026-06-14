@@ -81,9 +81,6 @@ function lg_shared_render_site_header(array $ctx): void
     $notif_unread  = $ctx['notif_unread'] ?? null;   // null = lazy-load
     $profile_url   = (string)($ctx['profile_url'] ?? '/profile/edit');  // viewer's public profile (/u/<slug>); /profile/edit is only the slug-less fallback
     $logout_url    = (string)($ctx['logout_url']  ?? '/wp-login.php?action=logout');
-    // P9 hooks: msg/notif icon hrefs. Default to BB paths for now; P9 modals will override.
-    $msg_url       = (string)($ctx['msg_url']   ?? '/members/me/messages/');
-    $notif_url     = (string)($ctx['notif_url'] ?? '/members/me/notifications/');
     $search_id     = (string)($ctx['search_id'] ?? 'lg-chrome-q');
     $search_ph     = (string)($ctx['search_placeholder'] ?? 'Search…');
     $active_nav    = (string)($ctx['active_nav'] ?? '');  // slug: 'stream'|'hub'|'events'|'members'|'sponsors'
@@ -234,10 +231,10 @@ function lg_shared_render_site_header(array $ctx): void
           </a>
         <?php endif; ?>
 
-        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-           href="<?= $h($msg_url) ?>"
-           aria-label="Messages"
-           data-lg-msg-link>
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
+                type="button"
+                aria-label="Messages"
+                data-lg-msg-link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
@@ -248,12 +245,12 @@ function lg_shared_render_site_header(array $ctx): void
           <?php else: ?>
             <span class="lg-chrome__badge" data-lg-msg-count hidden>0</span>
           <?php endif; ?>
-        </a>
+        </button>
 
-        <a class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-           href="<?= $h($notif_url) ?>"
-           aria-label="Notifications"
-           data-lg-notif-link>
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
+                type="button"
+                aria-label="Notifications"
+                data-lg-notif-link>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -264,7 +261,7 @@ function lg_shared_render_site_header(array $ctx): void
           <?php else: ?>
             <span class="lg-chrome__badge" data-lg-notif-count hidden>0</span>
           <?php endif; ?>
-        </a>
+        </button>
 
         <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
                 aria-label="Connections"

@@ -129,3 +129,29 @@ move into the strangler stack. No action beyond "don't add new pages on the BB t
 - Going forward: header changes + new-surface header requests route through **lg-shell**.
 
 — lg-shell lane (keeper of the shared header)
+
+---
+
+## 2026-06-14 — legacy-BB /members/me/* link leak closed
+
+The canonical header was emitting legacy BuddyBoss `/members/me/messages/` and
+`/members/me/notifications/` URLs as the **fallback `href`** on the Messages and
+Notifications icons. On dev2 (BB components ON) those resolve to live BB profile
+surfaces. social-modals.js already `preventDefault()`s + opens the modal on a
+normal click, so the leak only fired on no-JS / middle-click / ctrl-click / crawler.
+
+**Fix (site-header.php):** converted the Messages + Notifications icons from
+`<a href=…>` to `<button type="button">`, matching the Connections button pattern
+(which was already href-less). Kept classes
+(`lg-chrome__icon-btn lg-chrome__icon-btn--badged`), `aria-label`, the
+`data-lg-msg-link` / `data-lg-notif-link` hooks, SVGs, and the badge `<span>`.
+Removed the now-dead `$msg_url` / `$notif_url` `/members/me/*` defaults. Modals and
+social-modals.js untouched. (No `msg_url`/`notif_url` `$ctx` docblock entries existed.)
+
+**Verify:** `php -l` clean; zero `/members/me` in the header; gates all green
+(matrix 67/0, craft 9/9, infra-sec green).
+
+**Belt-and-suspenders:** the nginx `/members/*` redirect (a7b258e) STAYS as the
+safety net even though the header no longer emits these paths.
+
+— lg-shell lane
