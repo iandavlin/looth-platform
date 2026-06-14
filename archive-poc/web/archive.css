@@ -1108,7 +1108,7 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
 .row--hub-teaser .rail { gap: 12px; scroll-padding-left: 4px; }
 .dcard {
   flex: 0 0 320px;
-  background: #fff;
+  background: #faf8f2;   /* really light cream (softer than stark white on the cream page) */
   border: 1px solid var(--lg-line);
   border-radius: 8px;
   padding: 14px 16px 12px;
@@ -1124,11 +1124,12 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
 .dcard__avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #d4ccb8; }
 .dcard__author { font: 600 12px/1 var(--lg-font-sans); color: var(--lg-mute); }
 .dcard__title {
-  /* DM Serif Display (the front-page serif) ships weight 400 only — asking for
-     700 here faux-bolds it, which reads as blurry/smeared at 16px. Use its real
-     weight; the face is already heavy/display-y, so it still reads as a title. */
-  font: 400 16px/1.3 var(--lg-font-serif);
-  margin: 0 0 6px; color: var(--lg-ink);
+  /* DM Serif Display ships weight 400 only — faux-bold (700) smears at 16px.
+     Keep the real weight, darken to charcoal, and add a hair of text-stroke for
+     a touch more weight CRISPLY (vector outline, not a synthesized bold). */
+  font: 400 16px/1.32 var(--lg-font-serif);
+  margin: 0 0 6px; color: var(--lg-charcoal);
+  -webkit-text-stroke: 0.4px var(--lg-charcoal);
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
