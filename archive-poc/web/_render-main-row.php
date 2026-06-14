@@ -362,8 +362,14 @@ if (!function_exists('fp_img')) {
         $badge_label = $last ? ($is_stale ? 'Quiet · ' . rel_time($last) : 'Active · ' . rel_time($last)) : 'New';
         $badge_class = $is_stale ? 'dcard__badge--quiet' : 'dcard__badge--active';
         $is_gated = lg_archive_poc_is_gated($it['tier'] ?? 'public', $GLOBALS['LG_VIEWER_TIER'] ?? 'public');
+        // Slugs for the front-page discussion modal (fp-discuss.js). Parsed from
+        // the canonical /hub/<forum>/<topic>/ href so the card stays a real link
+        // (no-JS / middle-click fallback) while JS upgrades the click to a modal.
+        $d_forum = ''; $d_topic = '';
+        if (preg_match('#/hub/([^/]+)/([^/]+)/#', (string)($it['url'] ?? ''), $dm)) { $d_forum = $dm[1]; $d_topic = $dm[2]; }
+        $d_modal = ($d_forum !== '' && $d_topic !== '');
 ?>
-        <a class="dcard" href="<?= h($it['url'] ?: '#') ?>">
+        <a class="dcard" href="<?= h($it['url'] ?: '#') ?>"<?php if ($d_modal): ?> data-topic-id="<?= (int)($it['id'] ?? 0) ?>" data-forum="<?= h($d_forum) ?>" data-topic="<?= h($d_topic) ?>"<?php endif; ?>>
           <div class="dcard__head">
             <img class="dcard__avatar" src="<?= h($avatar) ?>" alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.style.background='#87986a'">
             <span class="dcard__author"><?= h($author) ?></span>

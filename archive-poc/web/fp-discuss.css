@@ -1,0 +1,38 @@
+/*
+ * fp-discuss.css — front-page discussion-modal support.
+ *
+ * The modal reuses the REAL /hub/forums.css for its component styling (the
+ * #lg-dmodal chrome, .reply-stub thread, .ntm-* / #frm-* composer, .fcr
+ * reactions) so it stays byte-identical to the Hub modal with zero fork-drift.
+ * Those rules are all class-namespaced and don't bleed.
+ *
+ * BUT forums.css also carries a handful of DOCUMENT-LEVEL element rules
+ * (:root tokens, body, a, h1–h4, img) that WOULD restyle this gated homepage.
+ * This sheet is loaded AFTER forums.css and re-asserts the archive-poc front
+ * page's own globals so loading forums.css for the modal is side-effect free.
+ * Source of truth for the modal component rules: /hub/forums.css.
+ */
+
+/* — restore the 3 design tokens whose values differ from forums.css — */
+:root {
+  --lg-ink:    #323532;
+  --lg-mute:   #6b6f6b;
+  --lg-sage-d: #6b7c52;
+}
+
+/* — restore document-level element styling forums.css would clobber — */
+html, body {
+  background: #efece6;
+  color: var(--lg-charcoal);
+  font-family: var(--lg-font-sans);
+}
+a { color: var(--lg-sage-d); }
+a:hover { text-decoration: underline; }
+h1, h2, h3, h4 { font: revert; }
+img { max-width: revert; display: revert; }
+
+/* The modal's own content keeps forums.css styling (higher-specificity
+   #lg-dmodal / .lg-dmodal__body rules win over the bare resets above). */
+
+/* Make sure the modal sits above the shared sticky site header. */
+#lg-dmodal { z-index: 4000; }

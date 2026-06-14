@@ -906,6 +906,10 @@ foreach ($main_rows as $row):
 <script>window.__ROWS__ = <?= json_encode($client_state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 window.__LG_VIEWER_TIER__ = <?= json_encode($viewer_tier) ?>;</script>
 <script src="/archive-poc/archive.js?v=<?= @filemtime(__DIR__.'/archive.js') ?>"></script>
+<?php /* Front-page discussion modal: a discussion card opens the thread + composer
+         in place. Tiny on its own; the heavy bb-mirror composer assets lazy-load
+         only on the first card click (composer-on-intent, CRAFT-STANDARD). */ ?>
+<script defer src="/archive-poc/fp-discuss.js?v=<?= @filemtime(__DIR__.'/fp-discuss.js') ?>"></script>
 </body>
 </html>
 <?php
