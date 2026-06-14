@@ -61,6 +61,12 @@ if ($slug !== '') {
     else {
         $title = (string)$issue['post']['post_title'] . ' — The Looth Group';
         $emailHtml = lg_weekly_campaign_html($db, $issue['data'], !$authed);
+        // LEAD (current, unsent) issue has no sent FluentCRM body → render the
+        // email on the fly from the issue's section data so the lead previews
+        // as the real email instead of the plain web-card fallback (Ian 6/14).
+        if ($emailHtml === '' && !empty($issue['data']['sections'])) {
+            $emailHtml = lg_weekly_email_preview_html($slug, !$authed);
+        }
     }
 } else {
     $issues = lg_weekly_issues($db);

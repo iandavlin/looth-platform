@@ -126,9 +126,11 @@ function lg_weekly_latest_slug(PDO $db): string
 
 /**
  * The EXACT email HTML the issue was sent as (FluentCRM campaign body, via the
- * campaign_id in the issue meta). '' when the issue was never sent. The web
- * page serves this in an isolated iframe so it displays "just like the email"
- * (Ian 6/12) — with the email-only unsubscribe footer line removed.
+ * campaign_id in the issue meta). '' when the issue was never sent — the CURRENT
+ * (unsent) lead issue takes this path; the caller then renders it on the fly
+ * via lg_weekly_email_preview_html(). The web page serves whichever HTML in an
+ * isolated iframe so it displays "just like the email" (Ian 6/12) — with the
+ * email-only unsubscribe footer line removed.
  */
 function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = false): string
 {
@@ -137,6 +139,65 @@ function lg_weekly_campaign_html(PDO $db, array $issueData, bool $maskAuthors = 
     $st = $db->prepare("SELECT email_body FROM wp_fc_campaigns WHERE id = :i");
     $st->execute([':i' => $cid]);
     $html = (string)($st->fetchColumn() ?: '');
+    if ($html === '') return '';
+    return lg_weekly_email_chrome($html, $maskAuthors);
+}
+
+/**
+ * The email HTML built ON THE FLY from the issue's curated section data — used
+ * for the LEAD (current, unsent) digest, which has no sent FluentCRM body. A
+ * WP loopback runs the SAME builder the sent email uses (LG_WD_Sender dry-run,
+ * via the lg-weekly-email-bridge mu-plugin), so the preview == the real email.
+ * '' on any failure → caller falls back to the web-card layout.
+ *
+ * Forwards the viewer cookie like the /whoami loopback so the cookie gate
+ * passes on dev/dev2; the result is cached in tmpfs (keyed on slug + mask) to
+ * skip the WP-boot tax on the page render AND the follow-up /raw iframe fetch.
+ */
+function lg_weekly_email_preview_html(string $slug, bool $maskAuthors = false): string
+{
+    $slug = trim($slug);
+    if ($slug === '' || PHP_SAPI === 'cli') return '';
+
+    $cache = '/dev/shm/lg-weekly-email-' . hash('sha256', $slug . '|' . ($maskAuthors ? '1' : '0')) . '.html';
+    if (is_readable($cache) && (time() - (int)filemtime($cache)) < 300) {
+        $hit = (string)file_get_contents($cache);
+        if ($hit !== '') return $hit;
+    }
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/wp-json/looth/v1/weekly-email-html?slug=' . rawurlencode($slug),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 8,
+        CURLOPT_HTTPHEADER     => [
+            'Host: ' . LG_EVENTS_HOST,
+            'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
+        ],
+    ]);
+    $body = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($code !== 200 || !is_string($body)) return '';
+
+    $json = json_decode($body, true);
+    $html = is_array($json) ? (string)($json['html'] ?? '') : '';
+    if ($html === '') return '';
+
+    $html = lg_weekly_email_chrome($html, $maskAuthors);
+    @file_put_contents($cache, $html, LOCK_EX);
+    return $html;
+}
+
+/**
+ * Email-only chrome adjustments shared by the sent-campaign and on-the-fly
+ * preview paths, so both display identically in the standalone iframe.
+ */
+function lg_weekly_email_chrome(string $html, bool $maskAuthors = false): string
+{
     if ($html === '') return '';
     // Email-only chrome: drop anchors that point at unsubscribe/preference
     // endpoints (meaningless on the web view), keep everything else verbatim.
