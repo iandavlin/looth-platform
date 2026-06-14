@@ -282,8 +282,12 @@ function bb_mirror_new_topic_modal(): void
         }
     }
 
-    $rest_base = 'https://' . LG_BB_MIRROR_HOST . '/wp-json/buddyboss/v1';
-    $login_url = 'https://' . LG_BB_MIRROR_HOST . '/wp-login.php';
+    // Same-origin (relative) so the composer's media/upload + reply fetches hit the
+    // CURRENT host, not a hardcoded one. Forcing LG_BB_MIRROR_ENV=dev on dev2 pinned
+    // LG_BB_MIRROR_HOST=dev.loothgroup.com → cross-origin POST → CORS-blocked uploads.
+    // TEMP band-aid for the cut "new-prod host" fix (host-from-request) — see lane brief.
+    $rest_base = '/wp-json/buddyboss/v1';
+    $login_url = '/wp-login.php';
     ?>
 <div class="ntm-overlay" id="ntm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ntm-heading">
   <div class="ntm-backdrop" id="ntm-backdrop"></div>
