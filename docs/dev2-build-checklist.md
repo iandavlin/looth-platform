@@ -10,8 +10,10 @@ record of what was actually done + every gotcha (so a rebuild or the cut doesn't
 ## CURRENT STATE (2026-06-14) — dev2 SERVES END-TO-END
 HTTPS + real cert · cookie gate enforced (anon→403) · `/`=archive-poc front · `/hub/` · `/events/`
 all render · logged-in identity works (header shows the member + ADMIN) · images live (R2).
-- **Done:** Phases 0–6 + 9 (SSL). Phase 7 partly (identity bridge + images done; URL-rewrite +
-  conversions/person-resync remain). **Remaining: 7 (finish) → 8 cron/timers → 10 verify → 11 the cut.**
+- **Done:** Phases 0–6 + 8 (timers/cron) + 9 (SSL). Phase 7 nearly done (identity bridge, images,
+  materialize/standalone render all verified); only the **archive-poc index URL-rewrite** (`dev.`→`loothgroup.com`)
+  + **bb-mirror person-resync** remain — both are cut-time data steps, not pre-cut blockers.
+  **Remaining: 10 verify → 11 the cut** (+ the two Phase-7 cut-time data steps).
 - **Active side-lanes (don't duplicate):** *whoami/identity* lane — CLOSED the bridge. *profile-routing*
   lane — a legacy BuddyBoss profile page is still reachable (likely a pre-existing parity issue, being
   handled there).
@@ -126,22 +128,27 @@ invisible to LE). `apt install python3-certbot-dns-cloudflare`; CF DNS-edit toke
 `certbot certonly --dns-cloudflare …`. Stripped the conf's `options-ssl-nginx.conf`/`ssl-dhparams.pem`
 includes (certonly doesn't create them).
 
-### Phase 7 — data / identity / URL-rewrite  (PARTLY DONE)
+### Phase 7 — data / identity / URL-rewrite  (NEARLY DONE — only the index URL-rewrite + person-resync remain, both cut-time)
 - ✅ **Identity bridge reconcile:** backfilled WP usermeta `_looth_uuid` from `profile_app.users` by
   `primary_email` for **1699 users** (`profile-auth.php` refuses to mint without it). Header lights up on
   re-login as a matched user (NOT claude_admin/qa-disposable — they have no profile-app row).
 - ✅ **Images:** the image-serving chain fixed (see gotcha).
-- ☐ **URL rewrite:** `wp search-replace '//loothgroup.com' '//dev2.loothgroup.com' --skip-columns=guid`
-  then `wp cache flush` (use `//` form — email-safe, all schemes). WP_HOME shim covers dynamic URLs;
-  this fixes hardcoded ones in content. **Verify it was applied** (re-run dry-run → 0 = applied).
-- ☐ conversions / materialize / reindex; bb-mirror person-resync.
-- ☐ **archive-poc discovery index stores ABSOLUTE permalinks + thumb URLs** (the renderer emits `$it['url']`
-  verbatim — `_render-card.php:22`, `_render-main-row.php`). dev2 inherited dev's index → the front page links/images
-  point at **`dev.loothgroup.com`** (a *different* box — confirmed 6/14, harmless cross-box for testing, NOT a config
-  bug; the host-from-request `8c677aa` fix only governs chrome/canonical/logo/loopback, not stored row data). **At the
-  cut these must be `loothgroup.com`:** rebuild the index from the live data (reindex/materialize), OR targeted
-  search-replace the URL/thumb columns in PG `discovery.content_item` + `discovery.article_blobs`. Verify the front
-  page has zero off-host links after.
+- ✅ **conversions / materialize / standalone render:** VERIFIED on dev2 (6/14) — a managed-CPT article
+  (`/post-imgcap/dying-aging-plastic-parts/`) + a video (`/post-type-videos/docs-festival-of-adhesion/`) both
+  render 200 through the standalone renderer with real content (28–33KB, real titles, not placeholders).
+- **⚠️ REFRAME (6/14) — what is and isn't cut-critical for URLs.** At the cut the box BECOMES `loothgroup.com`, so
+  **anything carrying `loothgroup.com` is already correct** and needs NO action: WP content (from the live dump),
+  and `archive-poc/web/defaults.php`'s hardcoded sponsor/group/benefit/fallback URLs. The OLD "URL rewrite"
+  step (`wp search-replace '//loothgroup.com' '//dev2.loothgroup.com'`) is **dev2-TEST hygiene only** (makes
+  dev2 self-contained / no cross-box links) and is **THROWAWAY at the cut — do NOT run it on the live box.**
+  - ☐ **THE ONE REAL CUT ITEM — archive-poc discovery index carries `dev.loothgroup.com`** (dumped from dev;
+    the renderer emits stored `$it['url']` verbatim — `_render-card.php:22`, `_render-main-row.php`). At cut these
+    must be `loothgroup.com`: **reindex from the live data** (preferred — materialize rebuilds them), OR targeted
+    `dev.→loothgroup.com` search-replace on the url/thumb columns in PG `discovery.content_item` + `article_blobs`.
+    Verify the front page has zero `dev.`/`dev2.` links after.
+  - ☐ **bb-mirror person-resync** — after the final snapshot top-off, forum author names go stale (person keyed
+    on a recyclable WP user ID; reconcile only refreshes persons whose POSTS changed). Full person-resync post-top-off.
+  - Minor: `wp-login.php` emits a stray `dev.loothgroup.com` (likely a plugin/option) — harmless, glance at the cut.
 
 ### Phase 8 — systemd units / timers  (✅ DONE on dev2 6/14)
 - ✅ WP cron (DISABLE_WP_CRON is set): `/etc/cron.d/looth-wp-cron` → `* * * * * looth-dev cd /var/www/dev && /usr/local/bin/wp cron event run --due-now`.
