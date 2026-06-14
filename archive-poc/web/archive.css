@@ -3012,7 +3012,7 @@ body.view-discover {
   --fp-img-ph: #d4ccb8;             /* thumb placeholder */
   --fp-cta-ink: #fff;               /* vp-cta text */
   --fp-cta-hover-bg: #3a4a3a;
-  background: var(--lg-cream);
+  background: #f3efe6;   /* main text-area background = warm cream (Ian 6/14), was near-white #fcfcf9 */
 }
 
 /* ── Hero: Classic Landing — centered copy, video beneath, open (no card box) ── */
