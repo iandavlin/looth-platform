@@ -283,9 +283,11 @@ function bb_mirror_new_topic_modal(): void
     }
 
     // Same-origin (relative) so the composer's media/upload + reply fetches hit the
-    // CURRENT host, not a hardcoded one. Forcing LG_BB_MIRROR_ENV=dev on dev2 pinned
-    // LG_BB_MIRROR_HOST=dev.loothgroup.com → cross-origin POST → CORS-blocked uploads.
-    // TEMP band-aid for the cut "new-prod host" fix (host-from-request) — see lane brief.
+    // CURRENT host — inherently cross-origin-safe, no host to get wrong. (Browser
+    // resolves these against the page origin, which is what we want on dev / dev2 /
+    // loothgroup.com alike.) LG_BB_MIRROR_HOST is now request-derived (config.php) so
+    // the loopback/server side self-resolves too; relative stays as the cleanest
+    // browser-side form. Was a band-aid for the dev2 cross-origin upload CORS block.
     $rest_base = '/wp-json/buddyboss/v1';
     $login_url = '/wp-login.php';
     ?>

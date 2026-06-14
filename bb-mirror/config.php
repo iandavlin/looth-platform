@@ -27,20 +27,38 @@ if (!$env) {
 }
 define('LG_BB_MIRROR_ENV', $env);
 
-// ---------- env-specific values ----------
+// ---------- env-specific values (PATHS/users only — NOT the host) ----------
+// LG_BB_MIRROR_ENV selects the filesystem + WP user the app runs against. The
+// browser-facing host is derived separately (below) from the actual request,
+// because at the cut the prod box runs ENV=dev — it lives in /var/www/dev +
+// looth-dev — while its public host is loothgroup.com. Env and host are
+// decoupled so no per-host edit is needed for dev / dev2 / loothgroup.com.
 if ($env === 'live') {
-    define('LG_BB_MIRROR_HOST',    'loothgroup.com');
     define('LG_BB_MIRROR_WP_PATH', '/var/www/html');
     define('LG_BB_MIRROR_WP_USER', 'looth-live');
     define('LG_BB_MIRROR_APP_ROOT','/srv/bb-mirror');
-    define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
-} else { // dev
-    define('LG_BB_MIRROR_HOST',    'dev.loothgroup.com');
+} else { // dev (also the dev2 / prod-at-cut box: /var/www/dev + looth-dev)
     define('LG_BB_MIRROR_WP_PATH', '/var/www/dev');
     define('LG_BB_MIRROR_WP_USER', 'looth-dev');
     define('LG_BB_MIRROR_APP_ROOT','/home/ubuntu/projects/bb-mirror');
-    define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
 }
+define('LG_BB_MIRROR_PUBLIC_PATH', '/hub');
+
+// ---------- browser-facing / loopback-routing host (request-derived) ----------
+// Single source of truth for both (a) the public host used to build URLs and
+// (b) the loopback CURL 'Host:' header that picks this box's nginx vhost.
+// Derived from the live request so dev, dev2, and loothgroup.com each
+// self-resolve. CLI/cron (reconcile, materializers — no HTTP_HOST) and any
+// loopback that runs before a request fall back to, in order:
+//   1. LG_BB_MIRROR_PUBLIC_HOST — set in the FPM pool + cron env on any box
+//      whose public host differs from its env default (dev2, prod-at-cut);
+//   2. else the env default below.
+// Sanitized: the value is interpolated into curl 'Host:' headers, so strip
+// anything outside a valid hostname[:port] to close Host-header injection.
+$bb_host_fallback = getenv('LG_BB_MIRROR_PUBLIC_HOST')
+    ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
+$bb_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
+define('LG_BB_MIRROR_HOST', $bb_req_host !== '' ? $bb_req_host : $bb_host_fallback);
 
 // ---------- derived ----------
 define('LG_BB_MIRROR_SCHEMA_PG',  LG_BB_MIRROR_APP_ROOT . '/schema.pg.sql');
