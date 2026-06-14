@@ -84,19 +84,23 @@
     while (wrap.firstChild) document.body.appendChild(wrap.firstChild);
   }
 
+  function v(key) { var m = window.__FPD_V__ || {}; return m[key] ? ('?v=' + m[key]) : ''; }
+
   function ensureAssets() {
     if (assetsP) return assetsP;
     window.LG_FORUM_BASE = HUB;     // forums.js FORUM_BASE → /hub (replies / load-more)
     injectFrmMarkup();              // before forums.js executes
+    // forums.css MUST come before fp-discuss.css so the neutralizer + mobile
+    // modal rules win the cascade (same-specificity, later wins).
     assetsP = Promise.all([
-      loadCss(HUB + '/forums.css'),
-      loadCss('/archive-poc/fp-discuss.css'),   // neutralizes forums.css globals (loaded AFTER it)
+      loadCss(HUB + '/forums.css' + v('forumsCss')),
+      loadCss('/archive-poc/fp-discuss.css' + v('css')),   // neutralizes forums.css globals + mobile modal
       loadCss('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css')
     ]).then(function () {
       // Quill is optional — the composer falls back to a textarea if it 404s.
       return loadJs('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.min.js').catch(function () {});
     }).then(function () {
-      return loadJs(HUB + '/forums.js');        // wires §4b composer + §2e/§4d/§10 (delegated)
+      return loadJs(HUB + '/forums.js' + v('forumsJs'));   // wires §4b composer + §2e/§4d/§10 (delegated)
     }).catch(function () {});
     return assetsP;
   }

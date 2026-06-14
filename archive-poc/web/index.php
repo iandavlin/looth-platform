@@ -908,7 +908,14 @@ window.__LG_VIEWER_TIER__ = <?= json_encode($viewer_tier) ?>;</script>
 <script src="/archive-poc/archive.js?v=<?= @filemtime(__DIR__.'/archive.js') ?>"></script>
 <?php /* Front-page discussion modal: a discussion card opens the thread + composer
          in place. Tiny on its own; the heavy bb-mirror composer assets lazy-load
-         only on the first card click (composer-on-intent, CRAFT-STANDARD). */ ?>
+         only on the first card click (composer-on-intent, CRAFT-STANDARD).
+         Asset versions are exposed so the lazy loader can cache-bust the modal's
+         CSS (fp-discuss.css is max-age=30d, not immutable). */ ?>
+<script>window.__FPD_V__ = {
+  css: <?= json_encode((string) @filemtime(__DIR__ . '/fp-discuss.css')) ?>,
+  forumsCss: <?= json_encode((string) @filemtime('/srv/bb-mirror/web/forums.css')) ?>,
+  forumsJs: <?= json_encode((string) @filemtime('/srv/bb-mirror/web/forums.js')) ?>
+};</script>
 <script defer src="/archive-poc/fp-discuss.js?v=<?= @filemtime(__DIR__.'/fp-discuss.js') ?>"></script>
 </body>
 </html>
