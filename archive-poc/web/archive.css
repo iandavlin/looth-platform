@@ -3728,3 +3728,27 @@ body.view-discover .lg-bento__map-join:disabled { opacity: .7; cursor: default; 
 .lg-bento__remind:hover{filter:brightness(1.06)}
 .lg-bento__remind.is-on{background:#e9efdf;color:#4c5a36;cursor:default}
 .lg-bento__remind:disabled{opacity:.75}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Gear → Text size (Ian 6/14). The app-settings gear sets --lg-read-scale
+   (+ rem base + --lguser-scale) on <html>, but the front page's text is
+   fixed-px and never referenced it, so the size control did nothing here.
+   Wire the primary readable text to honor it, the SAME way the Hub does
+   (fixed-px * var(--lg-read-scale)). Appended last + scoped to
+   body.view-discover so it overrides the base + responsive px rules without
+   editing them. Scope = single-size text (discussion cards, section heads,
+   rail/event cards); the activity .acard system (8+ size variants) + the
+   billboard hero (clamp) are intentionally left for Buck's redesign pass.
+   ════════════════════════════════════════════════════════════════════════ */
+body.view-discover .row__title        { font-size: calc(18px   * var(--lg-read-scale, 1)); }
+body.view-discover .row__subtitle     { font-size: calc(11px   * var(--lg-read-scale, 1)); }
+body.view-discover .lg-hubt__title    { font-size: calc(26px   * var(--lg-read-scale, 1)); }
+body.view-discover .lg-hubt__sub      { font-size: calc(14.5px * var(--lg-read-scale, 1)); }
+body.view-discover .dcard__title      { font-size: calc(16px   * var(--lg-read-scale, 1)); }
+body.view-discover .dcard__excerpt    { font-size: calc(13px   * var(--lg-read-scale, 1)); }
+body.view-discover .dcard__author,
+body.view-discover .dcard__replies    { font-size: calc(12px   * var(--lg-read-scale, 1)); }
+body.view-discover .rcard__title      { font-size: calc(16px   * var(--lg-read-scale, 1)); }
+body.view-discover .ecard__title      { font-size: calc(14px   * var(--lg-read-scale, 1)); }
+body.view-discover .ecard__meta       { font-size: calc(11px   * var(--lg-read-scale, 1)); }
+body.view-discover .billboard__excerpt{ font-size: calc(15px   * var(--lg-read-scale, 1)); }
