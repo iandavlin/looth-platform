@@ -620,6 +620,10 @@ require __DIR__ . '/_chrome.php'; ?>
     $right_rows = [];
     foreach ($rendered_rows as $r) {
         $lay = $r['layout'] ?? 'rail';
+        // The discussions rail is now rendered under the hub-teaser heading
+        // ("What members are talking about"); suppress the standalone row so it
+        // doesn't appear twice (Ian 6/14).
+        if ($lay === 'discussions') continue;
         if (empty($r['items']) && !in_array($lay, $static_layouts, true)) continue;
         $col = 'main';
         foreach ($rows_config as $rc) {
@@ -823,32 +827,20 @@ foreach ($main_rows as $row):
          Leak-safe for anon: archive_poc_run_discussions masks member-visibility
          authors, and gated excerpts are dropped below the viewer's tier. */ ?>
 <?php
+// Live discussions under the curated heading. The standalone 'discussions' row
+// is suppressed in the bucket loop above — its rail is rendered here instead,
+// under the "What members are talking about" heading (Ian 6/14). archive_poc_run_discussions
+// masks member-visibility authors for anon (leak-safe); _bare emits just the rail.
 $lg_ht_enabled = defined('LG_HUB_TEASER') && !empty(LG_HUB_TEASER['enabled']);
-$lg_ht_items   = [];
+$lg_ht_disc    = [];
 if ($lg_ht_enabled) {
     try {
-        $lg_ht_live = archive_poc_run_discussions($db, ['query' => ['limit' => 6, 'sort' => 'active']], $is_member);
-        foreach (($lg_ht_live['items'] ?? []) as $lt) {
-            $u = (string)($lt['url'] ?? '');
-            $f = ''; $t = '';
-            if (preg_match('#/hub/([^/]+)/([^/]+)/#', $u, $mm)) { $f = $mm[1]; $t = $mm[2]; }
-            $gated = function_exists('lg_archive_poc_is_gated')
-                ? lg_archive_poc_is_gated($lt['tier'] ?? 'public', $viewer_tier) : false;
-            $lg_ht_items[] = [
-                'title'   => (string)($lt['title'] ?? ''),
-                'excerpt' => $gated ? '' : (string)($lt['excerpt'] ?? ''),   // no gated body below tier
-                'replies' => (int)($lt['reply_count'] ?? 0),
-                'url'     => $u, 'forum' => $f, 'topic' => $t, 'id' => (int)($lt['id'] ?? 0),
-                'live'    => ($f !== '' && $t !== ''),
-            ];
-        }
-    } catch (\Throwable $e) { $lg_ht_items = []; }
-    if (!$lg_ht_items) {   // DB read empty → curated snapshot fallback (non-clickable)
-        foreach (array_slice(LG_HUB_TEASER['items'] ?? [], 0, 6) as $s) $lg_ht_items[] = $s + ['live' => false];
-    }
+        $lg_ht_live = archive_poc_run_discussions($db, ['query' => ['limit' => 12, 'sort' => 'active']], $is_member);
+        $lg_ht_disc = $lg_ht_live['items'] ?? [];
+    } catch (\Throwable $e) { $lg_ht_disc = []; }
 }
 ?>
-<?php if ($lg_ht_enabled && $lg_ht_items): ?>
+<?php if ($lg_ht_enabled && $lg_ht_disc): ?>
       <section class="row row--hub-teaser" data-row-id="hub-teaser">
         <div class="lg-hubt__head">
           <p class="lg-hubt__eyebrow">The Hub</p>
@@ -857,22 +849,7 @@ if ($lg_ht_enabled) {
             ? 'Real bench problems, candid answers — jump in.'
             : 'Real bench problems, candid answers. Join to reply and see who you&rsquo;re talking to.' ?></p>
         </div>
-        <div class="lg-hubt__grid">
-          <?php foreach (array_slice($lg_ht_items, 0, 6) as $lg_ht):
-            $lg_ht_link = !empty($lg_ht['live']) && !empty($lg_ht['url']);
-            $lg_ht_tag  = $lg_ht_link ? 'a' : 'article';
-          ?>
-          <<?= $lg_ht_tag ?> class="lg-hubt__card<?= $lg_ht_link ? ' lg-hubt__card--link' : '' ?>"<?php if ($lg_ht_link): ?> href="<?= h((string)$lg_ht['url']) ?>" data-topic-id="<?= (int)$lg_ht['id'] ?>" data-forum="<?= h((string)$lg_ht['forum']) ?>" data-topic="<?= h((string)$lg_ht['topic']) ?>"<?php endif; ?>>
-            <div class="lg-hubt__top">
-              <span class="lg-hubt__chip">Discussion</span>
-              <?php if (!empty($lg_ht['replies'])): ?><span class="lg-hubt__replies"><?= (int)$lg_ht['replies'] ?> replies</span><?php endif; ?>
-            </div>
-            <h3 class="lg-hubt__t"><?= h((string)($lg_ht['title'] ?? '')) ?></h3>
-            <?php if (!empty($lg_ht['excerpt'])): ?><p class="lg-hubt__ex"><?= h((string)$lg_ht['excerpt']) ?></p><?php endif; ?>
-            <?php if (!$is_member): ?><div class="lg-hubt__by">Private member &middot; join to see who</div><?php endif; ?>
-          </<?= $lg_ht_tag ?>>
-          <?php endforeach; ?>
-        </div>
+<?= $render_main_row(['layout' => 'discussions', 'items' => $lg_ht_disc, '_bare' => true, 'id' => 'hub-teaser', 'title' => '']) ?>
         <div class="lg-hubt__cta"><a class="lg-hubt__more" href="/hub/">See the full Hub &rarr;</a></div>
       </section>
 <?php endif; ?>

@@ -1101,6 +1101,11 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
 
 /* ===== Discussions row — forum-style card ===== */
 .row--discussions .rail { gap: 12px; }
+/* The discussions rail also renders bare under the hub-teaser heading
+   ("What members are talking about") — same rail spacing, no .row--discussions
+   wrapper there. */
+.row--hub-teaser { min-width: 0; }
+.row--hub-teaser .rail { gap: 12px; scroll-padding-left: 4px; }
 .dcard {
   flex: 0 0 320px;
   background: #fff;
@@ -3367,10 +3372,6 @@ body.view-discover .lg-hubt__card {
   background: var(--lg-card-bg, #fff); border: 1px solid var(--lg-line, #ebe9e2);
   border-radius: 10px; padding: 15px 16px 13px;
 }
-/* Live cards are <a> links (open the discussion modal). Kill the link chrome
-   and add a subtle hover lift so they read as cards, not links. */
-body.view-discover a.lg-hubt__card--link { text-decoration: none; color: inherit; cursor: pointer; transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease; }
-body.view-discover a.lg-hubt__card--link:hover { border-color: var(--lg-sage, #87986a); box-shadow: 0 4px 16px rgba(0,0,0,.07); transform: translateY(-1px); }
 body.view-discover .lg-hubt__top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
 body.view-discover .lg-hubt__chip {
   font: 700 10px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;

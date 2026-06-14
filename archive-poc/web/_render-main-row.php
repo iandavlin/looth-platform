@@ -346,11 +346,13 @@ if (!function_exists('fp_img')) {
       </div>
     </section>
 
-<?php elseif ($layout === 'discussions'): ?>
+<?php elseif ($layout === 'discussions'): $d_bare = !empty($row['_bare']); /* _bare = emit just the rail (no section/header) — used under the hub-teaser heading */ ?>
+    <?php if (!$d_bare): ?>
     <section class="row row--discussions" data-row-id="<?= h($row_id) ?>">
       <header class="row__head">
         <h2 class="row__title"><?= h($row['title']) ?></h2>
       </header>
+    <?php endif; ?>
       <div class="rail">
 <?php foreach ($row['items'] as $it):
         $author = $it['author_name'] ?: 'Member';
@@ -383,8 +385,10 @@ if (!function_exists('fp_img')) {
         </a>
 <?php endforeach; ?>
       </div>
+    <?php if (!$d_bare): ?>
       <script type="application/ld+json"><?= row_jsonld($row) ?></script>
     </section>
+    <?php endif; ?>
 
 <?php elseif ($layout === 'video-promo'):
         // Two-column row: YouTube video + freeform HTML copy.
