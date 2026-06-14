@@ -30,7 +30,7 @@ a media sync. (Handoff: `docs/dev2-to-live-handoff.md`. Audits preserved: `tools
 7. **Host hardcode / CORS** — composer POSTed cross-origin. bb-mirror fixed (`eefbe97` = request-derived host + `env[LG_BB_MIRROR_PUBLIC_HOST]`). ✅ **events + archive-poc `config.php` now fixed too (`8c677aa`)** — same host-from-request pattern, fallbacks `env[LG_EVENTS_PUBLIC_HOST]` / `env[LG_ARCHIVE_POC_PUBLIC_HOST]` for CLI/cron. Deploy bundle `dev2-host-derive.tgz` (plain-file surfaces). Also folded in the footer `/billing-refund/`→`/request-refund/` 404 fix.
 8. **JWT-private ACL** — `setfacl -m u:profile-app:r /etc/looth/jwt-private.pem` was missed (the internal-secret ACL was set; this one wasn't).
 9. **R2 read/write** — the rclone mount was `--read-only` → all uploads failed. Remove `--read-only` (it's a dedicated bucket → zero live risk).
-10. **Charset** — verify `wp_postmeta` is genuinely `utf8mb4` (emoji import 1366-fail / event materialize).
+10. **Charset** — ✅ VERIFIED on dev2 (6/14): `wp_postmeta`/`wp_posts` = `utf8mb4_unicode_520_ci`, `meta_value` column = `utf8mb4`. Emoji-1366 does NOT apply here — no fix needed. (Re-verify on the cut box if it's rebuilt from a different dump.)
 11. **⚠️ Secrets in the public path** — the build left PG/MySQL dumps + `profile-app-config.php` in the gate-exempt `.well-known` (member-data + creds, publicly fetchable). **Never stage dumps/secrets there; clean `.well-known` after any deploy.**
 
 ## BOX & ACCESS MODEL
@@ -143,10 +143,13 @@ includes (certonly doesn't create them).
   search-replace the URL/thumb columns in PG `discovery.content_item` + `discovery.article_blobs`. Verify the front
   page has zero off-host links after.
 
-### Phase 8 — systemd units / timers  (TODO)
-- ☐ WP cron (DISABLE_WP_CRON is set): cron `* * * * * cd /var/www/dev && wp cron event run --due-now` (as looth-dev).
-- ☐ bb-mirror-reconcile (.service+.timer), lg-person-vis-refresh (.service+.timer), thumbnails, poller (Stripe/Patreon) — model on dev.
-- SKIP for prod: mailpit, idle-shutdown, code-server, chrome-dev.
+### Phase 8 — systemd units / timers  (✅ DONE on dev2 6/14)
+- ✅ WP cron (DISABLE_WP_CRON is set): `/etc/cron.d/looth-wp-cron` → `* * * * * looth-dev cd /var/www/dev && /usr/local/bin/wp cron event run --due-now`.
+- ✅ bb-mirror-reconcile (.service+.timer, every 10m) + lg-person-vis-refresh (.service+.timer, every 15m). Both ExecStart normalized to **`/srv/bb-mirror`** (tracks the git clone, not the stale plain-file tree). Both oneshots run-tested clean: reconcile 20 rows, vis-refresh 507 resolved / 0 master-switch-private (**parity with dev: 510 public / 0 private** — NOT a fail-open).
+- ✅ Shared env `/etc/lg-loothdev-gate.env` (640 root:looth-dev + ACL u:bb-mirror:r): `LG_LOOTHDEV_GATE_TOKEN` + `LG_BB_MIRROR_PUBLIC_HOST=dev2.loothgroup.com`. **Prereq that gated this:** eefbe97 had to be pulled first (grep confirmed =2) so the loopback host resolves to dev2, not the real dev box. Also set `env[LG_BB_MIRROR_PUBLIC_HOST]` on the bb-mirror + looth-dev FPM pools.
+- **poller (Stripe/Patreon):** NOT installed on dev either (Stripe PARKED) → nothing to port; separate parked lane.
+- SKIP for prod: mailpit, idle-shutdown, code-server, chrome-dev, **thumbnails*.service** (those are node *editor* UIs on :8080/:3334, authoring tools — not a render dependency).
+- **⚠️ AT CUT:** delete `/etc/lg-loothdev-gate.env` (no gate on live) and flip `LG_BB_MIRROR_PUBLIC_HOST` → `loothgroup.com` on the two pools + (if kept) the env file. Same for the `LG_ARCHIVE_POC_PUBLIC_HOST` / `LG_EVENTS_PUBLIC_HOST` pool envs.
 
 ### Phase 8b — code deploy model  (NEW 6/14: hub/bb-mirror now git-managed on dev2)
 dev2 had NO git (plain-file bundles). Gave it a **read-only** GitHub deploy key (`~/.ssh/looth_platform_deploy`,

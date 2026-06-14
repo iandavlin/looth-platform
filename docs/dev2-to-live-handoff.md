@@ -38,11 +38,11 @@ it's all enumerated below and in the runbook.
 - **Front-page work** (live discussion modal, cream cards, dark mode, font-smoothing): pushed to `main`; dev2 bundle = `dev2-archive-front.tgz` (pull issued 6/14 — confirm applied).
 
 ## PENDING to dev2 (queued deploys — confirm each applied)
-1. **`eefbe97`** (bb-mirror host fix): `git -C /home/ubuntu/git/looth-platform pull` + `env[LG_BB_MIRROR_PUBLIC_HOST]=dev2.loothgroup.com` on the bb-mirror + looth-dev pools (and the reconcile/vis timers when Phase 8 lands — else loopback vis sync fails-open).
+1. ✅ **`eefbe97`** (bb-mirror host fix) PULLED on dev2 (grep=2) + `env[LG_BB_MIRROR_PUBLIC_HOST]=dev2.loothgroup.com` set on the bb-mirror + looth-dev pools and the Phase-8 timer env file. Loopback vis sync verified NOT failing-open (parity with dev).
 2. **`dev2-avatar-fallbacks.sh`** — photo-less → Optimum pass.
 3. **`dev2-archive-front.tgz`** — front-page modal/CSS/dark (pull issued).
-4. **`dev2-audit.sh` (content/DB half)** — ⚠️ verify `wp_postmeta` is truly `utf8mb4` (the emoji import 1366-fail), bridge, materialization. (HTTP half already green from dev.)
-5. **Phase 8 timers (`dev2-systemd.tgz`)** — WP cron + reconcile/vis NEVER installed. **WP cron is REQUIRED** (`DISABLE_WP_CRON` is set).
+4. **`dev2-audit.sh` (content/DB half)** — ✅ charset verified `utf8mb4` (no 1366 risk); bridge + materialization still to confirm.
+5. ✅ **Phase 8 timers** INSTALLED on dev2 (6/14): WP cron `/etc/cron.d/looth-wp-cron`, bb-mirror-reconcile.timer (10m), lg-person-vis-refresh.timer (15m). Both oneshots run-tested clean. Units written via heredoc (no bundle), ExecStart on `/srv/bb-mirror`.
 6. **`dev2-host-derive.tgz` (`8c677aa`)** — archive-poc + events `config.php` host-from-request fix + footer refund-link 404 fix (see OPEN-lane host item, now CLOSED). Extract to `/home/ubuntu/projects`; set `env[LG_ARCHIVE_POC_PUBLIC_HOST]` / `env[LG_EVENTS_PUBLIC_HOST]` = `dev2.loothgroup.com` on those pools; reload FPM. **Paste-commands handed to Ian.**
 
 ## Re-runnable audits (in dev's .well-known)
