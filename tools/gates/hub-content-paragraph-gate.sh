@@ -10,11 +10,12 @@
 #   If the materializer doesn't bake the paragraph structure in at sync, every
 #   newline collapses into one unbroken wall of text.
 #
-# THE INVARIANT: any published topic/reply whose SOURCE has a multi-paragraph
-# break (content_text contains a blank line) MUST carry a block/break tag in its
-# materialized content_html. The single source of truth is
+# THE INVARIANT: any published topic/reply (content_html) OR forum description
+# (forums.forum.description) whose SOURCE has a multi-paragraph break MUST carry
+# a block/break tag in its materialized HTML. The single source of truth is
 # bb_mirror_content_html() in bb-mirror/lib/materializers.php (decode->kses->
-# wpautop), shared by the live sync AND bin/backfill.php.
+# wpautop), shared by the live sync AND bin/backfill.php. Forum descriptions
+# render raw HTML (index.php / _topic-list.php) since this change.
 #
 # Pure SQL against the canonical store — no browser, no /whoami, no rate-limit
 # flake (unlike the forum-visibility gate), so it runs inline in run-all.sh.
@@ -40,6 +41,14 @@ WITH bad AS (
    WHERE status = 'publish'
      AND content_text ~ E'\n[[:space:]]*\n'
      AND content_html !~* '<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]'
+  UNION ALL
+  -- Forum descriptions share bb_mirror_content_html() and now render raw HTML
+  -- (index.php / _topic-list.php). forums.forum has no content_text column, so
+  -- detect the break in the stored `description` itself: a tag-less description
+  -- with a blank-line break never went through wpautop -> it will collapse.
+  SELECT 'forum-desc'::text AS kind, id FROM forums.forum
+   WHERE description ~ E'\n[[:space:]]*\n'
+     AND description !~* '<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]'
 )
 SELECT kind, id FROM bad ORDER BY kind, id LIMIT 25;
 EOSQL
