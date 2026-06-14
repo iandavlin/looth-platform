@@ -3013,6 +3013,11 @@ body.view-discover {
   --fp-cta-ink: #fff;               /* vp-cta text */
   --fp-cta-hover-bg: #3a4a3a;
   background: #f3efe6;   /* main text-area background = warm cream (Ian 6/14), was near-white #fcfcf9 */
+  /* Grayscale font-smoothing = the crisp-text fix (Ian 6/7, Hub-wide): kills the
+     subpixel fringing that reads as "blurry", most visible as light-on-dark in
+     dark mode. Applies both modes. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ── Hero: Classic Landing — centered copy, video beneath, open (no card box) ── */
