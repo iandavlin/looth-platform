@@ -176,7 +176,11 @@ at `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror` as instant rollback (`ln -
     (no resizer/srcset) — same on dev; pre-existing craft-debt for the events + standalone lanes (passes the gate on budget).
 - ☐ **Member-viewer (needs dev2 WP login):** `tools/gates/run-all.sh` member half · real WP login + `/whoami` tier ladder
   (anon/lite/pro) · member craft surfaces · payments test-mode.
-- ☐ ⚠️ refresh-JWT **wrong-key** case (open blocker per DEPLOY-PLAN) — needs dev2 shell; the one true open verify item.
+- ✅ refresh-JWT **wrong-key** case (DEPLOY-PLAN blocker) **CLOSED 6/14 on dev2:** forged `looth_id` (faithful claims
+  `sub`+`wp_user_id`) signed with a bogus key → `authenticated:false` (REJECTED); same claims signed with the real
+  `/etc/looth/jwt-private.pem` → `authenticated:true` (full payload). Proves signature verify works + the dev2 keypair
+  pairs → swapping in LIVE's keypair at the cut is safe. (whoami requires BOTH `sub` AND `wp_user_id` claims — a bare
+  `sub` token is anon even with a valid signature.)
 
 ---
 
