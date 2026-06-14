@@ -203,7 +203,7 @@
     if (!forum || !topic) return false;   // not modal-able → let the <a> navigate
 
     var m = ensureModal();
-    var titleEl = card.querySelector('.dcard__title');
+    var titleEl = card.querySelector('.dcard__title, .lg-hubt__t');
     m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
     var op = m.querySelector('.lg-dmodal__op');
     var rep = m.querySelector('.lg-dmodal__replies');
@@ -247,7 +247,7 @@
   // Intercept primary clicks on a modal-able discussion card. Middle-click and
   // modified clicks fall through to the card's real /hub/ href (fallback).
   document.addEventListener('click', function (e) {
-    var card = e.target.closest('.dcard[data-topic]');
+    var card = e.target.closest('.dcard[data-topic], .lg-hubt__card[data-topic]');
     if (!card) return;
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (open(card)) e.preventDefault();
