@@ -3168,6 +3168,23 @@ html[data-lguser-theme="dark"] body.view-discover {
   html:not([data-lguser-theme]):has(body.view-discover) { background: #15171a; }
 }
 
+/* ── Dark mode for the two hardcoded-light containers (Ian 6/14) ─────────────
+   The redesign's token re-points cover everything that uses --lg-*/--fp-* tokens.
+   These hardcode a light bg, so they stayed light in dark mode (and their token-
+   driven text auto-lightened → invisible). Re-point the surfaces; text already
+   follows --lg-* tokens. Both gates kept in sync with the dark counterpart above.
+   Also pin the cream main bg to the dark token (the light value is hardcoded). */
+html[data-lguser-theme="dark"] body.view-discover { background: var(--lg-cream); }
+html[data-lguser-theme="dark"] body.view-discover .dcard,
+html[data-lguser-theme="dark"] body.view-discover .lg-bento__weekly { background: var(--lg-card-bg); }
+html[data-lguser-theme="dark"] body.view-discover .lg-bento__weekly-txt small { color: var(--lg-mute); }
+@media (prefers-color-scheme: dark) {
+  html:not([data-lguser-theme]) body.view-discover { background: var(--lg-cream); }
+  html:not([data-lguser-theme]) body.view-discover .dcard,
+  html:not([data-lguser-theme]) body.view-discover .lg-bento__weekly { background: var(--lg-card-bg); }
+  html:not([data-lguser-theme]) body.view-discover .lg-bento__weekly-txt small { color: var(--lg-mute); }
+}
+
 /* ── Ghost CTA readability (Buck 2026-06-11): the redesign's .vp-cta ink repoint
    (--fp-cta-ink, archive.css "discover" block) out-specifies the secondary's own
    color rule, so the transparent ghost button inherited the FILLED button ink —
