@@ -47,7 +47,7 @@ $LOGO = LG_ARCHIVE_POC_LOGO_URL;
     <nav aria-label="Legal">
       <a href="/privacy/">Privacy</a>
       <a href="/terms/">Terms</a>
-      <a href="/billing-refund/">Billing &amp; Refund</a>
+      <a href="/request-refund/">Billing &amp; Refund</a>
     </nav>
   </div>
 </footer>

@@ -27,24 +27,37 @@ if (!$env) {
 }
 define('LG_ARCHIVE_POC_ENV', $env);
 
-// ---------- env-specific values ----------
+// ---------- env-specific values (PATHS/users only — NOT the host) ----------
+// LG_ARCHIVE_POC_ENV selects the filesystem + WP user. The browser-facing host
+// is derived separately (below) from the actual request, because at the cut the
+// prod box runs ENV=dev (/var/www/dev + looth-dev) while its public host is
+// loothgroup.com. Decoupled so dev / dev2 / loothgroup.com need no per-host edit.
 if ($env === 'live') {
-    define('LG_ARCHIVE_POC_HOST',          'loothgroup.com');
     define('LG_ARCHIVE_POC_WP_PATH',       '/var/www/html');
     define('LG_ARCHIVE_POC_WP_USER',       'looth-live');
     define('LG_ARCHIVE_POC_GATE_COOKIE',   '');                 // live has no cookie gate
     define('LG_ARCHIVE_POC_APP_ROOT',      '/srv/archive-poc');
-    define('LG_ARCHIVE_POC_LOGO_URL',      'https://loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
-    define('LG_ARCHIVE_POC_CANONICAL_BASE','https://loothgroup.com');
-} else { // dev
-    define('LG_ARCHIVE_POC_HOST',          'dev.loothgroup.com');
+} else { // dev (also the dev2 / prod-at-cut box: /var/www/dev + looth-dev)
     define('LG_ARCHIVE_POC_WP_PATH',       '/var/www/dev');
     define('LG_ARCHIVE_POC_WP_USER',       'looth-dev');
     define('LG_ARCHIVE_POC_GATE_COOKIE',   'loothdev_auth');
     define('LG_ARCHIVE_POC_APP_ROOT',      '/home/ubuntu/projects/archive-poc');
-    define('LG_ARCHIVE_POC_LOGO_URL',      'https://dev.loothgroup.com/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
-    define('LG_ARCHIVE_POC_CANONICAL_BASE','https://dev.loothgroup.com');
 }
+
+// ---------- browser-facing host (request-derived) ----------
+// Single source of truth for the public host used to build URLs (logo, canonical)
+// and the loopback CURL 'Host:' header. Derived from the live request so dev,
+// dev2, and loothgroup.com each self-resolve. CLI/cron (no HTTP_HOST) fall back
+// to, in order: (1) LG_ARCHIVE_POC_PUBLIC_HOST -- set in the FPM pool + any timer
+// env on a box whose public host differs from its env default (dev2, prod-at-cut);
+// (2) else the env default below. Sanitized (it feeds a curl 'Host:' header) ->
+// strip anything outside a valid hostname[:port] to close Host-header injection.
+$ap_host_fallback = getenv('LG_ARCHIVE_POC_PUBLIC_HOST')
+    ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
+$ap_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
+define('LG_ARCHIVE_POC_HOST',          $ap_req_host !== '' ? $ap_req_host : $ap_host_fallback);
+define('LG_ARCHIVE_POC_LOGO_URL',      'https://' . LG_ARCHIVE_POC_HOST . '/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
+define('LG_ARCHIVE_POC_CANONICAL_BASE','https://' . LG_ARCHIVE_POC_HOST);
 
 // ---------- derived ----------
 define('LG_ARCHIVE_POC_SQLITE',   LG_ARCHIVE_POC_APP_ROOT . '/index.sqlite');

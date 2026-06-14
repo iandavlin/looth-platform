@@ -29,11 +29,16 @@ if (!$env) {
 }
 define('LG_EVENTS_ENV', $env);
 
-if ($env === 'live') {
-    define('LG_EVENTS_HOST', 'loothgroup.com');
-} else {
-    define('LG_EVENTS_HOST', 'dev.loothgroup.com');
-}
+/* ---------- browser-facing / loopback-routing host (request-derived) ----------
+ * Decoupled from env (which selects PATHS only): at the cut the prod box runs
+ * ENV=dev but its public host is loothgroup.com, and dev2 is neither default.
+ * Derive from the live request so dev / dev2 / loothgroup.com each self-resolve;
+ * CLI/cron (no HTTP_HOST) fall back to LG_EVENTS_PUBLIC_HOST, else the env default.
+ * Sanitized — the value feeds a curl 'Host:' header (close Host-header injection). */
+$ev_host_fallback = getenv('LG_EVENTS_PUBLIC_HOST')
+    ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
+$ev_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
+define('LG_EVENTS_HOST', $ev_req_host !== '' ? $ev_req_host : $ev_host_fallback);
 define('LG_EVENTS_PUBLIC_PATH',  '/events');                 // nginx mount (takes over /events/)
 define('LG_EVENTS_TABLE_PREFIX', 'wp_');
 define('LG_EVENTS_DB_SECRET',    '/etc/lg-events-db');
