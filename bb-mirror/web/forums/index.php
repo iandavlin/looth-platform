@@ -143,7 +143,9 @@ function render_section(string $title, array $forums, ?string $desc = null): voi
         <span class="cat-group__count"><?= count($forums) ?> forum<?= count($forums) !== 1 ? 's' : '' ?></span>
       </div>
       <?php if ($desc): ?>
-        <p class="cat-group__desc"><?= htmlspecialchars($desc) ?></p>
+        <?php // description is wpautop'd + kses'd HTML at sync (bb_mirror_content_html);
+              // hardcoded section blurbs are safe literals. Echo raw (was escaped). ?>
+        <div class="cat-group__desc"><?= $desc ?></div>
       <?php endif; ?>
       <div class="forum-grid">
         <?php foreach ($forums as $f) render_forum_card($f); ?>

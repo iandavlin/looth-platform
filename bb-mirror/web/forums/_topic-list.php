@@ -102,7 +102,8 @@ function fmt_last_topic($ts): string {
 
   <h1 class="bb-mirror__page-title"><?= htmlspecialchars($forum['title']) ?></h1>
   <?php if ($forum['description'] && trim((string)$forum['description']) !== ''): ?>
-    <p class="forum__description"><?= htmlspecialchars($forum['description']) ?></p>
+    <?php // wpautop'd + kses'd HTML at sync (bb_mirror_content_html); echo raw (was escaped). ?>
+    <div class="forum__description"><?= $forum['description'] ?></div>
   <?php endif; ?>
 
   <?php if (!$topics): ?>

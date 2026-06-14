@@ -36,10 +36,12 @@ function _bb_mirror_decode(?string $s): ?string {
  * already-blocked HTML (BuddyBoss modern composer bodies that ship <p>/<div>)
  * intact, so this is safe for both raw-text and pre-structured bodies.
  *
- * SINGLE source of truth for the body column: BOTH write paths
- * (bb_mirror_upsert_topic/reply here AND bin/backfill.php's full walk) call this
- * — the prior duplication of `wp_kses_post(decode(...))` across the two files is
- * exactly how the wpautop step went missing twice.
+ * SINGLE source of truth for every body/description column: ALL write paths
+ * (bb_mirror_upsert_topic/reply/forum here AND bin/backfill.php's full walk)
+ * call this — the prior duplication of `wp_kses_post(decode(...))` across the
+ * two files is exactly how the wpautop step went missing twice. Forum
+ * descriptions render escaped-in-a-<p> historically; their render sites switched
+ * to raw-in-a-<div> (index.php / _topic-list.php) to consume this HTML.
  */
 function bb_mirror_content_html(?string $raw): ?string {
     if ($raw === null) return null;
@@ -255,7 +257,7 @@ function bb_mirror_upsert_forum(int $id, PDO $db): void {
     $db->prepare($sql)->execute([
         $id, $slug,
         _bb_mirror_decode($p->post_title),
-        wp_kses_post(_bb_mirror_decode($p->post_content)),
+        bb_mirror_content_html($p->post_content),
         (int)$p->post_parent ?: null, (int)$p->menu_order,
         _bb_mirror_first_group_id($m['_bbp_group_ids'] ?? null),
         $m['_bbp_forum_type']       ?? 'forum',

@@ -246,6 +246,10 @@ img { max-width: 100%; display: block; }
   color: var(--fg-muted);
   margin: 0 0 var(--s6);
 }
+/* description is now wpautop'd HTML (<p>-wrapped); trim the wrapper's outer
+   margins so a one-line blurb renders as before, keep inter-paragraph gaps. */
+.forum__description > p { margin: 0 0 var(--s3); }
+.forum__description > p:last-child { margin-bottom: 0; }
 
 .bb-mirror__empty {
   font-size: 15px;
@@ -349,6 +353,8 @@ img { max-width: 100%; display: block; }
   color: var(--fg-muted);
   margin: 0 0 var(--s3);
 }
+.cat-group__desc > p { margin: 0 0 var(--s2); }
+.cat-group__desc > p:last-child { margin-bottom: 0; }
 
 .cat-group__stats {
   display: flex;
