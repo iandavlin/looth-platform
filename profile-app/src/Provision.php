@@ -34,15 +34,22 @@ use Throwable;
 final class Provision
 {
     /**
+     * Default fallback avatar for photo-less members (Ian 2026-06-14): the branded
+     * "Optimum" emoji, shown across ALL surfaces (Hub cards, profile, directory)
+     * instead of each surface's own empty-state (Hub silhouette / initials letters).
+     * It's a STATIC local asset — NOT the old per-user Gravatar-placeholder guess
+     * that rotted (1,300+ fake-gravatar rows the BB backfill had to repair); a fixed
+     * image can't go stale. Real avatars overwrite it (me-avatar.php upload, the
+     * BB-upload + gravatar backfills). Relative path so it resolves on dev/dev2/prod.
+     */
+    public const DEFAULT_AVATAR_URL = '/wp-content/uploads/2024/11/Optimum.png';
+
+    /**
      * Idempotent create-or-heal for a WP user. Returns
      * ['user_id'=>int, 'uuid'=>string, 'created'=>bool].
      *
-     * avatar_url is INTENTIONALLY left NULL on create: NULL renders as the
-     * member's initials (Block.php), which is the canonical no-avatar state.
-     * Do not default it to a Gravatar/placeholder URL here — that was the
-     * avatar-rot bug (1,300+ rows stamped with fake gravatars the BB backfill
-     * then had to repair). Real avatars arrive only via me-avatar.php upload
-     * or the BB-upload crib (bin/backfill-avatars.php, NULL-only).
+     * New rows get DEFAULT_AVATAR_URL (the Optimum fallback); existing rows keep
+     * whatever avatar they have (ON CONFLICT never overwrites avatar_url).
      */
     public static function ensure(int $wpUserId, string $email, ?string $displayName): array
     {
@@ -61,13 +68,13 @@ final class Provision
             // Identity row, keyed on the stable uuid seed. Re-create is a no-op
             // beyond filling in a missing display_name.
             $stmt = $pg->prepare('
-                INSERT INTO users (uuid, primary_email, billing_email, contact_email, display_name)
-                VALUES (:uuid, :email, :email, :email, :name)
+                INSERT INTO users (uuid, primary_email, billing_email, contact_email, display_name, avatar_url)
+                VALUES (:uuid, :email, :email, :email, :name, :avatar)
                 ON CONFLICT (uuid) DO UPDATE
                     SET display_name = COALESCE(users.display_name, EXCLUDED.display_name)
                 RETURNING id, (xmax = 0) AS inserted
             ');
-            $stmt->execute([':uuid' => $uuid, ':email' => $normalized, ':name' => $displayName]);
+            $stmt->execute([':uuid' => $uuid, ':email' => $normalized, ':name' => $displayName, ':avatar' => self::DEFAULT_AVATAR_URL]);
             $row      = $stmt->fetch();
             $userId   = (int) $row['id'];
             $inserted = (bool) $row['inserted'];
