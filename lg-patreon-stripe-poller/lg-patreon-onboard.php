@@ -948,24 +948,29 @@ function lgpo_handle_callback() {
         $wp_role = ! empty( $tier_map ) ? reset( $tier_map ) : 'subscriber';
     }
 
-    // Already onboarded?
+    // Already onboarded? Matched by Patreon user-id — reuse, never mint.
     $existing_by_patreon = lgpo_get_user_by_patreon_id( $patreon_user_id );
     if ( $existing_by_patreon ) {
-        lgpo_apply_role_via_arbiter( (int) $existing_by_patreon->ID, $wp_role );
-        update_user_meta( $existing_by_patreon->ID, 'payment_source', 'patreon' );
-        lgpo_login_user( $existing_by_patreon );
+        lgpo_adopt_existing_user( $existing_by_patreon, $patreon_user_id, $patreon_email, $tier_id, $wp_role );
         lgpo_terminal( 'already_onboarded', $state_payload,
             'Your account is already connected and you\'re now logged in! Your membership has been verified and your access level updated.'
         );
     }
 
-    // Email collision?
+    // Email collision? An existing WP account already owns this Patreon email.
+    // REUSE it instead of minting a second account (the mikelle.davlin
+    // double-account: wp 1848 + minted wp 1905 split her identity and orphaned
+    // the original from the profile bridge). The only cases we DON'T auto-adopt:
+    //   - the existing account is already linked to a DIFFERENT Patreon id
+    //     (genuine conflict — two Patreon accounts, one email), or
+    //   - it's a privileged (admin) account — never hand an admin session out
+    //     over OAuth; route both to human review.
     $existing_by_email = get_user_by( 'email', $patreon_email );
     if ( $existing_by_email ) {
         $contact_email = get_option( 'lgpo_contact_email', 'ian.davlin@gmail.com' );
         $existing_patreon_id = get_user_meta( $existing_by_email->ID, 'lgpo_patreon_user_id', true );
 
-        if ( $existing_patreon_id && $existing_patreon_id !== $patreon_user_id ) {
+        if ( $existing_patreon_id && (string) $existing_patreon_id !== (string) $patreon_user_id ) {
             lgpo_add_pending( array(
                 'patreon_user_id' => $patreon_user_id, 'patreon_email' => $patreon_email,
                 'patreon_name' => $patreon_name, 'tier_id' => $tier_id,
@@ -978,11 +983,11 @@ function lgpo_handle_callback() {
             );
         }
 
-        if ( ! $existing_patreon_id ) {
+        if ( user_can( $existing_by_email, 'manage_options' ) ) {
             lgpo_add_pending( array(
                 'patreon_user_id' => $patreon_user_id, 'patreon_email' => $patreon_email,
                 'patreon_name' => $patreon_name, 'tier_id' => $tier_id,
-                'wp_user_id' => $existing_by_email->ID, 'reason' => 'email_collision',
+                'wp_user_id' => $existing_by_email->ID, 'reason' => 'admin_collision',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
             lgpo_terminal( 'email_collision', $state_payload,
@@ -990,9 +995,15 @@ function lgpo_handle_callback() {
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
             );
         }
+
+        // Same Patreon id, or not yet linked: adopt the existing account.
+        lgpo_adopt_existing_user( $existing_by_email, $patreon_user_id, $patreon_email, $tier_id, $wp_role );
+        lgpo_terminal( 'adopted', $state_payload,
+            'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level has been updated.'
+        );
     }
 
-    // Create new user
+    // No existing account by Patreon id or email — create a new one.
     $username = lgpo_generate_username( $patreon_name, $patreon_email );
     $password = wp_generate_password( 24, true, true );
 
@@ -1050,6 +1061,31 @@ function lgpo_handle_callback() {
 function lgpo_get_user_by_patreon_id( $patreon_user_id ) {
     $users = get_users( array( 'meta_key' => 'lgpo_patreon_user_id', 'meta_value' => $patreon_user_id, 'number' => 1 ) );
     return ! empty( $users ) ? $users[0] : null;
+}
+
+/**
+ * Reuse an existing WP account for this Patreon member instead of minting a
+ * second one. Stamps the Patreon linkage meta (idempotent), applies the
+ * entitled tier through the arbiter, and logs them in. This is the dedupe
+ * guard: a Patreon email or Patreon user-id that already maps to a WP account
+ * must NEVER create a new account.
+ */
+function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tier_id, $wp_role ) {
+    if ( ! $user instanceof WP_User ) {
+        $user = get_user_by( 'id', (int) $user );
+    }
+    if ( ! $user instanceof WP_User ) {
+        return;
+    }
+    update_user_meta( $user->ID, 'lgpo_patreon_user_id', $patreon_user_id );
+    update_user_meta( $user->ID, 'lgpo_patreon_email', $patreon_email );
+    update_user_meta( $user->ID, 'lgpo_patreon_tier_id', $tier_id );
+    if ( ! get_user_meta( $user->ID, 'lgpo_onboarded_at', true ) ) {
+        update_user_meta( $user->ID, 'lgpo_onboarded_at', current_time( 'mysql' ) );
+    }
+    update_user_meta( $user->ID, 'payment_source', 'patreon' );
+    lgpo_apply_role_via_arbiter( (int) $user->ID, $wp_role );
+    lgpo_login_user( $user );
 }
 
 function lgpo_generate_username( $name, $email ) {
