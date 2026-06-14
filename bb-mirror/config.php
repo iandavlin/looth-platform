@@ -222,6 +222,29 @@ function lg_bb_mirror_whoami(): ?array {
     return $result;
 }
 }
+
+// ---------- can-post signal: WP login cookie presence (NOT whoami) -----------
+//
+// Ian's standing rule: POSTING ABILITY gates on the WP login session, never on
+// /whoami. /whoami returns anon for a logged-in member whose JWT-uuid doesn't
+// resolve to a profile-app identity (unbridged / minter-decision-2), so a real
+// admin or post-snapshot member would otherwise be told to "sign in" while the
+// header shows them signed in (header reads the JWT directly — the two diverge).
+//
+// This runs in the bb-mirror FPM pool, which never boots WP, so is_user_logged_in()
+// isn't available here — we read the wordpress_logged_in_* cookie's PRESENCE, the
+// same signal bb_mirror_chrome_header() already uses for the display-name fallback.
+// It is a UX gate only: the real lock is the BB-REST nonce + server-side caps
+// re-check on /bb-mirror-api/v0/reply (and auth.php mints the nonce off
+// get_current_user_id() on the WP pool). True anon (no cookie) still fails closed.
+if (!function_exists('lg_bb_mirror_wp_logged_in')) {
+function lg_bb_mirror_wp_logged_in(): bool {
+    foreach ($_COOKIE as $k => $_) {
+        if (strpos($k, 'wordpress_logged_in_') === 0) return true;
+    }
+    return false;
+}
+}
 // ---------- anonymous-posting: viewer-moderator check + author mask ----------
 //
 // The per-post "Post anonymously" feature (anon-rebuild lane). A topic/reply

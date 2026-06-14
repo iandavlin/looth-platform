@@ -518,7 +518,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
          lazily when a composer opens (forums.js, with a plain-textarea fallback), so
          blocking first paint on a CDN stylesheet cost ~770ms on mobile Lighthouse.
          media-swap keeps the element's cascade position; print never matches first. */ ?>
-<?php if ((lg_bb_mirror_whoami()['authenticated'] ?? false) === true): /* anon has no composer — no editor assets at all (craft gate, Ian 6/12) */ ?>
+<?php if (lg_bb_mirror_wp_logged_in()): /* editor assets gate on the WP login session, NOT /whoami (Ian: posting=WP-login). A logged-in member whose whoami resolves anon still gets the real composer; true anon gets none (craft gate, Ian 6/12). */ ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"></noscript>
 <?php endif; ?>
@@ -619,7 +619,7 @@ function bb_mirror_chrome_footer(): void
 
 <?php bb_mirror_new_topic_modal(); ?>
 
-<?php if ((lg_bb_mirror_whoami()['authenticated'] ?? false) === true): ?>
+<?php if (lg_bb_mirror_wp_logged_in()): /* WP-login session, not /whoami — see CSS gate above */ ?>
 <?php /* Quill loads AFTER first paint settles (load+idle) — members only. By
          composer tap-time it's been ready for seconds, so Buck's synchronous
          tap-focus iOS keyboard path is untouched; forums.js already has the
