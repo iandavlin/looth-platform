@@ -14,6 +14,116 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // ── Shared composer image tray (desktop ≥641 only) ───────────────────────
+  // Out-of-body attachment tray = the SINGLE source of truth for bbp_media.
+  // Each uploaded image becomes a thumb with a ✕ that splices its id out of the
+  // composer's mediaIds array — fixing the old push-only / can't-delete bug
+  // (the array used to be append-only; deleting the inline preview was cosmetic).
+  // On mobile (≤640: Buck's fbStyleComposer drives ntm's hidden image button;
+  // lrs/lcp sheets own replies) we keep the legacy inline-embed path byte-for-
+  // byte. The gate is evaluated LIVE per upload, so a desktop window narrowed
+  // past 641 also falls back cleanly. The tray DOM is created ONLY inside the
+  // desktop branch, so it can never collide with the mobile composer's own
+  // add-row, which is injected into this same editor.nextSibling slot.
+  var LG_TRAY_MQ = (function () {
+    try { return window.matchMedia('(min-width:641px)'); }
+    catch (e) { return { matches: false }; }
+  })();
+
+  // opts: { editorEl, mediaIds, statusEl, restBase, getNonce(cb), insertInline(url) }
+  // mediaIds MUST be mutated in place (push / splice / .length=0) and never
+  // reassigned — this helper closes over that same array instance. Returns
+  // { handler, reset }: wire handler as the Quill toolbar image handler; call
+  // reset() wherever the composer clears (it empties both the array and tray).
+  function lgComposerTray(opts) {
+    var tray = null;
+    function ensureTray() {
+      if (tray || !opts.editorEl || !opts.editorEl.parentNode) return tray;
+      tray = document.createElement('div');
+      tray.className = 'lg-mtray';
+      tray.hidden = true;
+      opts.editorEl.parentNode.insertBefore(tray, opts.editorEl.nextSibling);
+      return tray;
+    }
+    function syncEmpty() {
+      if (tray && !tray.querySelector('.lg-mtray__item')) {
+        tray.hidden = true;
+        tray.classList.remove('is-uploading');
+      }
+    }
+    function addThumb(url, id) {
+      var t = ensureTray();
+      if (!t) return;
+      t.hidden = false;
+      var item = document.createElement('span');
+      item.className = 'lg-mtray__item';
+      var img = document.createElement('img');
+      img.className = 'lg-mtray__img';
+      img.src = url; img.alt = '';
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'lg-mtray__rm';
+      rm.setAttribute('aria-label', 'Remove image');
+      rm.textContent = '✕';
+      rm.addEventListener('click', function () {
+        var ix = opts.mediaIds.indexOf(id);
+        if (ix > -1) opts.mediaIds.splice(ix, 1);
+        if (item.parentNode) item.parentNode.removeChild(item);
+        syncEmpty();
+      });
+      item.appendChild(img);
+      item.appendChild(rm);
+      t.appendChild(item);
+    }
+    function reset() {
+      opts.mediaIds.length = 0;
+      if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
+    }
+    function handler() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        opts.getNonce(function (nonce) {
+          if (!nonce) { opts.statusEl.textContent = 'Not signed in.'; return; }
+          var desk = LG_TRAY_MQ.matches;
+          var t = null;
+          if (desk) { t = ensureTray(); if (t) { t.hidden = false; t.classList.add('is-uploading'); } }
+          opts.statusEl.textContent = 'Uploading image…';
+          var fd = new FormData();
+          fd.append('file', file);
+          fetch(opts.restBase + '/media/upload', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }, body: fd,
+          })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) {
+              if (t) t.classList.remove('is-uploading');
+              if (!res.ok || !res.j.upload_id) {
+                opts.statusEl.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error');
+                syncEmpty();
+                return;
+              }
+              opts.mediaIds.push(res.j.upload_id);
+              opts.statusEl.textContent = 'Image attached.';
+              var url = res.j.upload_thumb || res.j.upload;
+              if (desk) addThumb(url, res.j.upload_id);
+              else if (opts.insertInline) opts.insertInline(url);
+            })
+            .catch(function (err) {
+              if (t) t.classList.remove('is-uploading');
+              syncEmpty();
+              opts.statusEl.textContent = 'Upload error: ' + err.message;
+            });
+        });
+      };
+      input.click();
+    }
+    return { handler: handler, reset: reset };
+  }
+
   // ── Text-size toggle (pill beside Compact) ───────────────────────────────
   // 3-state cycle: Normal → Large → Larger → Normal. Scales --lg-read-scale
   // (post/reply/card body copy only). Persists per browser; aria-pressed +
@@ -477,6 +587,11 @@
       var rseQuill = null, ta = null;
 
       // Image button → upload to BB media → inline embed (mirrors frmImageHandler).
+      // NB: rse is intentionally NOT on the out-of-body tray — unlike the other
+      // composers it does NOT strip <img> on save (an edited reply's images live
+      // inline in content_html and round-trip), so its inline images are already
+      // real, deletable editor content. A tray would pull them out of the saved
+      // HTML with no bbp_media to carry them. Leave rse on the inline path.
       function rseImageHandler() {
         var input = document.createElement('input');
         input.type = 'file'; input.accept = 'image/*';
@@ -1182,40 +1297,20 @@
       });
     }
 
-    // Image button → file picker → upload to BB → track id + show inline preview.
-    function ntmImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        ntmStatus.textContent = 'Uploading image…';
-        var fd = new FormData();
-        fd.append('file', file);
-        fetch(ntmRestBase + '/media/upload', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'X-WP-Nonce': ntmNonce },
-          body: fd,
-        })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) {
-              ntmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error');
-              return;
-            }
-            ntmMediaIds.push(res.j.upload_id);
-            ntmStatus.textContent = 'Image attached.';
-            // Inline preview in the editor so the user sees it (stripped on submit;
-            // the real image is stored as BB media and rendered by the mirror).
-            var range = ntmQuill.getSelection(true);
-            ntmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { ntmStatus.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // Image button → file picker → upload to BB → tray thumb (desktop) or inline
+    // preview (mobile legacy). See lgComposerTray. ntmMediaIds = source of truth.
+    var ntmTray = lgComposerTray({
+      editorEl: ntmEditorEl,
+      mediaIds: ntmMediaIds,
+      statusEl: ntmStatus,
+      restBase: ntmRestBase,
+      getNonce: function (cb) { cb(ntmNonce); },
+      insertInline: function (url) {
+        var range = ntmQuill.getSelection(true);
+        ntmQuill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
+    function ntmImageHandler() { ntmTray.handler(); }
 
     // ── Forum radio-list helpers (single-select; replaces the native <select>) ─
     function ntmGetForum() {
@@ -1503,34 +1598,19 @@
       });
     }
 
-    // Image button → upload to BB media → track id + inline preview (mirrors ntm).
-    function frmImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        frmStatus.textContent = 'Uploading image…';
-        var fd = new FormData(); fd.append('file', file);
-        fetch(frmRestBase + '/media/upload', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'X-WP-Nonce': frmNonce }, body: fd,
-        })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) {
-              frmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error'); return;
-            }
-            frmMediaIds.push(res.j.upload_id);
-            frmMediaPreviews.push(res.j.upload_thumb || res.j.upload);
-            frmStatus.textContent = 'Image attached.';
-            var range = frmQuill.getSelection(true);
-            frmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { frmStatus.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+    var frmTray = lgComposerTray({
+      editorEl: frmEditorEl,
+      mediaIds: frmMediaIds,
+      statusEl: frmStatus,
+      restBase: frmRestBase,
+      getNonce: function (cb) { cb(frmNonce); },
+      insertInline: function (url) {
+        var range = frmQuill.getSelection(true);
+        frmQuill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
+    function frmImageHandler() { frmTray.handler(); }
 
     // Body HTML from Quill (or textarea), stripping preview <img> — the real
     // images ride along as bbp_media and are rendered by the mirror.
@@ -1542,7 +1622,7 @@
     }
 
     function frmResetEditor() {
-      frmMediaIds = [];
+      frmTray.reset();          // clears frmMediaIds (in place) + the tray thumbs
       frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
@@ -1773,27 +1853,19 @@
   // Rich-text reply editor (Quill + image upload), like the new-topic/feed-reply modals.
   var replyEditorEl = authed.querySelector('.reply-form__editor');
   var replyQuill = null, replyMediaIds = [];
-  function replyImageHandler() {
-    var input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*';
-    input.onchange = function () {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      status.textContent = 'Uploading image…';
-      var fd = new FormData(); fd.append('file', file);
-      fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (!res.ok || !res.j.upload_id) { status.textContent = 'Image upload failed.'; return; }
-          replyMediaIds.push(res.j.upload_id);
-          status.textContent = 'Image attached.';
-          var range = replyQuill.getSelection(true);
-          replyQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-        })
-        .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
-    };
-    input.click();
-  }
+  // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+  var replyTray = lgComposerTray({
+    editorEl: replyEditorEl,
+    mediaIds: replyMediaIds,
+    statusEl: status,
+    restBase: restBase,
+    getNonce: function (cb) { cb(nonce); },
+    insertInline: function (url) {
+      var range = replyQuill.getSelection(true);
+      replyQuill.insertEmbed(range ? range.index : 0, 'image', url);
+    },
+  });
+  function replyImageHandler() { replyTray.handler(); }
   function replyInitEditor() {
     if (replyQuill || !replyEditorEl) return;
     if (typeof Quill === 'undefined') { if (textarea) textarea.hidden = false; replyEditorEl.style.display = 'none'; return; }
@@ -1901,27 +1973,11 @@
     // Quill (fallback to a plain textarea if the CDN didn't load)
     var quill = null, ta = null, editMediaIds = [];
     var qEl = box.querySelector('.post-edit__quill');
-    function editImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        statusEl.textContent = 'Uploading image…';
-        var fd = new FormData(); fd.append('file', file);
-        fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) { statusEl.textContent = 'Image upload failed.'; return; }
-            editMediaIds.push(res.j.upload_id);
-            statusEl.textContent = 'Image attached.';
-            var range = quill.getSelection(true);
-            quill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { statusEl.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // editTray is constructed below, AFTER statusEl is declared (it's needed by
+    // the tray) — this wrapper is hoisted so the Quill toolbar config can point
+    // at it, and editTray is assigned before any image click can fire.
+    var editTray;
+    function editImageHandler() { editTray.handler(); }
     if (typeof Quill !== 'undefined') {
       quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: {
         container: [
@@ -1939,6 +1995,19 @@
 
     var statusEl = box.querySelector('.post-edit__status');
     var saveBtn  = box.querySelector('.post-edit__save');
+
+    // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+    editTray = lgComposerTray({
+      editorEl: qEl,
+      mediaIds: editMediaIds,
+      statusEl: statusEl,
+      restBase: restBase,
+      getNonce: function (cb) { cb(nonce); },
+      insertInline: function (url) {
+        var range = quill.getSelection(true);
+        quill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
 
     function teardown(restoreBody) {
       box.remove();
