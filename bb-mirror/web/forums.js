@@ -35,15 +35,36 @@
   // reassigned — this helper closes over that same array instance. Returns
   // { handler, reset }: wire handler as the Quill toolbar image handler; call
   // reset() wherever the composer clears (it empties both the array and tray).
+  // BuddyBoss rejects webp/heic/heif/avif on media upload — catch them client-
+  // side with a clear message instead of a silent server 400. Supported set
+  // advertised to users (BB also allows bmp/svg, but those aren't worth listing).
+  var LG_IMG_UNSUPPORTED = /\.(webp|heic|heif|avif|tiff?)$/i;
+  var LG_IMG_SUPPORTED_TXT = 'JPG, PNG, or GIF';
+
   function lgComposerTray(opts) {
     var tray = null;
+    var hintEl = null;
+    // Persistent "supported types" line under the editor (desktop only — mobile's
+    // composer is Buck's fbStyleComposer; it hides hint lines anyway).
+    function mountHint() {
+      if (hintEl || !LG_TRAY_MQ.matches || !opts.editorEl || !opts.editorEl.parentNode) return;
+      hintEl = document.createElement('p');
+      hintEl.className = 'lg-mtray-hint';
+      hintEl.textContent = 'Supported images: JPG, PNG, GIF';
+      opts.editorEl.parentNode.insertBefore(hintEl, opts.editorEl.nextSibling);
+    }
     function ensureTray() {
       if (tray || !opts.editorEl || !opts.editorEl.parentNode) return tray;
       tray = document.createElement('div');
       tray.className = 'lg-mtray';
       tray.hidden = true;
-      opts.editorEl.parentNode.insertBefore(tray, opts.editorEl.nextSibling);
+      // Insert above the hint line so order reads: editor → tray → hint.
+      opts.editorEl.parentNode.insertBefore(tray, hintEl || opts.editorEl.nextSibling);
       return tray;
+    }
+    function fail(msg) {
+      opts.statusEl.textContent = msg;
+      opts.statusEl.classList.add('lg-msg-error');
     }
     function syncEmpty() {
       if (tray && !tray.querySelector('.lg-mtray__item')) {
@@ -77,6 +98,7 @@
     }
     function reset() {
       opts.mediaIds.length = 0;
+      opts.statusEl.classList.remove('lg-msg-error');
       if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
     }
     function handler() {
@@ -86,11 +108,19 @@
       input.onchange = function () {
         var file = input.files && input.files[0];
         if (!file) return;
+        // Pre-flight: reject formats BB will refuse (webp/heic/…) up front, so
+        // the user gets a clear reason instead of a silent failed upload.
+        if (LG_IMG_UNSUPPORTED.test(file.name || '')) {
+          var ext = (file.name.split('.').pop() || 'that').toUpperCase();
+          fail(ext + ' images aren’t supported — please use ' + LG_IMG_SUPPORTED_TXT + '.');
+          return;
+        }
         opts.getNonce(function (nonce) {
-          if (!nonce) { opts.statusEl.textContent = 'Not signed in.'; return; }
+          if (!nonce) { fail('You’re not signed in.'); return; }
           var desk = LG_TRAY_MQ.matches;
           var t = null;
           if (desk) { t = ensureTray(); if (t) { t.hidden = false; t.classList.add('is-uploading'); } }
+          opts.statusEl.classList.remove('lg-msg-error');
           opts.statusEl.textContent = 'Uploading image…';
           var fd = new FormData();
           fd.append('file', file);
@@ -98,11 +128,13 @@
             method: 'POST', credentials: 'same-origin',
             headers: { 'X-WP-Nonce': nonce }, body: fd,
           })
-            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            // Tolerate a non-JSON body (e.g. a 413 when the file is too large) so
+            // we show a real reason rather than a JSON parse error.
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: null }; }); })
             .then(function (res) {
               if (t) t.classList.remove('is-uploading');
-              if (!res.ok || !res.j.upload_id) {
-                opts.statusEl.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error');
+              if (!res.ok || !res.j || !res.j.upload_id) {
+                fail('Couldn’t add that image — supported types are ' + LG_IMG_SUPPORTED_TXT + ' (and it must not be too large).');
                 syncEmpty();
                 return;
               }
@@ -112,15 +144,16 @@
               if (desk) addThumb(url, res.j.upload_id);
               else if (opts.insertInline) opts.insertInline(url);
             })
-            .catch(function (err) {
+            .catch(function () {
               if (t) t.classList.remove('is-uploading');
               syncEmpty();
-              opts.statusEl.textContent = 'Upload error: ' + err.message;
+              fail('Upload failed — check your connection and try a ' + LG_IMG_SUPPORTED_TXT + ' image.');
             });
         });
       };
       input.click();
     }
+    mountHint();
     return { handler: handler, reset: reset };
   }
 

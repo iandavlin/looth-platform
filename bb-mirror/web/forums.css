@@ -4203,3 +4203,13 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
     font: 600 12px/20px var(--lg-font-sans, system-ui, sans-serif); text-align: center; }
   .lg-mtray__rm:hover { background: rgba(26, 29, 26, .92); }
 }
+
+/* Composer image hint + error message (paired with lgComposerTray). The hint is
+   only ever inserted on desktop (JS-gated); the error colour applies on both
+   surfaces so a rejected upload — e.g. an unsupported webp — is never silent. */
+.lg-mtray-hint {
+  margin: 5px 0 0; font: 500 11.5px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.ntm-status.lg-msg-error, .frm-status.lg-msg-error, .lg-msg-error,
+.reply-form__status.lg-msg-error, .post-edit__status.lg-msg-error {
+  color: #b3261e; font-weight: 600; }
