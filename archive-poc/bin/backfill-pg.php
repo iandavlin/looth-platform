@@ -346,10 +346,15 @@ $db->beginTransaction();
 // CASCADE walks the FK chain; RESTART IDENTITY is skipped because looth-dev (the
 // writer) doesn't own the tag sequence — sequence drift is inconsequential,
 // nothing external pins tag.id values.
-$db->exec('TRUNCATE content_tag, content_item, tag, person CASCADE');
+// NB: tag + person are NOT truncated — they're upserted (ON CONFLICT) BEFORE this
+// transaction opens, so truncating them mid-txn would wipe the very rows the loop's
+// content_tag inserts then FK-reference. Only the content tables are rebuilt; stale
+// tag/person rows are harmless (the idempotent upsert keeps them current).
+$db->exec('TRUNCATE content_tag, content_item CASCADE');
 
 $count_by_kind = [];
 $total = 0;
+$errs  = 0;   // per-tag savepoint skips orphaned-tag FK links without killing the rebuild
 
 $batch_size = 500;
 $offset = 0;
@@ -489,7 +494,14 @@ while (true) {
 
         if (!empty($post_tags[$pid])) {
             foreach (array_keys($post_tags[$pid]) as $tid) {
-                $ins_ctag->execute([$pid, $tid]);
+                $db->exec('SAVEPOINT sp_tag');
+                try {
+                    $ins_ctag->execute([$pid, $tid]);
+                    $db->exec('RELEASE SAVEPOINT sp_tag');
+                } catch (\Throwable $e) {
+                    $db->exec('ROLLBACK TO SAVEPOINT sp_tag');   // orphaned/deleted tag → skip the link, keep the post
+                    $errs++;
+                }
             }
         }
     }
@@ -513,6 +525,7 @@ if (!$FORCE && $pre_count > 0 && $total < (int)($pre_count / 2)) {
     exit(1);
 }
 
+if ($errs > 0) fwrite(STDERR, "  note: skipped $errs orphaned tag-link(s); all posts indexed.\n");
 $db->commit();
 
 // tsvector is GENERATED STORED on content_item, so the FTS index is already
