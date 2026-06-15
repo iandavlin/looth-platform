@@ -103,6 +103,7 @@ $login_url = '/wp-login.php?redirect_to=' . rawurlencode('/hub/' . $topic['forum
 ?>
 <div class="lg-fpd-op" data-topic-id="<?= $tid ?>" data-forum-id="<?= $fid ?>"
      data-title="<?= htmlspecialchars($title, ENT_QUOTES) ?>"
+     data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>"
      data-can-post="<?= $viewer_logged_in ? '1' : '0' ?>">
   <div class="lg-dmodal__meta">
     <span class="fc-avatar"><?= $avatar ?></span>
