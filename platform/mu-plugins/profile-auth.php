@@ -16,9 +16,11 @@
  *   /etc/looth/jwt-private.pem  (640 root:looth-dev)
  *   /etc/looth/jwt-public.pem   (644 root:root — readable everywhere)
  *
- * `sub` claim is UUIDv5(LOOTH_IDENTITY_NAMESPACE, lower(trim(user_email))).
- * If a user changes their email in WP, the next minted token will resolve to
- * a different uuid than profile-app stored — caveat noted in slice one handoff.
+ * `sub` claim is the STORED profile-app users.uuid, read from WP usermeta
+ * `_looth_uuid` (mirrored at provision by the poller lane). It is NOT recomputed
+ * from the email, so an email change can't drift the token subject (the G4
+ * silent-logout bug). Missing mirror => skip minting, never email-derive.
+ * Decision 2 option (b); collapses to profile-app-sole-signer (a) post-cut.
  */
 
 if (!defined('ABSPATH')) exit;
@@ -30,9 +32,11 @@ const LOOTH_AUTH_COOKIE         = 'looth_id';
 const LOOTH_AUTH_COOKIE_DOMAIN  = '.dev.loothgroup.com';      // dev — adjust per env at deploy time
 const LOOTH_AUTH_TTL_SECONDS    = 30 * 24 * 60 * 60;          // 30 days
 const LOOTH_AUTH_PRIVATE_KEY    = '/etc/looth/jwt-private.pem';
+const LOOTH_AUTH_PUBLIC_KEY     = '/etc/looth/jwt-public.pem';   // 644 root:root — readable
 const LOOTH_AUTH_ISS            = 'https://dev.loothgroup.com';
 
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Ramsey\Uuid\Uuid;
 
 function looth_auth_compute_uuid(string $email): string {
@@ -45,16 +49,45 @@ function looth_auth_mint_jwt(WP_User $user): string {
     if ($pk === null) $pk = @file_get_contents(LOOTH_AUTH_PRIVATE_KEY);
     if (!$pk) throw new RuntimeException('looth-auth: private key unreadable');
 
+    // `sub` = the STORED profile-app users.uuid, mirrored into WP usermeta as
+    // `_looth_uuid` at provision (poller lane). Seeded from the email ONCE at
+    // create and never recomputed, so a WP email change can't drift the token
+    // subject (G4). Absent mirror => refuse to mint (caller skips the cookie);
+    // the init/issue re-mint heals on the next pageview once the mirror lands.
+    // NEVER fall back to looth_auth_compute_uuid($email) — that is the bug.
+    $sub = get_user_meta($user->ID, '_looth_uuid', true);
+    if (!is_string($sub) || $sub === '') {
+        throw new RuntimeException('looth-auth: no _looth_uuid mirror for user #'
+            . (int) $user->ID . ' — skipping mint (provision/backfill pending)');
+    }
+
     $now = time();
     $payload = [
         'iss'        => LOOTH_AUTH_ISS,
-        'sub'        => looth_auth_compute_uuid($user->user_email),
+        'sub'        => strtolower($sub),
         'wp_user_id' => (int) $user->ID,
         'email'      => $user->user_email,
         'iat'        => $now,
         'exp'        => $now + LOOTH_AUTH_TTL_SECONDS,
     ];
     return JWT::encode($payload, $pk, 'RS256');
+}
+
+// Verify a looth_id JWT against the public key. Returns the claims array on a
+// good token (signature + exp + iss all valid), or null on anything suspect.
+// Used by the reverse session bridge below — we mint a real WP session off this
+// token, so it must be cryptographically trusted, never just parsed.
+function looth_auth_verify_jwt(string $jwt): ?array {
+    static $pub = null;
+    if ($pub === null) $pub = @file_get_contents(LOOTH_AUTH_PUBLIC_KEY) ?: false;
+    if (!$pub) return null;
+    try {
+        $claims = (array) JWT::decode($jwt, new Key($pub, 'RS256'));   // throws on bad sig/expiry
+    } catch (Throwable $e) {
+        return null;
+    }
+    if (($claims['iss'] ?? '') !== LOOTH_AUTH_ISS) return null;
+    return $claims;
 }
 
 function looth_auth_set_cookie(string $jwt): void {
@@ -105,6 +138,39 @@ add_action('init', function () {
     try { looth_auth_set_cookie(looth_auth_mint_jwt(wp_get_current_user())); }
     catch (Throwable $e) { error_log('looth-auth init-mint failed: ' . $e->getMessage()); }
 });
+
+// Reverse direction: a valid looth_id JWT but NO live WP session → establish one.
+// The forward hook above keeps the JWT in sync when WP says logged-in; this keeps
+// the WP session in sync when the JWT says logged-in. Without it the two disagree:
+//   - Patreon-onboarded members created before onboard minted a WP cookie carry a
+//     looth_id (whoami=logged-in) but have no WP session, so wp_validate_auth_cookie
+//     returns anon and the membership nonce bridge / /me/* surface 401s.
+//   - On this DB-reload-heavy box a reload wipes server-side session tokens, so the
+//     WP cookie stops validating while the stateless JWT survives — same split.
+// Contract this restores: whoami=logged-in ⇒ a valid WP auth cookie exists.
+// Runs early (priority 1) so the rest of the request sees the authenticated user.
+add_action('init', function () {
+    if (is_admin() && wp_doing_ajax()) return;
+    if (defined('REST_REQUEST') && REST_REQUEST) return;   // healed via the next pageview, not mid-REST
+    if (is_user_logged_in()) return;                        // WP session already valid — nothing to heal
+    if (empty($_COOKIE[LOOTH_AUTH_COOKIE])) return;         // no identity to bridge from
+    if (headers_sent()) return;
+
+    $claims = looth_auth_verify_jwt((string) $_COOKIE[LOOTH_AUTH_COOKIE]);
+    if (!$claims) return;                                   // forged / expired / wrong issuer → ignore
+
+    // Anchor on email, not wp_user_id: IDs are recyclable after a DB reload, so a
+    // stale id claim can point at a different human. The JWT sub (uuid5 of email)
+    // makes email the identity of record; the id claim is advisory only.
+    $email = strtolower(trim((string) ($claims['email'] ?? '')));
+    if ($email === '') return;
+    $user = get_user_by('email', $email);
+    if (!$user) return;
+
+    wp_set_current_user($user->ID, $user->user_login);
+    wp_set_auth_cookie($user->ID, true);
+    error_log('looth-auth: bridged WP session from looth_id for ' . $email . ' (#' . $user->ID . ')');
+}, 1);
 
 // Admin bar: "My Profile" link visible to all logged-in users.
 // (Visible whether or not they've claimed; the editor handles the interstitial.)
