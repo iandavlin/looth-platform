@@ -24,7 +24,8 @@ const HUB_TYPE_LABELS = [
     'video'        => 'Videos',
     'article'      => 'Articles',
     'loothprint'   => 'Loothprints',
-    'event'        => 'Events',
+    // 'event' removed from the Hub (Ian 2026-06-11: events live on /events/);
+    // the feed union + facet counts exclude kind='event' to match.
     'sponsor-post' => 'Sponsors',
     'useful_links' => 'Useful Links',
     'shorty'       => 'Shorts',
@@ -235,7 +236,7 @@ function hub_facet_counts(PDO $db, array $content_tiers, array $forum_cat_map): 
     $tin = $tier_ph ? implode(',', $tier_ph) : "''";
 
     $tc = $db->prepare("SELECT kind, count(*) AS n FROM discovery.content_item
-                         WHERE tier IN ($tin) AND kind <> 'misc' GROUP BY kind");
+                         WHERE tier IN ($tin) AND kind NOT IN ('misc','event') GROUP BY kind");
     foreach ($content_tiers as $i => $t) $tc->bindValue(':ft' . $i, $t);
     $tc->execute();
     $types = [];
@@ -263,7 +264,7 @@ function hub_facet_counts(PDO $db, array $content_tiers, array $forum_cat_map): 
     // Fold CONTENT into the same category counts (reconciled by forum_label slug).
     // Content-only labels (Perspective, Vintage) surface as their own categories.
     $ccs = $db->prepare("SELECT forum_label, count(*) AS n FROM discovery.content_item
-                          WHERE tier IN ($tin) AND COALESCE(forum_label,'') <> '' GROUP BY forum_label");
+                          WHERE tier IN ($tin) AND kind <> 'event' AND COALESCE(forum_label,'') <> '' GROUP BY forum_label");
     foreach ($content_tiers as $i => $t) $ccs->bindValue(':ft' . $i, $t);
     $ccs->execute();
     foreach ($ccs->fetchAll() as $r) {
@@ -363,13 +364,13 @@ function hub_category_tree(PDO $db, array $content_tiers, array $forum_cat_map):
     };
     $cParent = [];
     $sp = $db->prepare("SELECT forum_label, count(*) n FROM discovery.content_item
-                         WHERE tier IN ($tinSql) AND COALESCE(forum_label,'')<>'' GROUP BY forum_label");
+                         WHERE tier IN ($tinSql) AND kind <> 'event' AND COALESCE(forum_label,'')<>'' GROUP BY forum_label");
     $bindTiers($sp); $sp->execute();
     foreach ($sp->fetchAll() as $r) $cParent[hub_reconcile_cat_key((string)$r['forum_label'])] = ($cParent[hub_reconcile_cat_key((string)$r['forum_label'])] ?? 0) + (int)$r['n'];
 
     $cLeaf = []; // parent_key . "\0" . leaf_slug => count
     $sl = $db->prepare("SELECT forum_label, subforum_label, count(*) n FROM discovery.content_item
-                         WHERE tier IN ($tinSql) AND COALESCE(subforum_label,'')<>'' GROUP BY forum_label, subforum_label");
+                         WHERE tier IN ($tinSql) AND kind <> 'event' AND COALESCE(subforum_label,'')<>'' GROUP BY forum_label, subforum_label");
     $bindTiers($sl); $sl->execute();
     foreach ($sl->fetchAll() as $r) {
         $pk = hub_reconcile_cat_key((string)$r['forum_label']);
@@ -535,8 +536,10 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
     // -- Author: multi-select, by name (across both worlds); OR within --
     if (!empty($filters['authors'])) {
         $ph = [];
-        foreach ($filters['authors'] as $i => $a) { $ph[] = ":ha$i"; $binds[":ha$i"] = $a; }
-        $and[] = 'u.author_name IN (' . implode(',', $ph) . ')';
+        // Case-insensitive (Ian 2026-06-10: typing "dan erlewine" must match
+        // "Dan Erlewine" — the exact IN produced 0 posts for a found author).
+        foreach ($filters['authors'] as $i => $a) { $ph[] = "LOWER(:ha$i)"; $binds[":ha$i"] = $a; }
+        $and[] = 'LOWER(u.author_name) IN (' . implode(',', $ph) . ')';
     }
 
     return [$and, $binds];
@@ -551,6 +554,12 @@ function hub_filter_where(array $filters, array $forum_cat_map, array $content_c
 
 function hub_mute_parse(): array
 {
+    // FACET MUTE RETIRED from filter surfaces (Ian 2026-06-11: "filters should
+    // be filter only"). Stored hub_mute cookies are IGNORED so nothing stays
+    // hidden with no control to unmute it; the serialize/toggle helpers below
+    // stay (harmless) for the dead mute_toggle URLs. Author-mutes (/me/mutes)
+    // are a separate member feature and unaffected.
+    return ['types' => [], 'cats' => [], 'leaves' => []];
     $types = []; $cats = []; $leaves = [];
     foreach (array_filter(explode(',', (string)($_COOKIE['hub_mute'] ?? ''))) as $tok) {
         $tok = trim($tok);

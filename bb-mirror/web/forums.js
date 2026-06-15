@@ -14,6 +14,149 @@
   // future rename) a one-line config change. Fallback matches the launch base.
   var FORUM_BASE = (window.LG_FORUM_BASE || '/forum').replace(/\/+$/, '');
 
+  // ── Shared composer image tray (desktop ≥641 only) ───────────────────────
+  // Out-of-body attachment tray = the SINGLE source of truth for bbp_media.
+  // Each uploaded image becomes a thumb with a ✕ that splices its id out of the
+  // composer's mediaIds array — fixing the old push-only / can't-delete bug
+  // (the array used to be append-only; deleting the inline preview was cosmetic).
+  // On mobile (≤640: Buck's fbStyleComposer drives ntm's hidden image button;
+  // lrs/lcp sheets own replies) we keep the legacy inline-embed path byte-for-
+  // byte. The gate is evaluated LIVE per upload, so a desktop window narrowed
+  // past 641 also falls back cleanly. The tray DOM is created ONLY inside the
+  // desktop branch, so it can never collide with the mobile composer's own
+  // add-row, which is injected into this same editor.nextSibling slot.
+  var LG_TRAY_MQ = (function () {
+    try { return window.matchMedia('(min-width:641px)'); }
+    catch (e) { return { matches: false }; }
+  })();
+
+  // opts: { editorEl, mediaIds, statusEl, restBase, getNonce(cb), insertInline(url) }
+  // mediaIds MUST be mutated in place (push / splice / .length=0) and never
+  // reassigned — this helper closes over that same array instance. Returns
+  // { handler, reset }: wire handler as the Quill toolbar image handler; call
+  // reset() wherever the composer clears (it empties both the array and tray).
+  // BuddyBoss rejects webp/heic/heif/avif on media upload — catch them client-
+  // side with a clear message instead of a silent server 400. Supported set
+  // advertised to users (BB also allows bmp/svg, but those aren't worth listing).
+  var LG_IMG_UNSUPPORTED = /\.(webp|heic|heif|avif|tiff?)$/i;
+  var LG_IMG_SUPPORTED_TXT = 'JPG, PNG, or GIF';
+
+  function lgComposerTray(opts) {
+    var tray = null;
+    var hintEl = null;
+    // Persistent "supported types" line under the editor (desktop only — mobile's
+    // composer is Buck's fbStyleComposer; it hides hint lines anyway).
+    function mountHint() {
+      if (hintEl || !LG_TRAY_MQ.matches || !opts.editorEl || !opts.editorEl.parentNode) return;
+      hintEl = document.createElement('p');
+      hintEl.className = 'lg-mtray-hint';
+      hintEl.textContent = 'Supported images: JPG, PNG, GIF';
+      opts.editorEl.parentNode.insertBefore(hintEl, opts.editorEl.nextSibling);
+    }
+    function ensureTray() {
+      if (tray || !opts.editorEl || !opts.editorEl.parentNode) return tray;
+      tray = document.createElement('div');
+      tray.className = 'lg-mtray';
+      tray.hidden = true;
+      // Insert above the hint line so order reads: editor → tray → hint.
+      opts.editorEl.parentNode.insertBefore(tray, hintEl || opts.editorEl.nextSibling);
+      return tray;
+    }
+    function fail(msg) {
+      opts.statusEl.textContent = msg;
+      opts.statusEl.classList.add('lg-msg-error');
+    }
+    function syncEmpty() {
+      if (tray && !tray.querySelector('.lg-mtray__item')) {
+        tray.hidden = true;
+        tray.classList.remove('is-uploading');
+      }
+    }
+    function addThumb(url, id) {
+      var t = ensureTray();
+      if (!t) return;
+      t.hidden = false;
+      var item = document.createElement('span');
+      item.className = 'lg-mtray__item';
+      var img = document.createElement('img');
+      img.className = 'lg-mtray__img';
+      img.src = url; img.alt = '';
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'lg-mtray__rm';
+      rm.setAttribute('aria-label', 'Remove image');
+      rm.textContent = '✕';
+      rm.addEventListener('click', function () {
+        var ix = opts.mediaIds.indexOf(id);
+        if (ix > -1) opts.mediaIds.splice(ix, 1);
+        if (item.parentNode) item.parentNode.removeChild(item);
+        syncEmpty();
+      });
+      item.appendChild(img);
+      item.appendChild(rm);
+      t.appendChild(item);
+    }
+    function reset() {
+      opts.mediaIds.length = 0;
+      opts.statusEl.classList.remove('lg-msg-error');
+      if (tray) { tray.innerHTML = ''; tray.hidden = true; tray.classList.remove('is-uploading'); }
+    }
+    function handler() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        // Pre-flight: reject formats BB will refuse (webp/heic/…) up front, so
+        // the user gets a clear reason instead of a silent failed upload.
+        if (LG_IMG_UNSUPPORTED.test(file.name || '')) {
+          var ext = (file.name.split('.').pop() || 'that').toUpperCase();
+          fail(ext + ' images aren’t supported — please use ' + LG_IMG_SUPPORTED_TXT + '.');
+          return;
+        }
+        opts.getNonce(function (nonce) {
+          if (!nonce) { fail('You’re not signed in.'); return; }
+          var desk = LG_TRAY_MQ.matches;
+          var t = null;
+          if (desk) { t = ensureTray(); if (t) { t.hidden = false; t.classList.add('is-uploading'); } }
+          opts.statusEl.classList.remove('lg-msg-error');
+          opts.statusEl.textContent = 'Uploading image…';
+          var fd = new FormData();
+          fd.append('file', file);
+          fetch(opts.restBase + '/media/upload', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-WP-Nonce': nonce }, body: fd,
+          })
+            // Tolerate a non-JSON body (e.g. a 413 when the file is too large) so
+            // we show a real reason rather than a JSON parse error.
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: null }; }); })
+            .then(function (res) {
+              if (t) t.classList.remove('is-uploading');
+              if (!res.ok || !res.j || !res.j.upload_id) {
+                fail('Couldn’t add that image — supported types are ' + LG_IMG_SUPPORTED_TXT + ' (and it must not be too large).');
+                syncEmpty();
+                return;
+              }
+              opts.mediaIds.push(res.j.upload_id);
+              opts.statusEl.textContent = 'Image attached.';
+              var url = res.j.upload_thumb || res.j.upload;
+              if (desk) addThumb(url, res.j.upload_id);
+              else if (opts.insertInline) opts.insertInline(url);
+            })
+            .catch(function () {
+              if (t) t.classList.remove('is-uploading');
+              syncEmpty();
+              fail('Upload failed — check your connection and try a ' + LG_IMG_SUPPORTED_TXT + ' image.');
+            });
+        });
+      };
+      input.click();
+    }
+    mountHint();
+    return { handler: handler, reset: reset };
+  }
+
   // ── Text-size toggle (pill beside Compact) ───────────────────────────────
   // 3-state cycle: Normal → Large → Larger → Normal. Scales --lg-read-scale
   // (post/reply/card body copy only). Persists per browser; aria-pressed +
@@ -190,7 +333,9 @@
       iframe.className = 'fc-video';
       iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(id) + '?autoplay=1&rel=0&modestbranding=1';
       iframe.title = 'Video';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      // explicit `fullscreen` in allow: Safari/Firefox don't fold the legacy
+      // allowFullscreen attr into the permissions policy (Buck audit 6/11)
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen';
       iframe.allowFullscreen = true;
       iframe.referrerPolicy = 'strict-origin-when-cross-origin';
       iframe.style.cssText = 'position:absolute; inset:0; width:100%; height:100%; border:0; background:#000; z-index:5;';
@@ -238,11 +383,104 @@
     syncRailControls(railIsOpen());
   }
 
+  // Centered filters modal (Ian 2026-06-11): on the hub feed the side rail no
+  // longer renders — the "Filters" chip opens #hub-fmodal instead. Forum
+  // subpages have no modal, so the chip/hamburger keep the legacy nav toggle.
+  const fmodal = document.getElementById('hub-fmodal');
+  function fmodalSet(open) {
+    if (!fmodal) return;
+    fmodal.hidden = !open;
+    document.body.classList.toggle('hub-fmodal-lock', open);
+    syncRailControls(open);
+    if (open) {
+      var p = fmodal.querySelector('.hub-fmodal__panel');
+      if (p) p.focus();
+    }
+  }
+  // Filter clicks APPLY WITHOUT CLOSING (Ian 2026-06-11: pick several, modal
+  // only closes on the × or a click off it). The rail rows are plain server
+  // links (zero-JS fallback = navigate); here we fetch the target URL and
+  // swap, in place: the feed cards (keeping the .feed NODE alive so the
+  // pinned-columns + infinite-scroll observers survive), the modal body
+  // (fresh counts + on-states), the chip bar, and the sort-pill hrefs (so a
+  // later sort click keeps the picked filters). URL via replaceState so
+  // reload/share lands on the same filtered view. Any failure falls back to
+  // plain navigation.
+  function fmodalApply(href) {
+    var mbody = fmodal.querySelector('.hub-fmodal__body');
+    if (mbody) mbody.classList.add('is-loading');
+    fetch(href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var oldR = document.getElementById('hub-feed-results');
+        var newR = doc.getElementById('hub-feed-results');
+        if (oldR && newR) {
+          var oldF = oldR.querySelector('.feed'), newF = newR.querySelector('.feed');
+          if (oldF && newF) {
+            oldF.innerHTML = newF.innerHTML;
+            var oldM = oldR.querySelector('.feed-more'), newM = newR.querySelector('.feed-more');
+            if (oldM && newM) oldM.innerHTML = newM.innerHTML;
+            else if (oldM && !newM) oldM.parentNode.removeChild(oldM);
+            else if (!oldM && newM) oldF.insertAdjacentElement('afterend', document.importNode(newM, true));
+          } else {
+            oldR.innerHTML = newR.innerHTML;   // empty-state transitions
+          }
+          document.dispatchEvent(new CustomEvent('lg:hub-feed-swapped'));
+        }
+        var nb = doc.querySelector('.hub-fmodal__body');
+        if (mbody && nb) mbody.innerHTML = nb.innerHTML;
+        var oldC = document.querySelector('.hub-chipbar'), newC = doc.querySelector('.hub-chipbar');
+        if (oldC && newC) oldC.replaceWith(document.importNode(newC, true));
+        else if (oldC && !newC) oldC.remove();
+        else if (!oldC && newC) {
+          var bar = document.querySelector('.feed-sort-bar');
+          if (bar) bar.insertAdjacentElement('beforebegin', document.importNode(newC, true));
+        }
+        // Sort/Saved pills keep the new filter set (hrefs are server-built).
+        var newAs = {}, list = doc.querySelectorAll('.feed-sort-bar a');
+        for (var i = 0; i < list.length; i++) newAs[list[i].textContent.trim()] = list[i].getAttribute('href');
+        document.querySelectorAll('.feed-sort-bar a').forEach(function (a) {
+          var h = newAs[a.textContent.trim()];
+          if (h) a.setAttribute('href', h);
+        });
+        // Toolbar search forms carry filters as hidden inputs — refresh them.
+        ['q', 'author'].forEach(function (kind) {
+          var of = document.querySelector('.hub-tsearch--' + kind);
+          var nf = doc.querySelector('.hub-tsearch--' + kind);
+          if (!of || !nf) return;
+          of.querySelectorAll('input[type="hidden"]').forEach(function (n) { n.remove(); });
+          nf.querySelectorAll('input[type="hidden"]').forEach(function (n) {
+            of.insertBefore(document.importNode(n, true), of.firstChild);
+          });
+        });
+        try { history.replaceState({}, '', href); } catch (e) {}
+        if (mbody) mbody.classList.remove('is-loading');
+      })
+      .catch(function () { location.href = href; });
+  }
+  if (fmodal) {
+    fmodal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-hub-fmodal-close]')) { fmodalSet(false); return; }
+      var a = e.target.closest('a[href]');
+      var mbody = fmodal.querySelector('.hub-fmodal__body');
+      if (a && mbody && mbody.contains(a)) {
+        e.preventDefault();
+        fmodalApply(a.getAttribute('href'));
+      }
+    });
+    // No Esc close — Ian 2026-06-11: the modal closes ONLY via the × or a
+    // click off the panel (multi-select sessions shouldn't lose the dialog).
+  }
+
   if (ham) ham.addEventListener('click', toggleNav);
   document.addEventListener('click', function (e) {
-    if (e.target.closest && e.target.closest('.lg-filters-chip')) toggleNav();
+    if (e.target.closest && e.target.closest('.lg-filters-chip')) {
+      if (fmodal) { fmodalSet(fmodal.hidden); return; }
+      toggleNav();
+    }
   });
-  syncRailControls(railIsOpen());   // reflect initial state on the chip(s)
+  if (!fmodal) syncRailControls(railIsOpen());   // reflect initial state on the chip(s)
 
   if (overlay) {
     overlay.addEventListener('click', function () {
@@ -318,7 +556,28 @@
     // Moderator Trash on thread reply stubs (BB-style admin action, in-feed).
     // Reveal the trash controls when the viewer can moderate; the DELETE endpoint
     // re-checks caps server-side, so the UI gate is convenience, not security.
-    protoGetAuth(function (auth) { if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate'); });
+    protoGetAuth(function (auth) {
+      if (auth && auth.can_edit_others) feed.classList.add('feed--can-moderate');
+      // Own-reply edit/delete (Ian 2026-06-11): tag the viewer's own reply rows
+      // with .reply-stub--mine so CSS reveals their edit/trash. Covers lazily
+      // loaded threads (feed expand + the §4e modal drains) via a throttled
+      // observer; the server endpoint re-checks author-or-mod regardless.
+      var myUid = (auth && auth.wp_user_id) || 0;
+      if (myUid > 0) {
+        var markMine = function () {
+          document.querySelectorAll('.reply-stub[data-author-id="' + myUid + '"]:not(.reply-stub--mine)')
+            .forEach(function (s) { s.classList.add('reply-stub--mine'); });
+        };
+        markMine();
+        var queued = false;
+        try {
+          new MutationObserver(function () {
+            if (queued) return; queued = true;
+            requestAnimationFrame(function () { queued = false; markMine(); });
+          }).observe(document.body, { childList: true, subtree: true });
+        } catch (e) {}
+      }
+    });
 
     // Moderator Edit — inline rich editor on a thread reply stub (PUT /reply/{id};
     // topic/forum read from the card). Quill (same snow toolbar as the new-topic /
@@ -361,6 +620,11 @@
       var rseQuill = null, ta = null;
 
       // Image button → upload to BB media → inline embed (mirrors frmImageHandler).
+      // NB: rse is intentionally NOT on the out-of-body tray — unlike the other
+      // composers it does NOT strip <img> on save (an edited reply's images live
+      // inline in content_html and round-trip), so its inline images are already
+      // real, deletable editor content. A tray would pull them out of the saved
+      // HTML with no bbp_media to carry them. Leave rse on the inline path.
       function rseImageHandler() {
         var input = document.createElement('input');
         input.type = 'file'; input.accept = 'image/*';
@@ -441,10 +705,12 @@
         status.textContent = 'Saving…';
         protoGetAuth(function (auth) {
           if (!auth || !auth.nonce) { status.textContent = 'Not signed in.'; return; }
-          fetch(protoReplyBase + '/reply/' + id, {
+          // Our endpoint authorizes author-OR-moderator + hard-deletes (the native
+          // BuddyBoss DELETE is mods-only) — Ian 2026-06-11 own-reply edit/delete.
+          fetch('/bb-mirror-api/v0/reply', {
             method: 'PUT', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
-            body: JSON.stringify({ id: id, topic_id: topicId, forum_id: forumId || undefined, content: html }),
+            body: JSON.stringify({ reply_id: id, content: html }),
           })
             .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
             .then(function (res) {
@@ -466,8 +732,10 @@
       protoGetAuth(function (auth) {
         if (!auth || !auth.nonce) { alert('Not signed in.'); return; }
         t.disabled = true;
-        fetch(protoReplyBase + '/reply/' + id, {
-          method: 'DELETE', credentials: 'same-origin', headers: { 'X-WP-Nonce': auth.nonce },
+        fetch('/bb-mirror-api/v0/reply', {
+          method: 'DELETE', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': auth.nonce },
+          body: JSON.stringify({ reply_id: id }),
         })
           .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
           .then(function (res) {
@@ -526,7 +794,7 @@
       // CPT / content cards CLICK THROUGH to the full post (Ian 6/6). Real links +
       // controls work; a bare-area click navigates to the post.
       if (card.classList.contains('feed-card--content')) {
-        if (ev.target.closest('a, button, input, textarea, label, select, [data-comments], .feed-card__compact-expand')) return;
+        if (ev.target.closest('a, button, input, textarea, label, select, [data-comments], .feed-card__compact-expand, .lg-card-actions')) return;
         var href = card.getAttribute('data-href');
         if (href) window.location.href = href;
         return;
@@ -826,6 +1094,10 @@
     return null;
   }
 
+  // Discussion-body YouTube/Vimeo plays FREE for everyone — Ian 2026-06-11
+  // ("don't gate youtube videos in discussions"; overrules the earlier
+  // no-free-video rule for member-pasted links). Looth's OWN paywalled
+  // content stays locked via the server-rendered teaser cards.
   function bbIframeEmbed(src) {
     var wrap = document.createElement('div');
     wrap.className = 'bb-embed bb-embed--video';
@@ -833,7 +1105,7 @@
     ifr.src = src;
     ifr.setAttribute('frameborder', '0');
     ifr.setAttribute('allowfullscreen', '');
-    ifr.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture');
+    ifr.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen');
     ifr.loading = 'lazy';
     wrap.appendChild(ifr);
     return wrap;
@@ -932,6 +1204,21 @@
       node.parentNode.replaceChild(frag, node);
     });
   }
+
+  // Close-filters button in the sidebar (Ian 2026-06-11) — mirrors the Filters
+  // pill: same body class + the same lg-nav-open persistence the pre-paint
+  // rail-state script reads, so pill/button/first-frame all agree.
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest && e.target.closest('[data-lg-nav-close]');
+    if (!c) return;
+    document.body.classList.add('nav-closed');
+    try { localStorage.setItem('lg-nav-open', '0'); } catch (err) {}
+  });
+
+  // Expose so the §4e discussion modal (separate IIFE) can embed provider URLs
+  // in its lazily-fetched OP body + reply thread — the load-time scan below only
+  // sees static page content, never the modal's injected HTML.
+  window.bbProcessEmbeds = bbProcessEmbeds;
 
   // Initial scan of any rendered bodies present at load (single-topic pages).
   document.querySelectorAll('.post__body, .feed-card__full-body[data-loaded]').forEach(bbProcessEmbeds);
@@ -1043,40 +1330,20 @@
       });
     }
 
-    // Image button → file picker → upload to BB → track id + show inline preview.
-    function ntmImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        ntmStatus.textContent = 'Uploading image…';
-        var fd = new FormData();
-        fd.append('file', file);
-        fetch(ntmRestBase + '/media/upload', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'X-WP-Nonce': ntmNonce },
-          body: fd,
-        })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) {
-              ntmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error');
-              return;
-            }
-            ntmMediaIds.push(res.j.upload_id);
-            ntmStatus.textContent = 'Image attached.';
-            // Inline preview in the editor so the user sees it (stripped on submit;
-            // the real image is stored as BB media and rendered by the mirror).
-            var range = ntmQuill.getSelection(true);
-            ntmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { ntmStatus.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // Image button → file picker → upload to BB → tray thumb (desktop) or inline
+    // preview (mobile legacy). See lgComposerTray. ntmMediaIds = source of truth.
+    var ntmTray = lgComposerTray({
+      editorEl: ntmEditorEl,
+      mediaIds: ntmMediaIds,
+      statusEl: ntmStatus,
+      restBase: ntmRestBase,
+      getNonce: function (cb) { cb(ntmNonce); },
+      insertInline: function (url) {
+        var range = ntmQuill.getSelection(true);
+        ntmQuill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
+    function ntmImageHandler() { ntmTray.handler(); }
 
     // ── Forum radio-list helpers (single-select; replaces the native <select>) ─
     function ntmGetForum() {
@@ -1105,9 +1372,13 @@
       document.body.classList.add('ntm-active');
       var ntmAnonChk = document.getElementById('ntm-anon-check');
       if (ntmAnonChk) ntmAnonChk.checked = false;   // anon toggle defaults off per post (Phase 1)
-      if (ntmAuthState === 'idle') {
+      // Retry auth whenever we're NOT already authed (idle/anon/loading). A single
+      // transient auth.php failure used to flip state to 'anon' and, because the
+      // guard only retried on 'idle', wedge the composer in Sign-in for the whole
+      // page session even for a logged-in member (Buck 2026-06-11).
+      if (ntmAuthState !== 'authed') {
         ntmLoadAuth(overrideForumId);
-      } else if (ntmAuthState === 'authed' && overrideForumId) {
+      } else if (overrideForumId) {
         ntmSetForum(overrideForumId);
       }
       setTimeout(ntmFocusEntry, 50);
@@ -1128,8 +1399,14 @@
 
     function ntmLoadAuth(overrideForumId) {
       ntmSetState('loading');
-      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject('auth ' + r.status); })
+      // Timeout so a hung auth.php doesn't strand the composer in 'loading'
+      // forever — it falls to 'anon', which the open-guard above will retry.
+      var ntmTimeout = new Promise(function (_, reject) { setTimeout(function () { reject('timeout'); }, 8000); });
+      Promise.race([
+        fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject('auth ' + r.status); }),
+        ntmTimeout,
+      ])
         .then(function (data) {
           if (!data.authenticated) { ntmSetState('anon'); return; }
           ntmNonce = data.nonce;
@@ -1163,6 +1440,22 @@
     if (ntmOpen) ntmOpen.addEventListener('click', function () { ntmShowOverlay(null); });
     ntmCancel.addEventListener('click', ntmHideOverlay);
     ntmBackdrop.addEventListener('click', ntmHideOverlay);
+
+    // ── Composer deep-link: /hub/?compose[=<forum-slug>] ────────────────────
+    // Off-hub surfaces (front-page What's-New CTAs) land here instead of the
+    // legacy WP new-post pages: the composer opens on arrival, preselected to
+    // the slug's forum when given (e.g. ?compose=suggestion-box-bug-reporting).
+    (function () {
+      var m = /[?&]compose(?:=([^&#]*))?(?:&|#|$)/.exec(location.search);
+      if (!m) return;
+      var slug = decodeURIComponent(m[1] || '');
+      var id = null;
+      if (slug && ntmForumList) {
+        var r = ntmForumList.querySelector('input[name="forum_id"][data-slug="' + slug.replace(/"/g, '') + '"]');
+        if (r) id = parseInt(r.value, 10);
+      }
+      ntmShowOverlay(id);
+    })();
 
     // ── Quick-add workflow tags (councilyes / weeklyyes) ─────────────────────
     // Each button toggles its tag in/out of the comma-separated #ntm-tags field.
@@ -1338,34 +1631,19 @@
       });
     }
 
-    // Image button → upload to BB media → track id + inline preview (mirrors ntm).
-    function frmImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        frmStatus.textContent = 'Uploading image…';
-        var fd = new FormData(); fd.append('file', file);
-        fetch(frmRestBase + '/media/upload', {
-          method: 'POST', credentials: 'same-origin',
-          headers: { 'X-WP-Nonce': frmNonce }, body: fd,
-        })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) {
-              frmStatus.textContent = 'Image upload failed: ' + ((res.j && res.j.message) || 'error'); return;
-            }
-            frmMediaIds.push(res.j.upload_id);
-            frmMediaPreviews.push(res.j.upload_thumb || res.j.upload);
-            frmStatus.textContent = 'Image attached.';
-            var range = frmQuill.getSelection(true);
-            frmQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { frmStatus.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+    var frmTray = lgComposerTray({
+      editorEl: frmEditorEl,
+      mediaIds: frmMediaIds,
+      statusEl: frmStatus,
+      restBase: frmRestBase,
+      getNonce: function (cb) { cb(frmNonce); },
+      insertInline: function (url) {
+        var range = frmQuill.getSelection(true);
+        frmQuill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
+    function frmImageHandler() { frmTray.handler(); }
 
     // Body HTML from Quill (or textarea), stripping preview <img> — the real
     // images ride along as bbp_media and are rendered by the mirror.
@@ -1377,7 +1655,7 @@
     }
 
     function frmResetEditor() {
-      frmMediaIds = [];
+      frmTray.reset();          // clears frmMediaIds (in place) + the tray thumbs
       frmMediaPreviews = [];
       if (frmQuill) frmQuill.setText('');
       else if (frmContent) frmContent.value = '';
@@ -1486,6 +1764,10 @@
           } else {
             frmAppendOptimistic(frmCard, frmName, content); // images come from frmMediaPreviews
           }
+          // Announce for surfaces with no .feed-card ancestor (discussion modal §4e).
+          try {
+            document.dispatchEvent(new CustomEvent('lg:reply-posted', { detail: { topicId: topicId } }));
+          } catch (err) {}
           frmResetEditor();
           frmSubmit.disabled = false;
           frmClose();
@@ -1604,27 +1886,19 @@
   // Rich-text reply editor (Quill + image upload), like the new-topic/feed-reply modals.
   var replyEditorEl = authed.querySelector('.reply-form__editor');
   var replyQuill = null, replyMediaIds = [];
-  function replyImageHandler() {
-    var input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*';
-    input.onchange = function () {
-      var file = input.files && input.files[0];
-      if (!file) return;
-      status.textContent = 'Uploading image…';
-      var fd = new FormData(); fd.append('file', file);
-      fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (!res.ok || !res.j.upload_id) { status.textContent = 'Image upload failed.'; return; }
-          replyMediaIds.push(res.j.upload_id);
-          status.textContent = 'Image attached.';
-          var range = replyQuill.getSelection(true);
-          replyQuill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-        })
-        .catch(function (err) { status.textContent = 'Upload error: ' + err.message; });
-    };
-    input.click();
-  }
+  // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+  var replyTray = lgComposerTray({
+    editorEl: replyEditorEl,
+    mediaIds: replyMediaIds,
+    statusEl: status,
+    restBase: restBase,
+    getNonce: function (cb) { cb(nonce); },
+    insertInline: function (url) {
+      var range = replyQuill.getSelection(true);
+      replyQuill.insertEmbed(range ? range.index : 0, 'image', url);
+    },
+  });
+  function replyImageHandler() { replyTray.handler(); }
   function replyInitEditor() {
     if (replyQuill || !replyEditorEl) return;
     if (typeof Quill === 'undefined') { if (textarea) textarea.hidden = false; replyEditorEl.style.display = 'none'; return; }
@@ -1732,27 +2006,11 @@
     // Quill (fallback to a plain textarea if the CDN didn't load)
     var quill = null, ta = null, editMediaIds = [];
     var qEl = box.querySelector('.post-edit__quill');
-    function editImageHandler() {
-      var input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*';
-      input.onchange = function () {
-        var file = input.files && input.files[0];
-        if (!file) return;
-        statusEl.textContent = 'Uploading image…';
-        var fd = new FormData(); fd.append('file', file);
-        fetch(restBase + '/media/upload', { method: 'POST', credentials: 'same-origin', headers: { 'X-WP-Nonce': nonce }, body: fd })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok || !res.j.upload_id) { statusEl.textContent = 'Image upload failed.'; return; }
-            editMediaIds.push(res.j.upload_id);
-            statusEl.textContent = 'Image attached.';
-            var range = quill.getSelection(true);
-            quill.insertEmbed(range ? range.index : 0, 'image', res.j.upload_thumb || res.j.upload);
-          })
-          .catch(function (err) { statusEl.textContent = 'Upload error: ' + err.message; });
-      };
-      input.click();
-    }
+    // editTray is constructed below, AFTER statusEl is declared (it's needed by
+    // the tray) — this wrapper is hoisted so the Quill toolbar config can point
+    // at it, and editTray is assigned before any image click can fire.
+    var editTray;
+    function editImageHandler() { editTray.handler(); }
     if (typeof Quill !== 'undefined') {
       quill = new Quill(qEl, { theme: 'snow', bounds: qEl, modules: { toolbar: {
         container: [
@@ -1770,6 +2028,19 @@
 
     var statusEl = box.querySelector('.post-edit__status');
     var saveBtn  = box.querySelector('.post-edit__save');
+
+    // Image button → upload to BB media → tray thumb (desktop) / inline (mobile).
+    editTray = lgComposerTray({
+      editorEl: qEl,
+      mediaIds: editMediaIds,
+      statusEl: statusEl,
+      restBase: restBase,
+      getNonce: function (cb) { cb(nonce); },
+      insertInline: function (url) {
+        var range = quill.getSelection(true);
+        quill.insertEmbed(range ? range.index : 0, 'image', url);
+      },
+    });
 
     function teardown(restoreBody) {
       box.remove();
@@ -2099,7 +2370,16 @@
       body: JSON.stringify({ post_type: pt, item_id: id, slug: slug, _wpnonce: nonce })
     })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok) renderChips(bar, j.counts || {}, j.mine); })
+      .then(function (j) {
+        if (!j || !j.ok) return;
+        // Update EVERY bar for this target, not just the clicked one — the
+        // discussion modal clones the card's topic bar (§4e), and the card
+        // and modal must always show the same numbers (Ian 2026-06-11).
+        var sel = '.fcr[data-post-type="' + pt + '"][data-item-id="' + id + '"]';
+        [].forEach.call(document.querySelectorAll(sel), function (b) {
+          renderChips(b, j.counts || {}, j.mine);
+        });
+      })
       .catch(function () {});
   }
 
@@ -2345,4 +2625,539 @@
         .catch(function () { if (status) status.textContent = 'Network error.'; send.disabled = false; });
     });
   });
+})();
+
+
+/* ─── §4e. Desktop discussion modal (bespoke-cutover, Ian 2026-06-10) ─────────
+   "Only modals for discussions": on desktop (>=641) a tap on a discussion
+   card's title / excerpt / cover / replies control opens a centered modal:
+   the OP (lazy ?body= full text, excerpt as instant placeholder) + the SAME
+   one-deep nested thread the in-feed expand uses (?replies= — reply reactions
+   and the ↪ @parent prefix come server-rendered). Built as IN-PAGE DOM, not
+   an iframe: the document-delegated handlers (reaction picker §4d, read-more,
+   reply modal) keep working inside it, and there is no page chrome — so no
+   breadcrumbs. Esc / ✕ / backdrop close. Mobile (<=640) keeps its sheet. */
+(function () {
+  var BASE = (window.LG_FORUM_BASE || '').toString().replace(/\/+$/, '');
+  var modal = null;
+
+  function deskt() {
+    try { return window.matchMedia('(min-width:641px)').matches; } catch (e) { return false; }
+  }
+  function ensure() {
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'lg-dmodal';
+    modal.hidden = true;
+    modal.innerHTML =
+      '<div class="lg-dmodal__back" data-dm-close></div>' +
+      '<div class="lg-dmodal__panel" role="dialog" aria-modal="true" aria-label="Discussion">' +
+        '<header class="lg-dmodal__head">' +
+          '<h2 class="lg-dmodal__title"></h2>' +
+          '<button type="button" class="lg-dmodal__size" aria-label="Modal size" title="Modal size"></button>' +
+          '<button type="button" class="lg-dmodal__x" data-dm-close aria-label="Close">&times;</button>' +
+        '</header>' +
+        '<div class="lg-dmodal__scroll feed-page">' +
+          '<div class="lg-dmodal__op"></div>' +
+          '<div class="lg-dmodal__replies"></div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function (e) {
+      if (e.target.closest('[data-dm-close]')) close();
+    });
+    // 3 panel sizes (Ian): S / M / L, cycled from the head, persisted per device.
+    var SIZES = ['s', 'm', 'l'];
+    function getSize() { try { var v = localStorage.getItem('lg-dmodal-size'); return SIZES.indexOf(v) > -1 ? v : 'm'; } catch (e) { return 'm'; } }
+    function applySize(sz) {
+      var p = modal.querySelector('.lg-dmodal__panel');
+      SIZES.forEach(function (x) { p.classList.remove('lg-dmodal--' + x); });
+      p.classList.add('lg-dmodal--' + sz);
+      modal.querySelector('.lg-dmodal__size').textContent = sz.toUpperCase();
+    }
+    applySize(getSize());
+    modal.querySelector('.lg-dmodal__size').addEventListener('click', function () {
+      var next = SIZES[(SIZES.indexOf(getSize()) + 1) % SIZES.length];
+      try { localStorage.setItem('lg-dmodal-size', next); } catch (e) {}
+      applySize(next);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && modal && !modal.hidden) close();
+    });
+    return modal;
+  }
+  function close() {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+  // The ?replies= endpoint pages 5 at a time (its .replies-loadmore button
+  // carries the next offset). The modal shows the WHOLE thread: walk the
+  // pages server-side style, replacing the button with the fetched rows.
+  function drain(t, tid, depth) {
+    if (depth > 20) return;
+    var btn = t.querySelector('.replies-loadmore');
+    if (!btn) { reconcileCount(t, tid); return; }
+    var off = btn.getAttribute('data-offset') || '';
+    var srt = btn.getAttribute('data-sort') || '';
+    btn.remove();
+    fetch(BASE + '/?replies=' + encodeURIComponent(tid) + '&offset=' + encodeURIComponent(off) + (srt ? '&sort=' + encodeURIComponent(srt) : ''), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) {
+        if (!html) { reconcileCount(t, tid); return; }
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        while (tmp.firstChild) t.appendChild(tmp.firstChild);
+        fbRows(t, tid);
+        if (window.bbProcessEmbeds) window.bbProcessEmbeds(t);   // embed provider links in drained pages
+        drain(t, tid, depth + 1);
+      })
+      .catch(function () {});
+  }
+
+  // The modal shows the WHOLE rendered thread — that count is the truth the
+  // user can see. Push it back onto the card's reply-count displays so the
+  // two never disagree (Ian 2026-06-11: "numbers must jive"); covers stale
+  // mirrored reply_count AND replies posted from inside the modal (the
+  // in-feed optimistic path can't see the modal composer).
+  function reconcileCount(t, tid) {
+    var n = t.querySelectorAll('.reply-stub').length;
+    if (!n) return;
+    var ctl = document.querySelector('.fc-facepile[data-topic-id="' + tid + '"]');
+    var card = ctl && ctl.closest('.feed-card');
+    if (!card) {
+      var exp0 = document.querySelector('.feed-card__expand[data-topic-id="' + tid + '"]');
+      card = exp0 && exp0.closest('.feed-card');
+    }
+    if (!card) return;
+    var word = n === 1 ? 'reply' : 'replies';
+    var fc = card.querySelector('.fc-facepile__count');
+    if (fc) fc.textContent = n + ' ' + word;
+    var exp = card.querySelector('.feed-card__expand');
+    if (exp) exp.innerHTML = 'View ' + n + ' ' + word + ' ▼';
+  }
+
+  // Social-style comment rows (Ian): each reply's reactions + Reply button sit
+  // together in one row UNDER the comment body. The per-reply buttons get the
+  // topic/forum ids stamped on them — in the modal there is no .feed-card
+  // ancestor for frmOpen to source them from.
+  function fbRows(t, tid) {
+    var fid = (t.closest('#lg-dmodal') && (document.querySelector('#lg-dmodal .lg-dmodal__act') || {}).getAttribute)
+      ? (document.querySelector('#lg-dmodal .lg-dmodal__act').getAttribute('data-forum-id') || '') : '';
+    [].forEach.call(t.querySelectorAll('.reply-stub'), function (stub) {
+      if (stub.getAttribute('data-lg-fbrow')) return;
+      stub.setAttribute('data-lg-fbrow', '1');
+      var row = document.createElement('div');
+      row.className = 'lg-dmodal__acts';
+      var fcr = stub.querySelector('.fcr');
+      var rb = stub.querySelector('.reply-stub__reply');
+      if (fcr) row.appendChild(fcr);
+      if (rb) {
+        rb.setAttribute('data-topic-id', tid);
+        rb.setAttribute('data-forum-id', fid);
+        row.appendChild(rb);
+      }
+      if (!row.childNodes.length) return;
+      var bodyEl = stub.querySelector('.reply-stub__body, .reply-stub__excerpt');
+      var col = bodyEl ? bodyEl.parentElement : stub;
+      col.appendChild(row);
+    });
+  }
+
+  function open(card) {
+    var tid = card.getAttribute('data-topic-id') ||
+      (card.querySelector('.feed-card__expand') || { getAttribute: function () { return null; } }).getAttribute('data-topic-id');
+    if (!tid) return;
+    var m = ensure();
+    var titleEl = card.querySelector('.fc-title, .feed-card__title');
+    m.querySelector('.lg-dmodal__title').textContent = titleEl ? titleEl.textContent.trim() : 'Discussion';
+    // forum_id is stamped on the card's reply CTA / composer, not the card itself.
+    var fidEl = card.querySelector('[data-forum-id]');
+    var fid = card.getAttribute('data-forum-id') || (fidEl && fidEl.getAttribute('data-forum-id')) || '';
+
+    // OP: author meta cloned off the card + full body (?body=; excerpt placeholder).
+    var op = m.querySelector('.lg-dmodal__op');
+    op.innerHTML = '';
+    var meta = document.createElement('div'); meta.className = 'lg-dmodal__meta';
+    var av = card.querySelector('.fc-avatar'); if (av) meta.appendChild(av.cloneNode(true));
+    var mw = document.createElement('div'); mw.className = 'lg-dmodal__meta-id';
+    var au = card.querySelector('.fc-author'); if (au) mw.appendChild(au.cloneNode(true));
+    var tm = card.querySelector('.fc-time'); if (tm) mw.appendChild(tm.cloneNode(true));
+    meta.appendChild(mw);
+    op.appendChild(meta);
+    var body = document.createElement('div'); body.className = 'lg-dmodal__body';
+    var ex = card.querySelector('.feed-card__op-excerpt, .fc-excerpt');
+    body.innerHTML = ex ? ex.innerHTML : '';
+    op.appendChild(body);
+    // FB-style: the actions live UNDER the post (Ian). Reply goes through the
+    // canonical composer (frm §4b, delegated on [data-frm-open]).
+    var opacts = document.createElement('div');
+    opacts.className = 'lg-dmodal__opacts';
+    opacts.innerHTML = '<button type="button" class="lg-dmodal__act feed-card__reply-cta" data-frm-open' +
+      ' data-topic-id="' + tid + '" data-forum-id="' + fid + '">&#8617; Reply</button>';
+    // React to the OP itself (Ian 2026-06-11): clone the card's topic reaction
+    // bar — same target, same store; §4d's delegated handlers work on the
+    // clone and doReact mirrors counts to every bar for the target, so the
+    // card and the modal can never disagree.
+    var cardBar = card.querySelector('.fc-actions .fcr');
+    if (cardBar) {
+      var opBar = cardBar.cloneNode(true);
+      var opPal = opBar.querySelector('.fcr-palette');
+      if (opPal) opPal.hidden = true;
+      opacts.insertBefore(opBar, opacts.firstChild);
+    }
+    // Delete the post — author (viewer wp_user_id === card's data-author-id) OR
+    // moderator (can_edit_others). Server (api/v0/reply.php DELETE {topic_id})
+    // re-checks the cap. Coord 2026-06-15: desktop-modal parity with the mobile sheet.
+    (function () {
+      var opAuthorId = parseInt(card.getAttribute('data-author-id'), 10) || 0;
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
+      del.setAttribute('aria-label', 'Delete this post');
+      del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
+      opacts.appendChild(del);
+      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (a) {
+          if (!a || !a.authenticated) return;
+          var mine = opAuthorId && a.wp_user_id && parseInt(a.wp_user_id, 10) === opAuthorId;
+          if (!mine && !a.can_edit_others) return;
+          del.hidden = false;
+          del.addEventListener('click', function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            if (!a.nonce) { alert('Not signed in.'); return; }
+            if (!window.confirm('Delete this post? This removes the discussion and its replies and can’t be undone.')) return;
+            del.disabled = true;
+            fetch('/bb-mirror-api/v0/reply', {
+              method: 'DELETE', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+              body: JSON.stringify({ topic_id: parseInt(tid, 10) })
+            })
+              .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
+              .then(function (res) {
+                if (res.s === 401) { del.disabled = false; alert('Please sign in.'); return; }
+                if (res.s === 403) { del.disabled = false; alert('You can only delete your own posts.'); return; }
+                if (!res.ok) { del.disabled = false; alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+                var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
+                try { card.remove(); } catch (e) {}
+              })
+              .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
+          });
+        }).catch(function () {});
+    })();
+    op.appendChild(opacts);
+    fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) {
+        if (html && html.trim()) {
+          body.innerHTML = html;
+          // Embed provider URLs (YouTube/Vimeo/IG/X) in the OP body, same as the
+          // single-topic page does — ?body= ships raw content_html (Ian 2026-06-11).
+          if (window.bbProcessEmbeds) window.bbProcessEmbeds(body);
+        }
+      })
+      .catch(function () {});
+
+    // Thread: nested one-deep + reply reactions, straight off the shared endpoint.
+    m.dataset.topicId = String(tid);
+    var rep = m.querySelector('.lg-dmodal__replies');
+    rep.innerHTML = '<div class="lg-dmodal__note">Loading replies…</div>';
+    loadThread(tid);
+
+    m.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Thread (re)loader — used on open and to LIVE-refresh after a reply posts
+  // from inside the modal (the composer has no .feed-card ancestor here, so
+  // the in-feed optimistic insert can't see the modal). Keeps the current
+  // thread on screen until the fresh HTML lands.
+  function loadThread(tid) {
+    var rep = modal && modal.querySelector('.lg-dmodal__replies');
+    if (!rep) return;
+    fetch(BASE + '/?replies=' + encodeURIComponent(tid), { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+      .then(function (html) {
+        rep.innerHTML = '<div class="feed-card__replies-full lg-rshow lg-dmodal__thread"></div>';
+        var t = rep.firstChild;
+        t.innerHTML = html;
+        if (!t.querySelector('.reply-stub')) {
+          rep.innerHTML = '<div class="lg-dmodal__note">No replies yet. Be the first to reply.</div>';
+          return;
+        }
+        fbRows(t, tid);
+        if (window.bbProcessEmbeds) window.bbProcessEmbeds(t);   // embed provider links in replies
+        drain(t, tid, 0);
+      })
+      .catch(function () {
+        rep.innerHTML = '<div class="lg-dmodal__note">Couldn’t load replies right now.</div>';
+      });
+  }
+
+  // The canonical composer announces successful posts; refresh in place when
+  // the modal is open on that topic.
+  document.addEventListener('lg:reply-posted', function (e) {
+    if (!modal || modal.hidden) return;
+    var tid = modal.dataset.topicId || '';
+    var posted = e.detail && e.detail.topicId;
+    if (tid && posted && String(posted) === tid) loadThread(tid);
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!deskt()) return;
+    if (!e.target.closest) return;
+    if (e.target.closest('#lg-dmodal')) return;            // clicks inside self-handle
+    var card = e.target.closest('.feed-card--topic');
+    if (!card || e.target.closest('.feed-card--content')) return;
+    // The replies-count controls ALWAYS open the modal; for everything else,
+    // real controls (reactions, read-more, composer, author links…) self-handle
+    // and only title/excerpt/cover taps open it.
+    // .lg-act-replies joins the always-open set (Buck 6/11): hub-polish wires it with
+    // stopPropagation, so this only catches the unwired window on a fresh infinite-
+    // scroll card — belt + suspenders, no double-open.
+    var viaReplies = e.target.closest('.feed-card__expand, .fc-facepile, .lg-act-replies');
+    if (!viaReplies) {
+      if (e.target.closest('button, input, textarea, iframe, .fcr, .fcr-palette, .lg-card-actions, [data-comments], .fc-composer, .reply-stub, .fc-cover--video, .feed-card__read-more, .fc-readmore, a[href*="/u/"]')) return;
+      if (!e.target.closest('.fc-title, .feed-card__title, .feed-card__op-excerpt, .fc-excerpt, .fc-cover, .feed-card__cover')) return;
+    }
+    e.preventDefault();
+    e.stopPropagation();   // beat the legacy inline-expand handlers
+    open(card);
+  }, true);
+})();
+
+/* ── §9 Pinned mosaic columns (desktop) ─────────────────────────────────────
+ * The mosaic was CSS multi-column (forums.css .feed{column-count}). Multicol
+ * REBALANCES the whole flow whenever anything changes height or count — every
+ * infinite-scroll append and every mid-feed insertion (sponsor cards) moved
+ * cards the user had already read into other columns ("the feed reorganizes
+ * and repeats itself", Ian 2026-06-11). Convert the feed to N fixed column
+ * buckets instead: each card is placed ONCE into the currently-shortest
+ * column and never moves again; new cards (infinite scroll) go to the
+ * shortest column at arrival. The column COUNT still comes from the CSS
+ * cascade (forums.css bands + any overlay override) via the computed
+ * column-count, so geometry stays CSS-owned — this module only pins.
+ * Stream layout (single reading column) is left on the CSS path untouched. */
+(function () {
+  'use strict';
+  var mqDesk = window.matchMedia('(min-width: 641px)');
+  var ord = 0, mo = null, bucketed = false, moving = false, rr = 0;
+
+  function feedEl() { return document.querySelector('.feed-page .feed'); }
+  function isStream() {
+    return (document.documentElement.getAttribute('data-lg-hublayout') || '') === 'stream';
+  }
+  function colCount(feed) {
+    // Read the value the CASCADE says (forums.css bands, overlay overrides).
+    // Multicol props are ignored by a flex container, so the declared count
+    // survives as a readable signal even while we're display:flex.
+    var n = parseInt(getComputedStyle(feed).columnCount, 10);
+    return (n >= 1 && n <= 8) ? n : 0;
+  }
+
+  function shortest(cols) {
+    var best = cols[0];
+    for (var i = 1; i < cols.length; i++) {
+      if (cols[i].offsetHeight < best.offsetHeight) best = cols[i];
+    }
+    return best;
+  }
+
+  // Deterministic sorts (new/old/hot — anything but random) read top-down, so
+  // shortest-column fill scrambles them: a load-more batch of OLDER cards pours
+  // into whichever column is shortest and ends up visually above newer cards
+  // next door ("Newest is out of order after load more", Ian 6/12). Round-robin
+  // keeps row bands in feed order and vertical position tracking recency.
+  // Random has no order to preserve — shortest-column keeps its bottoms even.
+  // No data-lg-sort attr (stale HTML) → legacy shortest-column fill.
+  function orderedSort(feed) {
+    var s = feed.getAttribute('data-lg-sort') || '';
+    return s !== '' && s !== 'random';
+  }
+
+  function place(card, cols, feed) {
+    if (!card.hasAttribute('data-lg-ord')) card.setAttribute('data-lg-ord', String(ord++));
+    if (orderedSort(feed)) { cols[rr % cols.length].appendChild(card); rr++; }
+    else shortest(cols).appendChild(card);
+  }
+
+  function unbucket(feed) {
+    if (!bucketed) return;
+    moving = true;
+    var cards = Array.prototype.slice.call(feed.querySelectorAll('.feed-card'));
+    cards.sort(function (a, b) {
+      // unstamped cards (late in-column insertions) sink to the end
+      function o(el) { var n = parseInt(el.getAttribute('data-lg-ord'), 10); return isNaN(n) ? 1e9 : n; }
+      return o(a) - o(b);
+    });
+    for (var i = 0; i < cards.length; i++) feed.appendChild(cards[i]);
+    var ws = feed.querySelectorAll('.feed-colw');
+    for (var j = 0; j < ws.length; j++) ws[j].remove();
+    feed.classList.remove('feed--pinned');
+    bucketed = false;
+    moving = false;
+  }
+
+  function bucket(feed) {
+    var n = colCount(feed);
+    if (!n || n < 2) { unbucket(feed); return; } // single column: CSS path is fine
+    moving = true;
+    var cards = Array.prototype.slice.call(feed.querySelectorAll('.feed-card'));
+    if (bucketed) {
+      cards.sort(function (a, b) {
+        // unstamped cards (late in-column insertions) sink to the end
+        function o(el) { var n = parseInt(el.getAttribute('data-lg-ord'), 10); return isNaN(n) ? 1e9 : n; }
+        return o(a) - o(b);
+      });
+      var old = feed.querySelectorAll('.feed-colw');
+      for (var k = 0; k < old.length; k++) old[k].remove();
+    }
+    var cols = [];
+    for (var i = 0; i < n; i++) {
+      var d = document.createElement('div');
+      d.className = 'feed-colw';
+      feed.appendChild(d);
+      cols.push(d);
+    }
+    feed.classList.add('feed--pinned');
+    rr = 0;   // fresh buckets → round-robin restarts at the left column
+    for (var c = 0; c < cards.length; c++) place(cards[c], cols, feed);
+    bucketed = true;
+    moving = false;
+  }
+
+  function liveCols(feed) {
+    return Array.prototype.slice.call(feed.querySelectorAll(':scope > .feed-colw'));
+  }
+
+  function apply() {
+    var feed = feedEl();
+    if (!feed) return;
+    if (!mqDesk.matches || isStream()) { unbucket(feed); return; }
+    bucket(feed);
+  }
+
+  function watch(feed) {
+    if (mo) return;
+    mo = new MutationObserver(function (muts) {
+      if (moving || !bucketed) return;
+      // A filters-modal apply replaces the feed's children wholesale (the
+      // column wrappers go with them) — rebuild the buckets from scratch.
+      if (!liveCols(feed).length) { bucket(feed); return; }
+      var cols = null;
+      for (var i = 0; i < muts.length; i++) {
+        var added = muts[i].addedNodes;
+        for (var j = 0; j < added.length; j++) {
+          var node = added[j];
+          // Only direct-child cards (infinite-scroll appends). Cards inserted
+          // INSIDE a column (sponsor afterend-insertions) are already placed.
+          if (node.nodeType === 1 && node.parentNode === feed &&
+              node.classList && node.classList.contains('feed-card')) {
+            if (!cols) cols = liveCols(feed);
+            if (cols.length) { moving = true; place(node, cols, feed); moving = false; }
+          }
+        }
+      }
+    });
+    mo.observe(feed, { childList: true });
+    // Empty-state transitions replace the .feed NODE itself — re-init on the
+    // swap event the filters modal dispatches.
+    document.addEventListener('lg:hub-feed-swapped', function () {
+      var f = feedEl();
+      if (!f) return;
+      if (mo) { mo.disconnect(); mo = null; }
+      bucketed = f.classList.contains('feed--pinned') && !!f.querySelector('.feed-colw');
+      apply();
+      watch(f);
+    });
+  }
+
+  function boot() {
+    var feed = feedEl();
+    if (!feed) return;
+    apply();
+    watch(feed);
+    var pend = null;
+    function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement; }
+    function recheck() {
+      clearTimeout(pend);
+      pend = setTimeout(function () {
+        // Entering video fullscreen resizes the viewport to monitor size; a
+        // re-bucket then MOVES the card hosting the player, which reloads the
+        // iframe and kicks the user out of fullscreen (Buck 6/11). Defer all
+        // layout work until fullscreen exits, then heal at the real size.
+        if (fsEl()) return;
+        var f = feedEl();
+        if (!f) return;
+        // Re-bucket only when the cascade's column count actually changed
+        // (band crossing / rail open) — a plain resize never reshuffles.
+        if (!mqDesk.matches || isStream()) { unbucket(f); return; }
+        var want = colCount(f);
+        var have = f.querySelectorAll(':scope > .feed-colw').length;
+        if (want !== have) bucket(f);
+      }, 150);
+    }
+    window.addEventListener('resize', recheck);
+    document.addEventListener('fullscreenchange', recheck);
+    document.addEventListener('webkitfullscreenchange', recheck);
+    // Layout toggle (gear: Mosaic <-> Stream) flips data-lg-hublayout live.
+    new MutationObserver(apply).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-lg-hublayout']
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+
+/* ── §10 Modal image lightbox (Ian 2026-06-11) ──────────────────────────────
+ * Any CONTENT image inside the discussion modal (OP body, reply photos)
+ * opens a full-screen lightbox — avatars, facepiles, reaction glyphs and
+ * emoji are excluded. img.php-resized images upgrade their w= param so the
+ * lightbox shows a sharper rendition than the modal's inline copy.
+ * Backdrop / × / Esc close the lightbox only (the modal stays open). */
+(function () {
+  'use strict';
+  var lb = null;
+
+  function ensure() {
+    if (lb) return lb;
+    lb = document.createElement('div');
+    lb.id = 'lg-imglb';
+    lb.hidden = true;
+    lb.innerHTML =
+      '<button type="button" class="lg-imglb__x" aria-label="Close image">&times;</button>' +
+      '<img class="lg-imglb__img" alt="">';
+    document.body.appendChild(lb);
+    lb.addEventListener('click', function () { lb.hidden = true; });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && lb && !lb.hidden) {
+        e.stopImmediatePropagation();   // eat the Esc — don't also close the modal
+        lb.hidden = true;
+      }
+    }, true);
+    return lb;
+  }
+
+  function fullSrc(img) {
+    var src = img.currentSrc || img.src || '';
+    // img.php proxy carries an explicit width — ask for a lightbox-size one
+    return src.replace(/([?&]w=)\d+/, '$11600');
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest) return;
+    var img = e.target.closest('#lg-dmodal img');
+    if (!img) return;
+    if (img.closest('.fc-avatar, .avatar-init, .fcr, .fc-facepile, .lg-dmodal__meta')) return;
+    if (img.classList.contains('emoji') || (img.width && img.width < 48)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var box = ensure();
+    box.querySelector('.lg-imglb__img').src = fullSrc(img);
+    box.hidden = false;
+  }, true);
 })();
