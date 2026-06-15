@@ -547,26 +547,13 @@
   var moveTimer = null;
   function onMapMove() { clearTimeout(moveTimer); moveTimer = setTimeout(refreshListFromMap, 350); }
 
-  // Default desktop view: most members are in the US, and a world-fit centers on the
-  // mid-Atlantic (empty within the 500mi cap → empty list). Center on the continental
-  // US on first load (unless the user already searched), re-asserting to beat the page's
-  // async world fitBounds. Mirrors the mobile layer's centerOnDefault.
-  function centerDefault() {
-    if (window.__lgddCentered || searched()) { window.__lgddCentered = true; return; }
-    var tries = 0;
-    (function tick() {
-      if (window.__lgddCentered || searched()) { window.__lgddCentered = true; return; }
-      var hasPins = false;
-      try { hasPins = (typeof pinMarkerBySlug !== 'undefined' && pinMarkerBySlug && Object.keys(pinMarkerBySlug).length > 0); } catch (e) {}
-      if (typeof dirMap !== 'undefined' && dirMap && dirMap.setView && hasPins) {
-        window.__lgddCentered = true;
-        var place = function () { try { if (!searched()) dirMap.setView([39.5, -98.5], 4, { animate: false }); } catch (e) {} };
-        place(); setTimeout(place, 500); setTimeout(place, 1100);
-        return;
-      }
-      if (++tries < 50) setTimeout(tick, 200);
-    })();
-  }
+  // FULL MAP on load (Ian 6/15): fit-to-all-pins / world extent — no auto-center on
+  // the US, no geolocation; the viewer's own pin is just another pin. We let the page's
+  // own fitBounds(all pins) stand and no longer override it. (The empty-list-at-world-
+  // zoom this used to dodge is handled by mapListQs: past the 500mi cap it drops the geo
+  // filter and the in-bounds pass keeps everything on screen = "all in view", Ian (a).)
+  // Kept as a no-op so the call site below stays valid; search still centers via the page.
+  function centerDefault() { window.__lgddCentered = true; }
 
   // ---------- rich pin popup (Feature: pin shows the member's real profile card) ----------
   // On popup open, swap the page's minimal popup for a clone of the member's actual list
