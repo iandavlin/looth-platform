@@ -180,6 +180,45 @@ if (!function_exists('bb_mirror_resolve_mentions')) {
     }
 }
 
+if (!function_exists('bb_mirror_paragraphs')) {
+    /**
+     * Display-time paragraph reconstruction for raw-newline content_html.
+     *
+     * The PG `content_html` column is MIXED: most rows carry <p> paragraphs, but a
+     * minority of legacy BuddyBoss imports are raw text with \r\n line breaks and
+     * NO block tags — those render as a "wall of text" because HTML collapses
+     * newlines to whitespace. This is a RENDER-time fix only: NOT a data migration
+     * and NOT the reverted sync-time wpautop. If the html already carries a
+     * block-level tag we return it untouched (covers the rows that are fine); a row
+     * with no newlines is left alone (nothing to rebuild). Otherwise blank-line-
+     * delimited blocks become <p> and remaining single newlines become <br>.
+     * Inline markup (already-resolved mentions, auto-linked URLs, <a>/<strong>/…)
+     * is preserved. Idempotent: re-running on its own output is a no-op (the <p>
+     * makes the block-tag guard trip).
+     */
+    function bb_mirror_paragraphs(string $html): string
+    {
+        if ($html === '') return $html;
+        // Already block-structured (incl. <br>) → leave it alone.
+        if (preg_match('#<(p|div|ul|ol|li|blockquote|h[1-6]|pre|table|figure|br)[\s/>]#i', $html)) {
+            return $html;
+        }
+        // No line breaks → single paragraph already; nothing to reconstruct.
+        if (strpos($html, "\n") === false && strpos($html, "\r") === false) {
+            return $html;
+        }
+        $norm = trim(str_replace(["\r\n", "\r"], "\n", $html));
+        if ($norm === '') return $html;
+        $out = '';
+        foreach (preg_split('/\n[ \t]*\n+/', $norm) as $block) {
+            $block = trim($block);
+            if ($block === '') continue;
+            $out .= '<p>' . str_replace("\n", "<br>\n", $block) . "</p>\n";
+        }
+        return $out !== '' ? $out : $html;
+    }
+}
+
 if (!function_exists('bb_mirror_format_snippet')) {
     /**
      * Teaser-safe formatted excerpt: resolves mentions + URLs (via
