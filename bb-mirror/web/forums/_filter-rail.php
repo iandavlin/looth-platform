@@ -50,7 +50,7 @@ function hub_query_params(): array
     if (!empty($f['leaves']))  $out['leaf']   = implode(',', $f['leaves']);
     if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
-    if (!empty($f['saved']))   $out['saved']  = 1;
+    if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
     return $out;
 }
 
