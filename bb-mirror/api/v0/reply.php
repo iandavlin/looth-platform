@@ -51,6 +51,39 @@ $body = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
 //    edit AND delete their own replies, no time limit, hard remove). The native
 //    BuddyBoss DELETE is moderators-only, so we own the policy here. ──────────
 if ($method === 'PUT' || $method === 'DELETE') {
+    // ── DELETE a whole TOPIC (the OP/post) — author-or-moderator, same policy as
+    //    replies (Ian 2026-06-15: delete-post in the modal, author + admin). The
+    //    bb-forum-author-delete mu-plugin maps delete_topic to an author-scoped
+    //    primitive; mods/admins delete others' via `moderate`. ──────────────────
+    if ($method === 'DELETE' && (int) ($body['reply_id'] ?? 0) <= 0 && (int) ($body['topic_id'] ?? 0) > 0) {
+        $topic_id_del = (int) $body['topic_id'];
+        if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
+            reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
+        }
+        if (!function_exists('bbp_get_topic_post_type')) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
+        }
+        $topic = get_post($topic_id_del);
+        if (!$topic || $topic->post_type !== bbp_get_topic_post_type()) {
+            reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Post not found.']);
+        }
+        // Author-or-moderator; author taken from the stored post (IDOR-proof), then
+        // the cap (author-scoped via the mu-plugin) is the authoritative gate.
+        $t_is_author = ((int) $topic->post_author === (int) $uid);
+        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
+        if ((!$t_is_author && !$t_is_mod) || !current_user_can('delete_topic', $topic_id_del)) {
+            reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only delete your own posts.']);
+        }
+        // Hard remove (Ian: not a tombstone). before_delete_post → bbp_deleted_topic
+        // → the bb→pg sync 'delete' drops the topic (and its replies) from the mirror.
+        $del = wp_delete_post($topic_id_del, true);
+        if (!$del) {
+            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Could not delete the post.']);
+        }
+        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_del, 'delete');
+        reply_out(200, ['ok' => true, 'status' => 'deleted', 'topic_id' => $topic_id_del]);
+    }
+
     $reply_id = (int) ($body['reply_id'] ?? 0);
     if ($reply_id <= 0) {
         reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
