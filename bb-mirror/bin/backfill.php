@@ -184,7 +184,7 @@ foreach ($forums as $f) {
         (int)$f->ID,
         (string)$f->post_name,
         decode_entities((string)$f->post_title),
-        bb_mirror_content_html((string)$f->post_content),  // decode->kses->wpautop (shared w/ materializers.php)
+        wp_kses_post(decode_entities((string)$f->post_content)),  // sanitize in (match materializers.php)
         (int)$f->post_parent ?: null,
         (int)$f->menu_order,
         first_group_id_from_meta($m['_bbp_group_ids'] ?? null),  // real link
