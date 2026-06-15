@@ -66,7 +66,7 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=200', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=199', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
@@ -122,7 +122,7 @@
     // Coarse pointers can rotate across the 640 split — give them both layers
     // (each self-gates at init); fine pointers load only the matching one.
     if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=12');
-    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=12');
+    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=11');
   }
 
   (function () {

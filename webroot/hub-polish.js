@@ -2661,11 +2661,7 @@
       '#looth-rep-sheet .lrs-op__body p{margin:0 0 8px}',
       '#looth-rep-sheet .lrs-op__body img{max-width:100%;height:auto;border-radius:12px}',
       '#looth-rep-sheet .lrs-op__body a{color:var(--lg-sage-d,#6b7c52)}',
-      '#looth-rep-sheet .lrs-op__acts{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 0 2px;position:relative;border-top:1px solid var(--lg-line,#e6e8e2)}',
-      '#looth-rep-sheet .lrs-op__del{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--lg-mute,#6b6f6b);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:6px 9px;border-radius:8px}',
-      '#looth-rep-sheet .lrs-op__del:hover{background:rgba(193,51,51,.1);color:#c33}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__acts{border-top-color:#2c312d}',
-      'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:#80867d}',
+      '#looth-rep-sheet .lrs-op__acts{display:flex;align-items:center;gap:10px;padding:10px 0 2px;position:relative}',
       // dark pass for the new pieces (the shell/bubbles/actions are already covered
       // by app-settings' dark style + the rules below)
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-grab::before{background:#3a403a}',
@@ -2905,55 +2901,15 @@
         if (!bars0[bi].closest('.reply-stub')) { cardBar = bars0[bi]; break; }
       }
     }
-    // OP action bar (Ian 2026-06-15: FB-style — all the OP's actions together in
-    // one row at the bottom of the post). Reaction bar (if any) on the left, the
-    // delete-post control on the right (author or moderator only).
-    var acts = document.createElement('div');
-    acts.className = 'lrs-op__acts';
     if (cardBar) {
+      var acts = document.createElement('div');
+      acts.className = 'lrs-op__acts';
       var opBar = cardBar.cloneNode(true);
       var opPal = opBar.querySelector('.fcr-palette');
       if (opPal) opPal.hidden = true;
       acts.appendChild(opBar);
+      op.appendChild(acts);
     }
-    if (tid) {
-      // Delete the whole post — shown when the viewer is the author (viewer
-      // wp_user_id === the card's data-author-id) OR a moderator (can_edit_others).
-      // Server (api/v0/reply.php DELETE {topic_id}) re-checks the cap regardless.
-      var opAuthorId = parseInt(card.getAttribute('data-author-id'), 10) || 0;
-      var del = document.createElement('button');
-      del.type = 'button'; del.className = 'lrs-op__del'; del.hidden = true;
-      del.setAttribute('aria-label', 'Delete this post');
-      del.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg><span>Delete</span>';
-      acts.appendChild(del);
-      lrsGetAuth(function (a) {
-        if (!a || !a.authenticated) return;
-        var mine = opAuthorId && a.wp_user_id && parseInt(a.wp_user_id, 10) === opAuthorId;
-        if (!mine && !a.can_edit_others) return;
-        del.hidden = false;
-        del.addEventListener('click', function (ev) {
-          ev.preventDefault(); ev.stopPropagation();
-          if (!a.nonce) { alert('Not signed in.'); return; }
-          if (!window.confirm('Delete this post? This removes the discussion and its replies and can’t be undone.')) return;
-          del.disabled = true;
-          fetch('/bb-mirror-api/v0/reply', {
-            method: 'DELETE', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
-            body: JSON.stringify({ topic_id: tid })
-          })
-            .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
-            .then(function (res) {
-              if (res.s === 401) { del.disabled = false; alert('Please sign in.'); return; }
-              if (res.s === 403) { del.disabled = false; alert('You can only delete your own posts.'); return; }
-              if (!res.ok) { del.disabled = false; alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
-              lrsClose();
-              try { card.remove(); } catch (e) {}
-            })
-            .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
-        });
-      });
-    }
-    if (acts.children.length) op.appendChild(acts);
     if (!tid) return;
     var base = (window.LG_FORUM_BASE || '/forum').toString().replace(/\/+$/, '');
     fetch(base + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })

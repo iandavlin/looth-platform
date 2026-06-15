@@ -16,6 +16,19 @@ and your charter (`cutover/lanes/lane-<you>.md`) before touching anything.
   but: **NEVER use `wp user delete` for test cleanup — tear down test users with direct SQL only.**
   Same warning on live. Make scratch users in a throwaway DB, or clean up by SQL, never via WP hooks.
 
+## ⚠️ COMMIT ROUTING — where YOUR commits go (incident 2026-06-15: brothers clobbering `main` + each other)
+- **Each lane commits to ITS OWN branch — NEVER `main`.** Hub = `bespoke-cutover`. Every other lane =
+  its own `lane-<name>` branch (create one if you don't have it). Commit small by pathspec, push **only
+  your branch**, report the SHA to the coordinator. Your work is not lost — it's on your branch.
+- **`main` is PRODUCTION — the cut tracks it. DO NOT push to `main`.** Only the **coordinator**
+  consolidates lane branches → `main`, deliberately + audited (the A.2 pattern: merge in a clean
+  throwaway worktree, gates GREEN, fast-forward only, tag a `pre-*` rollback anchor first). A lane
+  pushing straight to `main` is what broke this — `main` jumped commits behind everyone's back.
+- **Do NOT push to shared branches you didn't create** (`dev-snapshot-*`, `handoff-*`). Not yours.
+- **`cutover/lanes/HANDOFF.md` has ONE owner — the coordinator.** Do NOT co-edit it; concurrent edits
+  clobber. Got an update? *Report it* to the coordinator; don't touch the file.
+- **No push without Ian's review** (present commits + diffstat). Gates green first. This is absolute.
+
 ## 1. Stay in your lane
 - Edit ONLY the paths your charter lists as yours. Everything else is **READ-ONLY**:
   other lanes' `/srv` apps, the bb-mirror worktree, `/var/www` WP, `/etc/nginx`, `tools/gates/run-all.sh`.

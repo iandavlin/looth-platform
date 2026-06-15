@@ -111,6 +111,14 @@ dev2 + retest there (the real cut box), then the post-cut re-sweep + GSC sitemap
 - **Reindex archive-poc AFTER the URL flip** (else bakes `dev2`).
 - **SEO redirects must be `301`, not `302`** — 302 keeps Google on the OLD URL (no equity transfer).
 - **Overlay deploys go LIVE→git, never reverse** (don't cp the stale `hub-overlay-flag` fork over live).
+- **⚠️ AVOID DEPLOYING A STALE OVERLAY (forward, to dev2/live):** `hub-overlay-flag/*.js` in git is a
+  *snapshot* of dev1's live `/var/www/dev/*.js` and **drifts** (buck/anyone hot-edits live). Before
+  `cp hub-overlay-flag/* → <target>/var/www/dev/`, **RE-CAPTURE from live dev1 first** (or `cmp` each
+  file vs dev1's live copy and re-fold any that differ) — else you ship an old overlay. Fold currency
+  as of this handoff: **hub-polish.js / pwa.js = v200 (6/15)**; treat anything older in `pwa.js`'s `?v=`
+  as the canary. Same rule for `directory-*.js`, `mobile-hub.*`, `app-*.js`, `sponsor-cards.js`.
+- **Don't merge the snapshot branch wholesale** (`dev-snapshot-2026-06-15` holds mixed multi-lane WIP +
+  the dev2-config branch) — cherry-pick individual files to `main` deliberately, never `git merge` it.
 - **`≥641`-only CSS leaks onto mobile** (shared card markup) — ship the `≤640` complement same change.
 - **Conversion re-run = duplicate post** (must be idempotent). **No secrets in `.well-known`.**
 - **`wp user delete` = cross-store NUKE** — direct SQL only. **loothtool = out of scope.**
