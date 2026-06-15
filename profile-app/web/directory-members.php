@@ -442,6 +442,21 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     zoomToMember(main);
   });
+  // The pin popup renders the SAME card outside #dir-results, so the delegation above
+  // doesn't reach its Connect/Message buttons — wire them here (the card link is a
+  // plain <a> and navigates to the profile on its own). Scoped to .dir-pin-card so it
+  // never double-handles sidebar clicks (those stopPropagation in the handler above).
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.leaflet-popup.dir-pin-card')) return;
+    const cbtn = e.target.closest('.dir-connect');
+    if (cbtn) { e.preventDefault(); e.stopPropagation(); dirHandleConnect(cbtn); return; }
+    const mbtn = e.target.closest('.dir-msg');
+    if (mbtn) {
+      e.preventDefault(); e.stopPropagation();
+      const u = mbtn.dataset.msgUuid;
+      if (u) document.dispatchEvent(new CustomEvent('lg:open-dm', { detail: { uuid: u } }));
+    }
+  });
 });
 
 async function loadPage(page, append) {
