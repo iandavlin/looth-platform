@@ -126,9 +126,20 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
         if (is_array($terms)) {
             foreach ($terms as $t) {
                 if (!is_object($t)) continue;
+                /* post_tag chips link to the Hub search (live filter over the
+                   unified feed), NOT the WP /tag/<slug>/ archive. The Hub reads
+                   ?q= as a free-text query, so search by the human NAME — it
+                   matches feed content better than a hyphenated slug. Other
+                   taxonomies (shared_category, article-type, series) keep their
+                   WP term archives via get_term_link(). */
+                if ((string) $tax === 'post_tag') {
+                    $url = '/hub/?q=' . urlencode((string) $t->name);
+                } else {
+                    $url = (string) (get_term_link($t) ?: '#');
+                }
                 $tags[] = [
                     'name' => (string) $t->name,
-                    'url'  => (string) (get_term_link($t) ?: '#'),
+                    'url'  => $url,
                     'tax'  => (string) $tax,
                 ];
             }
@@ -324,7 +335,7 @@ if ($variant === 'sponsor') {
 <?php if ($tier_terms): ?>
 <?= $ind ?>    <div class="lg-post-header__eyebrow">
 <?php foreach ($tier_terms as $tier): ?>
-<?= $ind ?>      <a class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>" href="<?= Renderer::attr($tier['url']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></a>
+<?= $ind ?>      <span class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></span>
 <?php endforeach; ?>
 <?= $ind ?>    </div>
 <?php endif; ?>
@@ -332,7 +343,7 @@ if ($variant === 'sponsor') {
 <?php elseif ($tier_terms): ?>
 <?= $ind ?>  <div class="lg-post-header__eyebrow lg-post-header__eyebrow--static">
 <?php foreach ($tier_terms as $tier): ?>
-<?= $ind ?>    <a class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>" href="<?= Renderer::attr($tier['url']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></a>
+<?= $ind ?>    <span class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></span>
 <?php endforeach; ?>
 <?= $ind ?>  </div>
 <?php endif; ?>
@@ -398,7 +409,7 @@ if ($variant === 'sponsor') {
 <?php if ($tier_terms): ?>
 <?= $ind ?>    <div class="lg-post-header__eyebrow">
 <?php foreach ($tier_terms as $tier): ?>
-<?= $ind ?>      <a class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>" href="<?= Renderer::attr($tier['url']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></a>
+<?= $ind ?>      <span class="lg-post-header__chip lg-post-header__chip--tier lg-post-header__chip--tier--<?= Renderer::attr($tier['slug']) ?>"><?= htmlspecialchars((string) $tier['name'], ENT_QUOTES, 'UTF-8') ?></span>
 <?php endforeach; ?>
 <?= $ind ?>    </div>
 <?php endif; ?>
