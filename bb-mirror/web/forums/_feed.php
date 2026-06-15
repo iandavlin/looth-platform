@@ -1512,7 +1512,7 @@ $header_cat = $scoped_forum
     ?>
     <article class="feed-card feed-card--topic" data-lg-card="1"
              data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-gated="0"
-             data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-reply-count="<?= $reply_count ?>">
+             data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>" data-reply-count="<?= $reply_count ?>">
       <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
             $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>
       <?php /* aria-label: the avatar <a> has no text content (image/initials only) —
