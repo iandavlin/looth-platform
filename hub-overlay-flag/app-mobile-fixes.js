@@ -25,6 +25,10 @@
   (function () {
     try {
       if (!window.matchMedia('(max-width:640px)').matches) return;
+      // Guitardle is the one phone-friendly surface down there — its standalone
+      // page has a pinned-keyboard mobile layout, and the Hub teaser layer links
+      // straight to it. Let it through (Buck 6/12).
+      if (/^\/archive-poc\/guitardle(\/|$)/.test(location.pathname || '')) return;
       if (/^\/archive(-poc)?(\/|$)/.test(location.pathname || '')) {
         location.replace('/hub/');
       }

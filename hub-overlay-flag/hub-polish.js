@@ -752,10 +752,13 @@
       var avatar = head.querySelector('.avatar-init, .avatar-init--img');
       var author = head.querySelector('.reply-stub__author');
       var time = head.querySelector('.reply-stub__time');
-      // Capture the native reply button's reply-to id (for nested posting) before
-      // we drop the head, since canonical carries it there.
+      // Capture the native reply button's reply-to id + author (for nested posting
+      // and the composer's "Replying to:" pill) before we drop the head, since
+      // canonical carries them there.
       var nativeReply = head.querySelector('.reply-stub__reply');
       if (nativeReply && nativeReply.dataset.replyTo) stub.setAttribute('data-lg-replyto', nativeReply.dataset.replyTo);
+      if (nativeReply && nativeReply.dataset.replyToAuthor) stub.setAttribute('data-lg-replyto-author', nativeReply.dataset.replyToAuthor);
+      if (nativeReply && nativeReply.dataset.replyToSlug) stub.setAttribute('data-lg-replyto-slug', nativeReply.dataset.replyToSlug);
 
       var col = document.createElement('div'); col.className = 'lg-fb-col';
       var bubble = document.createElement('div'); bubble.className = 'lg-fb-bubble';
@@ -781,7 +784,7 @@
       if (head.parentNode) head.remove();
 
       like.addEventListener('click', function () { like.classList.toggle('is-on'); });
-      reply.addEventListener('click', function () { openReplyBox(col, author, stub); });
+      reply.addEventListener('click', function () { openReplyComposer(stub, author, col); });
 
       revealReplyImages(stub);
     } catch (e) {}
@@ -791,6 +794,39 @@
   function myAvatarSrc() {
     var img = document.querySelector('.lg-chrome__avatar img, .lg-chrome__account img');
     return img && (img.currentSrc || img.getAttribute('src')) || '';
+  }
+
+  // Reply to a COMMENT (Buck 2026-06-12): open the same pull-up composer sheet
+  // used for OP replies, with the context pill naming the comment's author, and
+  // post with reply_to so the reply nests under its parent. The old inline
+  // @-box (openReplyBox) stays as the fallback for stubs without a reply id
+  // (e.g. optimistic inserts) and any non-mobile edge.
+  function openReplyComposer(stub, author, col) {
+    var rid = parseInt(stub.getAttribute('data-lg-replyto') || '0', 10);
+    var aname = (stub.getAttribute('data-lg-replyto-author') || (author && author.textContent) || '').trim();
+    if (!rid || !window.matchMedia('(max-width:640px)').matches) { openReplyBox(col, author, stub); return; }
+    var sheet = stub.closest('#looth-rep-sheet');
+    if (sheet) {
+      openComposerSheet({
+        tid: sheet.getAttribute('data-tid'), fid: sheet.getAttribute('data-fid'),
+        replyTo: rid, replyToName: aname, focus: true
+      });
+      return;
+    }
+    // Feed-card teaser reply: open the discussion sheet behind the composer (both
+    // synchronously within the tap so iOS shows the keyboard) — the post-success
+    // thread reload then shows the new reply nested in place.
+    var card = stub.closest('.feed-card');
+    if (card) {
+      openRepliesSheet(card, { toReplies: true });
+      var sh = document.getElementById('looth-rep-sheet');
+      openComposerSheet({
+        tid: sh && sh.getAttribute('data-tid'), fid: sh && sh.getAttribute('data-fid'),
+        replyTo: rid, replyToName: aname, focus: true
+      });
+      return;
+    }
+    openReplyBox(col, author, stub);
   }
 
   // Inline reply box (Facebook-style) under a comment, @mentioning its author.
@@ -1199,7 +1235,17 @@
           '.lg-hub-search__cats{display:flex;gap:7px;flex-wrap:wrap;padding:11px 12px 5px}' +
           '.lg-hs-cat{display:inline-flex;align-items:center;background:var(--lg-sage-tint,#eef2e3);color:var(--lg-sage-d,#6b7c52);' +
           'border-radius:999px;padding:7px 12px;font:700 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;white-space:nowrap}' +
-          'html[data-lguser-theme="dark"] .lg-hs-cat{background:#243024;color:#b6c79a}';
+          'html[data-lguser-theme="dark"] .lg-hs-cat{background:#243024;color:#b6c79a}' +
+          '.lg-hs-tag{border:1px solid var(--lg-sage-3,#d4e0b8)}' +
+          'html[data-lguser-theme="dark"] .lg-hs-tag{border-color:#3a4a36}' +
+          '.lg-hub-search__go{display:flex;align-items:center;gap:9px;padding:12px;color:var(--lg-ink,#323532);' +
+          'font:600 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;' +
+          'border-top:1px solid var(--lg-line,#e3ddd0)}' +
+          '.lg-hub-search__cats+.lg-hub-search__go{border-top:0}' +
+          '.lg-hub-search__go svg{flex:0 0 auto;width:15px;height:15px;stroke:var(--lg-sage-d,#6b7c52)}' +
+          '.lg-hub-search__go b{font-weight:700}' +
+          'html[data-lguser-theme="dark"] .lg-hub-search__go{color:#d8dcd4;border-top-color:#33352f}' +
+          'html[data-lguser-theme="dark"] .lg-hub-search__go svg{stroke:#b6c79a}';
         (document.head || document.documentElement).appendChild(hcss);
       }
       var hubCats = null;
@@ -1216,26 +1262,82 @@
         if (out.length) hubCats = out;                       // cache once populated
         return out;
       }
-      function catPillsFor(q) {
-        var ql = q.toLowerCase().replace(/^#/, '');
+      // ── hashtag suggestions (Buck 2026-06-12: the # phrases already on posts
+      // are the intuitive way to filter — surface the matching ones at the TOP
+      // of the dropdown). Harvested live from the server-rendered card chips
+      // (a.fc-tag.tag-chip), whose hrefs already point at the /hub/?q=<tag>
+      // feed filter. Re-queried per render — infinite scroll keeps adding
+      // cards, so unlike harvestCats() this must NOT cache.
+      function harvestTags() {
+        var seen = {}, out = [];
+        var chips = document.querySelectorAll('a.fc-tag.tag-chip');
+        for (var i = 0; i < chips.length; i++) {
+          var label = (chips[i].textContent || '').trim();
+          if (!label) continue;
+          var key = label.toLowerCase().replace(/^[#@]/, '');
+          if (seen[key]) { seen[key].count++; continue; }
+          seen[key] = { label: label, href: chips[i].getAttribute('href'), count: 1 };
+          out.push(seen[key]);
+        }
+        out.sort(function (a, b) { return b.count - a.count; });
+        return out;
+      }
+      function matchHits(list, ql, getLabel) {
         var starts = [], contains = [];
-        harvestCats().forEach(function (c) {
-          var l = c.label.toLowerCase();
-          if (l.indexOf(ql) === 0) starts.push(c);
-          else if (l.indexOf(ql) > -1) contains.push(c);
+        list.forEach(function (x) {
+          var l = getLabel(x).toLowerCase().replace(/^[#@]/, '');
+          if (l.indexOf(ql) === 0) starts.push(x);
+          else if (l.indexOf(ql) > -1) contains.push(x);
         });
-        var hits = starts.concat(contains).slice(0, 6);
-        if (!hits.length) return null;
+        return starts.concat(contains);
+      }
+      // One pill row: matching hashtags FIRST, then matching categories,
+      // deduped by label, capped at 8. Pills navigate — they ARE filters.
+      function pillRowFor(q) {
+        var ql = q.toLowerCase().replace(/^[#@]/, '');
+        var tags = matchHits(harvestTags(), ql, function (t) { return t.label; }).slice(0, 6);
+        var cats = matchHits(harvestCats(), ql, function (c) { return c.label; });
+        var used = {}, pills = [];
+        tags.forEach(function (t) {
+          used[t.label.toLowerCase().replace(/^[#@]/, '')] = 1;
+          var disp = /^[@#]/.test(t.label) ? t.label : ('#' + t.label);
+          pills.push({ cls: 'lg-hs-cat lg-hs-tag', href: t.href, text: disp });
+        });
+        cats.forEach(function (c) {
+          if (used[c.label.toLowerCase()]) return;
+          pills.push({ cls: 'lg-hs-cat', href: c.href, text: '#' + c.label });
+        });
+        pills = pills.slice(0, 8);
+        if (!pills.length) return null;
         var row = document.createElement('div');
         row.className = 'lg-hub-search__cats';
-        hits.forEach(function (c) {
+        pills.forEach(function (p) {
           var a = document.createElement('a');
-          a.className = 'lg-hs-cat';
-          a.href = c.href;
-          a.textContent = '#' + c.label;
+          a.className = p.cls;
+          a.href = p.href;
+          a.textContent = p.text;
           row.appendChild(a);
         });
         return row;
+      }
+      // "Filter Hub by <word>" action row — applies the existing server-side
+      // full-text feed filter (/hub/?q=). Always offered while typing, so any
+      // word can filter the Hub even when nothing matches the suggest box.
+      function filterRowFor(q) {
+        var a = document.createElement('a');
+        a.className = 'lg-hub-search__go';
+        a.href = '/hub/?q=' + encodeURIComponent(q);
+        a.innerHTML = SEARCH_ICO.replace('lg-hub-search__ico', 'lg-hub-search__goico');
+        var t = document.createElement('span');
+        t.appendChild(document.createTextNode('Filter the Hub by “'));
+        var b = document.createElement('b'); b.textContent = q;
+        t.appendChild(b);
+        t.appendChild(document.createTextNode('”'));
+        a.appendChild(t);
+        return a;
+      }
+      function applyFilter(q) {
+        try { location.href = '/hub/?q=' + encodeURIComponent(q); } catch (e) {}
       }
 
       function position() {
@@ -1277,27 +1379,23 @@
           asContent();
         }
       }, true);
-      function note(msg) {
-        panel.innerHTML = '';
-        var n = document.createElement('div');
-        n.className = 'lg-hub-search__note';
-        n.textContent = msg;
-        panel.appendChild(n);
-        open();
-      }
-
       var timer = null, seq = 0;
-      function render(results, q) {
+      // pending=true → instant skeleton (pills + filter row) drawn on keystroke,
+      // before the suggest fetch returns; the full render replaces it.
+      function render(results, q, pending) {
         if (q !== input.value.trim()) return;     // stale: input moved on
-        var pills = catPillsFor(q);
-        if (!results.length && !pills) { note('No matches for “' + q + '”'); return; }
+        results = results || [];
+        var pills = pillRowFor(q);
         panel.innerHTML = '';
-        if (pills) panel.appendChild(pills);      // best-match categories on top
+        if (pills) panel.appendChild(pills);      // matching #tags + categories on top
+        panel.appendChild(filterRowFor(q));       // any word can filter the feed
         if (!results.length) {
-          var n0 = document.createElement('div');
-          n0.className = 'lg-hub-search__note';
-          n0.textContent = 'No posts match “' + q + '”';
-          panel.appendChild(n0);
+          if (!pending) {
+            var n0 = document.createElement('div');
+            n0.className = 'lg-hub-search__note';
+            n0.textContent = 'No posts match “' + q + '”';
+            panel.appendChild(n0);
+          }
           open();
           return;
         }
@@ -1332,6 +1430,7 @@
         var q = input.value.trim();
         clearTimeout(timer);
         if (q.length < 2) { seq++; close(); return; }
+        render(null, q, true);                     // instant pills + filter row
         timer = setTimeout(function () { query(q); }, 180);
       });
       input.addEventListener('focus', function () {
@@ -1339,7 +1438,23 @@
       });
       input.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') { input.value = ''; close(); input.blur(); }
+        // Enter = filter the feed by whatever was typed (the keyboard already
+        // shows a Search key via enterkeyhint). Empty + an active ?q= clears it.
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          var q = input.value.trim();
+          if (q.length >= 2) { applyFilter(q); return; }
+          try {
+            if (!q && new URLSearchParams(location.search).get('q')) location.href = '/hub/';
+          } catch (err) {}
+        }
       });
+      // Surface an already-applied keyword filter in the bubble so it's
+      // visible and editable (and clearable via empty + Enter).
+      try {
+        var activeQ = new URLSearchParams(location.search).get('q');
+        if (activeQ) input.value = activeQ;
+      } catch (err) {}
       // Close when tapping outside the bubble + panel.
       document.addEventListener('pointerdown', function (e) {
         if (!wrap.contains(e.target) && !panel.contains(e.target)) close();
@@ -2566,6 +2681,14 @@
       '#looth-rep-sheet .reply-stub{display:flex!important;gap:8px;align-items:flex-start;background:none!important;border:0!important;padding:0!important;margin:0 0 16px!important}',
       '#looth-rep-sheet .reply-stub .avatar-init,#looth-rep-sheet .reply-stub .avatar-init--img{width:32px;height:32px;border-radius:50%;flex:0 0 auto;font-size:13px;overflow:hidden}',
       '#looth-rep-sheet .reply-stub .avatar-init img{width:100%;height:100%;object-fit:cover;display:block}',
+      // Nested sub-replies (Buck 2026-06-12): the thread fragment orders children
+      // directly under their parent and tags them reply-stub--child — indent them
+      // FB-style with a smaller avatar so they read as a stacked sub-thread.
+      // (Must follow the flattener rule above: same specificity, later wins.)
+      '#looth-rep-sheet .reply-stub.reply-stub--child{margin:0 0 14px 38px!important}',
+      '#looth-rep-sheet .reply-stub--child .avatar-init,#looth-rep-sheet .reply-stub--child .avatar-init--img{width:26px;height:26px;font-size:11px}',
+      '#looth-rep-sheet .reply-stub__reply-to{color:var(--lg-sage-d,#6b7c52);font-weight:600;font-size:12.5px}',
+      'html[data-lguser-theme="dark"] #looth-rep-sheet .reply-stub__reply-to{color:#9cb37d}',
       '#looth-rep-sheet .lg-fb-col{display:flex;flex-direction:column;min-width:0;flex:1 1 auto;align-items:flex-start}',
       '#looth-rep-sheet .lg-fb-bubble{background:var(--lguser-bubble,#eceff3);border-radius:16px;padding:8px 13px;max-width:100%}',
       '#looth-rep-sheet .lg-fb-name{display:block;font-weight:700;font-size:13.5px;color:var(--lg-charcoal,#1a1d1a);text-decoration:none;margin:0 0 1px}',
@@ -3144,15 +3267,21 @@
   function openComposerSheet(o) {
     o = o || {};
     var sh = ensureCompSheet();
-    sh.__lcpCtx = { tid: parseInt(o.tid, 10) || 0, fid: parseInt(o.fid, 10) || 0 };
+    // Rebuilt fresh on EVERY open — replyTo from a comment-reply open can never
+    // leak into a later OP-reply open (and vice versa).
+    sh.__lcpCtx = {
+      tid: parseInt(o.tid, 10) || 0, fid: parseInt(o.fid, 10) || 0,
+      replyTo: parseInt(o.replyTo, 10) || 0, replyToName: (o.replyToName || '').trim()
+    };
     var av = sh.querySelector('#lcp-av'); var avs = lrsViewerAvatar();
     av.innerHTML = avs ? '<img src="' + avs.replace(/"/g, '&quot;') + '" alt="">' : '';
     var nameEl = sh.querySelector('#lcp-name');
     nameEl.textContent = 'You';
     lrsGetAuth(function (a) { if (a && a.display_name) nameEl.textContent = a.display_name; });
     var ctx = sh.querySelector('#lcp-ctx');
-    var ttl = (o.title || '').trim();
-    if (ttl) { ctx.hidden = false; ctx.textContent = 'Replying to: ' + (ttl.length > 34 ? ttl.slice(0, 33) + '…' : ttl); }
+    // Replying to a comment → name the comment's author; otherwise the topic title.
+    var who = sh.__lcpCtx.replyTo ? (sh.__lcpCtx.replyToName || 'a comment') : (o.title || '').trim();
+    if (who) { ctx.hidden = false; ctx.textContent = 'Replying to: ' + (who.length > 34 ? who.slice(0, 33) + '…' : who); }
     else { ctx.hidden = true; }
     var ta = sh.querySelector('#lcp-input');
     ta.value = ''; ta.style.height = 'auto';
@@ -3173,6 +3302,9 @@
   function closeComposerSheet() {
     var sh = document.getElementById('looth-comp-sheet');
     if (sh) sh.classList.remove('is-open');
+    // belt-and-braces vs the per-open rebuild: a closed sheet can't hold a stale
+    // comment target
+    if (sh && sh.__lcpCtx) sh.__lcpCtx.replyTo = 0;
   }
   function lcpSubmit(sh) {
     var ta = sh.querySelector('#lcp-input'), post = sh.querySelector('#lcp-post'), status = sh.querySelector('#lcp-status');
@@ -3183,7 +3315,9 @@
       if (!a || !a.authenticated) { status.textContent = 'Sign in to reply.'; post.disabled = false; return; }
       var payload = { topic_id: tid, content: text ? '<p>' + lrsEsc(text).replace(/\n/g, '<br>') + '</p>' : '' };
       if (ctx.fid) payload.forum_id = ctx.fid;
+      if (ctx.replyTo) payload.reply_to = ctx.replyTo;   // nest under the comment being replied to
       if (lcpMediaIds.length) payload.bbp_media = lcpMediaIds.slice();
+      var wasNested = !!ctx.replyTo;
       fetch(LRS_REPLY_BASE + '/reply', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
@@ -3192,12 +3326,28 @@
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           if (!res.ok) { status.textContent = (res.j && (res.j.message || res.j.code)) || 'Could not post.'; post.disabled = false; return; }
+          var newId = (res.j && (res.j.reply_id || res.j.id)) || 0;
           closeComposerSheet();
           // live-refresh the discussion modal if it's open on this topic
           var rs = document.getElementById('looth-rep-sheet');
           if (rs && rs.classList.contains('is-open') && parseInt(rs.getAttribute('data-tid'), 10) === tid) {
             lrsLoadThread(tid);
-            var b = rs.querySelector('#lrs-body'); if (b) setTimeout(function () { b.scrollTop = b.scrollHeight; }, 600);
+            var b = rs.querySelector('#lrs-body');
+            if (b && wasNested && newId) {
+              // The thread sorts newest TOP-LEVEL first, so a nested reply can land
+              // anywhere — poll for its stub (batches stream in via lrsLoadAll) and
+              // center it; fall back to the bottom if it never shows (e.g. held
+              // for moderation).
+              var tries = 0;
+              (function find() {
+                var el = rs.querySelector('#lrs-thread .reply-stub[data-reply-id="' + newId + '"]');
+                if (el) { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { el.scrollIntoView(); } return; }
+                if (++tries > 30) { b.scrollTop = b.scrollHeight; return; }
+                setTimeout(find, 200);
+              })();
+            } else if (b) {
+              setTimeout(function () { b.scrollTop = b.scrollHeight; }, 600);
+            }
           }
         })
         .catch(function () { status.textContent = 'Network error.'; post.disabled = false; });
@@ -4048,4 +4198,38 @@
   }
   document.addEventListener("fullscreenchange", onChange, false);
   document.addEventListener("webkitfullscreenchange", onChange, false);
+})();
+
+/* ── No pinch / double-tap zoom on the mobile Hub (Buck, 2026-06-11) ──
+   The Hub is an app surface; page zoom makes it feel like a web page.
+   Mobile-only (<=640), desktop untouched. Three layers because engines
+   differ in what they honor:
+   - viewport meta maximum-scale=1 + user-scalable=no (Android Chrome / TWA)
+   - touch-action: pan-x pan-y on html/body — blocks pinch AND double-tap
+     zoom in Chromium while leaving panning alone, so feed scroll and the
+     pull-up-sheet drag handlers are unaffected
+   - gesturestart/gesturechange preventDefault (iOS Safari ignores
+     user-scalable=no since iOS 10; this is the only lever it respects) */
+(function () {
+  if (!window.matchMedia('(max-width:640px)').matches) return;
+  var m = document.querySelector('meta[name="viewport"]');
+  if (!m) {
+    m = document.createElement('meta');
+    m.setAttribute('name', 'viewport');
+    document.head.appendChild(m);
+  }
+  m.setAttribute('content', 'width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no');
+  var st = document.createElement('style');
+  st.id = 'lg-hub-nozoom';
+  st.textContent = 'html,body{touch-action:pan-x pan-y}';
+  document.head.appendChild(st);
+  ['gesturestart', 'gesturechange'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false });
+  });
+  // Last-resort belt: kill any 2-finger move at the event level. Catches engines
+  // that ignore the meta/touch-action levers (Samsung Internet's force-zoom
+  // default, iOS Safari). One-finger scroll + sheet drags are untouched.
+  document.addEventListener('touchmove', function (e) {
+    if (e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
 })();

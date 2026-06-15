@@ -187,7 +187,15 @@
         if (entries[i].isIntersecting) { loadMore(); break; }
       }
     }, { rootMargin: '0px 0px ' + PRELOAD + 'px 0px' });
-    io.observe(document.getElementById(SENTINEL_ID));
+    // Arm AFTER the first paint settles (load + idle): an 18-card first page
+    // is shorter than the preload runway, so observing immediately fetched
+    // page 2 DURING initial render and competed with LCP (craft gate /
+    // lighthouse, Ian 6/12). Same seamless scroll — the fetch just yields to
+    // first paint. Manual button + online-retry paths below are unaffected.
+    var armIO = function () { var el = document.getElementById(SENTINEL_ID); if (el && io) io.observe(el); };
+    var armIdle = function () { (window.requestIdleCallback || function (f) { setTimeout(f, 800); })(armIO); };
+    if (document.readyState === 'complete') armIdle();
+    else window.addEventListener('load', armIdle, { once: true });
 
     // Delegated: a manual button click also appends via AJAX (survives the
     // innerHTML swaps) instead of doing a full-page navigation.

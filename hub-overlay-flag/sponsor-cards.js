@@ -4,9 +4,11 @@
  * Cards" placement Buck + Ian greenlit from the 2026-06-11 sponsors deck
  * (hub-styles/sponsors-deck.html → dev.loothgroup.com/sponsors-deck/).
  *
- * - One sponsor card after every Nth organic feed card (N below), rotating
- *   through the five sponsors; rotation start is randomized per pageload so
- *   the same sponsor doesn't always lead.
+ * - One sponsor card after every Nth organic feed card — N scales with the
+ *   mosaic column count (6 per column) so it's ~one ad per screenful on phone
+ *   AND desktop. Rotation cycles the five sponsors in insertion order;
+ *   rotation start is randomized per pageload so the same sponsor doesn't
+ *   always lead.
  * - Real production logo assets from wp-content/uploads; whole card links to
  *   the sponsor's /sponsors/<slug>/ page. On mobile the existing
  *   sponsor-sheet.js interceptor catches that link and opens the app-style
@@ -23,7 +25,7 @@
   window.__lgSponsorCards = true;
   if (!/^\/hub(\/|$)/.test(location.pathname)) return;
 
-  var EVERY = 6; // one sponsor card after every 6 organic cards
+  var EVERY = 6; // organic cards per ad PER COLUMN (×column-count in reflow)
 
   var SPONSORS = [
     { slug: 'total-vise', name: 'Total Vise',
@@ -115,23 +117,81 @@
     return el;
   }
 
-  /* ---------- insertion: after every Nth ORGANIC card, idempotent ----------
+  /* ---------- insertion: every Nth ORGANIC card, idempotent ----------
    * Only insert at anchors fully BELOW the viewport: inserting at or above
    * where the user currently is shoves the content they're reading (the other
    * half of Buck's "things jump around"). Slots the user has already scrolled
    * past just stay empty for this pageload — never reclaimed, never a jump.
-   * New infinite-scroll cards always arrive below the fold, so they qualify. */
+   * New infinite-scroll cards always arrive below the fold, so they qualify.
+   *
+   * Density (Buck 2026-06-11: "3 Total Vise ads in one view"): EVERY=6 was
+   * tuned for the ONE-column phone feed. The desktop mosaic shows 3-4 columns
+   * at once, so a fixed interval puts 3-5 ads in a single viewport — scale the
+   * interval by the mosaic's column count (forums.css/hub-polish keep the
+   * .feed column-count bands as the signal even when the canonical re-bucketer
+   * has flattened it to flex) → ~one ad per screenful at every width.
+   *
+   * Idempotency is a marker on the ANCHOR card (data-lg-sponsored), not a
+   * next-sibling check: the canonical mosaic re-bucketer physically moves
+   * cards between column wrappers on resize, which shuffles siblings and let
+   * the old check re-insert — and the old position-keyed rotation could then
+   * repeat the SAME sponsor. Rotation is now keyed to insertion order, so
+   * consecutive ads always cycle through all five sponsors. */
+  function colCount(feed) {
+    try {
+      var n = parseInt(getComputedStyle(feed).columnCount, 10);
+      if (n >= 1 && n <= 8) return n;
+    } catch (e) {}
+    return 1;
+  }
+
+  var inserted = 0; // rotation counter — consecutive ads never repeat a sponsor
+
   function reflow(feed) {
+    var every = EVERY * colCount(feed);
     var organic = feed.querySelectorAll('.feed-card:not(.lg-sponsor-card)');
     var fold = window.innerHeight || 800;
-    for (var i = EVERY - 1; i < organic.length; i += EVERY) {
+    var gap = 0; // organic cards (in current DOM order) since the last ad slot
+    for (var i = 0; i < organic.length; i++) {
       var anchor = organic[i];
-      var nxt = anchor.nextElementSibling;
-      if (nxt && nxt.classList && nxt.classList.contains('lg-sponsor-card')) continue;
+      if (anchor.hasAttribute('data-lg-sponsored')) { gap = 0; continue; }
+      gap++;
+      if (gap < every) continue;
       try {
-        if (anchor.getBoundingClientRect().top <= fold) continue;
-        var idx = (OFFSET + Math.floor(i / EVERY)) % SPONSORS.length;
-        anchor.insertAdjacentElement('afterend', cardEl(SPONSORS[idx]));
+        if (anchor.getBoundingClientRect().top <= fold) continue; // not below fold yet — first qualifying card takes the slot
+        anchor.setAttribute('data-lg-sponsored', '1');
+        var s = SPONSORS[(OFFSET + inserted++) % SPONSORS.length];
+        anchor.insertAdjacentElement('afterend', cardEl(s));
+        gap = 0;
+      } catch (e) {}
+    }
+    // re-bucketing can land two previously-spaced ads next to each other —
+    // drop the second of any adjacent pair (below the fold only: removing an
+    // on-screen card is exactly the jump this layer exists to avoid)
+    var pairs = feed.querySelectorAll('.lg-sponsor-card + .lg-sponsor-card');
+    for (var j = 0; j < pairs.length; j++) {
+      try {
+        if (pairs[j].getBoundingClientRect().top > fold) pairs[j].parentNode.removeChild(pairs[j]);
+      } catch (e) {}
+    }
+    // the SAME sponsor twice within a screen-height of itself (any column —
+    // a resize cycle re-inserts at the narrower width's spacing, and mosaic
+    // columns can put the pair side by side: Buck's "3 Total Vise in one
+    // view"). Drop the below-fold one; above-fold stays untouched.
+    var ads = feed.querySelectorAll('.lg-sponsor-card');
+    var seen = {}; // slug -> [viewport tops kept so far]
+    for (var k = 0; k < ads.length; k++) {
+      try {
+        var link = ads[k].querySelector('.lgsc-link');
+        var key = link ? link.getAttribute('href') : '';
+        var top = ads[k].getBoundingClientRect().top;
+        var kept = seen[key] || (seen[key] = []);
+        var clash = false;
+        for (var m = 0; m < kept.length; m++) {
+          if (Math.abs(kept[m] - top) < fold) { clash = true; break; }
+        }
+        if (clash && top > fold) ads[k].parentNode.removeChild(ads[k]);
+        else kept.push(top);
       } catch (e) {}
     }
   }

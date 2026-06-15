@@ -66,16 +66,28 @@
 
   if (onHub) {
     // Hub feed visual polish (app-card feed, desktop mosaic, action row …).
-    inject('looth-hub-polish-js', '/hub-polish.js?v=195', true);
+    inject('looth-hub-polish-js', '/hub-polish.js?v=199', true);
     // Hub infinite scroll (auto-append older feed items at the bottom).
     inject('looth-hub-infinite-js', '/hub-infinite.js?v=4');
     // Spotlight sponsor cards in the feed (Ian+Buck greenlight 2026-06-11).
-    inject('looth-sponsor-cards-js', '/sponsor-cards.js?v=3');
+    inject('looth-sponsor-cards-js', '/sponsor-cards.js?v=5');
     // Cover-image placeholder heights (scroll-jump mitigation, Buck 6/11).
     inject('looth-hub-nojump-js', '/hub-nojump.js?v=2', true);
     // Mobile Hub behaviors (≤640): killCompactOnMobile + long-press reactions.
     if (mobileish) inject('looth-mobile-hub-js', '/mobile-hub.js?v=3');
+    // "Play today's Guitardle" strip under the sort bar; opens the game in a
+    // pull-up sheet (mobile) / centered modal (desktop). Buck 6/12.
+    // DECOMMISSIONED for launch (Ian 6/12) — Guitardle is a fast-follow;
+    // re-enable this line to bring the Hub teaser back.
+    // idle('looth-gdle-teaser-js', '/guitardle-teaser.js?v=6');
   }
+
+  // Guitardle app-icon side art on the archive front page (stopgap until
+  // canonical buck/guitardle-polish 903addb merges; layer bails if merged).
+  // DECOMMISSIONED for launch (Ian 6/12) — fast-follow with the game block.
+  // if (PATH.indexOf('/archive-poc') === 0 || PATH.indexOf('/front-page') === 0) {
+  //   idle('looth-gdle-art-js', '/gdle-side-art.js?v=1');
+  // }
 
   // Marketplace shop bubble — ALL viewports/pages: the desktop pop-up modal plus
   // the site-wide loothtool.com nav-link interceptor (mobile → /shop/).
@@ -88,12 +100,12 @@
   inject('looth-tabbar-js', '/bottom-nav.js?v=21');
 
   if (mobileish) {
-    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=35');
+    inject('looth-mobile-fixes-js', '/app-mobile-fixes.js?v=36');
     // Tap-to-open sheets + push opt-in: needed soon, not needed for first paint.
     idle('looth-prac-sheet-js', '/practice-sheet.js?v=2');     // /p/<slug> business sheet
-    idle('looth-prof-sheet-js', '/profile-sheet.js?v=7');      // /u/ profile sheet
+    idle('looth-prof-sheet-js', '/profile-sheet.js?v=8');      // /u/ profile sheet
     idle('looth-msgr-js', '/messenger-sheet.js?v=1');          // DM pull-up
-    idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=2');      // sponsors sheet
+    idle('looth-spon-sheet-js', '/sponsor-sheet.js?v=11');      // sponsors sheet
     idle('looth-push-js', '/push.js?v=2');                     // self-gates mobile-coarse
   }
 
@@ -106,8 +118,8 @@
   if (onDir) {
     // Coarse pointers can rotate across the 640 split — give them both layers
     // (each self-gates at init); fine pointers load only the matching one.
-    if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=11');
-    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=9');
+    if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=12');
+    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=11');
   }
 
   (function () {
