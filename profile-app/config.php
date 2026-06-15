@@ -47,7 +47,15 @@ function looth_issue_bounce_if_needed(): void {
 $env = getenv('LG_PROFILE_APP_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
-    if (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, '.dev.loothgroup.com') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
+    // dev2 = the prod-candidate box (dev2.loothgroup.com / priv ip-172-31-47-205).
+    // Same stack as dev (WP at /var/www/dev, MariaDB `looth_import`) but its own
+    // host — must be matched BEFORE the bare 'live' fallthrough, else its
+    // dev2.loothgroup.com host is read as live and tier/cap lookups hit the
+    // nonexistent `looth_live` DB. At the cut this box becomes loothgroup.com
+    // and correctly resolves 'live'.
+    if (str_starts_with((string)$host, 'dev2.') || str_contains((string)$host, 'ip-172-31-47-205')) {
+        $env = 'dev2';
+    } elseif (str_starts_with((string)$host, 'dev.') || str_contains((string)$host, '.dev.loothgroup.com') || str_contains((string)$host, 'ip-172-31-81-87') || str_contains((string)$host, 'claude.loothgroup')) {
         $env = 'dev';
     } else {
         $env = 'live';
@@ -61,6 +69,14 @@ if ($env === 'live') {
     define('LG_PROFILE_APP_APP_ROOT',    '/srv/profile-app');
     define('LG_PROFILE_APP_PG_DSN',      'pgsql:host=/var/run/postgresql;dbname=profile_app');
     define('LG_PROFILE_APP_MYSQL_DB',    'looth_live');
+    define('LG_PROFILE_APP_MYSQL_BILLING_DB', 'lg_membership');
+} elseif ($env === 'dev2') {
+    // Prod-candidate box: identical stack to dev, only the host differs.
+    define('LG_PROFILE_APP_HOST',        'dev2.loothgroup.com');
+    define('LG_PROFILE_APP_WP_PATH',     '/var/www/dev');
+    define('LG_PROFILE_APP_APP_ROOT',    '/home/ubuntu/projects/profile-app');
+    define('LG_PROFILE_APP_PG_DSN',      'pgsql:host=/var/run/postgresql;dbname=profile_app');
+    define('LG_PROFILE_APP_MYSQL_DB',    'looth_import');
     define('LG_PROFILE_APP_MYSQL_BILLING_DB', 'lg_membership');
 } else {
     define('LG_PROFILE_APP_HOST',        'dev.loothgroup.com');

@@ -282,14 +282,8 @@ function bb_mirror_new_topic_modal(): void
         }
     }
 
-    // Same-origin (relative) so the composer's media/upload + reply fetches hit the
-    // CURRENT host — inherently cross-origin-safe, no host to get wrong. (Browser
-    // resolves these against the page origin, which is what we want on dev / dev2 /
-    // loothgroup.com alike.) LG_BB_MIRROR_HOST is now request-derived (config.php) so
-    // the loopback/server side self-resolves too; relative stays as the cleanest
-    // browser-side form. Was a band-aid for the dev2 cross-origin upload CORS block.
-    $rest_base = '/wp-json/buddyboss/v1';
-    $login_url = '/wp-login.php';
+    $rest_base = 'https://' . LG_BB_MIRROR_HOST . '/wp-json/buddyboss/v1';
+    $login_url = 'https://' . LG_BB_MIRROR_HOST . '/wp-login.php';
     ?>
 <div class="ntm-overlay" id="ntm-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="ntm-heading">
   <div class="ntm-backdrop" id="ntm-backdrop"></div>
@@ -400,11 +394,12 @@ function bb_mirror_new_topic_modal(): void
       <textarea class="ntm-textarea ntm-textarea--fallback" id="frm-content" name="content" rows="5"
                 placeholder="Share your thoughts…" hidden></textarea>
       <p class="ntm-paste-hint">Tip: paste a YouTube, Vimeo, or Instagram link on its own line to embed it.</p>
-      <?php /* Anonymous toggle REMOVED from replies 2026-06-10 (Ian: "we don't
-               want anon replies. Just anon posts.") — anon stays on the
-               new-TOPIC composer only. forums.js guards on the checkbox's
-               existence, so no _lg_anon ever rides a reply now; the API door
-               is closed server-side too (reply.php). */ ?>
+      <!-- Post anonymously (anon-rebuild lane): per-reply toggle, sends _lg_anon. -->
+      <label class="ntm-anon" for="frm-anon-check">
+        <input type="checkbox" class="ntm-anon__check" id="frm-anon-check" name="_lg_anon" value="1">
+        <span class="ntm-anon__tx">Reply anonymously
+          <span class="ntm-anon__hint">— your name &amp; avatar are hidden from other members</span></span>
+      </label>
       <div class="ntm-row">
         <button type="submit" class="ntm-submit" id="frm-submit">Post reply</button>
         <button type="button" class="ntm-cancel" id="frm-cancel">Cancel</button>
@@ -504,42 +499,24 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ?><!doctype html>
 <html lang="en">
 <head>
-<?php /* legacy hub-theme + compact pre-paint appliers REMOVED 2026-06-10
-         (bespoke-cutover two-mode pare-back): color is Light/Dark via the gear
-         (applied pre-paint by the nginx boot script); compact view retired. */ ?>
+<script>/* color theme (Default/Panels/Dark/Black): apply before paint to avoid flash */try{var t=localStorage.getItem('lg_hub_theme');if(t==='1')document.documentElement.classList.add('hub-theme-panel');else if(t==='2')document.documentElement.classList.add('hub-theme-dark');else if(t==='3')document.documentElement.classList.add('hub-theme-black');}catch(e){}</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> — Looth Group</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<?php /* Google Fonts CSS INLINED (perf lane 2026-06-11): the css2 <link> for
-         Lora+Cabin plus the Source Serif Pro @import formerly at the top of
-         forums.css — together ~930ms of render-blocking CDN round trips for
-         <15KB of @font-face rules (cascade-position-independent, so relocating
-         them is a visual no-op). Binaries still stream from fonts.gstatic.com
-         (preconnect above). See web/_fonts-inline.css header for refresh steps. */ ?>
-<style><?php @readfile(__DIR__ . '/_fonts-inline.css'); ?></style>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&family=Cabin:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
-<?php /* Quill toolbar CSS loads ASYNC (perf lane 2026-06-11): Quill only initializes
-         lazily when a composer opens (forums.js, with a plain-textarea fallback), so
-         blocking first paint on a CDN stylesheet cost ~770ms on mobile Lighthouse.
-         media-swap keeps the element's cascade position; print never matches first. */ ?>
-<?php if (lg_bb_mirror_wp_logged_in()): /* editor assets gate on the WP login session, NOT /whoami (Ian: posting=WP-login). A logged-in member whose whoami resolves anon still gets the real composer; true anon gets none (craft gate, Ian 6/12). */ ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" media="print" onload="this.media='all'">
-<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"></noscript>
-<?php endif; ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
 <link rel="stylesheet" href="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.css?v=<?= bb_mirror_asset_ver('forums.css') ?>">
 <?php /* Mobile presentation layer (Buck) — flat-card → FB app-card via grid-template-areas.
          MUST be a media-gated <head> <link> so it paints on first load (deferring it via
          pwa.js re-introduces the flash). Behaviors-only mobile-hub.js may defer. */ ?>
 <link rel="stylesheet" href="/mobile-hub.css?v=<?= @filemtime('/var/www/dev/mobile-hub.css') ?: '1' ?>" media="(max-width:640px)">
 </head>
-<body class="bb-mirror<?= !empty($GLOBALS['__bb_hub_rail']) ? ' hub-fmodal-page' : '' ?>">
-<?php /* Hub feed: filters live in a CENTERED MODAL (Ian 2026-06-11), not the
-         side rail — so the hub emits no nav aside, no hamburger, no drawer
-         backdrop, and needs no pre-paint nav-closed state. Forum subpages
-         keep the classic left nav + hamburger below. */ ?>
-<?php if (empty($GLOBALS['__bb_hub_rail'])): ?>
+<body class="bb-mirror">
+<script>/* compact feed view: apply before paint to avoid flash */try{if(localStorage.getItem('hub-compact')==='1')document.documentElement.classList.add('hub-compact');}catch(e){}</script>
+
 <!-- Fixed triangle-corner hamburger (top-left, always on top) -->
 <button class="corner-hamburger" id="bb-ham"
         aria-label="Toggle navigation" aria-expanded="true">
@@ -548,7 +525,6 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
 
 <!-- Mobile drawer backdrop -->
 <div class="nav-overlay" id="bb-overlay" aria-hidden="true"></div>
-<?php endif; ?>
 
 <?php
     lg_shared_render_site_header([
@@ -565,33 +541,13 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
     ]);
 ?>
 
-<?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')): ?>
-<?php /* Centered filters modal (Ian 2026-06-11): the rail content — Categories
-         AND Types both visible — in a dialog the sort-bar "Filters" chip opens.
-         Server-rendered, link-driven (zero-JS filtering still round-trips);
-         forums.js only opens/closes the shell. All viewports. */ ?>
-<div class="hub-fmodal" id="hub-fmodal" hidden role="dialog" aria-modal="true" aria-label="Hub filters">
-  <div class="hub-fmodal__back" data-hub-fmodal-close></div>
-  <div class="hub-fmodal__panel" tabindex="-1">
-    <header class="hub-fmodal__head">
-      <h2 class="hub-fmodal__title">Filters</h2>
-      <p class="hub-fmodal__help">Tap a name to filter the feed.</p>
-      <button type="button" class="hub-fmodal__x" data-hub-fmodal-close aria-label="Close filters">&times;</button>
-    </header>
-    <div class="hub-fmodal__body">
-      <?php
+<div class="bb-layout">
+  <aside class="bb-layout__nav" id="bb-nav">
+    <?php if (!empty($GLOBALS['__bb_hub_rail']) && function_exists('hub_render_rail')):
+        // Option A: the Hub control rail replaces the forum nav on the unified feed.
         $__r = $GLOBALS['__bb_hub_rail'];
         hub_render_rail($__r['facets'], $__r['filters'], $__r['muted'] ?? ['types' => [], 'cats' => []], $__r['sort'] ?? 'new', $__r['tree'] ?? []);
-      ?>
-    </div>
-  </div>
-</div>
-<?php endif; ?>
-
-<div class="bb-layout">
-  <?php if (empty($GLOBALS['__bb_hub_rail'])): ?>
-  <aside class="bb-layout__nav" id="bb-nav">
-    <button type="button" class="bb-nav__close" data-lg-nav-close aria-label="Close filters" title="Close filters">&times;</button>
+    else: ?>
     <?php bb_mirror_left_nav(); ?>
 
     <nav class="bb-mirror__searchbar bb-mirror__searchbar--sidebar" aria-label="Forum search">
@@ -604,8 +560,8 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub'): void
         <button class="search-form__btn" type="submit" aria-label="Search">&#9906;</button>
       </form>
     </nav>
+    <?php endif; ?>
   </aside>
-  <?php endif; ?>
   <main class="bb-layout__content bb-mirror__main" id="lg-main">
 <?php
 }
@@ -625,18 +581,7 @@ function bb_mirror_chrome_footer(): void
 
 <?php bb_mirror_new_topic_modal(); ?>
 
-<?php if (lg_bb_mirror_wp_logged_in()): /* WP-login session, not /whoami — see CSS gate above */ ?>
-<?php /* Quill loads AFTER first paint settles (load+idle) — members only. By
-         composer tap-time it's been ready for seconds, so Buck's synchronous
-         tap-focus iOS keyboard path is untouched; forums.js already has the
-         plain-textarea fallback if a tap somehow beats the idle load.
-         Anon never loads it (no composer exists). Ian 6/12. */ ?>
-<script>
-(function(){var go=function(){(window.requestIdleCallback||function(f){setTimeout(f,600)})(function(){
-  var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js';document.head.appendChild(s);});};
-if(document.readyState==='complete')go();else window.addEventListener('load',go,{once:true});})();
-</script>
-<?php endif; ?>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" defer></script>
 <!-- Single source of the forum base path for forums.js (self-links, lazy fetches). -->
 <script>window.LG_FORUM_BASE = <?= json_encode(LG_BB_MIRROR_PUBLIC_PATH) ?>;</script>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>

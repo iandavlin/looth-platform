@@ -20,19 +20,6 @@ if (!$tid) { http_response_code(400); echo 'bad request'; exit; }
 
 $db = bb_mirror_db();
 
-// Forum-visibility gate (C2): replies are only readable when the parent topic
-// lives in a PUBLIC forum. Hidden/private forums 404 — mirrors _topic-body.php
-// and the single-topic / feed read paths (which all gate on f.visibility).
-$vis = $db->prepare("
-    SELECT 1 FROM forums.topic t
-      JOIN forums.forum f ON f.id = t.forum_id
-     WHERE t.id = :tid AND t.status IN ('publish', 'closed') AND f.visibility = 'public'
-     LIMIT 1
-");
-$vis->bindValue(':tid', $tid, PDO::PARAM_INT);
-$vis->execute();
-if (!$vis->fetch()) { http_response_code(404); echo 'not found'; exit; }
-
 $rs = $db->prepare("
     SELECT r.id AS reply_id, r.parent_reply_id,
            COALESCE(r.author_name, 'Anonymous') AS author_name,
@@ -147,7 +134,7 @@ foreach ($page as $row) {
     bb_mirror_render_reply_stub(
         $node,
         $row['depth'] >= 1,                              // is_child (one indent tier)
-        false,                                           // load image inline (Ian 2026-06-11: images just load, no click)
+        true,                                            // defer image behind "Show image"
         true,                                            // per-reply Reply button
         $row['depth'] >= 2 ? $row['pa'] : null           // "↪ @author" for deep replies
     );

@@ -27,139 +27,8 @@ $_cat_map_rows = $db->query("
 $_forum_cat_map = bb_mirror_build_cat_map($_cat_map_rows);
 $forum_slug = (string)($_GET['forum_slug'] ?? '');
 $raw_offset = max(0, (int)($_GET['offset'] ?? 0));
-$card_limit = 18;   // Smaller first page (Ian 2026-06-11 "load on button push"): fewer
-                    // cards upfront cuts DOM/Style-Layout/TBT; infinite-scroll loads the
-                    // rest in 18-card batches ($has_next/$next_offset below, unchanged).
+$card_limit = 50;
 $fetch_size = 300; // fetch extra to cover collapse loss
-
-if (!function_exists('lg_cover_src')) {
-    /**
-     * Route a cover image through the on-the-fly resizer (/img.php) so the feed
-     * serves display-sized WebP instead of full-res originals (3024px phone
-     * photos were ~9 MB/page). Only rewrites our own /wp-content/uploads/ URLs;
-     * external URLs pass through. Also normalises http:// uploads to a
-     * same-origin request (kills the mixed-content warning). Ian 2026-06-11.
-     */
-    function lg_cover_src(?string $url, int $w = 800): ?string
-    {
-        if (!$url) {
-            return $url;
-        }
-        if (preg_match('#/wp-content/uploads/(.+)$#', $url, $m)) {
-            return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
-        }
-        return $url;
-    }
-}
-
-if (!function_exists('lg_cover_srcset')) {
-    /**
-     * srcset/sizes for a feed cover: the browser picks 400w for the ~381px
-     * desktop slot and phones at 1x, 800w for retina/wide — same image, same
-     * crop, right resolution (craft gate IMG-OVERSIZE; Ian 6/12 go). Only for
-     * URLs lg_cover_src routed through /img.php; external URLs emit nothing.
-     */
-    function lg_cover_srcset(?string $resized): string
-    {
-        if (!$resized || !str_starts_with($resized, '/img.php?')) return '';
-        $u400 = preg_replace('/&w=\d+$/', '&w=400', $resized);
-        $u800 = preg_replace('/&w=\d+$/', '&w=800', $resized);
-        return ' srcset="' . htmlspecialchars($u400, ENT_QUOTES) . ' 400w, '
-                           . htmlspecialchars($u800, ENT_QUOTES) . ' 800w"'
-             . ' sizes="(max-width: 640px) 100vw, 400px"';
-    }
-}
-
-if (!function_exists('lg_cover_dims')) {
-    /**
-     * width/height attrs for a feed cover <img> so the browser reserves the
-     * box before the photo arrives. Unsized lazy covers grew cards 200-500px
-     * as each image loaded, shoving content + re-balancing the mosaic (the
-     * Hub scroll-jump, Buck 6/11 — his hub-nojump.js 280px-placeholder shim
-     * retires once these land). Dims = getimagesize on the uploads source,
-     * scaled to the img.php w= target; img.php never upscales, so width is
-     * min(w, original). Reads the R2 uploads MOUNT directly (allow_other) —
-     * the /var/www/dev/wp-content path img.php uses is 2770 looth-dev:loothdevs
-     * and this pool runs as bb-mirror, which can't traverse it; same files
-     * (uploads symlinks to the mount). Repoint at cut alongside img.php's
-     * UPLOADS const. Memoized per request; external (non-uploads) URLs emit
-     * nothing and degrade exactly as before.
-     */
-    function lg_cover_dims(?string $url, int $w = 800): string
-    {
-        static $memo = [];
-        if (!$url) return '';
-        $clean = preg_replace('/[?#].*$/', '', $url);
-        if (!preg_match('#/wp-content/uploads/(.+)$#', $clean, $m)) return '';
-        $rel = $m[1];
-        // Original [w,h], resolved at most ONCE per image: per-request memo
-        // backed by a tmpfs cache (lg_cover_dims_resolve), so getimagesize()
-        // touches the R2 mount only on a cold image — not once per card per
-        // render. That per-card mount read was the hub's #1 server cost
-        // (FPM slowlog 6/13: lg_cover_dims realpath+getimagesize, ~1s/page).
-        if (!array_key_exists($rel, $memo)) $memo[$rel] = lg_cover_dims_resolve($rel);
-        $dim = $memo[$rel];
-        if (!$dim) return '';
-        $tw = min($w, $dim[0]);
-        $th = (int)round($dim[1] * $tw / $dim[0]);
-        return $th > 0 ? ' width="' . $tw . '" height="' . $th . '"' : '';
-    }
-}
-
-if (!function_exists('lg_cover_dims_resolve')) {
-    /**
-     * Original [w,h] for an uploads-relative path, or null. tmpfs-cached so the
-     * getimagesize() through the R2 mount runs only on a cold image. Dimensions
-     * never change for a given uploads URL (a new image is a new URL), so the
-     * cache is TTL-only with NO per-render stat — a stat/realpath would itself
-     * be a FUSE→R2 round-trip, the exact cost we're removing. Mirrors the whoami
-     * tmpfs-cache idiom in config.php. Path-containment check stays; it now runs
-     * once per image instead of once per card per render. [] = cached "no dims".
-     */
-    function lg_cover_dims_resolve(string $rel): ?array
-    {
-        $cacheFile = '/dev/shm/bb-imgdims-' . sha1($rel) . '.json';
-        if (is_readable($cacheFile) && (time() - filemtime($cacheFile)) < 604800) {
-            $d = json_decode((string)file_get_contents($cacheFile), true);
-            return (is_array($d) && isset($d[0], $d[1])) ? [(int)$d[0], (int)$d[1]] : null;
-        }
-        $val  = null;
-        $base = realpath('/mnt/loothgroup-uploads-dev');
-        $real = realpath('/mnt/loothgroup-uploads-dev/' . urldecode($rel));
-        if ($real !== false && $base !== false
-            && strncmp($real, $base . DIRECTORY_SEPARATOR, strlen($base) + 1) === 0) {
-            $info = @getimagesize($real);
-            if ($info && (int)$info[0] > 0 && (int)$info[1] > 0) {
-                $val = [(int)$info[0], (int)$info[1]];
-            }
-        }
-        $tmp = $cacheFile . '.' . getmypid() . '.tmp';
-        if (@file_put_contents($tmp, json_encode($val ?? [])) !== false) {
-            @chmod($tmp, 0600);
-            @rename($tmp, $cacheFile);
-        }
-        return $val;
-    }
-}
-
-if (!function_exists('lg_cover_loading_attrs')) {
-    /**
-     * Lazy-loading the FIRST feed cover delays the page's LCP element behind
-     * the lazy-load machinery (Lighthouse flagged it; LCP 5-9s on mobile).
-     * First cover paints with high priority, the next two (desktop shows ~3
-     * columns above the fold) load eagerly, everything below stays lazy.
-     * Infinite-scroll batches restart the counter — harmless, those covers
-     * are being inserted into view anyway. Perf lane 2026-06-11.
-     */
-    function lg_cover_loading_attrs(): string
-    {
-        static $n = 0;
-        $n++;
-        if ($n === 1) return 'loading="eager" fetchpriority="high"';
-        if ($n <= 3) return 'loading="eager"';
-        return 'loading="lazy"';
-    }
-}
 
 // ?fid=<id> disambiguates duplicate-slug forums (e.g. two 'finish' forums).
 $fid = 0;
@@ -173,19 +42,8 @@ if (preg_match('/[?&]fid=(\d+)/', $_SERVER['REQUEST_URI'] ?? '', $m)) {
 // keeps newest-first so a specific forum reads chronologically.
 $sort_param   = strtolower(trim((string)($_GET['sort'] ?? '')));
 $default_sort = ($forum_slug !== '' || $fid > 0) ? 'new' : 'random';
-// Persist the picked sort across visits (Ian 2026-06-10): an explicit ?sort=
-// writes a 1-year cookie; a bare /hub/ load reads it back, so Newest/Trending/
-// Random survives navigation and hard refresh. Random's SEED still re-rolls
-// each visit (it is only pinned across one visit's infinite scroll).
-$lg_valid_sorts = ['new', 'old', 'hot', 'random'];
-if (in_array($sort_param, $lg_valid_sorts, true)) {
-    if (($_COOKIE['lg_hub_sort'] ?? '') !== $sort_param) {
-        setcookie('lg_hub_sort', $sort_param,
-            ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax', 'secure' => true]);
-    }
-} else {
-    $lg_saved_sort = strtolower(trim((string)($_COOKIE['lg_hub_sort'] ?? '')));
-    $sort_param = in_array($lg_saved_sort, $lg_valid_sorts, true) ? $lg_saved_sort : $default_sort;
+if (!in_array($sort_param, ['new', 'old', 'hot', 'random'], true)) {
+    $sort_param = $default_sort;
 }
 // Random uses a per-visit seed so the weighted shuffle is STABLE across infinite-scroll
 // pages (same seed -> identical order -> coherent offset paging) and re-rolls on a fresh
@@ -195,16 +53,6 @@ if ($sort_param === 'random') {
     $rand_seed = (isset($_GET['seed']) && ctype_digit((string)$_GET['seed']))
         ? (int)$_GET['seed']
         : random_int(1, 2000000000);
-}
-// Hot scores divide by hours-since-NOW(), so the order DRIFTS between one
-// infinite-scroll fetch and the next — offset paging over a moving order
-// repeats/skips cards. Freeze the clock per scroll session (carried forward
-// in the "load older" URL exactly like the random seed).
-$hot_now = 0;
-if ($sort_param === 'hot') {
-    $hot_now = (isset($_GET['hnow']) && ctype_digit((string)$_GET['hnow']))
-        ? (int)$_GET['hnow']
-        : time();
 }
 
 $scoped_forum = null;
@@ -292,17 +140,12 @@ foreach ($db->query("SELECT slug FROM forum WHERE visibility = 'public'")->fetch
 }
 
 // -- Build ORDER BY clause --
-// Every sort carries a unique trailing tiebreaker (t.id): equal sort keys
-// (bulk-imported timestamps, all-zero hot scores) otherwise come back in
-// arbitrary per-query order and offset paging repeats/skips those cards.
 switch ($sort_param) {
     case 'old':
-        $order_by = 'ORDER BY t.last_active_at ASC NULLS LAST, t.id ASC';
+        $order_by = 'ORDER BY t.last_active_at ASC NULLS LAST';
         break;
     case 'hot':
-        // GREATEST guards rows newer than the frozen clock (negative age
-        // would take POW of a negative base → SQL error).
-        $order_by = "ORDER BY (t.reply_count::float / POW(GREATEST(EXTRACT(EPOCH FROM (to_timestamp(:hot_now) - t.last_active_at))/3600, 0) + 2, 1.5)) DESC NULLS LAST, t.last_active_at DESC NULLS LAST, t.id DESC";
+        $order_by = "ORDER BY (t.reply_count::float / POW(EXTRACT(EPOCH FROM (NOW() - t.last_active_at))/3600 + 2, 1.5)) DESC NULLS LAST";
         break;
     case 'random':
         // Seeded popularity-weighted shuffle (Efraimidis–Spirakis key u^(1/w)):
@@ -315,7 +158,7 @@ switch ($sort_param) {
         ) DESC";
         break;
     default: // new
-        $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST, t.id DESC';
+        $order_by = 'ORDER BY t.last_active_at DESC NULLS FIRST';
         break;
 }
 
@@ -326,47 +169,32 @@ switch ($sort_param) {
 // replies) can still surface, not just busy threads.
 switch ($sort_param) {
     case 'old':
-        // Oldest/Newest sort by CREATION time, not last activity — an old topic
-        // with a fresh reply must not jump the Newest feed (Ian 2026-06-10).
-        // Activity-recency still drives "hot"; reply teasers surface liveliness.
-        // card_type+topic_id tiebreaker: imported rows share timestamps and the
-        // union has no globally-unique id, so ties paginate unstably without it.
-        $union_order_by = 'ORDER BY created_at ASC NULLS LAST, card_type ASC, topic_id ASC';
+        $union_order_by = 'ORDER BY event_time ASC NULLS LAST';
         break;
     case 'hot':
-        // Frozen :hot_now clock (see $hot_now above) + GREATEST guard + unique
-        // tiebreaker — hot is the worst offset-paging offender: every
-        // 0-engagement card scores exactly 0 and ties with all the others.
-        $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(GREATEST(EXTRACT(EPOCH FROM (to_timestamp(:hot_now) - event_time))/3600, 0) + 2, 1.5)) DESC NULLS LAST, event_time DESC NULLS LAST, card_type ASC, topic_id DESC";
+        $union_order_by = "ORDER BY ((reply_count + like_count)::float / POW(EXTRACT(EPOCH FROM (NOW() - event_time))/3600 + 2, 1.5)) DESC NULLS LAST";
         break;
     case 'random':
-        // Front-door Random: seeded shuffle over the unified feed with a GENTLE
-        // popularity edge. u = uniform from hashtextextended(card_type||':'||id,
-        // :rand_seed); key = u^(1/weight). Weight was (replies+likes+1)^2 — a
-        // 10-reply discussion got weight 121 vs content's ~1, so discussions
-        // statistically buried every CPT card on page one ("Random is only doing
-        // discussions", Ian 2026-06-10). Now weight = 1 + ln(1+engagement)/5:
-        // 0-engagement cards draw uniform, a 30-reply thread gets ~1.7 — a mild
-        // lift, not a monopoly, so Random is a true mix of all CPTs + discussions
-        // (both viewports; same query serves mobile). Stable per seed for
-        // coherent infinite-scroll paging.
-        // The locked-teaser 0.25 penalty is GONE (Buck/Ian 6/11: gated content
-        // surfaces "same as normal" as lock-overlay teasers that drive signup —
-        // the penalty buried every gated card off page 1 of the default sort,
-        // which read as "the hub lock disappeared").
+        // Front-door Random: seeded popularity-weighted shuffle over the unified feed.
+        // u = uniform from hashtextextended(card_type||':'||id, :rand_seed); key =
+        // u^(1/weight), weight = (reply_count+like_count+1)^2 so popular topics AND liked
+        // content float up, recency-independent (old posts surface), stable per seed for
+        // coherent infinite-scroll paging. Locked teasers (content tier above the viewer's
+        // :viewer_rank) take a 0.25 multiplicative key penalty so they sink without vanishing.
         $union_order_by = "ORDER BY power(
             (hashtextextended(card_type || ':' || topic_id::text, :rand_seed) & 9223372036854775807)::double precision / 9223372036854775807.0,
-            1.0 / (1.0 + ln(1 + reply_count + like_count) / 5.0)
-        ) DESC";
+            1.0 / power(reply_count + like_count + 1, 2)
+        ) * CASE WHEN content_tier IS NOT NULL
+                 AND (CASE content_tier WHEN 'lite' THEN 1 WHEN 'pro' THEN 2 ELSE 0 END) > :viewer_rank
+               THEN 0.25 ELSE 1.0 END DESC";
         break;
     default: // new
-        $union_order_by = 'ORDER BY created_at DESC NULLS LAST, card_type ASC, topic_id DESC';
+        $union_order_by = 'ORDER BY event_time DESC NULLS FIRST';
         break;
 }
 
 // -- Control sidebar: active filter selection (site-wide /hub/ only) --
 require_once __DIR__ . '/_filter-rail.php'; // pulls in _hub-filters.php
-require_once __DIR__ . '/../_anon-scrub.php'; // logged-out contact scrub (Ian 2026-06-10)
 $hub_filters = hub_filters_parse();
 $hub_muted   = hub_mute_parse();
 
@@ -543,14 +371,9 @@ if ($scoped_forum) {
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
           LEFT JOIN person p ON p.id = t.author_id
           LEFT JOIN LATERAL (
-            -- OP cover: prefer a materialized attachment, else the first inline
-            -- <img> in the body (fluentform/inline images never hit forums.attachment).
-            SELECT COALESCE(
-                     (SELECT url FROM forums.attachment
-                       WHERE parent_kind = 'topic' AND parent_id = t.id
-                       ORDER BY id ASC LIMIT 1),
-                     (regexp_match(t.content_html, '<img[^>]+src=\"([^\"]+)\"'))[1]
-                   ) AS url
+            SELECT url FROM forums.attachment
+             WHERE parent_kind = 'topic' AND parent_id = t.id
+             ORDER BY id ASC LIMIT 1
           ) first_img ON true
           -- Fallback: if the topic itself has no image, surface the first image
           -- posted in any of its replies as the card's featured image.
@@ -576,7 +399,6 @@ if ($scoped_forum) {
     $stmt->bindValue(':fetch_size', $card_limit,              PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset,              PDO::PARAM_INT);
     if ($sort_param === 'random') $stmt->bindValue(':rand_seed', $rand_seed, PDO::PARAM_INT);
-    if ($sort_param === 'hot')    $stmt->bindValue(':hot_now',   $hot_now,   PDO::PARAM_INT);
     $stmt->execute();
 } else {
     // Site-wide /hub/ = the UNIFIED feed: forum topics ∪ content (discovery).
@@ -686,14 +508,9 @@ if ($scoped_forum) {
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
           LEFT JOIN person p ON p.id = t.author_id
           LEFT JOIN LATERAL (
-            -- OP cover: prefer a materialized attachment, else the first inline
-            -- <img> in the body (fluentform/inline images never hit forums.attachment).
-            SELECT COALESCE(
-                     (SELECT url FROM forums.attachment
-                       WHERE parent_kind = 'topic' AND parent_id = t.id
-                       ORDER BY id ASC LIMIT 1),
-                     (regexp_match(t.content_html, '<img[^>]+src=\"([^\"]+)\"'))[1]
-                   ) AS url
+            SELECT url FROM forums.attachment
+             WHERE parent_kind = 'topic' AND parent_id = t.id
+             ORDER BY id ASC LIMIT 1
           ) first_img ON true
           -- Fallback: if the topic itself has no image, surface the first image
           -- posted in any of its replies as the card's featured image.
@@ -749,11 +566,6 @@ if ($scoped_forum) {
           FROM discovery.content_item c
           LEFT JOIN rx crx ON crx.post_type = c.cpt AND crx.item_id = c.id
          WHERE c.tier IN ($tier_in)
-           -- events have their own page (Ian 6/11); kind='misc' = sponsor
-           -- plumbing (sponsor-product/-page rows feed the sponsor-page
-           -- carousels, NOT user-facing — Ian 6/12: only sponsor-POSTS join
-           -- the Hub). Matches the Type-facet exclusion above.
-           AND c.kind NOT IN ('event', 'misc')
            $q_content
       ) u
       $hub_where
@@ -767,9 +579,9 @@ if ($scoped_forum) {
     $stmt->bindValue(':fetch_size', $card_limit, PDO::PARAM_INT);
     $stmt->bindValue(':raw_offset', $raw_offset, PDO::PARAM_INT);
     if ($sort_param === 'random') {
-        $stmt->bindValue(':rand_seed', $rand_seed, PDO::PARAM_INT);
+        $stmt->bindValue(':rand_seed',   $rand_seed,             PDO::PARAM_INT);
+        $stmt->bindValue(':viewer_rank', (int)$viewer_tier_rank, PDO::PARAM_INT);
     }
-    if ($sort_param === 'hot') $stmt->bindValue(':hot_now', $hot_now, PDO::PARAM_INT);
     $stmt->execute();
 }
 
@@ -837,20 +649,14 @@ if (!empty($GLOBALS['__bb_hub_rail']) && !empty($hub_filters['authors'])) {
     foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
     $atin = $atph ? implode(',', $atph) : "''";
     $acs = $db->prepare(
-        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND LOWER(author_name) = LOWER(:an1))
-              + (SELECT count(*) FROM discovery.content_item WHERE LOWER(author_name) = LOWER(:an2) AND tier IN ($atin))"
+        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND author_name = :an1)
+              + (SELECT count(*) FROM discovery.content_item WHERE author_name = :an2 AND tier IN ($atin))"
     );
     foreach ($hub_filters['authors'] as $an) {
         $an  = (string)$an;
         $aid = 0;
-        // Case-insensitive + CANONICAL display name: show the stored casing
-        // ("Dan Erlewine"), not whatever the visitor typed (Ian 2026-06-10).
         foreach ($topics as $_r) {
-            if (mb_strtolower((string)($_r['author_name'] ?? '')) === mb_strtolower($an) && !empty($_r['author_id'])) {
-                $aid = (int)$_r['author_id'];
-                $an  = (string)$_r['author_name'];
-                break;
-            }
+            if ((string)($_r['author_name'] ?? '') === $an && !empty($_r['author_id'])) { $aid = (int)$_r['author_id']; break; }
         }
         $acs->bindValue(':an1', $an);
         $acs->bindValue(':an2', $an);
@@ -1050,8 +856,7 @@ if ($reply_rx_items) {
 $video_yt = [];
 $vid_ids = [];
 foreach ($topics as $_r) {
-    // shorty = video-link CPT; same inline-play treatment (Buck 6/12 parity).
-    if (($_r['card_type'] ?? '') === 'content' && in_array(($_r['content_kind'] ?? ''), ['video', 'shorty'], true)) {
+    if (($_r['card_type'] ?? '') === 'content' && ($_r['content_kind'] ?? '') === 'video') {
         $vid_ids[] = (int)$_r['topic_id'];
     }
 }
@@ -1061,7 +866,7 @@ if ($vid_ids) {
         // Prefer the engine's stored yt_id (commit 936b965 — 340/341 coverage, sourced
         // from ACF youtube_link → v2 embed block → post_content at index time). Keep the
         // body_text regex only as a fallback for any not-yet-reindexed row.
-        $vst = $db->prepare("SELECT id, yt_id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind IN ('video','shorty')");
+        $vst = $db->prepare("SELECT id, yt_id, body_text FROM discovery.content_item WHERE id IN ($vph) AND kind = 'video'");
         $vst->execute($vid_ids);
         $yt_re = '~(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{6,15})~i';
         foreach ($vst->fetchAll() as $vr) {
@@ -1141,17 +946,14 @@ function feed_render_tags(array $tags): void
 // Server-render the mobile action bar (Like / N replies / Share) that hub-polish.js
 // used to inject client-side (the post-paint flash). Markup MUST stay in lockstep
 // with hub-polish.js buildActions() — JS now only WIRES the present row, never builds
-// it (mobile-only via .lg-card-actions CSS; display:none at desktop). Content cards
-// pass $zero_label='Comment' (Buck 6/11 audit H4: they read identically to a 0-reply
-// discussion as "Reply", but their tap opens the comments surface, not a composer).
-function feed_action_bar(int $reply_count, string $zero_label = 'Reply'): void
+// it (mobile-only via .lg-card-actions CSS; display:none at desktop). $reply_count is
+// 0 for content cards → "Reply".
+function feed_action_bar(int $reply_count): void
 {
-    // Thumbs-up, not a heart: the Like applies a 👍 reaction so the icon matches
-    // (Buck 2026-06-11 — was swapped client-side; canonical now, his replace no-ops).
-    static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/></svg>';
+    static $ICO_LIKE    = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>';
     static $ICO_REPLIES = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5z"/></svg>';
     static $ICO_SHARE   = '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
-    $label = $reply_count === 0 ? $zero_label : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
+    $label = $reply_count === 0 ? 'Reply' : ($reply_count === 1 ? '1 reply' : $reply_count . ' replies');
     echo '<div class="feed-card__actions lg-card-actions">'
        . '<span class="lg-act lg-act-like" role="button" tabindex="0">' . $ICO_LIKE . 'Like</span>'
        . '<span class="lg-act lg-act-replies" role="button" tabindex="0">' . $ICO_REPLIES . htmlspecialchars($label) . '</span>'
@@ -1176,32 +978,6 @@ function feed_save_btn(string $postType, int $itemId): void
 // feed_rx_glyph() + feed_reactions_bar() now live in _reply-render.php (the shared
 // partial) so the lazy full-thread endpoint can emit reply reactions too. Required
 // below at the "-- Helpers --" include.
-
-// Sponsor rail (Ian 2026-06-12): in STREAM view sponsors move OUT of the feed
-// into this fixed right-hand rail (logo tiles linking to /sponsors/<slug>/);
-// mosaic keeps the inline spotlight cards (sponsor-cards.js) as discovery.
-// Server-rendered ALWAYS, CSS decides per layout — html[data-lg-hublayout] is
-// set pre-paint by the boot script, so neither layout flashes the other's
-// treatment. The list mirrors sponsor-cards.js SPONSORS (same assets/links).
-function hub_render_sponsor_rail(): void
-{
-    $sponsors = [
-        ['slug' => 'total-vise',            'name' => 'Total Vise',            'img' => '/wp-content/uploads/2024/06/Sponor-Banner-Total-Vise-300x108.webp',   'w' => 300, 'h' => 108],
-        ['slug' => 'stewmac',               'name' => 'StewMac',               'img' => '/wp-content/uploads/2024/06/Sidebar-Affiliate-Stew-Mac-300x108.webp', 'w' => 300, 'h' => 108],
-        ['slug' => 'go-acoustic-audio',     'name' => 'Go Acoustic Audio',     'img' => '/wp-content/uploads/2024/06/Sponsor-Go-Acoustic-300x80.webp',         'w' => 300, 'h' => 80],
-        ['slug' => 'strings-micro-factory', 'name' => 'Strings Micro Factory', 'img' => '/wp-content/uploads/2024/06/SMF-Logo-Horizontal-624x192.jpg',         'w' => 624, 'h' => 192],
-        ['slug' => 'gluboost',              'name' => 'GluBoost',              'img' => '/wp-content/uploads/2026/04/gluboost-logo-624x163.png',               'w' => 624, 'h' => 163],
-    ];
-    echo '<aside class="hub-sponsor-rail" aria-label="Our sponsors">';
-    echo '<h2 class="hsr-head">Our sponsors</h2>';
-    foreach ($sponsors as $s) {
-        echo '<a class="hsr-tile" href="/sponsors/' . htmlspecialchars($s['slug'], ENT_QUOTES) . '/">'
-           . '<img src="' . htmlspecialchars($s['img'], ENT_QUOTES) . '" alt="' . htmlspecialchars($s['name'], ENT_QUOTES) . '"'
-           . ' loading="lazy" width="' . (int)$s['w'] . '" height="' . (int)$s['h'] . '">'
-           . '</a>';
-    }
-    echo '</aside>';
-}
 
 // Forum feed URL, appending ?fid=<id> when the slug is shared by >1 forum.
 function feed_forum_url(array $f, array $slug_freq): string
@@ -1255,11 +1031,11 @@ $header_cat = $scoped_forum
 <div class="page feed-page">
 
   <!-- Forum header -->
-  <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?><?= $scoped_forum ? '' : ' forum-header--hub' ?>"
+  <header class="forum-header<?= $has_header_image ? ' forum-header--has-image' : '' ?><?= $header_image_explicit ? ' forum-header--explicit-image' : '' ?>"
           data-cat="<?= htmlspecialchars($header_cat) ?>">
     <?php if ($has_header_image): ?>
       <div class="forum-header__bg"
-           style="background-image: url('<?= htmlspecialchars(lg_cover_src($header_image_url, 1600), ENT_QUOTES, 'UTF-8') ?>')"></div>
+           style="background-image: url('<?= htmlspecialchars($header_image_url, ENT_QUOTES, 'UTF-8') ?>')"></div>
     <?php endif; ?>
     <div class="forum-header__body">
       <?php if ($parent_forum): ?>
@@ -1286,33 +1062,12 @@ $header_cat = $scoped_forum
 
   <!-- Sort bar (+ post button, right-aligned) -->
   <nav class="feed-sort-bar" aria-label="Sort activity" data-lg-bar="1">
-    <?php
-      // The ACTIVE sort leads the pill row (Ian 2026-06-10); the rest keep
-      // their usual order. usort is stable on PHP 8.
-      $lg_sort_pills = [
-          ['random', 'Random',   'lg-random-tab'],
-          ['new',    'Newest',   ''],
-          ['hot',    'Trending', ''],
-      ];
-      usort($lg_sort_pills, function ($a, $b) use ($sort_param) {
-          return (int)($b[0] === $sort_param) <=> (int)($a[0] === $sort_param);
-      });
-      foreach ($lg_sort_pills as [$lg_sid, $lg_slabel, $lg_scls]):
-        $lg_cls = trim($lg_scls . ($sort_param === $lg_sid ? ' active' : ''));
-    ?>
-    <a href="<?= feed_sort_url($lg_sid, $forum_slug) ?>"<?= $lg_cls !== '' ? ' class="' . $lg_cls . '"' : '' ?>><?= $lg_slabel ?></a>
-    <?php endforeach; ?>
-    <?php if ($viewer_logged_in):
-      // Saved pill (Ian 2026-06-11) — a VIEW toggle, not a sort: ?saved=1
-      // constrains the union to the viewer's ☆ saves (canonical view). Active
-      // = clickable to exit (CSS re-enables pointer-events). The lg-saved-pill
-      // class also tells the mobile overlay's ensureSavedPill not to insert
-      // its own copy. Logged-in only — anon has no saves.
-      $lg_on_saved   = !empty($hub_filters['saved']);
-      $lg_saved_href = feed_sort_url($sort_param, $forum_slug) . ($lg_on_saved ? '' : '&amp;saved=1');
-    ?>
-    <a href="<?= $lg_saved_href ?>" class="lg-saved-pill<?= $lg_on_saved ? ' active' : '' ?>">Saved</a>
-    <?php endif; ?>
+    <a href="<?= feed_sort_url('random', $forum_slug) ?>"
+       class="lg-random-tab<?= $sort_param === 'random' ? ' active' : '' ?>">Random</a>
+    <a href="<?= feed_sort_url('new', $forum_slug) ?>"
+       class="<?= $sort_param === 'new' ? 'active' : '' ?>">Newest</a>
+    <a href="<?= feed_sort_url('hot', $forum_slug) ?>"
+       class="<?= $sort_param === 'hot' ? 'active' : '' ?>">Trending</a>
     <?php if (!empty($GLOBALS['__bb_hub_rail'])): ?>
       <?php hub_render_toolbar_search($hub_filters, $sort_param); ?>
     <?php endif; ?>
@@ -1332,8 +1087,6 @@ $header_cat = $scoped_forum
     <?php endif; ?>
   </nav>
 
-  <?php if (!$scoped_forum) hub_render_sponsor_rail(); // hub front door only; CSS shows it in stream view ?>
-
   <?php foreach ($hub_author_headers as $_hah) hub_render_author_header($_hah, $hub_filters, $sort_param); ?>
 
   <div id="hub-feed-results">
@@ -1341,10 +1094,7 @@ $header_cat = $scoped_forum
     <p class="bb-mirror__empty">No recent activity.</p>
 
   <?php else: ?>
-  <?php /* data-lg-sort: forums.js §9 reads this to pick column fill — deterministic
-           sorts (new/old/hot) get round-robin so the mosaic reads in feed order;
-           random keeps shortest-column fill (even bottoms, no order to preserve). */ ?>
-  <div class="feed" data-lg-sort="<?= htmlspecialchars($sort_param, ENT_QUOTES) ?>">
+  <div class="feed">
 
     <?php foreach ($topics as $topic):
       // ---- Content card (article / video / event / sponsor-post) ----
@@ -1354,17 +1104,10 @@ $header_cat = $scoped_forum
         $c_url     = (string)($topic['content_url'] ?? '#');
         $c_title   = htmlspecialchars((string)$topic['topic_title']);
         $c_kind    = (string)($topic['content_kind'] ?? 'content');
-        $c_img     = lg_cover_src($topic['card_image'] ?? null);
-        $c_dims    = lg_cover_dims($topic['card_image'] ?? null);
+        $c_img     = $topic['card_image'] ?? null;
         $c_time    = $topic['event_time'] ? feed_rel_time($topic['event_time']) : '—';
         $c_author  = htmlspecialchars((string)$topic['author_name']);
         $c_excerpt = feed_op_excerpt($topic);
-        // Video-link kinds: an excerpt that's just the pasted provider URL is
-        // noise under a playable cover — suppress it (Buck 6/12; pairs with the
-        // shorty facade above).
-        if (in_array($c_kind, ['video', 'shorty'], true) && preg_match('~^https?://\S+$~', html_entity_decode($c_excerpt))) {
-            $c_excerpt = '';
-        }
         $c_likes   = (int)$topic['like_count'];
         $c_dur     = (int)($topic['duration_min'] ?? 0);
         $c_tier    = (string)($topic['content_tier'] ?? '');
@@ -1388,7 +1131,7 @@ $header_cat = $scoped_forum
         $c_is_gated  = (($rankmap[$c_tier] ?? 0) > ($GLOBALS['LG_HUB_VIEWER_RANK'] ?? 0));
         $c_tier_lbl  = ['lite' => 'Lite', 'pro' => 'Pro'][$c_tier] ?? ucfirst((string)$c_tier);
         // Inline-play id only for NON-gated videos (gated → overlay, never the embed).
-        $c_yt        = (!$c_is_gated && in_array($c_kind, ['video', 'shorty'], true)) ? ($video_yt[$c_id] ?? null) : null;
+        $c_yt        = (!$c_is_gated && $c_kind === 'video') ? ($video_yt[$c_id] ?? null) : null;
     ?>
     <?php /* FLAT card contract (docs/hub-mobile-desktop-split.md): every fc-* region is a
              DIRECT child of .feed-card so desktop (forums.css ≥641) and mobile (Buck's
@@ -1397,8 +1140,7 @@ $header_cat = $scoped_forum
     <article class="feed-card feed-card--content<?= $c_is_gated ? ' feed-card--gated feed-card--gated-' . htmlspecialchars($c_tier) : '' ?>" data-lg-card="1"
              data-id="<?= $c_id ?>" data-type="<?= htmlspecialchars($c_kind) ?>"
              data-href="<?= htmlspecialchars($c_url) ?>" data-gated="<?= $c_is_gated ? '1' : '0' ?>"
-             data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>"
-             data-post-type="<?= htmlspecialchars($c_cpt, ENT_QUOTES) ?>" data-item-id="<?= $c_id ?>">
+             data-cat="<?= htmlspecialchars($c_cat) ?>" data-kind="<?= htmlspecialchars($c_kind) ?>">
       <span class="fc-avatar lg-card-avatar"><?= bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null) ?></span>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $c_author ?></span>
@@ -1410,13 +1152,13 @@ $header_cat = $scoped_forum
       <time class="fc-time lg-card-time"><?= $c_time ?></time>
       <?php if ($c_yt): /* NON-gated video → facade: thumb + play; forums.js swaps iframe on click (no embed up front) */ ?>
         <div class="fc-cover feed-card__cover fc-cover--video" data-yt-play="<?= htmlspecialchars($c_yt, ENT_QUOTES) ?>" role="button" tabindex="0" aria-label="Play video">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
           <button type="button" class="fc-play" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
           <?php if ($c_dur > 0): ?><span class="fc-dur"><?= (int)$c_dur ?> min</span><?php endif; ?>
         </div>
       <?php elseif ($c_is_gated): /* GATED → locked teaser: dimmed thumb + lock overlay; links to the standalone page which carries its own paywall. NO inline play, no excerpt, no engagement. */ ?>
         <a class="fc-cover feed-card__cover fc-cover--gated" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= htmlspecialchars($c_tier_lbl) ?> members only">
-          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>><?php endif; ?>
+          <?php if (!empty($c_img)): ?><img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy"><?php endif; ?>
           <span class="fc-gate">
             <span class="fc-gate__lock" aria-hidden="true">&#128274;</span>
             <span class="fc-gate__t"><?= htmlspecialchars($c_tier_lbl) ?> members only</span>
@@ -1425,20 +1167,20 @@ $header_cat = $scoped_forum
         </a>
       <?php elseif (!empty($c_img)): ?>
         <a class="fc-cover feed-card__cover" href="<?= htmlspecialchars($c_url) ?>" aria-label="<?= $c_title ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>"<?= lg_cover_srcset($c_img) ?> alt=""<?= $c_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($c_img) ?>" alt="" loading="lazy">
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= htmlspecialchars($c_url) ?>"><?= $c_title ?></a></h3>
       <?php if (!$c_is_gated): /* gated cards: suppress excerpt/tags/engagement — locked teaser carries no payload */ ?>
         <?php if ($c_excerpt !== ''): ?>
-          <div class="fc-excerpt feed-card__op"><a class="feed-card__op-excerpt-link" href="<?= htmlspecialchars($c_url) ?>" tabindex="-1"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></a></div>
+          <div class="fc-excerpt feed-card__op"><p class="feed-card__op-excerpt"><?= $c_excerpt ?></p></div>
         <?php endif; ?>
         <?php if ($c_tags) feed_render_tags(array_slice($c_tags, 0, 5)); ?>
         <?php /* fc-actions = the reactions-comments SURFACE lane's engagement-bar slot.
                  Server-rendered (counts + action row) — wired by forums.js / hub-polish.js. */ ?>
         <div class="fc-actions">
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_reactions_bar($c_cpt, $c_id, $card_reaction_counts[$c_cpt . ':' . $c_id] ?? []); ?>
-          <?php feed_action_bar(0, 'Comment'); ?>
+          <?php feed_action_bar(0); ?>
           <?php if (in_array($c_cpt, LG_HUB_REACT_TYPES, true)) feed_save_btn($c_cpt, $c_id); ?>
           <?php if ($c_can_comment): ?>
             <button type="button" class="feed-card__comments-btn" data-comments
@@ -1474,8 +1216,7 @@ $header_cat = $scoped_forum
       if ($excerpt === '') $excerpt = feed_op_excerpt($topic);
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
-      $card_image  = lg_cover_src($topic['card_image'] ?? null);
-      $card_dims   = lg_cover_dims($topic['card_image'] ?? null);
+      $card_image  = $topic['card_image'] ?? null;
 
       // One teaser reply (newest); full thread lazy-loads via ?replies=<id>.
       $teaser    = $reply_teaser[$topic_id] ?? null;
@@ -1512,12 +1253,10 @@ $header_cat = $scoped_forum
     ?>
     <article class="feed-card feed-card--topic" data-lg-card="1"
              data-id="<?= $topic_id ?>" data-type="discussion" data-href="<?= $turl ?>" data-gated="0"
-             data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-forum-id="<?= (int)$topic['forum_id'] ?>" data-author-id="<?= (int)($topic['author_id'] ?? 0) ?>" data-reply-count="<?= $reply_count ?>">
+             data-cat="<?= htmlspecialchars($cat_key) ?>" data-topic-id="<?= $topic_id ?>" data-reply-count="<?= $reply_count ?>">
       <?php $av_href = $author_slug ? '/u/' . rawurlencode((string)$author_slug) : null;
             $av_t    = bb_mirror_avatar($topic['author_name'] ?: 'A', $topic['author_slug'] ?: $topic['topic_slug'], 40, $author_profiles[(int)($topic['author_id'] ?? 0)]['avatar_url'] ?? null); ?>
-      <?php /* aria-label: the avatar <a> has no text content (image/initials only) —
-               Lighthouse link-name failure on every discussion card (perf lane 6/11). */ ?>
-      <?php if ($av_href): ?><a class="fc-avatar lg-card-avatar" href="<?= htmlspecialchars($av_href) ?>" aria-label="<?= htmlspecialchars(($topic['author_name'] ?: 'Member') . ' — profile', ENT_QUOTES) ?>"><?= $av_t ?></a>
+      <?php if ($av_href): ?><a class="fc-avatar lg-card-avatar" href="<?= htmlspecialchars($av_href) ?>"><?= $av_t ?></a>
       <?php else: ?><span class="fc-avatar lg-card-avatar"><?= $av_t ?></span><?php endif; ?>
       <div class="fc-author">
         <span class="fc-author__name lg-card-author"><?= $author_link ?></span>
@@ -1532,12 +1271,12 @@ $header_cat = $scoped_forum
                but now unused. */ ?>
       <?php if (!empty($card_image)): ?>
         <a class="fc-cover feed-card__cover" href="<?= $turl ?>" aria-label="<?= htmlspecialchars($topic['topic_title']) ?>">
-          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>"<?= lg_cover_srcset($card_image) ?> alt=""<?= $card_dims ?> <?= lg_cover_loading_attrs() ?>>
+          <img class="feed-card__cover-img" src="<?= htmlspecialchars($card_image) ?>" alt="" loading="lazy">
         </a>
       <?php endif; ?>
       <h3 class="fc-title feed-card__title"><a href="<?= $turl ?>"><?= htmlspecialchars($topic['topic_title']) ?></a></h3>
       <div class="fc-excerpt feed-card__op">
-        <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $can_post ? $excerpt : lg_scrub_anon_contacts((string)$excerpt) ?></p><?php endif; ?>
+        <?php if ($excerpt !== ''): ?><p class="feed-card__op-excerpt"><?= $excerpt ?></p><?php endif; ?>
         <?php if ($show_read_more): ?>
           <div class="feed-card__full-body" hidden></div>
           <button class="feed-card__read-more" type="button" data-topic-id="<?= $topic_id ?>" data-state="collapsed">Read more &#9660;</button>
@@ -1613,8 +1352,6 @@ $header_cat = $scoped_forum
       $qs_parts[] = 'offset=' . $next_offset;
       // Carry the random-shuffle seed so infinite scroll keeps ONE coherent order.
       if ($sort_param === 'random') $qs_parts[] = 'seed=' . $rand_seed;
-      // Carry the frozen hot clock for the same reason (see $hot_now above).
-      if ($sort_param === 'hot')    $qs_parts[] = 'hnow=' . $hot_now;
       // Carry active Hub filters into the next page (Type/Cat/Author/Search).
       foreach (hub_query_params() as $k => $v) $qs_parts[] = $k . '=' . urlencode($v);
   ?>

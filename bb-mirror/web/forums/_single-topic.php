@@ -1,5 +1,4 @@
 <?php
-
 /**
  * /forums-poc/<forum-slug>/<topic-slug>/ — single topic + threaded replies.
  *
@@ -15,11 +14,6 @@
 
 declare(strict_types=1);
 
-
-// Logged-out contact scrub (Ian 2026-06-10) — see _anon-scrub.php. Included
-// by index.php (config already loaded).
-require_once __DIR__ . '/../_anon-scrub.php';
-$lg_anon_view = function_exists('lg_bb_mirror_can_post') ? !lg_bb_mirror_can_post() : true;
 require __DIR__ . '/../_chrome.php';
 
 $db          = bb_mirror_db();
@@ -33,8 +27,6 @@ $topic_slug  = $_GET['topic_slug']  ?? '';
 $topq = $db->prepare("
     SELECT t.id, t.slug, t.title, t.content_html,
            t.author_name, t.author_slug, t.author_id,
-           t.is_anon::int                              AS is_anon,
-           COALESCE(p.discussion_visibility, 'member') AS discussion_visibility,
            t.created_at, t.status, t.sticky_kind, t.voice_count, t.reply_count,
            f.id   AS forum_id,
            f.slug AS forum_slug,
@@ -43,7 +35,6 @@ $topq = $db->prepare("
            f.header_image_url
       FROM forums.topic  t
       JOIN forums.forum  f ON f.id = t.forum_id
-      LEFT JOIN forums.person p ON p.id = t.author_id
      WHERE f.slug  = :fs
        AND t.slug  = :ts
        AND t.status IN ('publish', 'closed')
@@ -65,16 +56,6 @@ $forum = ['id' => $row['forum_id'], 'slug' => $row['forum_slug'], 'title' => $ro
           'parent_forum_id' => $row['parent_forum_id'], 'header_image_url' => $row['header_image_url']];
 $topic = $row; // all t.* fields are top-level keys
 
-// ── 2b. Author-identity masks (H6) — same leak-safe masks the feed uses, now on
-//    the permalink too. is_anon → "Anonymous"; member-only discussion authors →
-//    "Private member" for logged-out viewers. Logged-in viewers see real authors
-//    (mask_visibility no-ops). Mask BEFORE the OP mod-badge lookup below so a
-//    masked author's author_id is nulled and the badge query never reveals them.
-$viewer_logged_in = !$lg_anon_view;
-$can_mod = function_exists('lg_bb_mirror_can_moderate') ? lg_bb_mirror_can_moderate() : false;
-lg_bb_mirror_mask_anon($topic, $can_mod);
-lg_bb_mirror_mask_visibility($topic, $viewer_logged_in);
-
 // ── 3. OP person record (for moderator badge) ────────────────────────────────
 $op_is_mod = false;
 if ($topic['author_id']) {
@@ -88,8 +69,6 @@ if ($topic['author_id']) {
 $rs = $db->prepare("
     SELECT r.id, r.parent_reply_id, r.content_html, r.author_name,
            r.author_slug, r.author_id, r.created_at,
-           r.is_anon::int                              AS is_anon,
-           COALESCE(p.discussion_visibility, 'member') AS discussion_visibility,
            p.is_moderator
       FROM reply r
       LEFT JOIN person p ON p.id = r.author_id
@@ -99,13 +78,6 @@ $rs = $db->prepare("
 ");
 $rs->execute([(int)$topic['id']]);
 $replies_flat = $rs->fetchAll();
-// Apply the same author-identity masks to every reply BEFORE the tree is built,
-// so masked names propagate to the "↩ in reply to <author>" back-references too.
-foreach ($replies_flat as &$lg_r) {
-    lg_bb_mirror_mask_anon($lg_r, $can_mod);
-    lg_bb_mirror_mask_visibility($lg_r, $viewer_logged_in);
-}
-unset($lg_r);
 
 // ── 4b. Attachments — one query covers topic + all replies in this thread. ──
 $reply_ids = array_map(fn($r) => (int)$r['id'], $replies_flat);
@@ -223,9 +195,7 @@ function render_reply(
     $r        = $reply_map[$id];
     $children = $children_map[$id] ?? [];
     $is_op    = ((int)$r['author_id'] === $op_id && $op_id > 0);
-    // Don't reveal that a masked (anon / member-only) author is a moderator.
-    $is_masked = ($r['_anon_masked'] ?? false) || ($r['_visibility_masked'] ?? false);
-    $is_mod   = !$is_masked && (bool)($r['is_moderator'] ?? false);
+    $is_mod   = (bool)($r['is_moderator'] ?? false);
     $letter   = avatar_letter($r['author_name'] ?: '?');
     $created  = fmt_ts_single($r['created_at']);
     $dt_attr  = fmt_ts_dt($r['created_at']);
@@ -253,7 +223,7 @@ function render_reply(
           <?php endif; ?>
           <time class="post__time" datetime="<?= $dt_attr ?>"><?= $created ?></time>
         </div>
-        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$r['content_html']) : $r['content_html'] /* sanitized at sync write */ ?></div>
+        <div class="post__body"><?= $r['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($GLOBALS['att_map']['reply'][(int)$r['id']] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__reply-btn" data-reply-to="<?= (int)$r['id'] ?>"
@@ -365,7 +335,7 @@ $fh_image      = $forum['header_image_url'] ?: null;
           <?php endif; ?>
           <time class="post__time" datetime="<?= $op_dt ?>"><?= $op_created ?></time>
         </div>
-        <div class="post__body"><?= $lg_anon_view ? lg_scrub_anon_contacts((string)$topic['content_html']) : $topic['content_html'] /* sanitized at sync write */ ?></div>
+        <div class="post__body"><?= $topic['content_html'] /* sanitized at sync write */ ?></div>
         <?php render_attachments($att_map['topic'][$topic_id] ?? []); ?>
         <div class="post__actions">
           <button type="button" class="post__edit-btn" hidden

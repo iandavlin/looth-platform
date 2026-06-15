@@ -56,17 +56,8 @@ if ($upload_id > 0) {
     $url = (string)$resolved;
 }
 
-// Only allow absolute https URLs (no javascript: etc.) on our OWN origin. Empty
-// = clear. Host allowlist closes the stored-SSRF/arbitrary-host hole: header
-// images are CSS backgrounds, and every legit source (wp-content uploads, the
-// /img.php resizer, the upload_id path resolved above) lives on the site host.
-$lg_sfi_allowed_hosts = [strtolower(LG_BB_MIRROR_HOST), 'www.' . strtolower(LG_BB_MIRROR_HOST)];
-if ($url !== '') {
-    $lg_sfi_host = strtolower((string) parse_url($url, PHP_URL_HOST));
-    if (!preg_match('#^https://#i', $url) || !in_array($lg_sfi_host, $lg_sfi_allowed_hosts, true)) {
-        lg_sfi_fail(400, 'url host not allowed');
-    }
-}
+// Only allow absolute https URLs (no javascript: etc.). Empty = clear.
+if ($url !== '' && !preg_match('#^https://#i', $url)) lg_sfi_fail(400, 'url must be https');
 
 $db = bb_mirror_db(false);
 

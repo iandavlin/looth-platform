@@ -21,25 +21,6 @@
   function hide(box) { box.hidden = true; box.innerHTML = ''; }
 
   /* ---- secondary: title quick-jump / author autocomplete dropdowns -------- */
-  // Bold the matched substring (escape FIRST, then wrap — indexes computed on
-  // the raw string but applied to its escaped twin would drift on &/<; so match
-  // on the raw, slice the raw, escape each slice).
-  function highlight(name, q) {
-    var i = name.toLowerCase().indexOf(q.toLowerCase());
-    if (i < 0) return esc(name);
-    return esc(name.slice(0, i)) + '<b>' + esc(name.slice(i, i + q.length)) + '</b>' + esc(name.slice(i + q.length));
-  }
-  function avatarHtml(it) {
-    if (it.avatar_url) {
-      return '<img class="hub-suggest__av" src="' + esc(it.avatar_url) + '" alt="" loading="lazy">';
-    }
-    var init = (it.name || '?').trim().charAt(0).toUpperCase();
-    return '<span class="hub-suggest__av hub-suggest__av--init" aria-hidden="true">' + esc(init) + '</span>';
-  }
-  function setActive(box, item) {
-    box.querySelectorAll('.hub-suggest__item.is-active').forEach(function (el) { el.classList.remove('is-active'); });
-    if (item) { item.classList.add('is-active'); item.scrollIntoView({ block: 'nearest' }); }
-  }
   function wireDropdown(input, box, mode, onPick) {
     var run = debounce(function () {
       var q = input.value.trim();
@@ -50,10 +31,8 @@
           if (!d.results || !d.results.length) { hide(box); return; }
           box.innerHTML = d.results.map(function (it) {
             if (mode === 'author') {
-              return '<button type="button" class="hub-suggest__item" role="option" data-pick="' + esc(it.name) + '">' +
-                     avatarHtml(it) +
-                     '<span class="hub-suggest__name">' + highlight(it.name, q) + '</span>' +
-                     '<span class="hub-suggest__n">' + it.n + (it.n === 1 ? ' post' : ' posts') + '</span></button>';
+              return '<button type="button" class="hub-suggest__item" data-pick="' + esc(it.name) + '">' +
+                     esc(it.name) + ' <span class="hub-suggest__n">' + it.n + '</span></button>';
             }
             var label = it.kind === 'discussion' ? 'Discussion' : it.kind;
             return '<a class="hub-suggest__item" href="' + esc(it.url) + '">' +
@@ -69,28 +48,7 @@
       var pick = e.target.closest('[data-pick]');
       if (pick) { e.preventDefault(); onPick(pick.getAttribute('data-pick')); }
     });
-    // Keyboard: ↑/↓ walk the list, Enter picks the active row (or the top one);
-    // with the dropdown hidden, Enter falls through to the plain form submit
-    // (the no-JS path: ?author=<typed text>).
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { hide(box); return; }
-      if (box.hidden) return;
-      var items = box.querySelectorAll('.hub-suggest__item');
-      if (!items.length) return;
-      var cur = box.querySelector('.hub-suggest__item.is-active');
-      var idx = Array.prototype.indexOf.call(items, cur);
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        idx = e.key === 'ArrowDown'
-          ? (idx + 1) % items.length
-          : (idx <= 0 ? items.length - 1 : idx - 1);
-        setActive(box, items[idx]);
-      } else if (e.key === 'Enter') {
-        var pick = cur || items[0];
-        if (pick && pick.hasAttribute('data-pick')) { e.preventDefault(); onPick(pick.getAttribute('data-pick')); }
-        else if (pick && pick.href) { e.preventDefault(); window.location.href = pick.href; }
-      }
-    });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(box); });
   }
 
   function addAuthor(name) {

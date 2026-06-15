@@ -35,9 +35,8 @@ function reply_out(int $code, array $body): void {
     exit;
 }
 
-$method = $_SERVER['REQUEST_METHOD'] ?? '';
-if (!in_array($method, ['POST', 'PUT', 'DELETE'], true)) {
-    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST/PUT/DELETE only.']);
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    reply_out(405, ['ok' => false, 'error' => 'method', 'message' => 'POST only.']);
 }
 
 $uid = get_current_user_id();
@@ -45,107 +44,7 @@ if (!$uid) {
     reply_out(401, ['ok' => false, 'error' => 'auth', 'message' => 'Sign in to reply.']);
 }
 
-$body = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
-
-// ── EDIT (PUT) / DELETE — own reply OR moderator (Ian 2026-06-11: members can
-//    edit AND delete their own replies, no time limit, hard remove). The native
-//    BuddyBoss DELETE is moderators-only, so we own the policy here. ──────────
-if ($method === 'PUT' || $method === 'DELETE') {
-    // ── DELETE a whole TOPIC (the OP/post) — author-or-moderator, same policy as
-    //    replies (Ian 2026-06-15: delete-post in the modal, author + admin). The
-    //    bb-forum-author-delete mu-plugin maps delete_topic to an author-scoped
-    //    primitive; mods/admins delete others' via `moderate`. ──────────────────
-    if ($method === 'DELETE' && (int) ($body['reply_id'] ?? 0) <= 0 && (int) ($body['topic_id'] ?? 0) > 0) {
-        $topic_id_del = (int) $body['topic_id'];
-        if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
-            reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
-        }
-        if (!function_exists('bbp_get_topic_post_type')) {
-            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
-        }
-        $topic = get_post($topic_id_del);
-        if (!$topic || $topic->post_type !== bbp_get_topic_post_type()) {
-            reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Post not found.']);
-        }
-        // Author-or-moderator; author taken from the stored post (IDOR-proof), then
-        // the cap (author-scoped via the mu-plugin) is the authoritative gate.
-        $t_is_author = ((int) $topic->post_author === (int) $uid);
-        $t_is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
-        if ((!$t_is_author && !$t_is_mod) || !current_user_can('delete_topic', $topic_id_del)) {
-            reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only delete your own posts.']);
-        }
-        // Hard remove (Ian: not a tombstone). before_delete_post → bbp_deleted_topic
-        // → the bb→pg sync 'delete' drops the topic (and its replies) from the mirror.
-        $del = wp_delete_post($topic_id_del, true);
-        if (!$del) {
-            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Could not delete the post.']);
-        }
-        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('topic', $topic_id_del, 'delete');
-        reply_out(200, ['ok' => true, 'status' => 'deleted', 'topic_id' => $topic_id_del]);
-    }
-
-    $reply_id = (int) ($body['reply_id'] ?? 0);
-    if ($reply_id <= 0) {
-        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => 'reply_id is required.']);
-    }
-    // CSRF: the same wp_rest nonce the auth endpoint mints (X-WP-Nonce header).
-    if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
-        reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
-    }
-    if (!function_exists('bbp_get_reply_post_type')) {
-        reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Forum engine unavailable.']);
-    }
-    $reply = get_post($reply_id);
-    if (!$reply || $reply->post_type !== bbp_get_reply_post_type()) {
-        reply_out(404, ['ok' => false, 'error' => 'not_found', 'message' => 'Reply not found.']);
-    }
-    // Author-or-moderator. The reply author is taken from the stored post, never
-    // the client (IDOR-proof) — same contract as the create path's flood check.
-    $is_author = ((int) $reply->post_author === (int) $uid);
-    $is_mod    = current_user_can('moderate') || current_user_can('keep_gate');
-    if (!$is_author && !$is_mod) {
-        reply_out(403, ['ok' => false, 'error' => 'forbidden', 'message' => 'You can only edit or delete your own replies.']);
-    }
-
-    if ($method === 'DELETE') {
-        // Hard remove (Ian: not a tombstone). wp_delete_post(force) fires
-        // before_delete_post → bbp_deleted_reply → the bb→pg sync 'delete'.
-        $del = wp_delete_post($reply_id, true);
-        if (!$del) {
-            reply_out(500, ['ok' => false, 'error' => 'server', 'message' => 'Could not delete the reply.']);
-        }
-        if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'delete'); // belt-and-suspenders
-        reply_out(200, ['ok' => true, 'status' => 'deleted', 'reply_id' => $reply_id]);
-    }
-
-    // PUT — edit content. wp_update_post kses-filters for non-unfiltered_html users.
-    $new = trim((string) ($body['content'] ?? ''));
-    if ($new === '') {
-        reply_out(400, ['ok' => false, 'error' => 'invalid', 'message' => "Reply can't be empty."]);
-    }
-    $upd = wp_update_post(['ID' => $reply_id, 'post_content' => $new], true);
-    if (is_wp_error($upd)) {
-        reply_out(500, ['ok' => false, 'error' => 'server', 'message' => (string) $upd->get_error_message()]);
-    }
-    // wp_update_post doesn't fire bbp_edit_reply, so sync the PG mirror explicitly.
-    if (function_exists('bb_mirror_sync_dispatch')) bb_mirror_sync_dispatch('reply', $reply_id, 'upsert');
-    $fresh = get_post($reply_id);
-    reply_out(200, [
-        'ok'           => true,
-        'status'       => 'edited',
-        'reply_id'     => $reply_id,
-        'content_html' => (string) apply_filters('bbp_get_reply_content', $fresh->post_content, $reply_id),
-    ]);
-}
-
-// ── CREATE (POST) ───────────────────────────────────────────────────────────
-// CSRF: the same wp_rest nonce the PUT/DELETE path verifies (X-WP-Nonce header).
-// rest_do_request() below runs the BuddyBoss handler in-process and so bypasses
-// the REST nonce gate — verify here. The client fetches this nonce from auth.php.
-if (!wp_verify_nonce((string) ($_SERVER['HTTP_X_WP_NONCE'] ?? ''), 'wp_rest')) {
-    reply_out(403, ['ok' => false, 'error' => 'nonce', 'message' => 'Session expired — reload and retry.']);
-}
-
+$body     = json_decode(file_get_contents('php://input') ?: '', true) ?: [];
 $topic_id = (int) ($body['topic_id'] ?? 0);
 $content  = trim((string) ($body['content'] ?? ''));
 $reply_to = (int) ($body['reply_to'] ?? 0);
@@ -220,10 +119,14 @@ if ($reply_id <= 0) {
 // Belt-and-suspenders throttle bookkeeping for our own pre-check.
 update_user_meta($uid, '_bbp_last_posted', time());
 
-// Anonymous REPLIES retired 2026-06-10 (Ian: "we don't want anon replies.
-// Just anon posts."). The composer toggle is gone from the reply modal and
-// this endpoint no longer honors `_lg_anon` on replies — anonymity remains a
-// new-TOPIC feature only. (Existing anon replies keep their stored meta.)
+// Anonymous-posting flag (anon-rebuild lane): the composer's "Post anonymously"
+// toggle rides `_lg_anon` in this body. The bb-mirror-sync mu-plugin also stamps
+// this meta from php://input on bbp_new_reply; we set it here too (we already
+// have the decoded body + the id) so the flag is guaranteed before the deferred
+// shutdown sync reads it. update_post_meta is idempotent.
+if (!empty($body['_lg_anon'])) {
+    update_post_meta($reply_id, '_lg_anon', 1);
+}
 
 $reply = get_post($reply_id);
 

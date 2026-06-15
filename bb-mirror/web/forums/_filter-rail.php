@@ -47,10 +47,8 @@ function hub_query_params(): array
     $out = [];
     if (!empty($f['types']))   $out['type']   = implode(',', $f['types']);
     if (!empty($f['cats']))    $out['cat']    = implode(',', $f['cats']);
-    if (!empty($f['leaves']))  $out['leaf']   = implode(',', $f['leaves']);
     if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
-    if (!empty($f['saved']))   $out['saved']  = 1;
     return $out;
 }
 
@@ -88,23 +86,37 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     $on     = in_array($key, $filters[$mkey], true);     // filtered-to
     $is_mut = in_array($key, $muted[$mkey], true);       // sticky-muted
     $f_url  = hub_url(hub_toggle($filters, $facet, $key), $sort);
+    $m_url  = hub_mute_url($filters, $sort, $facet === 'type' ? 't' : 'c', $key);
     ?>
     <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= $n === 0 ? ' hub-rail__row--empty' : '' ?>">
       <a class="hub-rail__nm" href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
       <span class="hub-rail__ct"><?= $n ?></span>
+      <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= $m_url ?>"
+         title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($label) ?>"></a>
     </div>
     <?php
 }
 
-/** The view toggles (Compact / Text size / Theme) — RETIRED 2026-06-10
- *  (bespoke-cutover; Ian: the header GEAR is the only page-state control zone).
- *  Text size + color live in the gear (LGSettings panel); compact mode retired
- *  with the layout pullback to Mosaic/Stream. Both render layers were already
- *  CSS-hiding these buttons — now they are simply not emitted. forums.js's
- *  legacy handlers are null-guarded, so they no-op. Function kept (empty) so
- *  call sites stay valid. */
+/** The view toggles (Compact / Text size / Theme). Shared so the Hub rail and
+ *  the scoped-forum sort bar render identical, JS-bindable markup. */
 function hub_render_view_toggles(): void
 {
+    ?>
+    <div class="feed-view-toggles">
+      <button class="feed-text-toggle" type="button" aria-pressed="false" data-level="0"
+              title="Cycle text size" aria-label="Cycle text size">
+        <span class="feed-text-toggle__icon" aria-hidden="true">T</span>
+      </button>
+      <button class="feed-theme-toggle" type="button" aria-pressed="false" data-level="0"
+              title="Cycle color theme" aria-label="Cycle color theme">
+        <span class="feed-theme-toggle__icon" aria-hidden="true">C</span>
+      </button>
+      <button class="feed-compact-toggle" type="button" aria-pressed="false"
+              title="Toggle compact view" aria-label="Toggle compact view">
+        <span class="feed-compact-toggle__icon" aria-hidden="true">Cpt</span>
+      </button>
+    </div>
+    <?php
 }
 
 /** One accordion parent (+ its leaves) for the Category section. */
@@ -133,6 +145,8 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
         <?= $chev ?>
         <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
         <span class="hub-rail__ct"><?= (int)$p['count'] ?></span>
+        <a class="hub-sw<?= $is_mut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'c', $p['key']) ?>"
+           title="<?= $is_mut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $is_mut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($p['label']) ?>"></a>
         <?php
     };
     if ($has): ?>
@@ -145,6 +159,8 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
           <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
             <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
             <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
+            <a class="hub-sw<?= $lmut ? '' : ' is-on' ?>" href="<?= hub_mute_url($filters, $sort, 'l', $lf['key']) ?>"
+               title="<?= $lmut ? 'Unmute' : 'Mute' ?>" aria-label="<?= $lmut ? 'Unmute ' : 'Mute ' ?><?= htmlspecialchars($lf['label']) ?>"></a>
           </div>
         <?php endforeach; ?>
       </div>
@@ -168,36 +184,56 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
                || !empty($filters['authors']) || !empty($filters['q'])
                || !empty($muted['types']) || !empty($muted['cats']) || !empty($muted['leaves']);
 
-    // BOTH sections visible at once, side by side — the segmented Type/Categories
-    // radio toggle is retired (Ian 2026-06-11: "both open, no toggle"); the rail
-    // now renders inside the centered filters modal (_chrome.php) and the modal
-    // body lays the two columns out via .hub-rail__cols.
-    // (Rail "Saved posts" entry removed 2026-06-11, Ian — the Saved pill in the
-    // sort bar is now the one Saved affordance. hub_saved_url() stays for the pill.)
+    // Segmented Type/Categories toggle (replaces the old stacked accordions, Ian):
+    // ONE facet list visible at a time, switchable with zero JS via two visually-
+    // hidden radios + :checked sibling rules. Default-checked = the section with an
+    // active selection; Categories (the primary nav) otherwise.
+    $type_active = !empty($filters['types']) || !empty($muted['types']);
+    $open_sec    = $type_active ? 'type' : 'cat';
+    // Saved view toggle — a dedicated rail entry (NOT a Type/Category facet).
+    // Logged-in only (cookie-gated, same door as the ☆ save control); anon viewers
+    // get no Saved affordance — canonical owner of the desktop Saved filter (this
+    // supersedes Buck's hub-polish.js overlay pill).
+    $saved_on   = !empty($filters['saved']);
+    $can_save   = function_exists('lg_bb_mirror_can_post') && lg_bb_mirror_can_post();
     ?>
     <div class="hub-rail">
+      <?php if ($can_save): ?>
+        <a class="hub-rail__saved<?= $saved_on ? ' is-on' : '' ?>" href="<?= hub_saved_url($filters, $sort) ?>"
+           aria-pressed="<?= $saved_on ? 'true' : 'false' ?>">
+          <span class="hub-rail__saved-ico" aria-hidden="true"><?= $saved_on ? '&#9733;' : '&#9734;' ?></span>
+          <span class="hub-rail__saved-nm">Saved posts</span>
+          <?php if ($saved_on): ?><span class="hub-rail__saved-x" aria-hidden="true">&times;</span><?php endif; ?>
+        </a>
+      <?php endif; ?>
       <?php if ($any_active): ?>
         <a class="hub-rail__reset" href="<?= hub_reset_url($sort) ?>">&times; Reset all filters</a>
       <?php endif; ?>
 
-      <div class="hub-rail__cols">
-        <section class="hub-rail__col hub-rail__col--cat" aria-label="Filter by category">
-          <h3 class="hub-rail__colh">Categories</h3>
-          <div class="hub-rail__group" id="hub-cat-accordion">
-            <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
-          </div>
-        </section>
-
-        <section class="hub-rail__col hub-rail__col--type" aria-label="Filter by type">
-          <h3 class="hub-rail__colh">Types</h3>
-          <div class="hub-rail__group">
-            <?php foreach ($type_order as $key):
-              if (!isset($types[$key])) continue;
-              hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
-            endforeach; ?>
-          </div>
-        </section>
+      <input type="radio" name="hub-rail-sec" id="hrs-cat"  class="hub-rail__radio"<?= $open_sec === 'cat'  ? ' checked' : '' ?>>
+      <input type="radio" name="hub-rail-sec" id="hrs-type" class="hub-rail__radio"<?= $open_sec === 'type' ? ' checked' : '' ?>>
+      <div class="hub-rail__switch" role="group" aria-label="Filter by">
+        <label class="hub-rail__seg hub-rail__seg--cat"  for="hrs-cat">Categories</label>
+        <label class="hub-rail__seg hub-rail__seg--type" for="hrs-type">Type</label>
       </div>
+
+      <p class="hub-rail__help">Tap a name to filter. Flip its <span class="hub-sw hub-sw--demo is-on" aria-hidden="true"></span> switch to mute — muted items stay hidden across visits.</p>
+
+      <div class="hub-rail__panel hub-rail__panel--cat">
+        <div class="hub-rail__group" id="hub-cat-accordion">
+          <?php foreach ($tree as $p) { if ($p['key'] === 'looths') continue; hub_render_cat_parent($p, $filters, $muted, $sort); } ?>
+        </div>
+      </div>
+
+      <div class="hub-rail__panel hub-rail__panel--type">
+        <div class="hub-rail__group">
+          <?php foreach ($type_order as $key):
+            if (!isset($types[$key])) continue;
+            hub_rail_row('type', (string)$key, hub_type_label((string)$key), (int)$types[$key], $filters, $muted, $sort);
+          endforeach; ?>
+        </div>
+      </div>
+
     </div>
     <?php
 }
@@ -232,9 +268,8 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
       <form class="hub-tsearch hub-tsearch--author" method="get" action="<?= $action ?>" role="search" autocomplete="off">
         <?= $keep(['author']) ?>
         <span class="hub-tsearch__ico" aria-hidden="true">&#128100;</span>
-        <?php /* "Search by author…" canonical (hub-polish's client rename now no-ops) */ ?>
-        <input class="hub-tsearch__in" name="author" type="search" placeholder="Search by author…"
-               value="" autocomplete="off" aria-label="Search by author" data-hub-author>
+        <input class="hub-tsearch__in" name="author" type="search" placeholder="Add an author…"
+               value="" autocomplete="off" aria-label="Filter by author" data-hub-author>
         <div class="hub-suggest" data-hub-suggest="author" hidden></div>
       </form>
     </div>

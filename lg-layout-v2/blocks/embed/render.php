@@ -17,6 +17,33 @@
 /** @var array $args */
 /** @var array $ctx */
 
+/**
+ * Pick the best YouTube poster that actually exists, stepping
+ * maxresdefault (1280w) -> sddefault (640w) -> hqdefault (480w, always exists).
+ * Result (URL + intrinsic width descriptor) is cached per video id for 7 days,
+ * so the HEAD probe runs at most once per video per week. Returns [url, width].
+ */
+if (!function_exists('lg_embed_yt_best_poster')) {
+    function lg_embed_yt_best_poster(string $ytId): array {
+        $id  = rawurlencode($ytId);
+        $hq  = ["https://i.ytimg.com/vi/{$id}/hqdefault.jpg", 480];
+        if (!function_exists('get_transient')) return $hq; // CLI/test harness
+        $key    = 'lg_v2_yt_poster_' . $ytId;
+        $cached = get_transient($key);
+        if (is_array($cached) && isset($cached[0], $cached[1])) return $cached;
+        $best = $hq;
+        foreach ([['maxresdefault', 1280], ['sddefault', 640]] as $cand) {
+            $resp = wp_remote_head("https://i.ytimg.com/vi/{$id}/{$cand[0]}.jpg", ['timeout' => 3]);
+            if (!is_wp_error($resp) && (int) wp_remote_retrieve_response_code($resp) === 200) {
+                $best = ["https://i.ytimg.com/vi/{$id}/{$cand[0]}.jpg", $cand[1]];
+                break;
+            }
+        }
+        set_transient($key, $best, 7 * DAY_IN_SECONDS);
+        return $best;
+    }
+}
+
 $url     = is_string($args['url']     ?? null) ? trim((string) $args['url'])     : '';
 $ratio   = is_string($args['ratio']   ?? null) ? trim((string) $args['ratio'])   : '16x9';
 $caption = is_string($args['caption'] ?? null) ? (string) $args['caption']       : '';
@@ -119,14 +146,19 @@ $playSvg = '<svg viewBox="0 0 68 48" aria-hidden="true"><path class="lg-embed__p
    iframe with autoplay=1. */
 if ($ytId !== '') {
     $safeYtId = htmlspecialchars($ytId, ENT_QUOTES, 'UTF-8');
-    /* maxresdefault.jpg isn't guaranteed for every video; hqdefault.jpg
-       always exists. Srcset lets the browser try the higher-res first. */
-    $thumbHi = "https://i.ytimg.com/vi/{$safeYtId}/maxresdefault.jpg";
+    /* maxresdefault.jpg only exists when the source was >=720p AND YouTube
+       generated it — for everything else it 404s to a grey 120x90 placeholder
+       that scales up blurry. We can't blindly offer it as the wide srcset
+       candidate (a desktop browser would pick it and get the grey blob).
+       Probe once (HEAD, cached 7d) and step down maxres -> sd -> hq; hqdefault
+       always exists and is the guaranteed src floor. object-fit:cover crops
+       the 4:3 fallbacks' letterbox bars to the 16:9 frame, so they look clean. */
     $thumbLo = "https://i.ytimg.com/vi/{$safeYtId}/hqdefault.jpg";
+    [$thumbHi, $hiW] = lg_embed_yt_best_poster($ytId);
     ?>
 <figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--youtube<?= $isShorts ? ' lg-embed--shorts' : '' ?>">
   <div class="lg-embed__frame lg-embed__facade" style="aspect-ratio: <?= $aspectCss ?>;" data-yt-id="<?= $safeYtId ?>" data-yt-start="<?= (int) $ytStart ?>">
-    <img class="lg-embed__poster" src="<?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?>" srcset="<?= htmlspecialchars($thumbHi, ENT_QUOTES, 'UTF-8') ?> 1280w, <?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?> 480w" sizes="100vw" loading="lazy" alt="" />
+    <img class="lg-embed__poster" src="<?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?>" srcset="<?= htmlspecialchars($thumbHi, ENT_QUOTES, 'UTF-8') ?> <?= (int) $hiW ?>w, <?= htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') ?> 480w" sizes="100vw" loading="lazy" alt="" />
     <button type="button" class="lg-embed__play" aria-label="Play video"><?= $playSvg ?></button>
   </div>
 <?php if ($caption !== ''): ?>

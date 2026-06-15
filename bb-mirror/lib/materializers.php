@@ -117,22 +117,6 @@ function bb_mirror_discussion_vis(int $uid): string {
  * Returns [] on any failure → every caller falls back to the safe 'member'.
  */
 function bb_mirror_discussion_vis_batch(array $wpIds): array {
-    $out = [];
-    foreach (bb_mirror_person_vis_batch($wpIds) as $wid => $vis) {
-        $out[$wid] = $vis['discussion'];
-    }
-    return $out;
-}
-
-/**
- * Richer batch resolver: wp_user_id => ['discussion' => 'public'|'member',
- * 'profile' => 'public'|'private']. 'profile' is the MASTER SWITCH
- * (users.profile_visibility, Ian 6/12 visibility refactor) — 'private' = the
- * member is owner-only everywhere; forums.person caches it so the hub search
- * mask rides the same JOIN as the logged-out author mask. Unresolved ids are
- * absent; callers default leak-safe.
- */
-function bb_mirror_person_vis_batch(array $wpIds): array {
     $wpIds = array_values(array_filter(array_map('intval', $wpIds), static fn($i) => $i > 0));
     if (!$wpIds) return [];
     $token  = (string) getenv('LG_LOOTHDEV_GATE_TOKEN');
@@ -160,10 +144,7 @@ function bb_mirror_person_vis_batch(array $wpIds): array {
         foreach ($data['items'] as $it) {
             $wid = (int) ($it['wp_user_id'] ?? 0);
             if ($wid <= 0) continue;
-            $out[$wid] = [
-                'discussion' => (($it['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member',
-                'profile'    => (($it['profile_visibility'] ?? 'public') === 'private') ? 'private' : 'public',
-            ];
+            $out[$wid] = (($it['discussion_visibility'] ?? 'member') === 'public') ? 'public' : 'member';
         }
     }
     return $out;
@@ -252,19 +233,6 @@ function bb_mirror_upsert_forum(int $id, PDO $db): void {
     bb_mirror_refresh_effective_group($db, $id);
 }
 
-// An attachment row whose file is gone becomes a BROKEN CARD COVER (the feed
-// promotes attachments to covers — Buck audit 6/11 found 36 dead rows, mostly
-// test uploads). Stat local uploads before writing the row; URLs outside the
-// uploads tree can't be verified and pass through. Runs under WP (www-data),
-// which CAN traverse the uploads dirs (the ubuntu user cannot).
-function bb_mirror_attachment_file_exists(string $url): bool {
-    $up    = wp_get_upload_dir();
-    $upath = parse_url($url, PHP_URL_PATH) ?: '';
-    $bpath = parse_url((string)$up['baseurl'], PHP_URL_PATH) ?: '';
-    if ($bpath === '' || strpos($upath, $bpath) !== 0) return true; // not a local upload
-    return file_exists($up['basedir'] . substr($upath, strlen($bpath)));
-}
-
 // Harvest BB media attachments + inline <img> URLs for a topic/reply.
 // Source priority:
 //   1. wp_postmeta.bp_media_ids (CSV of wp_bp_media.id) — BB Platform media uploads
@@ -330,14 +298,12 @@ function bb_mirror_sync_attachments(int $parent_id, string $kind, PDO $db, strin
         "INSERT INTO attachment (parent_kind, parent_id, url, alt, mime, width, height, position, sync_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
-    $pos = 0;
-    foreach ($rows as $row) {
-        if (!bb_mirror_attachment_file_exists($row['url'])) continue; // dead file = broken cover
+    foreach ($rows as $i => $row) {
         $stmt->execute([
             $kind, $parent_id,
             $row['url'], $row['alt'] ?: null,
             $row['mime'], $row['width'], $row['height'],
-            $pos++, bb_mirror_ts(time())
+            $i, bb_mirror_ts(time())
         ]);
     }
 }
@@ -378,12 +344,6 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         ? '{' . implode(',', array_map(fn($t) => '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], (string)$t) . '"', $tag_names)) . '}'
         : null;
 
-    // REAL reply count (Ian 2026-06-10: a card said "5 replies", the thread had
-    // 2 — bbPress's _bbp_reply_count meta drifts and we copied it verbatim).
-    // Count published replies at the source instead.
-    $real_reply_count = (int)$GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
-        "SELECT COUNT(*) FROM {$GLOBALS['wpdb']->posts} WHERE post_type='reply' AND post_status='publish' AND post_parent=%d", $id));
-
     $cols = ['id','forum_id','slug','title','content_html','content_text','featured_image_url',
              'author_id','author_name','author_slug','anonymous_name','is_anon',
              'status','sticky_kind','voice_count','reply_count',
@@ -399,7 +359,7 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
         $m['_bbp_topic_status'] ?? $p->post_status,
         $sticky,
         (int)($m['_bbp_voice_count']     ?? 0),
-        $real_reply_count,
+        (int)($m['_bbp_reply_count']     ?? 0),
         (int)($m['_bbp_last_reply_id']   ?? 0) ?: null,
         (int)($m['_bbp_last_active_id']  ?? 0) ?: null,
         bb_mirror_ts(bb_mirror_ts_in($m['_bbp_last_active_time'] ?? null)),
