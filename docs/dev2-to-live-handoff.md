@@ -18,9 +18,13 @@ it's all enumerated below and in the runbook.
   self-serve from dev**; only shell ops (wp-cli, psql, files, perms, deploys) need Ian to paste.
 - Deploy transport: build bundle on dev → serve at `https://dev.loothgroup.com/.well-known/` → Ian pulls →
   **delete after** (dev disk ~85%).
-- ⚠️ **Mixed deploy model:** `bb-mirror` is a real git checkout on dev2 (`git -C /home/ubuntu/git/looth-platform pull`);
-  **everything else is plain files → tar bundles.** Recommend converting dev2 to a FULL git checkout before/at
-  the cut (everything's in the repo — confirmed) so every deploy is one `git pull`.
+- ⚠️ **Mixed deploy model — DO NOT treat it as "one git pull" (that misread caused a regression 6/15):**
+  `bb-mirror` is a git checkout (`/home/ubuntu/git/looth-platform`, tracking **`main`** as of 6/15) served via `/srv/bb-mirror`;
+  **archive-poc is a SEPARATE plain dir** (`/home/ubuntu/projects/archive-poc`, NOT the clone); **nginx snippets are flat
+  copies that DIVERGE from dev1/git.** Before any deploy: confirm branch (`git status -sb`) + read `reflog`; pull `--ff-only`;
+  copy app files into their real dirs; deploy nginx as appended blocks + `nginx -t` + auto-rollback (never wholesale-copy).
+  Full rules + the recovery recipe live in **dev2-build-checklist.md → Phase 8b + CUT-CRITICAL GOTCHA #6**. Converting dev2
+  to a single full git checkout (so deploys really are one pull) is still a good idea — but it isn't the state today.
 
 ## DONE this session (on dev2, verified)
 - **Plugins:** `lg-layout-v2` + `lg-snippets` bundled + active (were missing → v2 editor + events broke).

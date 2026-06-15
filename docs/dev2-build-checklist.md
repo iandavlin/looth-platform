@@ -158,16 +158,30 @@ includes (certonly doesn't create them).
 - SKIP for prod: mailpit, idle-shutdown, code-server, chrome-dev, **thumbnails*.service** (those are node *editor* UIs on :8080/:3334, authoring tools — not a render dependency).
 - **⚠️ AT CUT:** delete `/etc/lg-loothdev-gate.env` (no gate on live) and flip `LG_BB_MIRROR_PUBLIC_HOST` → `loothgroup.com` on the two pools + (if kept) the env file. Same for the `LG_ARCHIVE_POC_PUBLIC_HOST` / `LG_EVENTS_PUBLIC_HOST` pool envs.
 
-### Phase 8b — code deploy model  (NEW 6/14: hub/bb-mirror now git-managed on dev2)
+### Phase 8b — code deploy model  (NEW 6/14; CORRECTED 6/15 — read this carefully before ANY dev2 deploy)
 dev2 had NO git (plain-file bundles). Gave it a **read-only** GitHub deploy key (`~/.ssh/looth_platform_deploy`,
-ed25519, "Allow write access" UNCHECKED) + `github-looth` ssh alias. Cloned to `/home/ubuntu/git/looth-platform`
-(branch `bespoke-cutover`); flipped `/srv/bb-mirror` symlink → the clone's `bb-mirror/`. Old plain-files tree kept
-at `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror` as instant rollback (`ln -sfn … && reload`).
-- **Deploy now = `git -C /home/ubuntu/git/looth-platform pull` + `systemctl reload php8.3-fpm nginx`.** Tracking+diffs for free.
-- ⚠️ **nginx snippets are NOT git-managed** (flat copies) — still deploy via `curl|tee + nginx -t + reload` (e.g. the /members/* redirect a7b258e).
-- **⚠️ AT CUT:** merge `bespoke-cutover` → `main`, repoint the checkout to `main` (prod must not track a lane branch).
-  Read-only deploy key persists (fine — prod pulls, never pushes). Other apps (archive-poc, profile-app, …) are still
-  plain files — git-manage them the same way if we want uniform git deploys for prod.
+ed25519, "Allow write access" UNCHECKED) + `github-looth` ssh alias. Cloned to `/home/ubuntu/git/looth-platform`;
+flipped `/srv/bb-mirror` symlink → the clone's `bb-mirror/`. Old plain-files tree kept at
+`/home/ubuntu/worktrees/bespoke-cutover/bb-mirror` as instant rollback (`ln -sfn … && reload`).
+
+**ACTUAL SERVE TOPOLOGY (verified 6/15 — the doc previously got this wrong and it caused a live-looking regression):**
+- `/srv/bb-mirror`  → `/home/ubuntu/git/looth-platform/bb-mirror`  — **THE GIT CLONE.** Branch was repointed
+  **`bespoke-cutover` → `main`** on 6/15 (per the "AT CUT" note below). **A `git pull` here changes served bb-mirror code.**
+- `/srv/archive-poc` → `/home/ubuntu/projects/archive-poc`  — **a SEPARATE plain dir, NOT the clone.** The git pull does
+  NOT touch it. Deploy archive-poc files (e.g. `sitemap.php`) by copying straight into `/home/ubuntu/projects/archive-poc/...`.
+- nginx snippets → flat copies in `/etc/nginx/snippets/` — **NOT git, and they DIVERGE from dev1/git** (box-specific
+  host/path/cache edits). `sha256` of all 3 differed from both git baseline AND dev1 on 6/15.
+
+**HARD RULES (learned the hard way 6/15 — see GOTCHA "dev2 deploy" below):**
+1. **NEVER blind `git pull` / `reset --hard HEAD@{1}`.** First confirm branch: `git -C … status -sb | head -1`, and read
+   `git -C … reflog -15`. The map work lives on **main's first-parent line, NOT on `bespoke-cutover`** — a clone sitting on
+   `bespoke-cutover` SILENTLY LOSES the full-map (`3a5817e`) + other main-only work. A blind pull/reset bounced the checkout
+   and looked like the whole site regressed. Recovery is always `git reset --hard origin/main` (canonical cut state).
+2. **NEVER wholesale-copy a dev1 snippet over dev2's** (they diverge → clobbers box-specific config). Deploy nginx changes
+   as **appended self-contained blocks + an idempotent `sed`**, then `nginx -t` with **auto-rollback to a timestamped backup**.
+   Template: `/var/www/dev/.well-known/dev2-seo-deploy-v2.sh` (the SEO deploy — copy its pattern).
+- **Deploy now = `git -C /home/ubuntu/git/looth-platform pull --ff-only` (bb-mirror only) + the surgical snippet/file steps + reload.**
+- **⚠️ AT CUT:** clone tracks `main` (done 6/15). Prod must not track a lane branch. Read-only deploy key persists.
 
 ### Phase 10 — verify (PARTLY DONE)
 - ✅ **Anon web sweep (6/14, self-serve from dev):** source-disclosure all locked (`config.php`/`wp-config.php`/`.git/config`
@@ -223,6 +237,17 @@ at `/home/ubuntu/worktrees/bespoke-cutover/bb-mirror` as instant rollback (`ln -
    **v1.74+** (stock v1.60 501s on R2 with `--vfs-cache-mode full`).
 5. **Uploads serve same-origin** (`<siteurl>/wp-content/uploads/` from the mount): AS3CF `serve-from-s3=true`
    but empty delivery-domain → site domain; so the URL search-replace (Ph7) is what makes images resolve.
+6. **dev2 deploy = NEVER blind git, NEVER wholesale snippet copy** (learned 6/15 — caused a full-site-looking regression).
+   - The bb-mirror clone (`/home/ubuntu/git/looth-platform`) serves live code via `/srv/bb-mirror`. A blind `git pull`
+     dragged it across commits; because **map work + other main-only commits are NOT on `bespoke-cutover`**, a checkout on
+     that branch silently loses them (map reverted to US-center, etc.). A blind `reset --hard HEAD@{1}` then overshot.
+     **Always:** `git status -sb` + `reflog -15` FIRST; recover with `git reset --hard origin/main`; pull with `--ff-only`.
+   - `/srv/archive-poc` → `/home/ubuntu/projects/archive-poc` is a SEPARATE dir (NOT the clone) — copy app files there directly.
+   - The 3 nginx snippets are flat copies that **diverge from dev1/git** — wholesale-copying a dev1 snippet clobbers
+     box-specific config. **Deploy nginx as appended self-contained blocks + idempotent `sed`, `nginx -t`, auto-rollback to
+     a timestamped backup.** Reference pattern: `/var/www/dev/.well-known/dev2-seo-deploy-v2.sh`.
+   - **The dev session cannot SSH to dev2 (SG blocks :22)** — shell ops are Ian-paste; ship via a `.well-known` bundle +
+     a paste-safe SCRIPT (run as `bash file`, NOT pasted with `set -e` — `set -e` + a no-match `grep` logs the shell out).
 
 ## Phase 11 — THE CUT (dev2 → loothgroup.com)
 - ☐ **FETCH FROM LIVE** (file access, NOT in the DB dump — or sessions/JWTs die at flip):
