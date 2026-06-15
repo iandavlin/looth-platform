@@ -280,9 +280,16 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 /* drop indicator while dragging a caddy block onto the profile */
 .lg-block--drop-before{box-shadow:0 -3px 0 0 var(--lg-sage)}
 .lg-block--drop-after{box-shadow:0 3px 0 0 var(--lg-sage)}
-/* Sections toggle in the View-as bar */
-.lg-viewas__caddy{margin-left:auto;background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:6px 14px;font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
+/* Sections toggle in the View-as bar — a hamburger at the break (Ian 6/15):
+   below 1380px the caddy is an off-canvas drawer, so this reads as a menu
+   button; at >=1380 it's display:none (the caddy is the permanent column). */
+.lg-viewas__caddy{margin-left:auto;display:inline-flex;align-items:center;gap:9px;background:var(--lg-amber);color:#4a3c10;border:0;border-radius:999px;padding:8px 15px;min-height:40px;font:800 calc(12px*var(--lg-read-scale,1))/1 var(--lg-font-sans);cursor:pointer}
 .lg-viewas__caddy:hover{filter:brightness(1.06)}
+/* three-bar hamburger glyph (currentColor inherits the button ink) */
+.lg-burger-ic{display:inline-block;width:16px;height:2px;background:currentColor;border-radius:2px;position:relative;flex:0 0 16px}
+.lg-burger-ic::before,.lg-burger-ic::after{content:"";position:absolute;left:0;width:16px;height:2px;background:currentColor;border-radius:2px}
+.lg-burger-ic::before{top:-5px}
+.lg-burger-ic::after{top:5px}
 /* caddy panel — slide-in from the right on desktop; off-canvas drawer on mobile */
 .lg-caddy{position:fixed;top:0;right:0;height:100vh;width:300px;max-width:86vw;background:var(--lg-card-bg,#fff);border-left:1px solid var(--lg-line);
   box-shadow:-12px 0 36px rgba(0,0,0,.14);transform:translateX(102%);transition:transform .22s ease;z-index:1200;display:flex;flex-direction:column;padding:18px}
@@ -577,7 +584,7 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
           <span class="lg-viewas__note">You are editing <b><?= looth_h($displayName) ?></b>'s profile as an administrator. Every save is logged.</span>
           <a class="lg-vchip" style="background:rgba(255,255,255,.12);color:#fff;text-decoration:none" href="/u/<?= rawurlencode($slugSafe) ?>">Exit admin edit</a>
           <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
+          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
           <?php endif; ?>
         </div>
         <?php else: ?>
@@ -589,7 +596,7 @@ html[data-lguser-theme="dark"] .lg-banner--empty{background:repeating-linear-gra
             <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
           </span>
           <?php if ($editing): ?>
-          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy">Sections</button>
+          <button type="button" class="lg-viewas__caddy" id="lg-caddy-toggle" aria-expanded="false" aria-controls="lg-caddy" aria-label="Open sections menu"><span class="lg-burger-ic" aria-hidden="true"></span><span class="lg-viewas__caddy-lbl">Sections</span></button>
           <?php endif; ?>
         </div>
         <?php endif; /* /adminEditing banner vs View-as */ ?>
