@@ -543,9 +543,14 @@ if ($scoped_forum) {
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
           LEFT JOIN person p ON p.id = t.author_id
           LEFT JOIN LATERAL (
-            SELECT url FROM forums.attachment
-             WHERE parent_kind = 'topic' AND parent_id = t.id
-             ORDER BY id ASC LIMIT 1
+            -- OP cover: prefer a materialized attachment, else the first inline
+            -- <img> in the body (fluentform/inline images never hit forums.attachment).
+            SELECT COALESCE(
+                     (SELECT url FROM forums.attachment
+                       WHERE parent_kind = 'topic' AND parent_id = t.id
+                       ORDER BY id ASC LIMIT 1),
+                     (regexp_match(t.content_html, '<img[^>]+src=\"([^\"]+)\"'))[1]
+                   ) AS url
           ) first_img ON true
           -- Fallback: if the topic itself has no image, surface the first image
           -- posted in any of its replies as the card's featured image.
@@ -681,9 +686,14 @@ if ($scoped_forum) {
           LEFT JOIN forum pf ON pf.id = f.parent_forum_id
           LEFT JOIN person p ON p.id = t.author_id
           LEFT JOIN LATERAL (
-            SELECT url FROM forums.attachment
-             WHERE parent_kind = 'topic' AND parent_id = t.id
-             ORDER BY id ASC LIMIT 1
+            -- OP cover: prefer a materialized attachment, else the first inline
+            -- <img> in the body (fluentform/inline images never hit forums.attachment).
+            SELECT COALESCE(
+                     (SELECT url FROM forums.attachment
+                       WHERE parent_kind = 'topic' AND parent_id = t.id
+                       ORDER BY id ASC LIMIT 1),
+                     (regexp_match(t.content_html, '<img[^>]+src=\"([^\"]+)\"'))[1]
+                   ) AS url
           ) first_img ON true
           -- Fallback: if the topic itself has no image, surface the first image
           -- posted in any of its replies as the card's featured image.
