@@ -1132,7 +1132,7 @@ Accept: application/json
 
     public const GALLERY_KEY            = 'gallery';
     public const GALLERY_URL_BASE       = '/profile-media/gallery';
-    public const GALLERY_MAX            = 24;
+    public const GALLERY_MAX            = 10;
     public const GALLERY_DISPLAY_MODES  = ['grid', 'carousel'];
     public const GALLERY_DISPLAY_DEFAULT = 'grid';
 
