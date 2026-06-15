@@ -37,18 +37,35 @@ OFFENDERS=$(sudo -u bb-mirror php -r '
 require "/srv/bb-mirror/config.php";
 require_once "/srv/bb-mirror/web/forums/_reply-render.php";
 $db = bb_mirror_db();
-$block = "#<(p|br|ul|ol|li|blockquote|h[1-6]|pre|table|figure|div)[\s/>]#i";
 $bad = [];
 
-// topic/reply: assert the render helper de-collapses every raw-newline body.
+// A render-collapse offender = after bb_mirror_paragraphs, a RAW text run (outside
+// any block element) STILL holds a blank-line break -> it collapses in the modal.
+// Tokenise the rendered output by block element (same shape the helper preserves)
+// and inspect only the text BETWEEN blocks. This catches BOTH fully-raw rows AND
+// MIXED rows (raw body + appended block, e.g. 71640) — the latter were invisible
+// to the old "content_html has no block tag" filter.
+$blockEl = "~(<(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)\b[^>]*>.*?"
+         . "</(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)>|<(?:hr|br)\s*/?>)~is";
+$collapses = function (string $rendered) use ($blockEl): bool {
+    $rendered = str_replace(["\r\n", "\r"], "\n", $rendered); // normalise so \n\n is detectable
+    $parts = preg_split($blockEl, $rendered, -1, PREG_SPLIT_DELIM_CAPTURE);
+    if ($parts === false) return false;
+    foreach ($parts as $seg) {
+        if ($seg === "" || preg_match("~^\s*(?:<[a-z]|<(?:hr|br)\s*/?>)~i", $seg)) continue;
+        if (preg_match("/\S\s*\n[ \t]*\n\s*\S/", $seg)) return true; // blank-line break in bare text
+    }
+    return false;
+};
+
+// topic/reply: candidate = source has a paragraph break (NO block-tag filter, so
+// mixed rows are included). Push through the render helper, then check for survivors.
 foreach (["topic" => "status IN (\x27publish\x27,\x27closed\x27)",
           "reply" => "status = \x27publish\x27"] as $kind => $where) {
     $sql = "SELECT id, content_html FROM forums.$kind
-             WHERE $where
-               AND content_text ~ E\x27\n[[:space:]]*\n\x27
-               AND content_html !~* \x27<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]\x27";
+             WHERE $where AND content_text ~ E\x27\n[[:space:]]*\n\x27";
     foreach ($db->query($sql) as $r) {
-        if (!preg_match($block, bb_mirror_paragraphs((string)$r["content_html"])))
+        if ($collapses(bb_mirror_paragraphs((string)$r["content_html"])))
             $bad[] = "$kind|" . $r["id"];
     }
 }
