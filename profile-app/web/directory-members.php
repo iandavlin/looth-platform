@@ -288,60 +288,67 @@ function dirAviFallback(img) {
   d.textContent = img.getAttribute('data-ini') || '';
   img.replaceWith(d);
 }
+// ONE member's card markup — the single source of truth. The sidebar list AND the
+// map pin popup both render through this, so the two surfaces can never drift
+// (Ian 6/15: full-card pin popups, parity desktop-hover/mobile-tap).
+function dirCardHTML(it) {
+  // (Per-member teaser cards removed, Ian 6/12 pm: the anon stack is visible
+  // profiles only; members-only members appear as anonymous dots on the map.)
+  const dn = decodeEnt(it.display_name) || 'Member';
+  // profile-media resize buckets (craft gate 6/12): avatars 96, banners 480
+  const rs = (u,w) => u ? u + (u.indexOf('?')>=0?'&':'?') + 'w=' + w : u;
+  const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
+  const avi = it.avatar_url
+    ? `<img class="avi-sm" src="${escH(rs(it.avatar_url,96))}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
+    : `<div class="avi-sm">${ini}</div>`;
+  const banner = it.banner_url
+    ? `<div class="dir-card__banner"><img src="${escH(rs(it.banner_url,480))}" alt=""></div>`
+    : '';
+  const links = (it.links||[]).map(l => {
+    const href = socUrl(l.kind, l.value);
+    if (!href) return '';
+    return `<a class="dir-link" href="${escH(href)}" target="_blank" rel="noopener noreferrer" title="${escH(l.kind)}" aria-label="${escH(l.kind)}">${SOC_ICONS[l.kind] || SOC_ICONS._fb}</a>`;
+  }).join('');
+  // Connect button (logged-in viewers only; API omits it.connect for anon).
+  const cx = it.connect || null;
+  let connectBtn = '';
+  if (cx && cx.state !== 'self' && cx.state !== 'blocked') {
+    const LBL = {none:'Connect', pending_out:'Requested', pending_in:'Accept', accepted:'Connected'};
+    const act = cx.state === 'none' ? 'request' : (cx.state === 'pending_in' ? 'accept' : '');
+    const dis = (cx.state === 'pending_out' || cx.state === 'accepted') ? ' disabled' : '';
+    connectBtn = `<button type="button" class="dir-connect dir-connect--${cx.state}" data-act="${act}" data-uuid="${escH(it.uuid||'')}" data-cid="${cx.id||''}"${dis}>${LBL[cx.state]||'Connect'}</button>`;
+  }
+  // Connected members get a Message button that opens the shared header DM modal
+  // (lg:open-dm — same hook the /u/ profile actions + in-modal connection list use).
+  let msgBtn = '';
+  if (cx && cx.state === 'accepted' && it.uuid) {
+    msgBtn = `<button type="button" class="dir-msg" data-msg-uuid="${escH(it.uuid)}">Message</button>`;
+  }
+  return `
+  <div class="dir-card">
+    <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
+      ${banner}
+      <div class="row1">
+        ${avi}
+        <div><div class="name">${escH(dn)}</div>
+        ${it.location?.text?`<div class="loc-row">${escH(decodeEnt(it.location.text))}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
+        </div>
+      </div>
+      ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(decodeEnt(h.name))}</span>`).join('')}</div>`:''}
+      ${it.lights?.length?`<div class="dir-lights">${it.lights.map(l=>`<span class="dir-light dir-light--${l.tone}"><span class="dir-light__dot"></span>${escH(l.label)}</span>`).join('')}</div>`:''}
+    </a>
+    <div class="dir-card__foot">
+      ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
+      ${(connectBtn||msgBtn)?`<div class="dir-card__actions">${connectBtn}${msgBtn}</div>`:''}
+    </div>
+  </div>`;
+}
 function renderResults(items, append) {
   const wrap = document.getElementById('dir-results');
-  const html = items.map(it => {
-    // (Per-member teaser cards removed, Ian 6/12 pm: the anon stack is visible
-    // profiles only; members-only members appear as anonymous dots on the map.)
-    const dn = decodeEnt(it.display_name) || 'Member';
-    // profile-media resize buckets (craft gate 6/12): avatars 96, banners 480
-    const rs = (u,w) => u ? u + (u.indexOf('?')>=0?'&':'?') + 'w=' + w : u;
-    const ini = escH(dn.split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase());
-    const avi = it.avatar_url
-      ? `<img class="avi-sm" src="${escH(rs(it.avatar_url,96))}" alt="" loading="lazy" data-ini="${ini}" onerror="dirAviFallback(this)">`
-      : `<div class="avi-sm">${ini}</div>`;
-    const banner = it.banner_url
-      ? `<div class="dir-card__banner"><img src="${escH(rs(it.banner_url,480))}" alt=""></div>`
-      : '';
-    const links = (it.links||[]).map(l => {
-      const href = socUrl(l.kind, l.value);
-      if (!href) return '';
-      return `<a class="dir-link" href="${escH(href)}" target="_blank" rel="noopener noreferrer" title="${escH(l.kind)}" aria-label="${escH(l.kind)}">${SOC_ICONS[l.kind] || SOC_ICONS._fb}</a>`;
-    }).join('');
-    // Connect button (logged-in viewers only; API omits it.connect for anon).
-    const cx = it.connect || null;
-    let connectBtn = '';
-    if (cx && cx.state !== 'self' && cx.state !== 'blocked') {
-      const LBL = {none:'Connect', pending_out:'Requested', pending_in:'Accept', accepted:'Connected'};
-      const act = cx.state === 'none' ? 'request' : (cx.state === 'pending_in' ? 'accept' : '');
-      const dis = (cx.state === 'pending_out' || cx.state === 'accepted') ? ' disabled' : '';
-      connectBtn = `<button type="button" class="dir-connect dir-connect--${cx.state}" data-act="${act}" data-uuid="${escH(it.uuid||'')}" data-cid="${cx.id||''}"${dis}>${LBL[cx.state]||'Connect'}</button>`;
-    }
-    // Connected members get a Message button that opens the shared header DM modal
-    // (lg:open-dm — same hook the /u/ profile actions + in-modal connection list use).
-    let msgBtn = '';
-    if (cx && cx.state === 'accepted' && it.uuid) {
-      msgBtn = `<button type="button" class="dir-msg" data-msg-uuid="${escH(it.uuid)}">Message</button>`;
-    }
-    return `
-    <div class="dir-card">
-      <a class="dir-card__main" href="/u/${escH(it.slug)}" data-slug="${escH(it.slug)}">
-        ${banner}
-        <div class="row1">
-          ${avi}
-          <div><div class="name">${escH(dn)}</div>
-          ${it.location?.text?`<div class="loc-row">${escH(decodeEnt(it.location.text))}${it.distance_mi!=null?` · ${it.distance_mi} mi`:''}</div>`:''}
-          </div>
-        </div>
-        ${it.highlights?.length?`<div class="hl-chips">${it.highlights.map(h=>`<span class="hl">${escH(decodeEnt(h.name))}</span>`).join('')}</div>`:''}
-        ${it.lights?.length?`<div class="dir-lights">${it.lights.map(l=>`<span class="dir-light dir-light--${l.tone}"><span class="dir-light__dot"></span>${escH(l.label)}</span>`).join('')}</div>`:''}
-      </a>
-      <div class="dir-card__foot">
-        ${links?`<div class="dir-links">${links}</div>`:'<span class="dir-foot-sp"></span>'}
-        ${(connectBtn||msgBtn)?`<div class="dir-card__actions">${connectBtn}${msgBtn}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
+  // Pre-seed the pin-popup card cache: members already in the list are full data we
+  // hold, so their pin popup needs no fetch — only off-list pins lazy-load (Ian 6/15).
+  items.forEach(it => { if (it && it.slug) cardCache[it.slug] = Promise.resolve(it); });
+  const html = items.map(dirCardHTML).join('');
   if (append) wrap.insertAdjacentHTML('beforeend', html);
   else wrap.innerHTML = html || '<div class="dir-empty">no members match. try widening filters.</div>';
 }
@@ -512,6 +519,19 @@ function pinIconWithCount(n) {
 }
 let dirChildLayer = null, expandedSlug = null;
 let pinMarkerBySlug = {}, dirActiveSlug = null;
+// Pin-popup card cache (slug -> Promise<item|null>): the popup lazy-loads the SAME
+// full card the sidebar renders, fetched once per member by slug and reused. Seeded
+// from each rendered list batch so visible members need no fetch (Ian 6/15).
+const cardCache = {};
+function ensureCard(slug) {
+  if (cardCache[slug]) return cardCache[slug];
+  const pr = fetch('/profile-api/v0/directory/members?slug=' + encodeURIComponent(slug), {credentials: 'include'})
+    .then(r => r.ok ? r.json() : null)
+    .then(d => (d && d.items && d.items[0]) ? d.items[0] : null)
+    .catch(() => null);
+  cardCache[slug] = pr;
+  return pr;
+}
 function collapseDropoffs() {
   if (dirChildLayer) dirChildLayer.clearLayers();
   expandedSlug = null;
@@ -545,6 +565,28 @@ function initDirMap() {
   // Click empty map: collapse an expanded pin + dismiss any open popup (our managed
   // popups set closeOnClick:false, so this is the only map-click dismissal path).
   dirMap.on('click', () => { collapseDropoffs(); dirMap.closePopup(); });
+  // Connect/Message inside a full-card pin popup reuse the sidebar handlers. The
+  // sidebar's own delegate is scoped to #dir-results and stops propagation, and these
+  // buttons live in .leaflet-popup (outside it), so this never double-fires.
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.leaflet-popup')) return;
+    const cbtn = e.target.closest('.dir-connect');
+    if (cbtn) { e.preventDefault(); e.stopPropagation(); dirHandleConnect(cbtn); return; }
+    const mbtn = e.target.closest('.dir-msg');
+    if (mbtn) { e.preventDefault(); e.stopPropagation(); const u = mbtn.dataset.msgUuid; if (u) document.dispatchEvent(new CustomEvent('lg:open-dm', {detail: {uuid: u}})); }
+  });
+  // Pin popup renders the sidebar card at card width (mirrors the card chrome).
+  if (!document.getElementById('dir-pin-card-css')) {
+    const st = document.createElement('style');
+    st.id = 'dir-pin-card-css';
+    st.textContent =
+      '.leaflet-popup.dir-pin-card .leaflet-popup-content-wrapper{padding:0;border-radius:16px;overflow:hidden;box-shadow:0 12px 34px rgba(26,29,26,.30)}' +
+      '.leaflet-popup.dir-pin-card .leaflet-popup-content{margin:0;width:300px!important}' +
+      '.leaflet-popup.dir-pin-card .dir-card{border:0;border-radius:16px;background:#fff}' +
+      '.leaflet-popup.dir-pin-card .dir-card__main{cursor:pointer}' +
+      '.leaflet-popup.dir-pin-card .leaflet-popup-close-button{z-index:2;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.5);width:26px;height:26px;font-size:20px}';
+    document.head.appendChild(st);
+  }
   loadPins();
 }
 function plotPins(pins) {
@@ -579,8 +621,22 @@ function plotPins(pins) {
     // closeOnClick:false — Leaflet otherwise closes the popup on the map's pre-click,
     // BEFORE the marker's click handler runs, so the "is the popup open?" navigation
     // gate would always see it closed. Empty-map clicks close popups explicitly below.
-    const popup = L.popup({offset: [0, -10], closeOnClick: false}).setContent(popupHtml);
-    const openPin = () => popup.setLatLng([p.lat, p.lng]).openOn(dirMap);
+    const popup = L.popup({offset: [0, -10], closeOnClick: false,
+      className: (!p.gated && p.slug) ? 'dir-pin-card' : ''}).setContent(popupHtml);
+    // openPin keeps the manually-managed L.popup model (NOT bindPopup) so the
+    // click-through nav gate below still works. The name+location stub is the instant
+    // placeholder; on open we lazy-load the SAME full card the sidebar renders (one
+    // markup source via dirCardHTML) and swap it in — desktop hover + mobile tap both
+    // route here, so both surfaces inherit it from this single change (Ian 6/15).
+    const openPin = () => {
+      popup.setLatLng([p.lat, p.lng]).openOn(dirMap);
+      if (p.gated || !p.slug) return;
+      ensureCard(p.slug).then(item => {
+        if (!item || !dirMap.hasLayer(popup)) return;   // missing/hidden, or popup dismissed first
+        popup.setContent(dirCardHTML(item));
+        popup.update();
+      });
+    };
     m.on('mouseover', openPin);
     if (navigates) {
       m.on('click', () => { dirMap.hasLayer(popup) ? (window.location.href = '/u/' + p.slug) : openPin(); });

@@ -93,6 +93,12 @@ $page   = max(1, (int)($_GET['page'] ?? 1));
 $pageSize = isset($_GET['page_size']) ? max(1, min(200, (int)$_GET['page_size'])) : 20;
 $offset   = ($page - 1) * $pageSize;
 $sort   = ($_GET['sort'] ?? 'joined_asc') === 'joined_desc' ? 'joined_desc' : 'joined_asc';
+// Single-member fetch: the map pin popup lazy-loads ONE member's full card by slug
+// (Ian 6/15). Additive — constrains the list query to that slug; every existing
+// visibility/precision guard below still applies, so a slug fetch can never expose
+// more than the pin/card already does (a private or non-opt-in slug returns nothing).
+$slug   = isset($_GET['slug']) ? trim((string)$_GET['slug']) : '';
+if ($slug !== '') { $page = 1; $offset = 0; $pageSize = 1; }
 
 $pg = Db::pg();
 
@@ -206,6 +212,11 @@ if ($lat !== null && $lng !== null) {
 $listWheres = $wheres;
 if ($audience === 'public' && !$isAdmin) {
     $listWheres[] = "COALESCE(u.location_public_precision, 'private') <> 'private'";
+}
+// Slug fetch rides on top of the full visibility stack above — it only ever narrows.
+if ($slug !== '') {
+    $listWheres[] = 'u.slug = :slug';
+    $params[':slug'] = $slug;
 }
 
 // Map-pin feed: coarsened coords for the ENTIRE filtered set (not just the current
