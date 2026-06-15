@@ -256,7 +256,7 @@ if ($wpck !== '' && strpos($wpck, '=') !== false) {
     $loc  = (string)curl_getinfo($ch, CURLINFO_REDIRECT_URL);
     curl_close($ch);
     check('S1 stale looth_id + WP session bounces to re-mint',
-          $code === 302 && strpos($loc, '/wp-json/looth/auth/issue') !== false, "code=$code loc=$loc");
+          $code === 302 && strpos($loc, '/looth-auth/issue') !== false, "code=$code loc=$loc");
 } else {
     check('S1 stale-token bounce (wp cookie mint failed)', false, 'could not mint wp cookie');
 }

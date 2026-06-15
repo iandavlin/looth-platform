@@ -19,7 +19,8 @@ if (!$viewer) {
     }
     if ($hasWpSession) {
         $return = $_SERVER['REQUEST_URI'] ?? '/profile/edit';
-        header('Location: /wp-json/looth/auth/issue?return=' . urlencode($return));
+        // Non-REST mint endpoint (wp-auth lane, 7821c3e) — see config.php note.
+        header('Location: /looth-auth/issue?return=' . urlencode($return));
         exit;
     }
     looth_render_login_interstitial('/profile/edit');

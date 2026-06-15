@@ -40,7 +40,12 @@ function looth_issue_bounce_if_needed(): void {
     setcookie('looth_issue_tried', '1', ['expires' => time() + 120, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Lax']);
     $ret = $_SERVER['REQUEST_URI'] ?? '/';
     if ($ret === '' || $ret[0] !== '/') $ret = '/';
-    header('Location: /wp-json/looth/auth/issue?return=' . rawurlencode($ret));
+    // Non-REST mint endpoint (wp-auth lane, 7821c3e): the old REST route
+    // /wp-json/looth/auth/issue is broken for a plain navigation — BuddyBoss's
+    // REST gate (re-armed every DB reload) 401s it, and WP REST cookie-auth
+    // needs a nonce a navigation never carries. The plain path authenticates
+    // off the logged_in cookie and isn't under BB's REST gate.
+    header('Location: /looth-auth/issue?return=' . rawurlencode($ret));
     exit;
 }
 
