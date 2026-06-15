@@ -147,15 +147,18 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
 <body class="<?= $isOwner ? 'mode-editor' : 'mode-view' ?>">
 <?php require __DIR__ . '/_chrome.php'; ?>
 <div class="app" id="lg-main">
-  <aside class="rail">
+  <aside class="rail" id="lg-rail">
+    <button type="button" class="rail-close" id="lg-rail-close" aria-label="Close sections menu">✕</button>
     <h6>Profile</h6>
     <?php foreach ($order as $k): ?>
       <div class="tab <?= $sectionDefs[$k]['active'] ? 'on' : '' ?>" data-anchor="<?= looth_h($k) ?>"><span class="dot"></span><?= looth_h($sectionDefs[$k]['title']) ?></div>
     <?php endforeach; ?>
     <div class="rail-foot">slice 2 · catalogs + directory</div>
   </aside>
+  <div class="rail-backdrop" id="lg-rail-backdrop"></div>
   <main class="main">
     <div class="topbar">
+      <button type="button" class="rail-toggle" id="lg-rail-toggle" aria-controls="lg-rail" aria-expanded="false" aria-label="Open sections menu"><span class="bars" aria-hidden="true">☰</span> Sections</button>
       <div class="crumbs">profile · <b><?= $slug ?></b></div>
       <?php if ($isOwner): ?>
         <div class="viewer"><span>👁 viewing as</span>

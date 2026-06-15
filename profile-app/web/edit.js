@@ -468,10 +468,30 @@
     sec.addEventListener('drop', e => { e.preventDefault(); if (!dragSrc || dragSrc === sec) return; sec.parentNode.insertBefore(dragSrc, sec); sec.classList.remove('drag-over'); });
   });
 
+  // ─── rail drawer (mobile): the section nav slides in below 780px ────────
+  // Below 780px the rail is a fixed off-canvas drawer (CSS); the .rail-toggle
+  // hamburger in the topbar reveals it. Above 780px these controls are
+  // display:none and the rail is the static column — this wiring is inert.
+  const railEl       = document.getElementById('lg-rail');
+  const railToggle   = document.getElementById('lg-rail-toggle');
+  const railBackdrop = document.getElementById('lg-rail-backdrop');
+  const railClose    = document.getElementById('lg-rail-close');
+  function setRail(open){
+    if (!railEl) return;
+    railEl.classList.toggle('open', open);
+    railBackdrop?.classList.toggle('open', open);
+    railToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  railToggle?.addEventListener('click',   () => setRail(!railEl.classList.contains('open')));
+  railBackdrop?.addEventListener('click', () => setRail(false));
+  railClose?.addEventListener('click',    () => setRail(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setRail(false); });
+
   // ─── rail tab scroll ──────────────────────────────────────────────────
   $$('.tab[data-anchor]').forEach(t => t.addEventListener('click', () => {
     const el = document.getElementById(t.dataset.anchor); if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
     $$('.tab.active').forEach(x => x.classList.remove('active')); t.classList.add('active');
+    setRail(false);   // close the mobile drawer after picking a section
   }));
 
   if (new URLSearchParams(location.search).get('just_claimed') === '1') {

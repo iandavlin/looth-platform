@@ -23,6 +23,21 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
 .tab.active{border-left-color:var(--rail-active)}
 .rail-foot{position:absolute;bottom:14px;left:0;right:0;padding:0 18px;color:var(--rail-mute);font-size:11px}
 
+/* mobile section-drawer affordances — base styles; shown only <=780px (see the
+   media query). Above 780px the rail stays the static 240px column unchanged. */
+.rail-toggle{display:none;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:600;
+  color:var(--ink-soft);background:var(--panel);border:1px solid var(--line);border-radius:9px;
+  padding:8px 12px;cursor:pointer;min-height:40px}
+.rail-toggle:hover{background:var(--line-soft);color:var(--ink)}
+.rail-toggle .bars{font-size:16px;line-height:1}
+.rail-close{display:none;position:absolute;top:12px;right:12px;width:34px;height:34px;
+  align-items:center;justify-content:center;background:transparent;border:none;color:var(--rail-mute);
+  font-size:20px;line-height:1;cursor:pointer;border-radius:8px}
+.rail-close:hover{color:var(--rail-ink);background:rgba(255,255,255,.06)}
+.rail-backdrop{position:fixed;inset:0;background:rgba(20,18,15,.42);z-index:55;display:none;
+  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.rail-backdrop.open{display:block}
+
 /* main */
 .main{padding:0 0 64px}
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 32px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
@@ -226,7 +241,16 @@ body.interstitial{display:flex;align-items:center;justify-content:center;min-hei
 
 @media (max-width: 780px){
   .app{grid-template-columns:1fr}
-  .rail{position:relative;height:auto;display:none}
+  /* The section rail becomes a slide-in drawer. It used to be display:none with
+     no way to reach it — an invisible editor sidebar on iPad portrait (768px),
+     phones, and narrow/split-screen windows (Danny West, WP 206). The
+     .rail-toggle hamburger in the topbar opens it; .rail-backdrop dims behind. */
+  .rail{position:fixed;top:0;left:0;bottom:0;width:min(284px,82vw);height:100vh;height:100dvh;
+        z-index:60;transform:translateX(-100%);transition:transform .22s ease;
+        box-shadow:0 0 48px rgba(0,0,0,.45);will-change:transform}
+  .rail.open{transform:none}
+  .rail-toggle{display:inline-flex}
+  .rail-close{display:inline-flex}
   .idhead{grid-template-columns:64px 1fr;gap:14px;padding:18px 4px}
   .avi{width:64px;height:64px;font-size:22px}
   .pencil{opacity:.45}  /* touch: pencils always visible */
