@@ -5,7 +5,9 @@
  * Option B (no hero card, no right rail — those are Option C, deferred).
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;600&display=swap');
+/* Source Serif Pro @import moved to the inlined fonts block in _chrome.php
+   (perf lane 2026-06-11) — as an @import here it was a render-blocking request
+   serialized BEHIND the forums.css download. Same @font-face rules, same swap. */
 
 /* Crisp text (Ian 6/7) — grayscale font-smoothing across the whole Hub (incl. the
    fixed composer modal + search panel, which live outside .feed-page). This is the
@@ -93,90 +95,16 @@ body.bb-mirror{ -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:gray
 }
 
 /* ══════════════════════════════════════════════════════════
-   COLOR THEME TOGGLE — 4-state cycle (Default → Panels → Dark → Black)
-   Set as .hub-theme-panel / -dark / -black on <html> by forums.js,
-   persisted in localStorage, applied before paint (_chrome.php head).
-   Each theme just re-points the design tokens defined on :root above,
-   so every component that reads --bg / --bg-card / --fg / --lg-* follows.
+   LEGACY COLOR-THEME CYCLE (Default → Panels → Dark → Black) RETIRED
+   2026-06-10 (bespoke-cutover two-mode pare-back). The hub-theme-panel/
+   -dark/-black token blocks + their hardcoded-white patches lived here.
+   The C-toggle button stopped being emitted earlier today; the _chrome.php
+   pre-paint class applier is removed with this commit, so the classes can
+   never appear. Color modes are now exactly TWO, owned by the gear
+   (app-settings): Light = no overrides; Dark = --lguser-*/--lg-* inline +
+   the dark token bridge below. forums.js's cycle handler is null-guarded
+   dead code (swept with C3).
    ══════════════════════════════════════════════════════════ */
-
-/* 2 — "Panels": literally SWAP the page and panel backgrounds. Default is
-   cream page (#f4f2ec) + white panels; this flips to a white page + cream
-   panels — softer cards, same brand palette (cream panels are easier on the
-   eyes than stark white). Text/borders unchanged. */
-html.hub-theme-panel {
-  --bg:          #2f302b;  /* dark-grey page so the cream panels + rail pop     */
-  --bg-card:     #f4f2ec;  /* panels (and the rail, via --bg-card) stay cream   */
-  --lg-card-bg:  #f4f2ec;
-  --lg-cream:    #f4f2ec;
-  --bg-sticky:   #efece3;
-  --bg-closed:   #e9e6dc;
-}
-
-/* 3 — "Dark": full dark-sage mode. */
-html.hub-theme-dark {
-  --bg:          #14170f;
-  --bg-card:     #1e2218;
-  --lg-card-bg:  #1e2218;
-  --lg-cream:    #14170f;
-  --bg-sticky:   #242a1b;
-  --bg-closed:   #1a1e14;
-  --fg:          #e9eae2;
-  --fg-muted:    #b6bcab;
-  --fg-soft:     #868c79;
-  --lg-ink:      #e9eae2;
-  --lg-mute:     #aab09c;
-  --lg-line:     #343b2a;
-  --border:      #343b2a;
-  --border-soft: #2a3022;
-  --lg-sage-tint:#2a3320;            /* hover wash */
-  --lg-sage-d:   #7c9a52;            /* lift brand sage so buttons/active pills read on dark */
-  --accent:      #7c9a52;
-  --shadow-card: 0 1px 0 rgba(0,0,0,.5);
-  --shadow-elev: 0 8px 24px rgba(0,0,0,.55);
-}
-
-/* 4 — "Black": true-black OLED / Reddit-style dark (pure black page, raised
-   near-black panels). */
-html.hub-theme-black {
-  --bg:          #060608;  /* reads black; a hair off pure #000 to avoid halation/eye-strain */
-  --bg-card:     #16181c;  /* raised panels separate from the near-black page */
-  --lg-card-bg:  #16181c;
-  --lg-cream:    #060608;
-  --bg-sticky:   #1e2024;
-  --bg-closed:   #0f1013;
-  --fg:          #d7dadc;  /* desaturated off-white (not #fff) — softer on dark */
-  --fg-muted:    #9a9d9f;
-  --fg-soft:     #6c6f71;
-  --lg-ink:      #d7dadc;
-  --lg-mute:     #9a9d9f;
-  --lg-line:     #2a2c30;
-  --border:      #2a2c30;
-  --border-soft: #1d1f22;
-  --lg-sage-tint:#1c2614;            /* hover wash */
-  --lg-sage-d:   #86a559;            /* lifted brand sage for buttons/active pills */
-  --accent:      #86a559;
-  --shadow-card: 0 1px 0 rgba(0,0,0,.7);
-  --shadow-elev: 0 8px 28px rgba(0,0,0,.75);
-}
-
-/* Dark/Black patches for a few surfaces that hardcode white. */
-html.hub-theme-dark .ntm-form .ql-toolbar.ql-snow,
-html.hub-theme-dark .post-edit .ql-toolbar.ql-snow,
-html.hub-theme-dark .post-edit__quill,
-html.hub-theme-dark .reply-form__editor,
-html.hub-theme-dark .search-form__input,
-html.hub-theme-dark .nav-tree__cat-pill,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow,
-html.hub-theme-black .post-edit .ql-toolbar.ql-snow,
-html.hub-theme-black .post-edit__quill,
-html.hub-theme-black .reply-form__editor,
-html.hub-theme-black .search-form__input,
-html.hub-theme-black .nav-tree__cat-pill { background: var(--bg-card); }
-html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-stroke,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-stroke { stroke: var(--fg-muted); }
-html.hub-theme-dark  .ntm-form .ql-toolbar.ql-snow .ql-fill,
-html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-muted); }
 
 /* ── Insulate the shared shell chrome from the Hub's theme ───────────────────
    The Hub themes by re-pointing the global --lg-* tokens on <html> (so the feed,
@@ -199,6 +127,32 @@ html.hub-theme-black .ntm-form .ql-toolbar.ql-snow .ql-fill { fill: var(--fg-mut
   --lg-charcoal:  #1a1d1a;
   --lg-amber:     #ecb351;
   --lg-rust:      #c66845;
+}
+
+/* ── DARK-MODE TOKEN BRIDGE (2026-06-10 bespoke-cutover — C10 unification,
+   then the two-mode pare-back: Ian wants exactly ONE light + ONE dark) ───────
+   LIGHT is the no-pick default with ZERO overrides — every surface renders its
+   native brand palette, so nothing can mismatch (this killed the "colors hit
+   some headers and not others" class of bug, along with the legacy hub-theme-*
+   classes that used to live right above this comment).
+   DARK is set by the gear (app-settings): --lguser-* + --lg-* land INLINE on
+   <html> pre-paint via the nginx boot script. This bridge chains the legacy
+   bb-mirror tokens to the same source so the whole Hub shell follows in the
+   SAME frame — plain cascade, no !important, no var() cycle (the inline
+   --lguser values beat the :root aliases). Desktop only: mobile is normalized
+   brand-light by design (folds into mobile-hub.css at the C9 stage). */
+@media (min-width: 641px) {
+  html[data-lguser-theme="dark"] {
+    --bg:          var(--lguser-bg);
+    --bg-card:     var(--lguser-card);
+    --bg-sticky:   var(--lguser-card);
+    --bg-closed:   var(--lguser-bg);
+    --fg:          var(--lguser-ink);
+    --fg-muted:    var(--lguser-mute);
+    --border:      var(--lguser-line);
+    --border-soft: var(--lguser-line);
+    --lg-card-bg:  var(--lguser-card);
+  }
 }
 
 /* The theme-cycle pill in the sort bar (matches .feed-compact-toggle / -text-). */
@@ -1307,7 +1261,7 @@ body.nav-open .nav-overlay { display: block; }
   min-width: 0;
 }
 .bb-layout__content .page {
-  max-width: 1100px;   /* was 860 — reclaim the desktop gutter (shell allows 1280) */
+  max-width: 1040px;   /* 1180 -> 860 -> 1100 -> 1040: narrowed the desktop stream a tad (Ian 6/14). Mobile reset to none below. */
 }
 
 /* Mobile / tablet: drawer */
@@ -1538,6 +1492,11 @@ body.fcr-anon .feed-page .fcr-chip { pointer-events: none; }
 .reply-stub__edit:hover { opacity: 1; color: var(--lg-sage-d, #586b3f); background: var(--lg-sage-tint, #eef2e3); }
 .reply-stub__trash:hover { opacity: 1; color: var(--lg-rust, #c66845); background: var(--lg-sage-tint, #eef2e3); }
 .feed--can-moderate .reply-stub__edit, .feed--can-moderate .reply-stub__trash { display: inline-flex; }
+/* Members can edit/delete their OWN replies (Ian 2026-06-11) — the client adds
+   .reply-stub--mine on rows whose data-author-id matches the viewer. */
+.reply-stub--mine > .reply-stub__head .reply-stub__edit,
+.reply-stub--mine > .reply-stub__head .reply-stub__trash,
+.reply-stub--mine .reply-stub__edit, .reply-stub--mine .reply-stub__trash { display: inline-flex; }
 /* Inline reply editor */
 .reply-stub__editbox { margin: 6px 0 4px; width: 100%; flex: 1 1 100%; box-sizing: border-box; }
 .reply-stub__editbox .rse-input { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
@@ -1759,6 +1718,58 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   pointer-events: none;
 }
 
+/* The Saved pill is a VIEW TOGGLE — unlike sort pills it stays clickable when
+   active so a second click exits the Saved view (Ian 2026-06-11). */
+.feed-sort-bar a.lg-saved-pill.active { pointer-events: auto; }
+
+/* FB-bubble name wrap (absorbed from hub-polish lg-fbname-wrap-css 2026-06-11,
+   coord-approved): long author names must wrap INSIDE bubbles instead of
+   driving them to max-content past the viewport. Buck's client copy no-ops. */
+.feed-page .lg-fb-col, #looth-rep-sheet .lg-fb-col { max-width: 100%; }
+.feed-page .lg-fb-bubble .lg-fb-name, #looth-rep-sheet .lg-fb-bubble .lg-fb-name {
+  white-space: normal; overflow-wrap: anywhere; }
+.feed-page .lg-fb-bubble img, #looth-rep-sheet .lg-fb-bubble img { max-width: 100%; height: auto; }
+
+/* Close-filters button at the top of the sidebar (Ian 2026-06-11). Desktop
+   only — mobile's filter drawer has its own close. Same state as the pill. */
+.bb-nav__close { display: none; }
+@media (min-width: 641px) {
+  .bb-layout__nav { position: relative; }
+  .bb-nav__close {
+    display: inline-flex; align-items: center; justify-content: center;
+    position: absolute; top: 8px; right: 8px; z-index: 5;
+    width: 30px; height: 30px; padding: 0;
+    border: 1px solid var(--lg-line, #e3ddd0); border-radius: 50%;
+    background: var(--bg-card, #fff); color: var(--lg-mute, #6b6f6b);
+    font-size: 18px; line-height: 1; cursor: pointer;
+    transition: color .12s ease, border-color .12s ease;
+  }
+  .bb-nav__close:hover { color: var(--lg-rust, #c66845); border-color: var(--lg-rust, #c66845); }
+  body.nav-closed .bb-nav__close { display: none; }
+  /* The Categories/Type segmented toggle is the rail's top row — give it a
+     right gutter so the close X doesn't sit on the "Type" tab (Ian screenshot). */
+  .bb-layout__nav .hub-rail__switch { margin-right: 38px; }
+}
+
+/* Desktop: the sort/search/filters CONTROL SURFACE sticks just below the
+   (sticky, 61px) site header (Ian 2026-06-11: header stays sticky too; the
+   controls stack under it). Solid themed bg so cards slide under cleanly;
+   z BELOW the header's 40 so its account/notification dropdowns overlay the
+   bar. Mobile untouched (Buck lane). */
+@media (min-width: 641px) {
+  .feed-page .feed-sort-bar {
+    position: sticky; top: var(--lg-header-h, 61px); z-index: 39;
+    background: var(--lguser-bg, #e9eedd);
+    padding: 10px 0;
+    box-shadow: 0 8px 14px -12px rgba(26, 29, 26, .35);
+  }
+  /* The Filters chip's ☰ icon keeps position:absolute from the legacy corner-
+     button styling; the bar becoming position:sticky made it the icon's
+     containing block, painting a stray ☰ over the first pill (Ian report).
+     Inline it inside the chip on desktop. */
+  .feed-page .feed-sort-bar .lg-filters-chip .corner-hamburger__icon { position: static; }
+}
+
 /* ══════════════════════════════════════════════════════════
    CARD v2 — OP EXCERPT + THREADED REPLIES (Features 2 + 3)
    ══════════════════════════════════════════════════════════ */
@@ -1817,6 +1828,16 @@ a.feed-card__reply-author:hover { text-decoration: underline; }
   -webkit-line-clamp: 6;   /* show more of the post before "…" (Ian); "Read more" reveals the rest */
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* CPT cards only: the excerpt clicks through to the post too (Ian 6/14) — same
+   target as the title/cover, styled as plain text so it reads identically.
+   Discussion cards keep their bare <p> (the card opens its modal/expand). */
+.feed-card--content .feed-card__op-excerpt-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .feed-card__op-meta {
@@ -2255,6 +2276,20 @@ body.ntm-active { overflow: hidden; }
   --fg-soft:   #8d9088;
   --border:    #dcd7ca;
   --lg-sage-tint: #eef2e3;
+}
+
+/* DARK-mode repoint (Ian 2026-06-10: "all forms ignore dark mode") — the same
+   token-pinning trick as the light pin above, with the dark set. The gear's
+   mode is the single source; the whole dialog (panel, inputs, forum list,
+   Quill) follows through these tokens. */
+html[data-lguser-theme="dark"] .ntm-overlay {
+  --bg:        #1b1e21;
+  --bg-card:   #15171a;
+  --fg:        #e5e7e1;
+  --fg-muted:  #a6ac9f;
+  --fg-soft:   #80867d;
+  --border:    #2c312d;
+  --lg-sage-tint: #243024;
 }
 
 .ntm-backdrop {
@@ -2891,10 +2926,18 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
    2026-06-10 (hub-coord). No !important: `.feed-page .feed` outspecifies the
    base single-column `.feed` grid above; values match the JS so no reflow. */
 @media (min-width: 641px) {
-  .feed-page { max-width: 2100px; }
+  /* SPREAD (Ian 2026-06-10): no width cap — the feed runs out to the header
+     edges (24px side padding matches the header inner gutter). The REAL trap
+     was `.bb-layout__content .page{max-width:1100px}` (higher specificity than
+     a bare .feed-page rule), so this selector must outweigh it. */
+  .feed-page,
+  .bb-layout__content .page.feed-page { max-width: none; }
   .feed-page .feed {
     display: block;
-    column-width: 370px;
+    /* Mosaic = exactly THREE columns (Ian 2026-06-10) — was column-width:370px
+       (responsive count). Narrow-desktop guard below drops to 2 so cards keep
+       a readable shape in a squeezed window. */
+    column-count: 3;
     column-gap: 18px;
     padding: 22px 24px 48px;
   }
@@ -2907,11 +2950,144 @@ a.nav-tree__cat-name:hover { text-decoration: underline; }
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;
   }
-  .feed-page .feed-card__cover,
-  .feed-page .fc-cover { aspect-ratio: 16 / 9; max-height: 300px; }
-  /* full-width hero cover spans its column edge-to-edge */
-  .feed-page .feed-card:first-child .feed-card__cover,
-  .feed-page .feed-card:first-child .fc-cover { max-width: none; width: 100%; }
+  /* UNIFORM covers (Ian 2026-06-10: "cards should be uniform") — every card,
+     first included, fills its column at 16:9; the first-child hero special-
+     case is retired (here AND in the overlay). Outweighs the arrangement
+     block's 440px cover cap. */
+  .feed-page .feed-card .feed-card__cover,
+  .feed-page .feed-card .fc-cover {
+    aspect-ratio: 16 / 9; max-height: 300px; max-width: none; width: 100%;
+  }
+  /* The IMAGE fills the 16:9 box (Ian 2026-06-10: "images need to be cover") —
+     without object-fit the natural-ratio img letterboxed inside the fixed box. */
+  .feed-page .feed-card .feed-card__cover img,
+  .feed-page .feed-card .fc-cover img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    /* release the legacy absorbed-polish img clamps (un-queried aspect-ratio:3/2
+       + max-height:360px) that kept DISCUSSION images from covering the box —
+       content cards had a 16:9 rescue rule, topics didn't (Ian 2026-06-10). */
+    aspect-ratio: auto; max-height: none;
+  }
+}
+/* Narrow-desktop guard: 3 columns under ~1100px squeezes cards past readability —
+   drop to 2 in that band. Full-size desktop gets the 3 Ian asked for. */
+@media (min-width: 641px) and (max-width: 1100px) {
+  .feed-page .feed { column-count: 2; }
+}
+
+/* PINNED columns (forums.js §9) — multicol rebalances the whole flow on every
+   append/insert, so infinite scroll made already-read cards change columns
+   ("feed reorganizes + repeats", Ian 2026-06-11). The JS converts the feed to
+   fixed .feed-colw buckets; placed cards never move. The column-count rules
+   above stay as the SOURCE for how many buckets to build (read via computed
+   style — a flex container ignores multicol props, so they coexist). */
+@media (min-width: 641px) {
+  .feed-page .feed.feed--pinned { display: flex; align-items: flex-start; gap: 18px; }
+  .feed-page .feed.feed--pinned .feed-colw { flex: 1 1 0; min-width: 0; }
+}
+
+/* CONTENT MEETS THE BANNER (Ian 2026-06-11: "content box expands to meet the
+   header, not vice versa") — no width caps anywhere in the Hub strip; the feed
+   fills the same width as the banner at every desktop size, and the column
+   count scales so cards stay readable instead of ballooning. (Supersedes the
+   overlay's 1716/2294/2872 caps — removed from hub-polish in the same change.) */
+@media (min-width: 1101px) and (max-width: 2399px) {
+  .feed-page .feed { column-count: 3; }
+}
+@media (min-width: 2400px) {
+  .feed-page .feed { column-count: 4; }
+}
+@media (min-width: 3200px) {
+  .feed-page .feed { column-count: 5; }
+}
+
+/* ── STREAM layout variant — one centered reading column. The default is the
+   mosaic/masonry geometry above; layouts pulled back to these TWO (Ian
+   2026-06-10, bespoke-cutover). html[data-lg-hublayout] is set PRE-PAINT by
+   the nginx boot script from localStorage lg-hub-layout (the gear panel is the
+   control), so the picked layout paints on the first frame. The attribute
+   selector outweighs the mosaic rules above; no !important. (Moved here from
+   hub-polish ensureHubLayoutCss; Cards/Compact variants retired.) ── */
+@media (min-width: 641px) {
+  /* Cap the READING COLUMN only (Ian 2026-06-10: 760 on the whole page was too
+     narrow and squeezed the hero/sort bar with it) — the page spreads like
+     mosaic; the card column centers at a comfortable 1100. */
+  html[data-lg-hublayout="stream"] .feed-page .feed {
+    display: block; column-width: auto; columns: 1;
+    max-width: 1100px; margin: 0 auto; padding: 22px 16px 48px;
+  }
+  /* Hub banner + sort bar align to the CARD edges (Ian 2026-06-10: "header same
+     width as the card container"). Cards sit 16px inside the 1100 column, so
+     the matching outer width is 1100 - 2*16. */
+  html[data-lg-hublayout="stream"] .feed-page .forum-header,
+  html[data-lg-hublayout="stream"] .feed-page .feed-sort-bar,
+  html[data-lg-hublayout="stream"] .feed-page .hub-chipbar,
+  html[data-lg-hublayout="stream"] .feed-page .hub-author-hdr {
+    max-width: calc(1100px - 32px);
+    margin-left: auto; margin-right: auto;
+  }
+  html[data-lg-hublayout="stream"] .feed-page .feed-card { margin: 0 0 20px; }
+  /* UNIFORM covers (Ian 2026-06-10): every card — the first card and video CPTs
+     included — gets the same full-card-width, TRUE 16:9 preview. No hero
+     special-case, no max-height crop. Outweighs the arrangement block's 440px
+     cover cap and matches the overlay's first-child hero values, so nothing
+     fights. */
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .feed-card__cover,
+  html[data-lg-hublayout="stream"] .feed-page .feed-card .fc-cover {
+    aspect-ratio: 16 / 9; max-height: none; max-width: none; width: 100%;
+  }
+}
+
+/* ── Sponsor rail (Ian 2026-06-12: sponsors OUT of the stream feed, into a
+   right-hand rail; mosaic keeps the inline spotlight cards as discovery).
+   The aside is server-rendered on every hub load; these rules decide which
+   treatment paints — both keyed on pre-paint state (the boot script's
+   data-lg-hublayout + the media query), so neither layout flashes.
+   The rail is position:fixed in the right gutter of the 1100px reading
+   column: out of flow, so it can never shift feed content (zero CLS). ── */
+.feed-page .hub-sponsor-rail { display: none; }
+@media (min-width: 641px) {
+  /* Stream pulls the INLINE sponsor cards (sponsor-cards.js .lg-sponsor-card)
+     out of the feed at every desktop width — the rail replaces them where it
+     fits. Mobile (≤640) and mosaic keep them untouched. !important because the
+     hub-polish overlay's C3-leftover '.feed-page .feed-card{display:block
+     !important}' otherwise outranks the hide (dies at the C3 absorb). */
+  html[data-lg-hublayout="stream"] .feed-page .feed .lg-sponsor-card { display: none !important; }
+}
+@media (min-width: 1570px) {
+  /* 1100px column + 2×(200px rail + gaps) — below this the gutter can't hold
+     the rail without crowding the cards, so sponsors sit this band out. */
+  html[data-lg-hublayout="stream"] .feed-page .hub-sponsor-rail {
+    display: block;
+    position: fixed;
+    top: 132px;                          /* clears the sticky chrome + sort bar */
+    left: calc(50% + 550px + 24px);      /* right gutter of the centered column */
+    width: 200px;
+    max-height: calc(100vh - 156px);
+    overflow: auto;
+  }
+  .hub-sponsor-rail .hsr-head {
+    margin: 0 0 10px;
+    font: 700 11px/1 var(--lg-font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    letter-spacing: .09em; text-transform: uppercase;
+    color: var(--lguser-mute, var(--lg-mute, #6b6f6b));
+    padding-bottom: 7px;
+    border-bottom: 2px solid var(--lg-amber, #ecb351);
+  }
+  .hub-sponsor-rail .hsr-tile {
+    display: flex; align-items: center; justify-content: center;
+    height: 84px; margin: 0 0 10px; padding: 0 14px;
+    background: #fff;                    /* logos are designed for white slabs */
+    border: 1px solid var(--lguser-line, var(--lg-line, #e3ddd0));
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(26, 29, 26, .08);
+  }
+  .hub-sponsor-rail .hsr-tile img {
+    display: block; max-width: 100%; max-height: 56px; width: auto; height: auto;
+  }
+  .hub-sponsor-rail .hsr-tile:hover {
+    border-color: var(--lguser-accent, var(--lg-sage-d, #6b7c52));
+  }
 }
 
 
@@ -3356,27 +3532,45 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
 .hub-rail__saved-nm { flex: 1 1 auto; }
 .hub-rail__saved-x { font-size: 16px; line-height: 1; color: var(--lg-mute); }
 
-/* ── Segmented Type/Categories toggle (zero-JS; replaces stacked accordions) ── */
-.hub-rail__radio { position: absolute; width: 1px; height: 1px; opacity: 0;
-  pointer-events: none; clip: rect(0 0 0 0); }
-.hub-rail__switch { display: flex; gap: 3px; margin: 2px 0 8px; padding: 3px;
-  background: var(--lg-sage-tint, #eef2e3); border-radius: 999px;
-  border: 1px solid var(--lg-line, #e3ddd0); }
-.hub-rail__seg { flex: 1 1 0; text-align: center; padding: 6px 12px; border-radius: 999px;
-  cursor: pointer; white-space: nowrap; user-select: none;
-  font: 700 12.5px/1 var(--lg-font-sans, system-ui, sans-serif);
-  letter-spacing: .01em; color: var(--lg-sage-d, #6b7c52);
-  transition: background .12s, color .12s, box-shadow .1s; }
-.hub-rail__seg:hover { color: var(--lguser-accent-d, #52613d); }
-/* :checked radio lights its matching segment (radios precede the switch) */
-#hrs-cat:checked  ~ .hub-rail__switch .hub-rail__seg--cat,
-#hrs-type:checked ~ .hub-rail__switch .hub-rail__seg--type {
-  background: var(--lguser-accent, #6b7c52); color: #fff;
-  box-shadow: 0 1px 2px rgba(26,29,26,.18); }
-/* Show only the checked section's panel */
-.hub-rail__panel { display: block; }
-#hrs-cat:checked  ~ .hub-rail__panel--type,
-#hrs-type:checked ~ .hub-rail__panel--cat { display: none; }
+/* ── Centered filters modal (Ian 2026-06-11: "both open, no toggle") ──────────
+   The rail renders inside #hub-fmodal (_chrome.php); the segmented radio
+   toggle is retired — Categories and Types sit side by side. The shell is
+   token-driven so user themes/dark restyle it like the cards. */
+.hub-fmodal { position: fixed; inset: 0; z-index: 240; }
+.hub-fmodal[hidden] { display: none; }
+.hub-fmodal__back { position: absolute; inset: 0; background: rgba(26, 24, 20, .48);
+  cursor: pointer; }
+.hub-fmodal__panel { position: relative; margin: clamp(16px, 7vh, 64px) auto 0;
+  width: min(720px, calc(100vw - 32px)); max-height: min(82vh, 860px);
+  display: flex; flex-direction: column; outline: none;
+  background: var(--bg-card, #fbfaf6); color: var(--lg-ink, #323532);
+  border: 1px solid var(--lg-line, #e3ddd0); border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(26, 29, 26, .28); }
+.hub-fmodal__head { display: flex; align-items: baseline; gap: 12px;
+  padding: 16px 20px 12px; border-bottom: 1px solid var(--lg-line, #e3ddd0); }
+.hub-fmodal__title { margin: 0; font: 700 19px/1.2 var(--lg-font-serif, Georgia, serif); }
+.hub-fmodal__help { margin: 0; flex: 1 1 auto;
+  font: 400 12.5px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.hub-fmodal__x { flex: none; align-self: center; border: 0; background: none; cursor: pointer;
+  font: 400 24px/1 var(--lg-font-sans, system-ui, sans-serif); color: var(--lg-mute, #6b6f6b);
+  padding: 2px 8px; border-radius: 8px; }
+.hub-fmodal__x:hover { background: var(--lg-sage-tint, #eef2e3); color: var(--lg-ink, #323532); }
+.hub-fmodal__body { overflow-y: auto; padding: 14px 20px 20px;
+  scrollbar-width: thin; scrollbar-color: var(--lg-line) transparent; }
+/* fetch-in-flight while a filter applies (modal stays open, Ian 6/11) */
+.hub-fmodal__body.is-loading { opacity: .55; pointer-events: none;
+  transition: opacity .15s; }
+body.hub-fmodal-lock { overflow: hidden; }
+/* Two open sections, side by side; single column on phones */
+.hub-rail__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px;
+  align-items: start; }
+.hub-rail__colh { margin: 6px 2px 7px; font: 600 11px/1 var(--lg-font-sans, sans-serif);
+  letter-spacing: .08em; text-transform: uppercase; color: var(--lg-mute); }
+@media (max-width: 560px) {
+  .hub-rail__cols { grid-template-columns: 1fr; }
+  .hub-fmodal__help { display: none; }
+}
 /* Short how-to-filter/mute helper */
 .hub-rail__help { margin: 0 2px 8px; padding: 0; max-width: 210px;
   font: 400 11.5px/1.45 var(--lg-font-sans, system-ui, sans-serif);
@@ -3468,9 +3662,10 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
 .hub-tsearch__ico { color: var(--lg-mute); font-size: 13px; line-height: 1; }
 .hub-tsearch__in { border: 0; background: transparent; outline: none;
   font: 500 13px/1 var(--lg-font-sans); color: var(--lg-ink); width: 132px; }
-.hub-tsearch--author .hub-tsearch__in { width: 116px; }
+.hub-tsearch--author .hub-tsearch__in { width: 150px; }  /* fits "Search by author…" — was 116, clipped */
 .hub-tsearch__in::placeholder { color: var(--lg-mute); }
 .hub-tsearch { position: relative; }
+.hub-tsearch:focus-within { border-color: var(--lg-sage-d, #6b7c52); }
 
 /* Type-ahead dropdown (live search + author autocomplete) */
 .hub-suggest { position: absolute; top: calc(100% + 5px); left: 0; z-index: 60;
@@ -3479,7 +3674,13 @@ summary.hub-acc__parent::-webkit-details-marker { display: none; }
 .hub-suggest__item { display: flex; align-items: center; gap: 8px; width: 100%;
   text-align: left; background: none; border: 0; cursor: pointer; padding: 7px 9px;
   border-radius: 7px; font: 500 13px/1.3 var(--lg-font-sans); color: var(--lg-ink); text-decoration: none; }
-.hub-suggest__item:hover { background: var(--lg-sage-tint, #eef2e3); }
+.hub-suggest__item:hover,
+.hub-suggest__item.is-active { background: var(--lg-sage-tint, #eef2e3); }
+.hub-suggest__av { flex: none; width: 24px; height: 24px; border-radius: 50%;
+  object-fit: cover; background: var(--lg-sage-tint, #eef2e3); }
+.hub-suggest__av--init { display: inline-flex; align-items: center; justify-content: center;
+  font: 600 11px/1 var(--lg-font-sans); color: var(--lg-sage-d, #6b7c52); }
+.hub-suggest__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-suggest__kind { flex: none; font: 600 9px/1.4 var(--lg-font-sans); text-transform: uppercase;
   letter-spacing: .04em; color: var(--lg-mute); background: var(--lg-sage-tint, #eef2e3);
   border-radius: 5px; padding: 1px 6px; }
@@ -3576,7 +3777,8 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .feed-card{
     /* card chrome — desktop only (moved off the base rule for the split) */
     background:var(--bg-card); border:1px solid var(--lg-line); border-radius:8px;
-    padding:14px 16px 0; border-left:4px solid var(--sec,transparent);
+    /* top breathing room + real bottom padding under the action row (Ian 6/15) */
+    padding:18px 16px 16px; border-left:4px solid var(--sec,transparent);
     transition:transform .18s ease, box-shadow .18s ease, border-color .15s ease; overflow:hidden;
     display:grid;
     grid-template-columns:44px minmax(0,1fr) auto;
@@ -3668,33 +3870,29 @@ body:has(.feed-page) #bb-ham{display:none}
 .feed-card__reply-cta, .reply-stub__reply {
   transition: color .12s, background .12s, border-color .12s, box-shadow .15s ease;
 }
-/* Resting (before hover) */
-html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta,
-html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply {
+/* Resting (before hover) — re-keyed 2026-06-10 from the retired hub-theme-*
+   classes to the two-mode attribute (Light = no data-lguser-theme="dark"). */
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply {
   box-shadow: 0 1px 4px rgba(26, 29, 26, .16);
 }
-html.hub-theme-dark  .feed-card__reply-cta,
-html.hub-theme-black .feed-card__reply-cta,
-html.hub-theme-dark  .reply-stub__reply,
-html.hub-theme-black .reply-stub__reply {
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #7c9a52) 42%, transparent);
+html[data-lguser-theme="dark"] .feed-card__reply-cta,
+html[data-lguser-theme="dark"] .reply-stub__reply {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lguser-accent, #9cb37d) 42%, transparent);
 }
 /* Hover bump */
-html:not(.hub-theme-dark):not(.hub-theme-black) .feed-card__reply-cta:hover,
-html:not(.hub-theme-dark):not(.hub-theme-black) .reply-stub__reply:hover {
+html:not([data-lguser-theme="dark"]) .feed-card__reply-cta:hover,
+html:not([data-lguser-theme="dark"]) .reply-stub__reply:hover {
   box-shadow: 0 3px 9px rgba(26, 29, 26, .24);
 }
-html.hub-theme-dark  .feed-card__reply-cta:hover,
-html.hub-theme-black .feed-card__reply-cta:hover,
-html.hub-theme-dark  .reply-stub__reply:hover,
-html.hub-theme-black .reply-stub__reply:hover {
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #7c9a52) 68%, transparent);
+html[data-lguser-theme="dark"] .feed-card__reply-cta:hover,
+html[data-lguser-theme="dark"] .reply-stub__reply:hover {
+  box-shadow: 0 0 14px color-mix(in srgb, var(--lguser-accent, #9cb37d) 68%, transparent);
 }
-/* Cards — subtle sage glow on dark/black hover (desktop ≥641) */
+/* Cards — subtle sage glow on dark hover (desktop ≥641) */
 @media (min-width: 641px) {
-  html.hub-theme-dark  .feed-page .feed-card:hover,
-  html.hub-theme-black .feed-page .feed-card:hover {
-    box-shadow: 0 0 22px color-mix(in srgb, var(--accent, #7c9a52) 17%, transparent);
+  html[data-lguser-theme="dark"] .feed-page .feed-card:hover {
+    box-shadow: 0 0 22px color-mix(in srgb, var(--lguser-accent, #9cb37d) 17%, transparent);
   }
 }
 
@@ -3732,28 +3930,25 @@ html.hub-theme-black .reply-stub__reply:hover {
 .feed-page .feed-card--gated-pro .fc-tier-badge { background: #caa24a; }
 
 @media (min-width: 641px) {
-  /* thumbs/players a little bigger (Ian) */
-  .feed-page .feed-card--content .fc-cover { max-width: 480px; }
-  /* ALL CPT (content) cards with a cover: image LEFT, text RIGHT, large 16:9 (Ian).
-     Reuses the cooler-card area names — cover spans the left column across the text
-     rows. :has(.fc-cover) so text-only cards (no image) keep the default 1-col grid
-     instead of an empty left gutter. Covers video, gated teaser, article, etc. */
-  .feed-page .feed-card--content:has(.fc-cover) {
-    grid-template-columns: 360px 40px minmax(0,1fr) auto;
-    grid-template-areas:
-      "cover avatar  author   time"
-      "cover avatar  activity category"
-      "cover title   title    title"
-      "cover excerpt excerpt  excerpt"
-      "cover actions actions  actions"
-      "cover tags    tags     tags";
-    align-items: start;
-  }
+  /* CPT (content) cards now match discussions: a full-width 16:9 cover BAND in
+     the card flow — NOT the old image-LEFT/text-RIGHT split (Ian 2026-06-11).
+     They keep the default single-column grid (cover = the full "cover" row);
+     we just normalise the cover img to a true 16:9 cover. :has(.fc-cover) so
+     text-only CPT cards stay clean. */
   .feed-page .feed-card--content:has(.fc-cover) .fc-cover {
-    grid-area: cover; align-self: start; margin-top: 0; max-width: none; width: 360px; }
+    grid-area: cover; align-self: stretch; max-width: none; width: auto; }
   .feed-page .feed-card--content:has(.fc-cover) .fc-cover .feed-card__cover-img {
     aspect-ratio: 16 / 9; height: auto; max-height: none; object-fit: cover; }
-  .feed-page .feed-card--content:has(.fc-cover) .fc-title { margin-top: 0; }
+
+  /* ── Full-bleed cover band (Ian 2026-06-11): the 16:9 image fills edge-to-edge
+     to the card sides by breaking out of the 16px card padding; the card's
+     overflow:hidden clips it into a clean band. Applies to BOTH discussion and
+     CPT covers. 3-class selector + late source order outweighs the legacy
+     .feed-page .fc-cover (3654) and masonry cover rules. Desktop only — mobile
+     covers are Buck's mobile-hub.css. */
+  .feed-page .feed-card .fc-cover {
+    width: auto; max-width: none; margin: 12px -16px 0; border-radius: 0;
+  }
 }
 
 /* Composer → rich (Quill) expand affordance (Ian 6/7). Sits in the composer wrap
@@ -3832,3 +4027,192 @@ html.hub-theme-black .reply-stub__reply:hover {
    on the excerpt so it only shows when there IS a body (gated/title-only cards stay
    clean). Appended last so it wins over the grid rule's margin. */
 .feed-page .fc-excerpt { border-top: 1px solid var(--lguser-line, #cdd6ba); margin-top: 9px; padding-top: 9px; }
+/* fork: bespoke-cutover preview */
+
+
+/* ══ §4e DESKTOP DISCUSSION MODAL (bespoke-cutover, Ian 2026-06-10) ══
+   Token-driven, so Light/Dark follow automatically. Thread inherits the
+   .reply-stub family (incl. --child indent + .fcr reaction bars). */
+@media (min-width: 641px) {
+  /* z 8800: BELOW the reply composer overlay (9000) + lightbox (9999) — both
+     open on top of this modal ("reply buttons land under the modal", Ian). */
+  #lg-dmodal { position: fixed; inset: 0; z-index: 8800; }
+  #lg-dmodal[hidden] { display: none; }
+  #lg-dmodal .lg-dmodal__back { position: absolute; inset: 0; background: rgba(10, 12, 10, .58); }
+  #lg-dmodal .lg-dmodal__panel.lg-dmodal--s { width: min(620px, calc(100vw - 48px)); }
+  #lg-dmodal .lg-dmodal__panel.lg-dmodal--l { width: min(1040px, calc(100vw - 64px)); }
+  #lg-dmodal .lg-dmodal__panel {
+    position: relative; width: min(760px, calc(100vw - 48px)); max-height: 86vh;
+    margin: 7vh auto 0; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg-card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: 0 24px 64px -16px rgba(0, 0, 0, .45);
+  }
+  #lg-dmodal .lg-dmodal__head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  #lg-dmodal .lg-dmodal__title { flex: 1; min-width: 0; margin: 0; font: 700 calc(18px*var(--lg-read-scale,1))/1.3 var(--font-head); color: var(--fg); }
+  #lg-dmodal .lg-dmodal__x {
+    flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; cursor: pointer;
+    background: var(--lg-sage-tint); color: var(--fg-muted); font: 400 20px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__x:hover { background: var(--lg-sage); color: #fff; }
+  /* .feed-page rides on the scroll body so the reaction picker/chips/fb styles
+     match the feed exactly (Ian: "make picker same as outside") — and we kill
+     the page-bg/width side effects the class drags in. */
+  #lg-dmodal .lg-dmodal__scroll { overflow-y: auto; padding: 16px 18px 22px; background: transparent; max-width: none; }
+  #lg-dmodal .lg-dmodal__meta { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  #lg-dmodal .lg-dmodal__meta .fc-avatar img,
+  #lg-dmodal .lg-dmodal__meta .fc-avatar .avatar-init { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+  #lg-dmodal .lg-dmodal__meta-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  #lg-dmodal .lg-dmodal__meta .fc-author__name { font-weight: 700; color: var(--fg); }
+  #lg-dmodal .lg-dmodal__meta .fc-time { font-size: 12.5px; color: var(--fg-muted); }
+  #lg-dmodal .lg-dmodal__body { font-size: calc(15.5px*var(--lg-read-scale,1)); line-height: 1.6; color: var(--fg); margin-bottom: 4px; }
+  #lg-dmodal .lg-dmodal__body img { max-width: 100%; height: auto; border-radius: 10px; }
+  #lg-dmodal .lg-dmodal__thread { border-top: 1px solid var(--border); padding-top: 6px; }
+  #lg-dmodal .lg-dmodal__note { padding: 18px 4px; color: var(--fg-muted); font: 14px/1.5 var(--font-body); }
+  /* Size cycle (S/M/L) in the head */
+  #lg-dmodal .lg-dmodal__size {
+    flex: none; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 50%;
+    cursor: pointer; background: none; color: var(--fg-muted); font: 700 12px/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__size:hover { border-color: var(--lg-sage, #87986a); color: var(--fg); }
+  /* Social-style action rows — one place, under the content (Ian) */
+  #lg-dmodal .lg-dmodal__opacts {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 0; margin-bottom: 12px; border-bottom: 1px solid var(--border);
+  }
+  #lg-dmodal .lg-dmodal__act,
+  #lg-dmodal .reply-stub__reply {
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    background: none; border: 0; padding: 2px 4px; box-shadow: none;
+    color: var(--lg-sage-d, #586b3f); font: 700 calc(13px*var(--lg-read-scale,1))/1 var(--font-body);
+  }
+  #lg-dmodal .lg-dmodal__act:hover,
+  #lg-dmodal .reply-stub__reply:hover { color: var(--lg-sage, #87986a); background: none; box-shadow: none; }
+  #lg-dmodal .lg-dmodal__del { margin-left: auto; color: var(--lg-mute, #6b6f6b); }
+  #lg-dmodal .lg-dmodal__del:hover { color: #c33; background: rgba(193, 51, 51, .1); border-radius: 8px; }
+  #lg-dmodal .lg-dmodal__acts {
+    display: flex; align-items: center; gap: 14px; padding: 6px 0 0; width: 100%;
+  }
+  /* Thread rhythm: divided top-level stubs, breathing room, indented children.
+     The scroll body carries .feed-page (picker styling), which also brings the
+     feed's pill background for .reply-stub — modal rows stay flat separators. */
+  #lg-dmodal .lg-dmodal__thread .reply-stub { padding: 12px 0; margin: 0; border-top: 1px solid var(--border-soft, var(--border)); background: none !important; border-radius: 0; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub:first-child { border-top: 0; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub--child { margin-left: 42px; border-top: 0; padding-top: 4px; }
+  #lg-dmodal .lg-dmodal__thread .avatar-init,
+  #lg-dmodal .lg-dmodal__thread .reply-stub img.avatar { width: 32px; height: 32px; font-size: 13px; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__author { font-size: 13.5px; font-weight: 700; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__excerpt,
+  #lg-dmodal .lg-dmodal__thread .reply-stub__body { font-size: calc(14.5px*var(--lg-read-scale,1)); line-height: 1.55; }
+  #lg-dmodal .lg-dmodal__thread .reply-stub__head .reply-stub__reply { display: none; } /* moved to the acts row */
+  /* the modal drains the pages itself — the per-5 button never shows */
+  #lg-dmodal .lg-dmodal__thread .replies-loadmore { display: none; }
+}
+
+
+/* ── CARD PARE-DOWN with the discussion modal (Ian 2026-06-10: "pare the card
+   functionality down so it doesn't duplicate what is in the modal") — desktop
+   topic cards are PREVIEWS: title/excerpt/cover/facepile/reactions/save. The
+   thread (teaser reply, expand, read-more full body, inline composer, reply
+   CTA) lives in the §4e modal. ≥641 only — mobile keeps its sheet flow. The
+   modal's own thread renders OUTSIDE .feed-card, so these don't touch it. ── */
+@media (min-width: 641px) {
+  .feed-page .feed-card--topic .fc-replies,
+  .feed-page .feed-card--topic .feed-card__replies,
+  .feed-page .feed-card--topic .feed-card__replies-full,
+  .feed-page .feed-card--topic .feed-card__read-more,
+  .feed-page .feed-card--topic .fc-composer,
+  .feed-page .feed-card--topic .feed-card__reply-cta,
+  .feed-page .feed-card--topic .feed-card__reply-cta--inline { display: none; }
+}
+
+
+/* ── CPT card bottom row (Ian 2026-06-10: "could use some love") — desktop:
+   one coherent row: reactions left, comment + save right. The overlay's
+   duplicate bookmark pill is retired (v147); ☆ fc-save is THE save. ── */
+@media (min-width: 641px) {
+  .feed-page .feed-card .fc-actions {
+    display: flex; align-items: center; gap: 12px;
+    padding-top: 10px; border-top: 1px solid var(--border-soft, var(--border));
+  }
+  .feed-page .feed-card .fc-actions .fcr { flex: 1 1 auto; min-width: 0; }
+  .feed-page .feed-card .fc-actions .feed-card__comments-btn,
+  .feed-page .feed-card .fc-actions .fc-save {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    background: none; border: 0; padding: 4px 6px;
+    color: var(--fg-muted); font: 600 calc(13px*var(--lg-read-scale,1))/1 var(--font-body);
+  }
+  .feed-page .feed-card .fc-actions .feed-card__comments-btn:hover,
+  .feed-page .feed-card .fc-actions .fc-save:hover { color: var(--lg-sage-d, #586b3f); }
+  .feed-page .feed-card .fc-actions .fc-save.is-on { color: var(--lg-sage-d, #586b3f); }
+}
+
+/* Desktop hub: top banner removed on the FRONT-DOOR hub (scoped forums keep
+   theirs); the sort-bar New-post pill un-hides and sits right of Filters —
+   mirrors the existing mobile banner-hide. (Buck pre-launch 2026-06-11) */
+@media (min-width:641px){
+  .feed-page .forum-header--hub{display:none}
+  .feed-page .feed-sort-bar > .lg-newpost{
+    display:inline-flex;align-items:center;gap:5px;position:static;width:auto;height:auto;
+    background:var(--lguser-accent-d,#52613d);color:#fff;border:0;border-radius:999px;
+    padding:8px 15px;font:700 13px/1 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);
+    white-space:nowrap;margin:0;box-shadow:none;transform:none;cursor:pointer;
+  }
+  .feed-page .feed-sort-bar > .lg-newpost:hover{background:var(--lguser-accent,#6b7c52)}
+}
+
+/* ── Modal image lightbox (forums.js §10, Ian 2026-06-11) ── */
+#lg-imglb { position: fixed; inset: 0; z-index: 9100; /* above #lg-dmodal (8800) */
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 8, .88); cursor: zoom-out; }
+#lg-imglb[hidden] { display: none; }
+#lg-imglb .lg-imglb__img { max-width: 94vw; max-height: 92vh; width: auto; height: auto;
+  border-radius: 6px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55); }
+#lg-imglb .lg-imglb__x { position: absolute; top: 14px; right: 18px; border: 0;
+  background: none; color: #fff; font: 400 34px/1 var(--lg-font-sans, system-ui, sans-serif);
+  cursor: pointer; opacity: .8; padding: 4px 10px; }
+#lg-imglb .lg-imglb__x:hover { opacity: 1; }
+
+/* ── Composer image attachment tray (desktop ≥641 only) ─────────────────────
+   Out-of-body tray = source of truth for bbp_media (see forums.js
+   lgComposerTray). Mobile (≤640) keeps the legacy inline-embed path and never
+   creates this DOM, so these rules are gated to desktop to avoid any paint on
+   Buck's mobile composer surface. */
+@media (min-width: 641px) {
+  .lg-mtray { display: flex; flex-wrap: wrap; gap: 8px; margin: 9px 0 2px; position: relative; }
+  .lg-mtray.is-uploading { min-height: 7px; }
+  /* Indeterminate "working" bar above the thumb row (no determinate % — the
+     current fetch upload can't report bytes; a sliding bar signals progress). */
+  .lg-mtray.is-uploading::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -5px; height: 3px;
+    border-radius: 2px; background: var(--lg-line, #e3ddd0); overflow: hidden; }
+  .lg-mtray.is-uploading::after {
+    content: ""; position: absolute; top: -5px; height: 3px; width: 38%;
+    border-radius: 2px; background: var(--lguser-accent, #6b7c52);
+    animation: lg-mtray-indet 1.05s ease-in-out infinite; }
+  @keyframes lg-mtray-indet { 0% { left: -40%; } 100% { left: 100%; } }
+  .lg-mtray__item {
+    position: relative; display: inline-flex; width: 74px; height: 74px;
+    border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--lg-line, #e3ddd0); background: var(--lg-cream, #fbfbf8); }
+  .lg-mtray__img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .lg-mtray__rm {
+    position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0;
+    border: 0; cursor: pointer; border-radius: 50%;
+    background: rgba(26, 29, 26, .72); color: #fff;
+    font: 600 12px/20px var(--lg-font-sans, system-ui, sans-serif); text-align: center; }
+  .lg-mtray__rm:hover { background: rgba(26, 29, 26, .92); }
+}
+
+/* Composer image hint + error message (paired with lgComposerTray). The hint is
+   only ever inserted on desktop (JS-gated); the error colour applies on both
+   surfaces so a rejected upload — e.g. an unsupported webp — is never silent. */
+.lg-mtray-hint {
+  margin: 5px 0 0; font: 500 11.5px/1.4 var(--lg-font-sans, system-ui, sans-serif);
+  color: var(--lg-mute, #6b6f6b); }
+.ntm-status.lg-msg-error, .frm-status.lg-msg-error, .lg-msg-error,
+.reply-form__status.lg-msg-error, .post-edit__status.lg-msg-error {
+  color: #b3261e; font-weight: 600; }

@@ -240,6 +240,11 @@ foreach ($topics as $t) {
     $sticky = !empty($m['_bbp_super_sticky_topics']) ? 'super'
             : (!empty($m['_bbp_sticky_topics']) ? 'forum' : null);
 
+    // TRUE reply count from the source rows — _bbp_reply_count meta drifts
+    // (see materializers.php note, Ian 2026-06-10).
+    $real_reply_count = (int)$wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='reply' AND post_status='publish' AND post_parent=%d", (int)$t->ID));
+
     $stmt_topic->execute([
         (int)$t->ID, $fid,
         (string)$t->post_name, decode_entities((string)$t->post_title),
@@ -250,7 +255,7 @@ foreach ($topics as $t) {
         $m['_bbp_topic_status'] ?? (string)$t->post_status,
         $sticky,
         (int)($m['_bbp_voice_count']     ?? 0),
-        (int)($m['_bbp_reply_count']     ?? 0),
+        $real_reply_count,
         (int)($m['_bbp_last_reply_id']   ?? 0) ?: null,
         (int)($m['_bbp_last_active_id']  ?? 0) ?: null,
         bb_mirror_ts(ts_in($m['_bbp_last_active_time'] ?? null)),

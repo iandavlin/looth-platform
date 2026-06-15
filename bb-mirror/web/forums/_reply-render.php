@@ -10,6 +10,25 @@
 
 declare(strict_types=1);
 
+if (!function_exists('lg_cover_src')) {
+    /**
+     * Same resizer-routing helper as _feed.php (function_exists-guarded twin —
+     * _topic-replies.php includes this file without _feed.php). Reply-stub
+     * images were the last feed images bypassing /img.php: raw ~100KB originals
+     * for a 240px-max thumbnail (perf lane 2026-06-11).
+     */
+    function lg_cover_src(?string $url, int $w = 800): ?string
+    {
+        if (!$url) {
+            return $url;
+        }
+        if (preg_match('#/wp-content/uploads/(.+)$#', $url, $m)) {
+            return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
+        }
+        return $url;
+    }
+}
+
 // Whether the current viewer may post (create topics/replies). Posting is
 // authenticated-only and the BuddyBoss REST API rejects anonymous writes (401) —
 // that 401 is the real, inspector-proof backstop. This is the SERVER-rendered UI
@@ -46,6 +65,14 @@ if (!function_exists('bb_mirror_avatar')) {
     {
         if ($avatar_url !== null && $avatar_url !== '') {
             $u = function_exists('lg_bb_mirror_safe_avatar') ? lg_bb_mirror_safe_avatar($avatar_url) : $avatar_url;
+            // Route uploads-hosted avatars through the resizer at 2x the slot
+            // (a 300px/149KB BB original was shipping into 40px circles —
+            // craft gate IMG-RAW, Ian 6/12). Non-uploads URLs pass through.
+            if (preg_match('#/wp-content/uploads/(.+)$#', (string)$u, $m)) {
+                $u = '/img.php?s=' . rawurlencode($m[1]) . '&w=96';   // smallest resizer bucket; avatars render 32-48px
+            } elseif (str_starts_with((string)$u, '/profile-media/')) {
+                $u .= (str_contains((string)$u, '?') ? '&' : '?') . 'w=96';   // profile-app media.php resize bucket
+            }
             return sprintf(
                 '<img class="avatar-init avatar-init--img" src="%s" width="%d" height="%d" alt="" loading="lazy" decoding="async">',
                 htmlspecialchars((string)$u), $size, $size
@@ -153,6 +180,65 @@ if (!function_exists('bb_mirror_resolve_mentions')) {
     }
 }
 
+if (!function_exists('bb_mirror_paragraphs')) {
+    /**
+     * Display-time paragraph reconstruction for raw-newline content_html.
+     *
+     * The PG `content_html` column is MIXED: most rows carry <p> paragraphs, but a
+     * minority of legacy BuddyBoss imports are raw text with \r\n line breaks and
+     * NO block tags — those render as a "wall of text" because HTML collapses
+     * newlines to whitespace. This is a RENDER-time fix only: NOT a data migration
+     * and NOT the reverted sync-time wpautop. If the html already carries a
+     * block-level tag we return it untouched (covers the rows that are fine); a row
+     * with no newlines is left alone (nothing to rebuild). Otherwise blank-line-
+     * delimited blocks become <p> and remaining single newlines become <br>.
+     * Inline markup (already-resolved mentions, auto-linked URLs, <a>/<strong>/…)
+     * is preserved. Idempotent: re-running on its own output is a no-op (the <p>
+     * makes the block-tag guard trip).
+     */
+    function bb_mirror_paragraphs(string $html): string
+    {
+        if ($html === '') return $html;
+        // No line breaks anywhere → nothing to reconstruct (covers single-line and
+        // fully-tag-structured-on-one-line bodies).
+        if (strpos($html, "\n") === false && strpos($html, "\r") === false) {
+            return $html;
+        }
+        $t = str_replace(["\r\n", "\r"], "\n", $html);
+
+        // Tokenise into existing BLOCK elements (left untouched) and the raw text
+        // BETWEEN them. Crucial for MIXED rows: BuddyBoss bodies are often raw
+        // \n\n text with a block chunk appended (e.g. an "<p>Images</p>" gallery) —
+        // bailing on the mere presence of a block tag left the raw body collapsed
+        // (topic 71640). We only paragraph-wrap the raw text segments; anything
+        // already inside a block element is preserved verbatim. Non-nested blocks
+        // (the shape BuddyBoss emits); inline tags (<a>/<strong>/<img>) stay inside
+        // the text run and get wrapped with it.
+        $blockEl = '(?:<(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)\b[^>]*>.*?'
+                 . '</(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)>|<(?:hr|br)\s*/?>)';
+        $parts = preg_split('~(' . $blockEl . ')~is', $t, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) return $html;
+
+        $out = '';
+        foreach ($parts as $seg) {
+            if ($seg === '') continue;
+            // A captured block element → keep as-is.
+            if (preg_match('~^\s*(?:<(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)\b|<(?:hr|br)\s*/?>)~i', $seg)) {
+                $out .= $seg;
+                continue;
+            }
+            // Raw text run → blank lines become <p>, single newlines become <br>.
+            if (trim($seg) === '') continue;
+            foreach (preg_split('/\n[ \t]*\n+/', trim($seg)) as $block) {
+                $block = trim($block);
+                if ($block === '') continue;
+                $out .= '<p>' . str_replace("\n", "<br>\n", $block) . "</p>\n";
+            }
+        }
+        return $out !== '' ? $out : $html;
+    }
+}
+
 if (!function_exists('bb_mirror_format_snippet')) {
     /**
      * Teaser-safe formatted excerpt: resolves mentions + URLs (via
@@ -257,13 +343,23 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         $ra          = htmlspecialchars($r['author_name'] ?: 'Anonymous');
         $rslug       = $r['author_slug'] ?? null;
         $raw_text    = trim(strip_tags($r['excerpt'] ?? ''));
+        // Logged-out contact scrub (Ian 2026-06-10): emails + @handles never
+        // reach anonymous eyes. See _anon-scrub.php.
+        if (function_exists('lg_bb_mirror_can_post') && !lg_bb_mirror_can_post()) {
+            require_once __DIR__ . '/../_anon-scrub.php';
+            $raw_text = lg_scrub_anon_contacts($raw_text);
+        }
         $reply_short = mb_substr($raw_text, 0, 160);
         $reply_rest  = mb_strlen($raw_text) > 160 ? mb_substr($raw_text, 160) : '';
         $rtime_r     = $r['created_at'] ? feed_rel_time((string)$r['created_at']) : '—';
         $av_slug     = $rslug ?: ($r['author_name'] ?: 'anonymous');
         $classes     = 'reply-stub' . ($is_child ? ' reply-stub--child' : '');
         $rid_attr    = isset($r['reply_id']) ? ' data-reply-id="' . (int)$r['reply_id'] . '"' : '';
-        echo '<div class="' . $classes . '"' . $rid_attr . '>';
+        // Reply author's WP user id (forums.person.id IS the WP user id) — lets the
+        // client mark the viewer's OWN rows so they can edit/delete them (Ian
+        // 2026-06-11). Absent on masked-anon rows; that's fine (anon replies retired).
+        $aid_attr    = !empty($r['author_id']) ? ' data-author-id="' . (int)$r['author_id'] . '"' : '';
+        echo '<div class="' . $classes . '"' . $rid_attr . $aid_attr . '>';
         echo '<div class="reply-stub__head">';
         echo bb_mirror_avatar($r['author_name'] ?: 'Anonymous', $av_slug, $is_child ? 22 : 28, $r['avatar_url'] ?? null);
         if ($rslug) {
@@ -290,7 +386,9 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         // Moderator Edit + Trash — emitted for every reply, revealed only under
         // .feed--can-moderate (set client-side when auth says can_edit_others).
         // The PUT/DELETE endpoints re-check caps server-side regardless of the UI.
-        if (isset($r['reply_id'])) {
+        // Logged-out viewers never edit: skip the buttons AND the data-reply-raw
+        // payload (it carried the raw body incl. contact handles — Ian 2026-06-10).
+        if (isset($r['reply_id']) && (!function_exists('lg_bb_mirror_can_post') || lg_bb_mirror_can_post())) {
             // Carry the COMPLETE stored body (not the truncated stub excerpt) so the
             // inline Quill edit editor can load + round-trip the real reply. Raw HTML
             // (mention placeholders unresolved — they round-trip as-is and re-resolve
@@ -310,7 +408,14 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
         if (!empty($r['excerpt_html'])) {
             // Pre-formatted by the caller (bb_mirror_format_snippet): resolved
             // @mentions + clickable URLs, already truncated + safe HTML.
-            echo '<span class="reply-stub__excerpt">' . $r['excerpt_html'] . '</span>';
+            $lg_xh = (string)$r['excerpt_html'];
+            if (function_exists('lg_bb_mirror_can_post') && !lg_bb_mirror_can_post()) {
+                require_once __DIR__ . '/../_anon-scrub.php';
+                // mention anchors leak the handle in text + href — neutralize whole
+                $lg_xh = preg_replace('~<a\b[^>]*class="[^"]*bb-mention[^"]*"[^>]*>.*?</a>~is', '@member', $lg_xh) ?? $lg_xh;
+                $lg_xh = lg_scrub_anon_contacts($lg_xh);
+            }
+            echo '<span class="reply-stub__excerpt">' . $lg_xh . '</span>';
         } elseif ($reply_short !== '') {
             echo '<span class="reply-stub__excerpt">' . htmlspecialchars($reply_short);
             if ($reply_rest) {
@@ -320,7 +425,7 @@ if (!function_exists('bb_mirror_render_reply_stub')) {
             echo '</span>';
         }
         if (!empty($r['reply_image_url'])) {
-            $iu = htmlspecialchars($r['reply_image_url']);
+            $iu = htmlspecialchars(lg_cover_src((string)$r['reply_image_url']) ?? '');
             if ($collapse_image) {
                 // Teaser context: keep the image hidden AND unloaded (data-src, no
                 // src) until the reader opens the reply — keeps the feed card compact.

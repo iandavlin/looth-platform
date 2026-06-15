@@ -22,8 +22,15 @@ if (!$tid) {
     exit;
 }
 
+// Forum-visibility gate (C2): a topic body is readable only when its parent
+// forum is PUBLIC. Hidden/private forums 404 — same gate the single-topic page
+// and feed read paths use (JOIN forums.forum … WHERE f.visibility='public').
 $stmt = $db->prepare(
-    "SELECT content_html FROM forums.topic WHERE id = :id AND status = 'publish' LIMIT 1"
+    "SELECT t.content_html
+       FROM forums.topic t
+       JOIN forums.forum f ON f.id = t.forum_id
+      WHERE t.id = :id AND t.status = 'publish' AND f.visibility = 'public'
+      LIMIT 1"
 );
 $stmt->bindValue(':id', $tid, PDO::PARAM_INT);
 $stmt->execute();
@@ -36,7 +43,10 @@ if (!$row) {
 }
 
 header('Content-Type: text/html; charset=utf-8');
-echo bb_mirror_resolve_mentions((string)$row['content_html'], $db);
+require_once __DIR__ . '/../_anon-scrub.php';
+$lg_body_html = bb_mirror_paragraphs(bb_mirror_resolve_mentions((string)$row['content_html'], $db));
+if (!lg_bb_mirror_can_post()) $lg_body_html = lg_scrub_anon_contacts($lg_body_html);
+echo $lg_body_html;
 
 // -- Attachments below the text -----------------------------------------------
 $astmt = $db->prepare(
