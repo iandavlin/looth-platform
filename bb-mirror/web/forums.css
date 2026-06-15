@@ -3777,7 +3777,8 @@ body:has(.feed-page) #bb-ham{display:none}
   .feed-page .feed-card{
     /* card chrome — desktop only (moved off the base rule for the split) */
     background:var(--bg-card); border:1px solid var(--lg-line); border-radius:8px;
-    padding:14px 16px 0; border-left:4px solid var(--sec,transparent);
+    /* top breathing room + real bottom padding under the action row (Ian 6/15) */
+    padding:18px 16px 16px; border-left:4px solid var(--sec,transparent);
     transition:transform .18s ease, box-shadow .18s ease, border-color .15s ease; overflow:hidden;
     display:grid;
     grid-template-columns:44px minmax(0,1fr) auto;
