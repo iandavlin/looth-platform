@@ -36,7 +36,31 @@
   block, 0 address strings in page, 429 on repeat, honeypot drops, dark
   modal correct. Screenshot mockups/feedback-modal-dark.png.
 
+- `34b4b1a` fp-rows: member rails trimmed to NEW "Most recent posts"
+  aggregator (12 newest, exclude discussion+misc) + Mandolin + Dan
+  Erlewine; the five other rails flipped audience→public so the
+  logged-out page is unchanged. Verified both row sets via curl.
+
+- `05fecd8` fp: featured member → Chip Tait (Brooklyn Fretworks, wp 141) +
+  Instagram embed (DQcbipnERt1) replaces both promo videos; band now BOTH
+  audiences (CSS de-scoped from .is-member). Chip's location_visibility =
+  members → the city line renders members-only on the band. video_id kept
+  in config as revert; `instagram` field takes precedence.
+
+- (data, no commit) Chip Tait's profile_socials filled from his own public
+  web presence: web/instagram/facebook/email/phone (all published on
+  brooklynfretworks.com/contact). Renders 5 header icons for members;
+  anon sees none (his profile is members-only visibility — by design).
+
+- `f3e9fcb` fp: IG embed OFF again (Ian) — featured videos restored on both
+  promo rows via the kept video_id; Chip Tait band stays both audiences.
+  Renderer `instagram` support stays dormant in code.
+
 ## OPEN
+- PRE-EXISTING (not from today's changes): the active-discussions row
+  resolves 0 items for BOTH audiences (item_ids:[] in the page JSON) so
+  it silently never renders. Query is kind=discussion sort=active.
+  Needs a look — possibly the standalone lane's content_item side.
 - The LIVE NOW banner (`web/index.php` happening-now block) still sends
   entitled members straight to Zoom ("Join →"). Left as-is — it's a
   join-the-call-now affordance, not a card — but flag if Ian wants it

@@ -131,6 +131,30 @@ $range = static function (string $from, string $to): string {
 .lg-wk__sub-bar button{border:0;border-radius:999px;background:var(--lg-sage,#87986a);color:#fff;font-weight:700;font-size:14px;padding:11px 22px;cursor:pointer}
 .lg-wk__sub-bar button:hover{filter:brightness(1.06)}
 .lg-wk__hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+
+/* ── Dark counterpart (Ian 6/14) ─────────────────────────────────────────────
+   The card surfaces above hardcode a light bg (#fff / light placeholder) while
+   their text follows the site-header --lg-* tokens that flip light in dark →
+   titles washed out on white cards. Re-point ONLY the hardcoded-light surfaces
+   to the dark card token; text already follows the tokens. Mirror archive-poc's
+   two-gate pattern so it tracks the same user/OS theme switch:
+     1. html[data-lguser-theme="dark"]  — explicit Dark pick (overlay stamps it)
+     2. OS prefers-color-scheme: dark    — only while no theme attr is stamped
+   --lguser-card / --lguser-line come from app-settings.js (fallbacks mirror it).
+   .lg-wk__sponsor-tag is self-contained (own light bg + dark text) → legible on
+   a dark card either way, left as-is. */
+html[data-lguser-theme="dark"] .lg-wk__issue,
+html[data-lguser-theme="dark"] .lg-wk__card,
+html[data-lguser-theme="dark"] .lg-wk__gate,
+html[data-lguser-theme="dark"] .lg-wk__mail{background:var(--lguser-card,#1e2124)}
+html[data-lguser-theme="dark"] .lg-wk__thumb{background:var(--lguser-line,#2c312d)}
+@media (prefers-color-scheme: dark){
+  html:not([data-lguser-theme]) .lg-wk__issue,
+  html:not([data-lguser-theme]) .lg-wk__card,
+  html:not([data-lguser-theme]) .lg-wk__gate,
+  html:not([data-lguser-theme]) .lg-wk__mail{background:var(--lguser-card,#1e2124)}
+  html:not([data-lguser-theme]) .lg-wk__thumb{background:var(--lguser-line,#2c312d)}
+}
 </style>
 </head>
 <body class="lg-weekly-page">
