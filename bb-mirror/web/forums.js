@@ -2806,6 +2806,45 @@
       if (opPal) opPal.hidden = true;
       opacts.insertBefore(opBar, opacts.firstChild);
     }
+    // Delete the post — author (viewer wp_user_id === card's data-author-id) OR
+    // moderator (can_edit_others). Server (api/v0/reply.php DELETE {topic_id})
+    // re-checks the cap. Coord 2026-06-15: desktop-modal parity with the mobile sheet.
+    (function () {
+      var opAuthorId = parseInt(card.getAttribute('data-author-id'), 10) || 0;
+      var del = document.createElement('button');
+      del.type = 'button'; del.className = 'lg-dmodal__act lg-dmodal__del'; del.hidden = true;
+      del.setAttribute('aria-label', 'Delete this post');
+      del.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg> Delete';
+      opacts.appendChild(del);
+      fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (a) {
+          if (!a || !a.authenticated) return;
+          var mine = opAuthorId && a.wp_user_id && parseInt(a.wp_user_id, 10) === opAuthorId;
+          if (!mine && !a.can_edit_others) return;
+          del.hidden = false;
+          del.addEventListener('click', function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            if (!a.nonce) { alert('Not signed in.'); return; }
+            if (!window.confirm('Delete this post? This removes the discussion and its replies and can’t be undone.')) return;
+            del.disabled = true;
+            fetch('/bb-mirror-api/v0/reply', {
+              method: 'DELETE', credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': a.nonce },
+              body: JSON.stringify({ topic_id: parseInt(tid, 10) })
+            })
+              .then(function (r) { return r.json().then(function (j) { return { s: r.status, ok: r.ok, j: j }; }, function () { return { s: r.status, ok: r.ok, j: {} }; }); })
+              .then(function (res) {
+                if (res.s === 401) { del.disabled = false; alert('Please sign in.'); return; }
+                if (res.s === 403) { del.disabled = false; alert('You can only delete your own posts.'); return; }
+                if (!res.ok) { del.disabled = false; alert('Could not delete: ' + ((res.j && (res.j.message || res.j.error)) || 'failed')); return; }
+                var cb = m.querySelector('[data-dm-close]'); if (cb) cb.click();
+                try { card.remove(); } catch (e) {}
+              })
+              .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
+          });
+        }).catch(function () {});
+    })();
     op.appendChild(opacts);
     fetch(BASE + '/?body=' + encodeURIComponent(tid), { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })

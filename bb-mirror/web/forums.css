@@ -4090,6 +4090,8 @@ html[data-lguser-theme="dark"] .reply-stub__reply:hover {
   }
   #lg-dmodal .lg-dmodal__act:hover,
   #lg-dmodal .reply-stub__reply:hover { color: var(--lg-sage, #87986a); background: none; box-shadow: none; }
+  #lg-dmodal .lg-dmodal__del { margin-left: auto; color: var(--lg-mute, #6b6f6b); }
+  #lg-dmodal .lg-dmodal__del:hover { color: #c33; background: rgba(193, 51, 51, .1); border-radius: 8px; }
   #lg-dmodal .lg-dmodal__acts {
     display: flex; align-items: center; gap: 14px; padding: 6px 0 0; width: 100%;
   }
