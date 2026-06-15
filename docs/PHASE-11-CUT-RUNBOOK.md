@@ -14,11 +14,22 @@ Companions: `docs/dev2-build-checklist.md` (gotcha detail + phase history), `doc
 
 ## A. Pre-cut (hours-to-days ahead — no downtime)
 1. **Lower DNS TTL** on `loothgroup.com` A record (Cloudflare) → 60–120s, so the flip propagates fast.
-2. **Merge `bespoke-cutover` → `main`** in the looth-platform repo; repoint dev2's clone
-   (`/home/ubuntu/git/looth-platform`) to `main` (prod must not track a lane branch). This carries the
-   bb-mirror Hub paragraph fix (`9510cbf`) + forum-description fix + any other lane work.
-3. **Confirm all pending dev2 deploys applied** (handoff §PENDING): host-derive `8c677aa`, avatar fallbacks,
-   archive-front, Phase 8 timers (done), eefbe97 (done).
+2. **A.2 — DONE ✅ (6/15, `89c397d`).** The current hub now lives on `main`: a real merge that takes
+   `bb-mirror/` from `bespoke-cutover` and keeps everything else from main (both parents recorded; carries
+   `9510cbf` + the SEO resolver). Rollback tag `pre-a2-real-20260615`. ⚠️ The PRIOR merge `f019434` was a
+   **FALSE POSITIVE** — it recorded bespoke as a parent but kept main's OLD bb-mirror tree, which is what
+   caused the broken hub on dev2-on-`main` (6/15). **`main` is now the SINGLE SOURCE OF TRUTH — the
+   bespoke/main split is gone.** Verify before trusting any repoint: `git diff --quiet origin/main
+   origin/bespoke-cutover -- bb-mirror/` (empty = hub landed).
+3. **Prod box = ONE git checkout of `main` for ALL apps — NO bundles. ⭐ THIS IS THE DURABLE FIX for the
+   6/15 "stale mess".** The entire 6/15 dev2 thrash was bundle drift: bb-mirror was a git clone but
+   `archive-poc`/`profile-app`/`events`/`lg-shared` + the `/var/www/dev` overlay (`webroot/`) were stale
+   plain-file bundles that silently fell a day behind main (US-center map, hub rail, dark mode). **Fix:** at
+   the cut, make `/home/ubuntu/projects` (or the single clone) a real `main` checkout and repoint EVERY
+   `/srv/*` app **and** the `/var/www/dev` overlay to it, so deploy = `git pull` and drift is impossible.
+   Then "confirm pending deploys" (host-derive `8c677aa`, archive-front, avatars, paragraph re-backfill) is
+   automatic — they're all on `main`. Verify: every `/srv/*` `readlink -f` lands inside the checkout, and
+   `git -C <checkout> rev-parse HEAD` == `origin/main`.
 4. **Dress-rehearse B–D below** on a throwaway clone if at all possible; at minimum walk the commands.
 
 ## B. Fetch from LIVE (file access — NOT in the DB dump, or sessions/JWTs die at flip)
@@ -76,6 +87,14 @@ Companions: `docs/dev2-build-checklist.md` (gotcha detail + phase history), `doc
     (rebuilds discovery `url`/`thumb_url`/`article_blobs` at the live host). Spot-check the front page for 0 off-host links.
 13. **gate OFF** (nginx cookie-gate maps) — live has no gate. **Delete `/etc/lg-loothdev-gate.env`** + drop the
     `LG_LOOTHDEV_GATE_TOKEN` from the reconcile/vis units.
+13b. **SEO nginx rules (NOT git-managed — must be applied here or search-continuity 404s at the cut).** Add to
+    the box's flat-copy snippets, APPEND-only + `nginx -t` (proven verbatim on dev1; resolver code already on
+    `main`): bb-mirror snippet → the `/all-forums-all-topics/`, `/groups/`, `/topic-tag/` 301 blocks + the
+    `seo-redirect` resolver location; profile-app snippet → `/members/*` `302→301`; archive-poc snippet →
+    `/sitemap.xml` + `/sitemap-<section>.xml` routes + `/mobile-archive-page/`→`/archive/` +
+    `/sponsor-page/<s>/`→`/sponsors/<s>/`. Run `tools/cut/sitemap-grants.sql` (profile_app read for the sitemap).
+    Then swap **robots.txt** (`/home/ubuntu/cut-staging/robots-live.txt`, points at the sitemap) over dev's
+    `Disallow: /`. Post-flip: sweep the 999 GSC `Table.csv` URLs → all 200/301, submit sitemap to GSC.
 14. **R2:** real uploads bucket/token with **write**; remount rw.
 15. **Real secrets:** SMTP, Stripe, Patreon, VAPID → live values; **re-point Stripe + Patreon webhooks → new box**.
 16. **DSNs** peer→password where the FPM user changes; **5-way /whoami re-arm** (poller, lgms creds, BB REST gate, bridge).
