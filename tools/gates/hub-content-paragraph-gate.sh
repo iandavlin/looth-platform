@@ -6,69 +6,81 @@
 # full-body single-topic + topic-body paths collapsed again):
 #   bbPress/BuddyBoss store post_content RAW — paragraph breaks are bare "\n\n",
 #   no <p>/<br> — and apply wpautop on DISPLAY. The Hub (bb-mirror) renders
-#   forums.{topic,reply}.content_html VERBATIM and WP-free (no wpautop at render).
-#   If the materializer doesn't bake the paragraph structure in at sync, every
-#   newline collapses into one unbroken wall of text.
+#   forums.{topic,reply}.content_html WP-free, so without paragraph handling every
+#   newline collapses into one unbroken wall of text in the discussion modals.
 #
-# THE INVARIANT: any published topic/reply (content_html) OR forum description
-# (forums.forum.description) whose SOURCE has a multi-paragraph break MUST carry
-# a block/break tag in its materialized HTML. The single source of truth is
-# bb_mirror_content_html() in bb-mirror/lib/materializers.php (decode->kses->
-# wpautop), shared by the live sync AND bin/backfill.php. Forum descriptions
-# render raw HTML (index.php / _topic-list.php) since this change.
+# THE INVARIANT (realigned 2026-06-15, Ian's render-time decision): the PARAGRAPH
+# HOME is RENDER-time, not the data layer. The sync-time wpautop in the materializer
+# was tried and REVERTED (9510cbf/def57f8 -> 5fd44bd/b656d2b); the PG content_html
+# column stays MIXED on purpose. So this gate no longer demands block tags in the
+# STORED html — it asserts the USER-VISIBLE truth: every raw-newline body that WOULD
+# collapse must come out of the render path carrying a block/break tag.
+#   - topic/reply bodies: render via bb_mirror_paragraphs() (in _reply-render.php,
+#     applied at the _topic-body.php OP emit shared by BOTH modal endpoints). Each
+#     raw-newline body is pushed THROUGH the helper and re-checked.
+#   - forum descriptions: render via a template that already wraps them in a single
+#     <p> (index.php / _topic-list.php, htmlspecialchars'd) — so they cannot render
+#     tag-less, but a GENUINE multi-paragraph description loses its internal breaks
+#     inside that one <p>. We flag only descriptions with REAL text (whitespace incl
+#     U+00A0 stripped — kills phantom nbsp/blank-line rows like 3818) that carry a
+#     paragraph break, i.e. ones that would actually collapse.
 #
-# Pure SQL against the canonical store — no browser, no /whoami, no rate-limit
-# flake (unlike the forum-visibility gate), so it runs inline in run-all.sh.
+# Runs as ubuntu on dev; the render check runs as the `bb-mirror` PG-role user so
+# bb_mirror_db() connects via peer auth.
 #
-# Run as ubuntu on dev (sudos to the postgres superuser to read schema forums).
-# Exit 0 = GREEN. Non-zero = collapse offenders exist — re-run the backfill
-# after fixing the materializer:
-#   sudo -u looth-dev wp --path=/var/www/dev eval 'require "/srv/bb-mirror/bin/backfill.php";'
+# Exit 0 = GREEN. Non-zero = a body still collapses at render — fix the render path
+# (bb_mirror_paragraphs / the description template), do NOT re-introduce the
+# reverted sync-time wpautop.
 set -uo pipefail
 
-DB=looth
+OFFENDERS=$(sudo -u bb-mirror php -r '
+require "/srv/bb-mirror/config.php";
+require_once "/srv/bb-mirror/web/forums/_reply-render.php";
+$db = bb_mirror_db();
+$block = "#<(p|br|ul|ol|li|blockquote|h[1-6]|pre|table|figure|div)[\s/>]#i";
+$bad = [];
 
-# Offenders: source has a paragraph break (blank line) but the materialized HTML
-# carries no block/break tag at all → it WILL render as one collapsed block.
-read -r -d '' SQL <<'EOSQL'
-WITH bad AS (
-  SELECT 'topic'::text AS kind, id FROM forums.topic
-   WHERE status IN ('publish','closed')
-     AND content_text ~ E'\n[[:space:]]*\n'
-     AND content_html !~* '<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]'
-  UNION ALL
-  SELECT 'reply'::text AS kind, id FROM forums.reply
-   WHERE status = 'publish'
-     AND content_text ~ E'\n[[:space:]]*\n'
-     AND content_html !~* '<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]'
-  UNION ALL
-  -- Forum descriptions share bb_mirror_content_html() and now render raw HTML
-  -- (index.php / _topic-list.php). forums.forum has no content_text column, so
-  -- detect the break in the stored `description` itself: a tag-less description
-  -- with a blank-line break never went through wpautop -> it will collapse.
-  SELECT 'forum-desc'::text AS kind, id FROM forums.forum
-   WHERE description ~ E'\n[[:space:]]*\n'
-     AND description !~* '<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]'
-)
-SELECT kind, id FROM bad ORDER BY kind, id LIMIT 25;
-EOSQL
+// topic/reply: assert the render helper de-collapses every raw-newline body.
+foreach (["topic" => "status IN (\x27publish\x27,\x27closed\x27)",
+          "reply" => "status = \x27publish\x27"] as $kind => $where) {
+    $sql = "SELECT id, content_html FROM forums.$kind
+             WHERE $where
+               AND content_text ~ E\x27\n[[:space:]]*\n\x27
+               AND content_html !~* \x27<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]\x27";
+    foreach ($db->query($sql) as $r) {
+        if (!preg_match($block, bb_mirror_paragraphs((string)$r["content_html"])))
+            $bad[] = "$kind|" . $r["id"];
+    }
+}
 
-OFFENDERS=$(sudo -u postgres psql -d "$DB" -t -A -F'|' -c "$SQL" 2>&1)
+// forum descriptions: template wraps in one <p>; flag only REAL multi-paragraph
+// text (strip all whitespace incl U+00A0) that would lose its internal breaks.
+$dsql = "SELECT id, description FROM forums.forum
+          WHERE description ~ E\x27\n[[:space:]]*\n\x27
+            AND description !~* \x27<(p|br|ul|ol|li|blockquote|h[1-6]|pre|div|table)[ />]\x27";
+foreach ($db->query($dsql) as $r) {
+    $stripped = preg_replace("/[\s\x{00A0}]+/u", "", (string)$r["description"]);
+    if ($stripped !== "" && $stripped !== null) $bad[] = "forum-desc|" . $r["id"];
+}
+
+echo implode("\n", $bad);
+' 2>&1)
 RC=$?
 if [ $RC -ne 0 ]; then
-  echo "PARAGRAPH-GATE: ERROR querying postgres:"
+  echo "PARAGRAPH-GATE: ERROR running render check:"
   echo "$OFFENDERS"
   exit 2
 fi
 
+OFFENDERS=$(printf '%s\n' "$OFFENDERS" | grep '|' || true)
 if [ -n "$OFFENDERS" ]; then
   N=$(printf '%s\n' "$OFFENDERS" | grep -c '|')
-  echo "PARAGRAPH-COLLAPSE: $N+ posts have multi-paragraph source but NO block tag in content_html"
-  echo "  (showing up to 25 — kind|id):"
-  printf '%s\n' "$OFFENDERS" | sed 's/^/    /'
-  echo "  Fix: bb_mirror_content_html() in materializers.php must wpautop; then re-backfill."
+  echo "PARAGRAPH-COLLAPSE: $N body/desc(s) STILL render with no block tag (wall of text)"
+  echo "  (kind|id — these collapse at render):"
+  printf '%s\n' "$OFFENDERS" | head -25 | sed 's/^/    /'
+  echo "  Fix: bb_mirror_paragraphs() in _reply-render.php (render path) — NOT sync wpautop."
   exit 1
 fi
 
-echo "paragraph-collapse gate: GREEN (no collapsed topic/reply bodies)"
+echo "paragraph-collapse gate: GREEN (every raw body de-collapses at render)"
 exit 0
