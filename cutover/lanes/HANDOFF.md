@@ -1,103 +1,100 @@
-# Coordinator handoff — FINISHING THE CUT (2026-06-15)
+# Coordinator handoff — FINISHING THE CUT (2026-06-15, PM)
 
-You're the successor coordinator. This supersedes the 6/13 handoff (in git history). The cut
-is far along — your job is a short punch-list + executing the runbook, NOT re-planning it.
+Successor: the cut is far along. This supersedes earlier handoffs (in git history). Your job =
+a short punch-list + the **SEO/search-continuity build below** + executing the runbook.
 
 ## Read order
 1. **This file.**
 2. **`docs/PHASE-11-CUT-RUNBOOK.md`** ← THE executable cut sequence (A→F). Don't re-derive it.
-3. `cutover/lanes/INDEX.md` (board) · `cutover/lanes/RULES.md` (lane OS + landmines).
-4. `docs/DEPLOY-PLAN.md` (strategy).
-5. **`docs/dev2-build-checklist.md` → the ADJUSTMENTS LOG = THE TRAP CATALOG.** Every build/cut
-   gotcha lives there so the cut doesn't rediscover them (pool env overrides, secrets-in-`.well-known`,
-   plugin symlinks, image-serving chain, R2 read/write, SSL). **Re-apply its CUT-CRITICAL items at the cut.**
-5. Buck zone (he's OUT, we steward): `cutover/lanes/lane-buck-surfaces.md` + `docs/BUCK-SURFACES-AUDIT-2026-06-13.md`.
+3. **`docs/dev2-build-checklist.md` → the ADJUSTMENTS LOG = THE TRAP CATALOG** (every build/cut gotcha;
+   re-apply its CUT-CRITICAL items at the cut).
+4. `cutover/lanes/INDEX.md` (board, 6/13-stale) · `cutover/lanes/RULES.md` · `docs/DEPLOY-PLAN.md`.
 
-## Where the cut is (one paragraph)
-Phase 11. dev2 = the prod candidate, built + verified; Phases 7–10 done (anon web sweep,
-JWT wrong-key blocker closed, timers/cron). Method = **NEW box + DNS flip**, carrying live's
-**WP salts + JWT keypair + users/sessions** so logins survive the flip (same domain). The
-A→F runbook is complete and ordered. Remaining = the punch-list below + running the runbook.
+## State (one paragraph)
+Phase 11. dev2 = prod candidate, built + verified. Method = NEW box + DNS flip, carrying live's
+**WP salts + JWT keypair + users/sessions** so logins survive. **A.2 is DONE** — `origin/main` =
+`f019434` now holds the entire hub fork + map + genre + cut work (one branch). dev2 is deployed on
+`main`. Remaining = the SEO continuity build + the runbook flip.
 
-## Δ since the 6/13 handoff (this session)
-- **Hub punch-list DONE + pushed** (`origin/bespoke-cutover` @ `574c449`): delete-post (desktop
-  `#lg-dmodal` + mobile `#looth-rep-sheet` + `api/v0/reply.php` topic-delete endpoint), #5 line
-  breaks (render-time `bb_mirror_paragraphs` in `_topic-body.php`, feeds all 3 modals), #2 cover
-  fallback to first inline body img, `data-author-id` on card + fragment, the overlay byte-fold.
-- **dev2 front-page modal FIXED** — it 404'd because dev2 lacked the `/bb-mirror-api/v0/topic`
-  nginx route + `api/` dir was not `o+rx` for the bb-mirror pool + pool config. All three are
-  **already runbook step 10 / 11d** (chmod o+x, grant/route re-apply after restore).
-- **Map pin-popup + full-map-on-load are COMMITTED** (main, see unpushed below) — `3694657`
-  (full card in popup, lazy-fetch by slug), `bacce53` (Connect/Message), `3a5817e` (full map,
-  US-center dropped). The map lane re-diagnosed already-done work; the live overlay just needs
-  DEPLOY, not rebuild.
-- **Genre taxo expanded 22→89** (`f1b6509`) — music = genres; **dev-built DATA, seed on the box**.
-- **Desktop card padding fixed** (`77ab5d2`) — closes the "card-tops laying out poorly" cut item.
-- **Live WP salts STAGED** → `/home/ubuntu/cut-staging/live-wp-salts.php` (600); hash-confirmed
-  they DIFFER from dev. Runbook step 5 is ready — **apply in the cut window only, not now**
-  (swapping salts pre-cut logs out dev2's current sessions).
+## ✅ Done this session (6/15)
+- **A.2 merge DONE** — `origin/main` `3a5817e → f019434` (118-commit hub fork merged; audited clean,
+  gates green, ff-only). **Rollback anchor `pre-a2-main` (3a5817e) on origin** — `git revert -m 1 f019434`
+  or reset-to-tag if needed.
+- **dev2 deployed on `main`** — pulled f019434; overlay `hub-polish.js`/`pwa.js` cp'd to `/var/www/dev`
+  (chown to **www-data** on dev2, NOT buck:loothdevs — those are dev1-only users); genre catalog seeded
+  (89). dev2 is the **prod-shaped** box (no dev team users, www-data ownership, R2, env=dev2 host-detect).
+- **Live WP salts STAGED** → `/home/ubuntu/cut-staging/live-wp-salts.php` (600, hash-confirmed ≠ dev).
+  Apply at cut step 5 (cut-window only).
+- **Refresh-JWT verified PASS** — `profile-auth.php` heals absent (init mint) / expired (cookie co-expiry
+  → re-mint) / reverse (valid JWT, no WP session → bridges session); wrong-key avoided by carrying live's
+  keypair. Session preservation robust given salts+keypair carry.
+- **Avatars on dev2**: dry-run = 31 fixable (274 placeholder, rest have no BB photo → stay on Optimum
+  default, correct). `--apply` pending Ian. Re-run at cut after the live top-off (idempotent, keep-list #1).
+- **Snapshot branch `dev-snapshot-2026-06-15`** (origin) — captured ALL uncommitted multi-lane WIP
+  (`9cece1c`) so nothing's lost. Excluded `archive-poc/index.sqlite` (runtime DB). Promote real items to
+  main deliberately. The `profile-app/config.php` dev2-env branch is in there (NOT cut-critical — at cut
+  the box is loothgroup.com → 'live' branch; dev2 branch never fires).
 
-## ⚠️ UNPUSHED — push WITH Ian's review (he reviews every push; no silent pushes)
-- **main**: `f1b6509` (genre) · `3694657` + `bacce53` + `3a5817e` (map).
-- **bespoke-cutover**: `77ab5d2` (card padding).
-- Runbook **A.2** = merge `bespoke-cutover` → `main`, repoint dev2's clone to `main` (prod must
-  not track a lane branch). Present the diffstat first.
+## 🔍 SEO / SEARCH CONTINUITY (NEW 6/15 — Ian: "don't lose our current search") ★ build before cut
+**Risk:** the cut changes URL structure; any old indexed URL that 404s loses its Google ranking.
+**GSC data:** `live-bundle/loothgroup.com-Coverage-2026-06-15.zip` (summary) +
+`lg-snippets/loothgroup.com-Coverage-Valid-2026-06-15.zip` → **`Table.csv` = the 999-URL indexed list**.
+- ~**1,208 indexed**, ~**270 impressions/day**, growing. Mostly-gated site (5,225 not-indexed = 2,590 thin
+  + 1,344 intentional noindex + 629 already-redirecting + 372 canonical-dupes + 151 already-404).
+- **Of the 999 valid URLs, 69% are old bbPress forum/group topics with NO redirect:**
+  - **372** `/all-forums-all-topics/topic/<slug>/`
+  - **316** `/groups/<group>/forum/topic/<slug>/`
+  - → would **404 at the cut = lose ~69% of search.** THIS IS THE #1 CONTINUITY ITEM.
+- **Already fine:** content CPTs slug-preserved & unchanged (post-type-videos 116, loothprint 66,
+  post-imgcap 14, sponsor-post 7, event 17, etc.); forums→hub is `301` ✓.
+- **Members:** only **6** indexed; their redirect is **302 (should be 301)**.
 
-## Rest-of-cut punch-list (the work NOT already in the runbook)
-1. **SEO / sitemap — the one genuine gap (Ian add 6/15).** NOT in the runbook. `robots.txt` is
-   still `User-agent:* / Disallow:/` (the landmine — ships → Google indexes nothing). Build
-   (lightweight, Rank Math is gone): a custom sitemap + basic meta (title/desc/canonical/OG) on
-   PUBLIC surfaces (`/`, `/u/<slug>`, public posts, events, sponsors), `noindex` on gated/member.
-   Swap `robots.txt` at runbook **step 13** (gate-off). Submit to Search Console in E/F.
-   ⬜ DECISION OPEN with Ian: exact public index surface.
-2. **Refresh-JWT verification — load-bearing, NOT done** (runbook step 22). `profile-auth.php`
-   (mu-plugin) mints on `wp_login`, on `init` if cookie MISSING, and via `/wp-json/looth/auth/refresh`.
-   Confirm a valid WP cookie + **absent / expired / wrong-key** JWT re-mints cleanly. The
-   present-but-invalid (expired/wrong-key) heal path is the last bit to verify; carrying live's
-   keypair (step 6) makes present tokens stay valid, so the practical risk is low — but confirm.
-3. **A.2 merge** (above) + **seed the dev-built catalog**: run
-   `profile-app/sql/2026-06-15-genres-expand.sql` on the cut box (it's dev data, NOT in the live
-   top-off). Idempotent (`ON CONFLICT DO NOTHING`).
-4. **INDEX loose ends**: re-wire forum-visibility as GATE 4/4 (rate-limit flake fixed), wire
-   `archive-poc/bin/gate-anon-leak.py` into run-all, `reconcile-pg.php` systemd timer (live at cut),
-   archive the 150 stale docs (salvage the 43 cut-knowledge ones first).
+**The fix (build, then it goes in the cut box's nginx — flat per-box, replicate):**
+1. **Slug-resolver redirect (the big save).** Old topic slugs ARE preserved in `forums.topic`
+   (verified 4/5; e.g. `reverend-club-...` → `quick-questions/reverend-club-...`). Build a bb-mirror
+   endpoint: take `<slug>` → `SELECT f.slug,t.slug FROM forums.topic t JOIN forums.forum f ... WHERE
+   t.slug=:s` → **301 → `/hub/<forum>/<slug>`**; not-found → **301 → `/hub`** (NEVER 404).
+2. **nginx rules** → `^/all-forums-all-topics/topic/([^/]+)` and `^/groups/.+/forum/topic/([^/]+)`
+   → the resolver. Also map `/topic-tag/`, `/groups/` landing → `/hub`.
+3. **Members 302→301** in `strangler-profile-app.conf`: `/members/<slug>` → `301 /u/$1`,
+   `/members/` → `301 /directory/members`. (Keep `/members/me` + `profile/edit` as 302 — login convenience.)
+4. **Sitemap** (new canonical URLs), hosted in **archive-poc** (serves the front). Sitemap-index →
+   profiles (`/u/<slug>`, ~1,904, **respect `users.profile_visibility='public'`**), content
+   (`discovery.content_item.url` where tier public/null, **exclude `cpt='sponsor-product'`**), static
+   (front, events). Dynamic PHP at `/sitemap.xml`. No SEO plugin (Rank Math removed → custom + lightweight).
+5. **robots.txt**: STAGED at `/home/ubuntu/cut-staging/robots-live.txt` — swap in at **cut step 13**
+   (replaces dev's `Disallow: /`); points at the sitemap.
+6. **noindex** stays on gated/member content (1,344 already noindexed — keep).
+**Verify post-cut:** sample the 999 `Table.csv` URLs → each 200 or 301 (zero 404); submit sitemap to GSC.
 
-## In-flight lanes (Ian's own chat windows; he ferries report-backs)
-- **Map lane** — root-caused the bare popup as the overlay↔canonical split-brain (canonical
-  uses free-floating `L.popup().openOn()`, not marker-bound; the overlay's hooks miss). The FIX
-  is already committed (`3694657` etc.); the lane's job is deploy/verify + the full-map override
-  removal — NOT a rebuild. Coordinator corrected its earlier "needs building" read.
-- **Profile-app lane** — just spun up for the **gallery block** (`src/Block.php:1131+`,
-  `api/v0/me-gallery.php`) + folding Buck's profile work (`buck/profile-p6` in
-  `/home/buck/looth-platform`; diff his TIP, divergence risk). Boot brief issued.
-- **Hub lane** — DONE.
+## ⚠️ Remaining punch-list (priority order)
+1. **SEO continuity build (above) — #1+#2 (slug-resolver + nginx) is the priority** (protects 69%).
+2. Sitemap + robots swap (above #4/#5).
+3. The runbook flip (A→F): salts/JWT carry, freeze+top-off, gotcha re-apply, URL+DNS flip, verify.
+4. Re-run avatar backfill + the data top-offs at the cut window (keep-list).
+5. Promote `profile-app/config.php` dev2-branch to main IF you want dev2 testable as 'dev2' (not cut-critical).
+6. INDEX loose ends: forum-visibility gate 4/4, reconcile-pg timer, doc archive.
 
-## Staged / on-box cut artifacts
-- `/home/ubuntu/cut-staging/live-wp-salts.php` (600) — live's 8 salt lines (step 5; cut-window only).
+## Staged / on-box artifacts
+- `/home/ubuntu/cut-staging/live-wp-salts.php` (600) — live salts (step 5, cut-window only).
+- `/home/ubuntu/cut-staging/robots-live.txt` — live robots.txt (step 13).
 - `/etc/looth/jwt-{private,public}.pem` — JWT keypair (carry live's at cut, step 6).
-- `backups/looth_import_*.sql.gz` — live DB build copy (final top-off at flip).
-- `tools/topoff-dev-from-live.sh` + `docs/CUT-DAY-DATA-TOPOFF.md` — idempotent top-off + keep-list.
-- `tools/cut/forums-grant.sql` — the PG grant to re-apply after every restore.
+- `backups/looth_import_*.sql.gz` · `tools/topoff-dev-from-live.sh` · `docs/CUT-DAY-DATA-TOPOFF.md` ·
+  `tools/cut/forums-grant.sql` (re-apply after every PG restore).
+- GSC exports: `live-bundle/…Coverage…zip`, `lg-snippets/…Coverage-Valid…zip` (Table.csv = indexed URLs).
 
-## Landmines / don'ts (standing)
-- **DNS + `WP_HOME`/`WP_SITEURL` flip in the SAME window** — never DNS alone (redirect loop / admin lockout).
-- **Re-apply after ANY PG restore**: forums-grant + `chmod o+x /home/ubuntu` + pool env overrides
-  (`LG_*_ENV=dev`, `LG_*_PUBLIC_HOST=loothgroup.com`). CONFIRMED 6/14: the grant did NOT survive the
-  dev2 restore → front page 500'd for every logged-in member.
-- **Reindex (archive-poc) AFTER the URL flip** — else it bakes in `dev2`.
-- **`wp user delete` = cross-store lifecycle NUKE** — never for test cleanup; direct SQL only.
-- **Salts + JWT carry from live = the session-preservation pair** — both, in the cut window.
-- One dup-email member (mikelle.davlin wp `1848`/`1905`) — whitelist at bridge-backfill so step 11a doesn't red.
-- **Overlay deploys go LIVE→git, never the reverse** — do NOT `cp` the `hub-overlay-flag` fork over
-  live JS (it's stale, it loses). Capture the live webroot INTO git, then deploy git→webroot.
-- **A desktop `≥641`-only CSS rule LEAKS onto mobile** (shared card markup) — ship its `≤640`
-  complement in the SAME change; verify at 390px. (Bit us repeatedly.)
-- **A post-conversion RE-RUN creates a DUPLICATE WP post** (same slug) — the conversion job MUST be
-  idempotent. Counting buckets: A=no `_lg_layout_v2`, B=converted-but-broken, C=dup-slug.
-- **Never stage dumps/secrets in `.well-known`** (gate-exempt → publicly fetchable) — clean it after any deploy.
-- **loothtool dev = out of scope** (Ian: zero worry there).
-- No push over a RED gate; **no push without Ian's review**. The 3 gates (matrix/craft/infra-sec) are green.
+## Landmines / don'ts (standing — full catalog in the ADJUSTMENTS LOG)
+- **DNS + `WP_HOME`/`SITEURL` flip in the SAME window** — never DNS alone.
+- **Re-apply after ANY PG restore:** forums-grant + `chmod o+x /home/ubuntu` + pool env overrides
+  (CONFIRMED 6/14: grant didn't survive dev2 restore → member 500s).
+- **Reindex archive-poc AFTER the URL flip** (else bakes `dev2`).
+- **SEO redirects must be `301`, not `302`** — 302 keeps Google on the OLD URL (no equity transfer).
+- **Overlay deploys go LIVE→git, never reverse** (don't cp the stale `hub-overlay-flag` fork over live).
+- **`≥641`-only CSS leaks onto mobile** (shared card markup) — ship the `≤640` complement same change.
+- **Conversion re-run = duplicate post** (must be idempotent). **No secrets in `.well-known`.**
+- **`wp user delete` = cross-store NUKE** — direct SQL only. **loothtool = out of scope.**
+- One dup-email member (mikelle.davlin wp 1848/1905) — whitelist at bridge-backfill. **No push without Ian's review.**
 
 ## Rollback
-DNS is the master switch — revert `loothgroup.com` A → old-live (TTL is low); old-live's `WP_HOME`
-is unchanged so it serves immediately. Investigate on the new box out of the hot path. (Runbook §Rollback.)
+DNS is the master switch (revert `loothgroup.com` A → old-live, TTL low; old-live's `WP_HOME` unchanged).
+A.2 rollback: `git revert -m 1 f019434 && git push`, or reset to tag `pre-a2-main`. dev2: `git checkout` back.
