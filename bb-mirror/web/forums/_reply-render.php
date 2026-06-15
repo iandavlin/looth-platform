@@ -199,21 +199,41 @@ if (!function_exists('bb_mirror_paragraphs')) {
     function bb_mirror_paragraphs(string $html): string
     {
         if ($html === '') return $html;
-        // Already block-structured (incl. <br>) → leave it alone.
-        if (preg_match('#<(p|div|ul|ol|li|blockquote|h[1-6]|pre|table|figure|br)[\s/>]#i', $html)) {
-            return $html;
-        }
-        // No line breaks → single paragraph already; nothing to reconstruct.
+        // No line breaks anywhere → nothing to reconstruct (covers single-line and
+        // fully-tag-structured-on-one-line bodies).
         if (strpos($html, "\n") === false && strpos($html, "\r") === false) {
             return $html;
         }
-        $norm = trim(str_replace(["\r\n", "\r"], "\n", $html));
-        if ($norm === '') return $html;
+        $t = str_replace(["\r\n", "\r"], "\n", $html);
+
+        // Tokenise into existing BLOCK elements (left untouched) and the raw text
+        // BETWEEN them. Crucial for MIXED rows: BuddyBoss bodies are often raw
+        // \n\n text with a block chunk appended (e.g. an "<p>Images</p>" gallery) —
+        // bailing on the mere presence of a block tag left the raw body collapsed
+        // (topic 71640). We only paragraph-wrap the raw text segments; anything
+        // already inside a block element is preserved verbatim. Non-nested blocks
+        // (the shape BuddyBoss emits); inline tags (<a>/<strong>/<img>) stay inside
+        // the text run and get wrapped with it.
+        $blockEl = '(?:<(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)\b[^>]*>.*?'
+                 . '</(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)>|<(?:hr|br)\s*/?>)';
+        $parts = preg_split('~(' . $blockEl . ')~is', $t, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) return $html;
+
         $out = '';
-        foreach (preg_split('/\n[ \t]*\n+/', $norm) as $block) {
-            $block = trim($block);
-            if ($block === '') continue;
-            $out .= '<p>' . str_replace("\n", "<br>\n", $block) . "</p>\n";
+        foreach ($parts as $seg) {
+            if ($seg === '') continue;
+            // A captured block element → keep as-is.
+            if (preg_match('~^\s*(?:<(?:p|h[1-6]|blockquote|pre|figure|ul|ol|table|div)\b|<(?:hr|br)\s*/?>)~i', $seg)) {
+                $out .= $seg;
+                continue;
+            }
+            // Raw text run → blank lines become <p>, single newlines become <br>.
+            if (trim($seg) === '') continue;
+            foreach (preg_split('/\n[ \t]*\n+/', trim($seg)) as $block) {
+                $block = trim($block);
+                if ($block === '') continue;
+                $out .= '<p>' . str_replace("\n", "<br>\n", $block) . "</p>\n";
+            }
         }
         return $out !== '' ? $out : $html;
     }
