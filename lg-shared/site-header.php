@@ -319,12 +319,9 @@ function lg_shared_render_site_header(array $ctx): void
             <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Subscription</a>
             </li>
-            <li role="none">
-              <a role="menuitem" href="/connect-your-patreon/">Connect Your Patreon</a>
-            </li>
-            <li role="none">
-              <a role="menuitem" href="/membership-guide/">Membership Guide</a>
-            </li>
+            <?php /* "Connect Your Patreon" removed from the logged-in account menu (Ian 6/16):
+                     connected members don't need it; the anon connect door lives elsewhere. */ ?>
+            <?php /* "Membership Guide" hidden until the guide is actually built out (Ian 6/16). */ ?>
             <?php if ($manage_opts): /* Stripe money pages — dormant pre-launch; admin-only QA until cut */ ?>
             <li role="none" class="lg-chrome__account-menu-divider"></li>
             <li role="none">
