@@ -993,6 +993,7 @@ function lgpo_handle_callback() {
     $campaign_id = get_option( 'lgpo_campaign_id' );
     $membership  = null;
     $tier_id     = null;
+    $tier_label  = null;
 
     if ( ! empty( $identity_body['data']['relationships']['memberships']['data'] ) ) {
         $member_ids = wp_list_pluck( $identity_body['data']['relationships']['memberships']['data'], 'id' );
@@ -1017,6 +1018,14 @@ function lgpo_handle_callback() {
             $entitled_tiers = $resource['relationships']['currently_entitled_tiers']['data'] ?? array();
             if ( ! empty( $entitled_tiers ) ) {
                 $tier_id = $entitled_tiers[0]['id'];
+                // Resolve the tier title from the included tier resource (fields[tier]=title)
+                // so the lg_patreon_members snapshot carries the same tier_label the sweep writes.
+                foreach ( $included as $inc ) {
+                    if ( ( $inc['type'] ?? '' ) === 'tier' && ( $inc['id'] ?? '' ) === $tier_id ) {
+                        $tier_label = $inc['attributes']['title'] ?? null;
+                        break;
+                    }
+                }
             }
             break;
         }
@@ -1030,6 +1039,25 @@ function lgpo_handle_callback() {
         );
     }
 
+    // Snapshot of the matched active membership, shaped for
+    // LGPO_Sync_Engine::record_patreon_member() — written at every terminal
+    // (new account + both adopt branches) so a self-connected member is fully
+    // provisioned (lg_patreon_members row) immediately, not next sweep.
+    $member_snapshot = array(
+        'patreon_user_id'                 => $patreon_user_id,
+        'email'                           => $patreon_email,
+        'full_name'                       => $patreon_name,
+        'patron_status'                   => $membership['attributes']['patron_status'] ?? 'active_patron',
+        'currently_entitled_amount_cents' => $membership['attributes']['currently_entitled_amount_cents'] ?? null,
+        'tier_labels'                     => $tier_label ? array( $tier_label ) : array(),
+        // The OAuth identity response carries no charge history — leave null;
+        // the next creator-token sweep enriches these on its pass.
+        'last_charge_status'              => null,
+        'last_charge_date'                => null,
+        'next_charge_date'                => null,
+        'will_pay_amount_cents'           => null,
+    );
+
     $tier_map = get_option( 'lgpo_tier_map', array() );
     $wp_role  = null;
     if ( $tier_id && isset( $tier_map[ $tier_id ] ) ) {
@@ -1042,7 +1070,7 @@ function lgpo_handle_callback() {
     // Already onboarded? Matched by Patreon user-id — reuse, never mint.
     $existing_by_patreon = lgpo_get_user_by_patreon_id( $patreon_user_id );
     if ( $existing_by_patreon ) {
-        lgpo_adopt_existing_user( $existing_by_patreon, $patreon_user_id, $patreon_email, $tier_id, $wp_role );
+        lgpo_adopt_existing_user( $existing_by_patreon, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot );
         lgpo_terminal( 'already_onboarded', $state_payload,
             'Your account is already connected and you\'re now logged in! Your membership has been verified and your access level updated.'
         );
@@ -1088,7 +1116,7 @@ function lgpo_handle_callback() {
         }
 
         // Same Patreon id, or not yet linked: adopt the existing account.
-        lgpo_adopt_existing_user( $existing_by_email, $patreon_user_id, $patreon_email, $tier_id, $wp_role );
+        lgpo_adopt_existing_user( $existing_by_email, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot );
         lgpo_terminal( 'adopted', $state_payload,
             'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level has been updated.'
         );
@@ -1115,6 +1143,12 @@ function lgpo_handle_callback() {
     update_user_meta( $user_id, 'lgpo_patreon_tier_id', $tier_id );
     update_user_meta( $user_id, 'lgpo_onboarded_at', current_time( 'mysql' ) );
     update_user_meta( $user_id, 'payment_source', 'patreon' );
+
+    // Write the full membership snapshot (lg_patreon_members) the sweep would
+    // write, so Membership::statusFor() sees them as a member NOW — not next sweep.
+    if ( class_exists( 'LGPO_Sync_Engine' ) ) {
+        LGPO_Sync_Engine::record_patreon_member( (int) $user_id, $member_snapshot );
+    }
 
     // Record the Patreon role opinion in lg_role_sources so the arbiter
     // sees it on later cross-source merges (e.g. user later signs up for Stripe).
@@ -1157,11 +1191,13 @@ function lgpo_get_user_by_patreon_id( $patreon_user_id ) {
 /**
  * Reuse an existing WP account for this Patreon member instead of minting a
  * second one. Stamps the Patreon linkage meta (idempotent), applies the
- * entitled tier through the arbiter, and logs them in. This is the dedupe
- * guard: a Patreon email or Patreon user-id that already maps to a WP account
- * must NEVER create a new account.
+ * entitled tier through the arbiter, writes the lg_patreon_members snapshot,
+ * and logs them in. This is the dedupe guard: a Patreon email or Patreon
+ * user-id that already maps to a WP account must NEVER create a new account.
+ *
+ * @param array $member_snapshot Shape for LGPO_Sync_Engine::record_patreon_member().
  */
-function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tier_id, $wp_role ) {
+function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot = array() ) {
     if ( ! $user instanceof WP_User ) {
         $user = get_user_by( 'id', (int) $user );
     }
@@ -1176,6 +1212,10 @@ function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tie
     }
     update_user_meta( $user->ID, 'payment_source', 'patreon' );
     lgpo_apply_role_via_arbiter( (int) $user->ID, $wp_role );
+    // Full membership snapshot so the member is provisioned NOW, not next sweep.
+    if ( ! empty( $member_snapshot ) && class_exists( 'LGPO_Sync_Engine' ) ) {
+        LGPO_Sync_Engine::record_patreon_member( (int) $user->ID, $member_snapshot );
+    }
     lgpo_login_user( $user );
 }
 

@@ -909,6 +909,17 @@ class LGPO_Sync_Engine {
     }
 
     /**
+     * Public entry point for the self-connect onboard path: write the SAME
+     * lg_patreon_members snapshot the sweep writes, so a freshly-connected member
+     * is fully provisioned immediately instead of waiting for the next hourly
+     * sweep. Idempotent (ON DUPLICATE KEY UPDATE) — the next sweep enriches the
+     * row with charge dates the OAuth identity response doesn't carry.
+     */
+    public static function record_patreon_member( int $wp_user_id, array $member ): void {
+        self::upsert_patreon_member_row( $wp_user_id, $member );
+    }
+
+    /**
      * Upsert a Patreon member row in lg_patreon_members. Powers the unified
      * Membership::statusFor() panel on Manage Subscription.
      */
