@@ -55,8 +55,13 @@ final class Provision
      * It's the preferred public-slug source — using it keeps a later xprofile
      * backfill a no-op. When absent we derive the slug from display_name/email
      * instead, so every provision still lands with a resolvable /u/<slug>.
+     *
+     * $autoClaim marks the profile claimed (so the onboard skips the "Start your
+     * profile" interstitial and lands straight in the editor). ONLY the onboard
+     * hook sets it — legacy/backfilled/admin-created rows leave it false and still
+     * go through the interstitial.
      */
-    public static function ensure(int $wpUserId, string $email, ?string $displayName, ?string $nicename = null): array
+    public static function ensure(int $wpUserId, string $email, ?string $displayName, ?string $nicename = null, bool $autoClaim = false): array
     {
         if ($wpUserId < 1) {
             throw new \InvalidArgumentException('ensure: wp_user_id required');
@@ -119,6 +124,21 @@ final class Provision
         // so a slug-unique race only logs and is retried next provision — it can
         // never roll back or fail the identity create.
         self::ensureSlug($userId, $nicename, $displayName, $normalized);
+
+        // Auto-claim onboard-hook provisions: provisioning already builds the
+        // profile (now with a slug), so mark it claimed too and the new member
+        // skips the "Start your profile" interstitial — they land straight in the
+        // editor / on their /u/. Scoped to the hook path ($autoClaim); legacy,
+        // backfilled and admin-created rows never set it and still see the
+        // interstitial. Idempotent: Profile::claim() is ON CONFLICT DO NOTHING,
+        // so an already-claimed profile is left untouched. Best-effort.
+        if ($autoClaim) {
+            try {
+                Profile::claim($userId, 'onboard');
+            } catch (\Throwable $e) {
+                error_log('[provision] auto-claim skipped for user_id=' . $userId . ': ' . $e->getMessage());
+            }
+        }
 
         return ['user_id' => $userId, 'uuid' => $uuid, 'created' => $inserted];
     }

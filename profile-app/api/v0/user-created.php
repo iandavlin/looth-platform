@@ -27,9 +27,11 @@ $nice   = isset($in['nicename']) ? (string)$in['nicename'] : null;
 if ($wpId <= 0 || $email === '') profile_app_json(400, ['error' => 'missing_fields']);
 
 // Idempotent, self-healing create+bridge (G7). Safe for the poller's blocking
-// provision() to retry until it sticks.
+// provision() to retry until it sticks. autoClaim=true: this is the onboard path,
+// so mark the profile claimed (skip the "Start your profile" interstitial) — the
+// public claim endpoint stays the path for legacy/admin rows.
 try {
-    $res = Provision::ensure($wpId, $email, $name, $nice);
+    $res = Provision::ensure($wpId, $email, $name, $nice, true);
 } catch (Throwable $e) {
     profile_app_json(500, ['error' => 'db_error', 'detail' => $e->getMessage()]);
 }
