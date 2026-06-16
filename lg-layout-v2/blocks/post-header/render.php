@@ -126,20 +126,15 @@ if ($post_id > 0 && function_exists('get_the_terms')) {
         if (is_array($terms)) {
             foreach ($terms as $t) {
                 if (!is_object($t)) continue;
-                /* post_tag chips link to the Hub search (live filter over the
-                   unified feed), NOT the WP /tag/<slug>/ archive. The Hub reads
-                   ?q= as a free-text query, so search by the human NAME — it
-                   matches feed content better than a hyphenated slug. Other
-                   taxonomies (shared_category, article-type, series) keep their
-                   WP term archives via get_term_link(). */
-                if ((string) $tax === 'post_tag') {
-                    $url = '/hub/?q=' . urlencode((string) $t->name);
-                } else {
-                    $url = (string) (get_term_link($t) ?: '#');
-                }
+                /* EVERY taxonomy chip links to the Hub search (live filter over
+                   the unified feed), NOT the WP term archive (/tag/<slug>/,
+                   /category/<slug>/, /article-type/…, /series/… — all legacy WP
+                   surfaces). The Hub reads ?q= as a free-text query, so search
+                   by the human NAME — it matches feed content better than a
+                   hyphenated slug. */
                 $tags[] = [
                     'name' => (string) $t->name,
-                    'url'  => $url,
+                    'url'  => '/hub/?q=' . urlencode((string) $t->name),
                     'tax'  => (string) $tax,
                 ];
             }
