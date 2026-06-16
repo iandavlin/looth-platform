@@ -44,6 +44,75 @@ function looth_auth_compute_uuid(string $email): string {
     return Uuid::uuid5($ns, strtolower(trim($email)))->toString();
 }
 
+/**
+ * Resolve the member's public `slug` for the looth_id `slug` claim (§0c shape;
+ * mirrors profile-app's Mint::mintForWpUserId, the canonical signer).
+ *
+ * WHY THIS EXISTS: the `slug` claim feeds the shared header's "My Profile" link
+ * (/srv/lg-shared/site-header.php — /u/<slug>, else /profile/edit). The slug is
+ * minted in profile-app's Postgres at provision, which the WP minter cannot read
+ * (looth-dev has SELECT-only on the WP MySQL DB, no Postgres access at all). So we:
+ *   1. Prefer the `_looth_slug` usermeta mirror — a local, zero-latency cache.
+ *   2. On a miss, resolve it ONCE from profile-app's gate-EXEMPT internal slug
+ *      endpoint (GET /profile-api/v0/internal/slug?wp_user_id=<int>; loopback-only,
+ *      X-LG-Internal-Auth shared secret, reads users.slug fresh from Postgres),
+ *      then stamp the result into `_looth_slug` so subsequent mints are local-only.
+ *
+ * NOTE the endpoint is under /profile-api/v0/internal/ deliberately: the public
+ * /whoami sits behind the dev COOKIE GATE, and a server-to-server mint call
+ * carries no gate cookie (it 403s). The internal/ block is cookie-gate-exempt
+ * and locked to localhost at the nginx layer + the shared secret in PHP.
+ *
+ * Best-effort: returns '' (claim omitted) on ANY failure — a missing slug claim
+ * only degrades the menu link to /profile/edit, it must never block a mint.
+ * The slug write happens AFTER provision, so a first login can legitimately miss
+ * here; the init re-mint (below) heals the token on the next pageview once the
+ * slug exists, with no "visit your profile once" detour.
+ */
+function looth_auth_slug_for_user(WP_User $user): string {
+    $wpId = (int) $user->ID;
+    if ($wpId < 1) return '';
+
+    // 1) Local mirror — fast path, no network. Filled by a prior resolve below.
+    $cached = get_user_meta($wpId, '_looth_slug', true);
+    if (is_string($cached) && $cached !== '') return $cached;
+
+    // 2) Resolve from profile-app's PG-backed, gate-exempt internal slug endpoint.
+    //    Short timeouts: this is a login hot-path and the slug is non-critical,
+    //    so we never let it stall the mint.
+    $secret = @file_get_contents('/etc/lg-internal-secret');
+    if (!is_string($secret) || $secret === '') return '';
+    $secret = trim($secret);
+
+    $host = $_SERVER['HTTP_HOST'] ?? 'dev.loothgroup.com';
+    $ch = curl_init('https://127.0.0.1/profile-api/v0/internal/slug?wp_user_id=' . $wpId);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_TIMEOUT        => 4,
+        CURLOPT_SSL_VERIFYPEER => false,   // loopback to local nginx self-signed cert
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_HTTPHEADER     => [
+            'Host: ' . $host,
+            'X-LG-Internal-Auth: ' . $secret,
+            'Accept: application/json',
+        ],
+    ]);
+    $body   = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($status !== 200 || !is_string($body)) return '';
+
+    $d = json_decode($body, true);
+    $slug = (is_array($d) && !empty($d['slug']) && is_string($d['slug'])) ? $d['slug'] : '';
+    if ($slug === '') return '';
+
+    // Cache for next time so the common path is the local mirror, not a hop.
+    update_user_meta($wpId, '_looth_slug', $slug);
+    return $slug;
+}
+
 function looth_auth_mint_jwt(WP_User $user): string {
     static $pk = null;
     if ($pk === null) $pk = @file_get_contents(LOOTH_AUTH_PRIVATE_KEY);
@@ -70,6 +139,15 @@ function looth_auth_mint_jwt(WP_User $user): string {
         'iat'        => $now,
         'exp'        => $now + LOOTH_AUTH_TTL_SECONDS,
     ];
+
+    // `slug` claim (§0c shape; matches profile-app Mint). Populated whenever a
+    // slug exists so a fresh connection's FIRST page load already resolves
+    // /u/<slug> in the shared header — no "visit your profile once" detour.
+    // Omitted (never null/empty) when unresolved, so the header's slug-less
+    // /profile/edit fallback still applies and the claim shape stays clean.
+    $slug = looth_auth_slug_for_user($user);
+    if ($slug !== '') $payload['slug'] = $slug;
+
     return JWT::encode($payload, $pk, 'RS256');
 }
 
@@ -128,13 +206,47 @@ add_action('wp_logout', function () { looth_auth_clear_cookie(); });
 // Double-clear on a plain logout is harmless (setcookie with past expiry twice).
 add_action('clear_auth_cookie', function () { looth_auth_clear_cookie(); });
 
-// On any normal pageview where user is logged in but cookie is missing, mint.
+// On any normal pageview where user is logged in but the cookie is MISSING, mint.
+// Also self-heal a stale SLUG-LESS cookie: a token minted before the member's
+// slug existed carries no `slug` claim, so the shared header degrades the
+// "My Profile" link to /profile/edit until something re-mints. Once the local
+// `_looth_slug` mirror is populated (by a prior mint's whoami resolve), re-mint
+// so the claim lands on the NEXT pageview — no "visit your profile once" detour.
+// The heal is gated on the LOCAL mirror only (no whoami hop on the hot path) and
+// is one-shot per request, so a member whose slug genuinely doesn't exist yet
+// can't loop. NULL claims (forged/expired) fall through to the missing-cookie mint.
 add_action('init', function () {
     if (is_admin() && wp_doing_ajax()) return;
     if (defined('REST_REQUEST') && REST_REQUEST) return;
     if (!is_user_logged_in()) return;
-    if (!empty($_COOKIE[LOOTH_AUTH_COOKIE])) return;
     if (headers_sent()) return;
+
+    $cookie = $_COOKIE[LOOTH_AUTH_COOKIE] ?? '';
+    if ($cookie !== '') {
+        // Present cookie: only re-mint to backfill a missing slug claim.
+        $claims = looth_auth_verify_jwt((string) $cookie);
+        if ($claims === null) return;                       // invalid → handled by reverse-bridge/issue
+        if (!empty($claims['slug'])) return;                // already carries slug — nothing to heal
+        $user = wp_get_current_user();
+        $mirror = get_user_meta($user->ID, '_looth_slug', true);
+        if (!is_string($mirror) || $mirror === '') {
+            // No local slug yet (fresh connection — provision writes the slug to
+            // Postgres slightly AFTER first login). Try ONE whoami resolve to
+            // populate the mirror, throttled to ~1/min/user so we never hop on
+            // every pageview while a member genuinely has no slug. Once it lands,
+            // looth_auth_slug_for_user stamps `_looth_slug` and we re-mint.
+            $throttle = 'looth_slug_probe_' . (int) $user->ID;
+            if (get_transient($throttle)) return;
+            set_transient($throttle, 1, 60);
+            $mirror = looth_auth_slug_for_user($user);      // whoami hop + stamps mirror on success
+            if ($mirror === '') return;                     // still no slug — leave token as-is
+        }
+        try { looth_auth_set_cookie(looth_auth_mint_jwt($user)); }
+        catch (Throwable $e) { error_log('looth-auth slug-heal mint failed: ' . $e->getMessage()); }
+        return;
+    }
+
+    // No cookie at all → mint a fresh one (resolves slug inline).
     try { looth_auth_set_cookie(looth_auth_mint_jwt(wp_get_current_user())); }
     catch (Throwable $e) { error_log('looth-auth init-mint failed: ' . $e->getMessage()); }
 });
