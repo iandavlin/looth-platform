@@ -666,8 +666,9 @@ function lgpo_parse_state_payload( $raw ): ?array {
 /**
  * Terminal-state handler: redirect to <return_target>?onboarded=<status>
  * when the OAuth state was minted by /patreon-connect, OR fall through to
- * the legacy lgpo_success/lgpo_fail wp_die page when it was minted by the
- * shortcode.
+ * the legacy lgpo_confirm_page() wp_die page when it was minted by the
+ * shortcode. Both paths resolve their copy through lgpo_onboard_copy($status),
+ * so first-time-vs-reconnect wording stays in one place.
  */
 function lgpo_terminal( string $status, ?array $payload, string $legacy_html ): void {
     // Creator-OAuth payloads don't carry return_target (they're admin-only and
@@ -679,11 +680,101 @@ function lgpo_terminal( string $status, ?array $payload, string $legacy_html ): 
         wp_redirect( $url, 302 );
         exit;
     }
-    if ( $status === 'success' || $status === 'already_onboarded' ) {
-        lgpo_success( $legacy_html );
-    } else {
-        lgpo_fail( $legacy_html );
+    // Legacy shortcode path (no return target): render a styled confirmation
+    // page whose title + tone match the case — first-time welcome, returning
+    // reconnect, or a hard failure (see lgpo_onboard_copy()).
+    lgpo_confirm_page( $status, $legacy_html );
+}
+
+/**
+ * Single source of truth for onboard/reconnect confirmation copy, keyed on the
+ * terminal $status the callback emits. `ok` selects the green (success) vs red
+ * (needs-action) treatment; `title` + `body` are reused by BOTH the legacy
+ * wp_die confirmation page and the return-target banner (?onboarded=<status>).
+ *
+ * This is where first-time onboard ("Welcome…") and a returning reconnect
+ * ("You're logged in now") are distinguished — a repeat Patreon connection must
+ * never read as a fresh-onboard welcome (Ian).
+ *
+ * @return array{ok:bool,title:string,body:string}
+ */
+function lgpo_onboard_copy( string $status ): array {
+    $map = [
+        'success' => [
+            'ok'    => true,
+            'title' => 'Welcome to The Looth Group',
+            'body'  => "Your account is set up and you're logged in now. We've emailed a set-password link so you can sign back in anytime.",
+        ],
+        'already_onboarded' => [
+            'ok'    => true,
+            'title' => "You're logged in now",
+            'body'  => "Your Patreon was already connected — we've just logged you into your existing account and refreshed your membership access. Nothing else to do.",
+        ],
+        'adopted' => [
+            'ok'    => true,
+            'title' => "You're logged in now",
+            'body'  => 'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level is up to date.',
+        ],
+        'not_a_patron' => [
+            'ok'    => false,
+            'title' => 'Membership not found',
+            'body'  => "We couldn't find an active Looth Group membership on your Patreon account.",
+        ],
+        'email_collision' => [
+            'ok'    => false,
+            'title' => 'Account needs review',
+            'body'  => "There's already an account associated with your email address. Please contact us so we can sort this out.",
+        ],
+    ];
+    return $map[ $status ] ?? [
+        'ok'    => false,
+        'title' => 'Onboarding Issue',
+        'body'  => 'Something went wrong activating your account. Please try again.',
+    ];
+}
+
+/**
+ * Render the terminal confirmation page for the legacy shortcode path (no
+ * return target). Title + accent come from lgpo_onboard_copy($status); the body
+ * is the richer inline HTML the call site passed (which may carry dynamic links
+ * — the Join CTA, a contact mailto — so we keep it over the default copy).
+ */
+function lgpo_confirm_page( string $status, string $body_html ): void {
+    $copy   = lgpo_onboard_copy( $status );
+    $accent = $copy['ok'] ? [ 'bg' => '#d4e0b8', 'border' => '#87986A' ]
+                          : [ 'bg' => '#fde8e4', 'border' => '#FE6A4F' ];
+    wp_die(
+        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
+        . '<h2 style="color:#1A1E12;">' . esc_html( $copy['title'] ) . '</h2>'
+        . '<div style="padding:1em 1.5em;background:' . $accent['bg'] . ';border:1px solid ' . $accent['border'] . ';border-radius:6px;color:#1A1E12;">' . $body_html . '</div>'
+        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
+        $copy['title'],
+        [ 'response' => 200 ]
+    );
+}
+
+/**
+ * Return-target path (/patreon-connect → callback → <return_target>?onboarded=<status>):
+ * prepend a confirmation banner to the landing page so a member who comes
+ * through the standalone /join/ entry still gets the same clear
+ * first-time-vs-reconnect confirmation. No-op unless ?onboarded is one of the
+ * known statuses. Completes the §3n contract — the redirect was already wired,
+ * but nothing consumed the param.
+ */
+add_filter( 'the_content', 'lgpo_onboarded_banner', 5 );
+function lgpo_onboarded_banner( $content ) {
+    if ( ! is_main_query() || ! in_the_loop() || ! is_page() || empty( $_GET['onboarded'] ) ) {
+        return $content;
     }
+    $status = sanitize_key( wp_unslash( $_GET['onboarded'] ) );
+    $copy   = lgpo_onboard_copy( $status );
+    $accent = $copy['ok'] ? [ 'bg' => '#d4e0b8', 'border' => '#87986A' ]
+                          : [ 'bg' => '#fde8e4', 'border' => '#FE6A4F' ];
+    $banner = '<div class="lgpo-onboarded-banner" style="max-width:680px;margin:0 auto 28px;padding:1em 1.5em;background:'
+        . $accent['bg'] . ';border:1px solid ' . $accent['border'] . ';border-radius:8px;color:#1A1E12;">'
+        . '<strong style="display:block;font-size:1.1em;margin-bottom:4px;">' . esc_html( $copy['title'] ) . '</strong>'
+        . '<span>' . esc_html( $copy['body'] ) . '</span></div>';
+    return $banner . $content;
 }
 
 /**
@@ -1111,26 +1202,6 @@ function lgpo_notify_admin( $patreon_name, $patreon_email, $wp_username ) {
         "A Patreon member tried to onboard but their email collides with an existing WP account.\n\n"
         . "Patreon Name: {$patreon_name}\nPatreon Email: {$patreon_email}\nExisting WP User: {$wp_username}\n\n"
         . "Review: " . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"
-    );
-}
-
-function lgpo_fail( $message ) {
-    wp_die(
-        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
-        . '<h2 style="color:#1A1E12;">Looth Group — Account Activation</h2>'
-        . '<div style="padding:1em 1.5em;background:#fde8e4;border:1px solid #FE6A4F;border-radius:6px;color:#1A1E12;">' . $message . '</div>'
-        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
-        'Onboarding Issue', array( 'response' => 200 )
-    );
-}
-
-function lgpo_success( $message ) {
-    wp_die(
-        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
-        . '<h2 style="color:#1A1E12;">Looth Group — Account Activation</h2>'
-        . '<div style="padding:1em 1.5em;background:#d4e0b8;border:1px solid #87986A;border-radius:6px;color:#1A1E12;">' . $message . '</div>'
-        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
-        'Welcome!', array( 'response' => 200 )
     );
 }
 
