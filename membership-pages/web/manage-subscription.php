@@ -119,6 +119,10 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
             <?php endif; ?>
 
             <dl class="lg-manage-sub__details">
+                <?php if (!empty($membership['email'])): ?>
+                    <dt>Patreon email</dt>
+                    <dd><?= $h((string) $membership['email']) ?></dd>
+                <?php endif; ?>
                 <?php if ($amount !== ''): ?>
                     <dt>Monthly</dt>
                     <dd><?= $h($amount) ?></dd>
@@ -151,6 +155,9 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
                 <a class="lg-manage-sub__cta" href="<?= $h($patreon_link) ?>" target="_blank" rel="noopener">
                     Manage on Patreon &rarr;
                 </a>
+            </p>
+            <p class="lg-manage-sub__changepw">
+                <a href="/patreon-password/?change=1">Change your password &rarr;</a>
             </p>
         </section>
 

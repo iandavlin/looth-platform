@@ -60,7 +60,7 @@ function lg_membership_load_patreon_membership(int $wp_user_id): ?array {
 
     try {
         $stmt = lg_membership_poller_db()->prepare(
-            'SELECT wp_user_id, patron_status, last_charge_status, last_charge_date,
+            'SELECT wp_user_id, email, patron_status, last_charge_status, last_charge_date,
                     next_charge_date, tier_label,
                     will_pay_amount_cents, currently_entitled_amount_cents, synced_at
                FROM lg_patreon_members
@@ -76,6 +76,7 @@ function lg_membership_load_patreon_membership(int $wp_user_id): ?array {
 
     return [
         'wp_user_id'                      => (int) $row['wp_user_id'],
+        'email'                           => $row['email'] !== null ? (string) $row['email'] : null,
         'patron_status'                   => $row['patron_status']                    !== null ? (string) $row['patron_status']      : null,
         'last_charge_status'              => $row['last_charge_status']               !== null ? (string) $row['last_charge_status'] : null,
         'last_charge_date'                => $row['last_charge_date']                 !== null ? (string) $row['last_charge_date']   : null,
