@@ -27,6 +27,26 @@ if (!$viewer) {
     exit;
 }
 
+// No one should ever sit on the slug-less /profile/edit fallback. The instant we
+// know the viewer's slug — read straight from Postgres, no cookie/cache/JWT-claim
+// dependency — send them to their canonical /u/<slug> (which IS the inline editor
+// for the owner). This makes the menu-link slug-claim timing irrelevant: even a
+// stale "/profile/edit" link lands the member on their real profile. (Ian 6/16.)
+$slug = (string) ($viewer['slug'] ?? '');
+if ($slug === '') {
+    try {
+        $st = \Looth\ProfileApp\Db::pg()->prepare('SELECT slug FROM users WHERE id = :i');
+        $st->execute([':i' => (int) $viewer['id']]);
+        $slug = trim((string) $st->fetchColumn());
+    } catch (\Throwable $e) {
+        $slug = '';
+    }
+}
+if ($slug !== '') {
+    header('Location: /u/' . rawurlencode($slug), true, 302);
+    exit;
+}
+
 if (!Profile::hasClaimed((int)$viewer['id'])) {
     looth_render_claim_interstitial($viewer);
     exit;
