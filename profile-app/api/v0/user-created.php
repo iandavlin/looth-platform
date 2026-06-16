@@ -21,12 +21,15 @@ if (!is_array($in)) profile_app_json(400, ['error' => 'invalid_json']);
 $wpId   = isset($in['wp_user_id']) ? (int)$in['wp_user_id'] : 0;
 $email  = isset($in['email']) ? (string)$in['email'] : '';
 $name   = isset($in['display_name']) ? (string)$in['display_name'] : null;
+// Optional: the WP user_nicename, the preferred /u/ slug source. Absent today
+// (poller sends id/email/display_name); Provision falls back to display_name/email.
+$nice   = isset($in['nicename']) ? (string)$in['nicename'] : null;
 if ($wpId <= 0 || $email === '') profile_app_json(400, ['error' => 'missing_fields']);
 
 // Idempotent, self-healing create+bridge (G7). Safe for the poller's blocking
 // provision() to retry until it sticks.
 try {
-    $res = Provision::ensure($wpId, $email, $name);
+    $res = Provision::ensure($wpId, $email, $name, $nice);
 } catch (Throwable $e) {
     profile_app_json(500, ['error' => 'db_error', 'detail' => $e->getMessage()]);
 }

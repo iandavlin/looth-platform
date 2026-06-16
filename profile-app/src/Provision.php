@@ -50,8 +50,13 @@ final class Provision
      *
      * New rows get DEFAULT_AVATAR_URL (the Optimum fallback); existing rows keep
      * whatever avatar they have (ON CONFLICT never overwrites avatar_url).
+     *
+     * $nicename (optional) is the WP user_nicename the user-created hook may carry.
+     * It's the preferred public-slug source — using it keeps a later xprofile
+     * backfill a no-op. When absent we derive the slug from display_name/email
+     * instead, so every provision still lands with a resolvable /u/<slug>.
      */
-    public static function ensure(int $wpUserId, string $email, ?string $displayName): array
+    public static function ensure(int $wpUserId, string $email, ?string $displayName, ?string $nicename = null): array
     {
         if ($wpUserId < 1) {
             throw new \InvalidArgumentException('ensure: wp_user_id required');
@@ -105,7 +110,64 @@ final class Provision
             throw $e;
         }
 
+        // Mint a resolvable public slug for every provision. Historically the
+        // INSERT left users.slug NULL — only the one-time xprofile backfill seeded
+        // it (slug <- user_nicename) — so a live-provisioned member (every new
+        // Patreon connection, every poller dedupe survivor) landed slug-less:
+        // Whoami returns slug=null and the shared header degrades the "Profile"
+        // button to legacy /members/ instead of /u/<slug>. Post-commit + guarded
+        // so a slug-unique race only logs and is retried next provision — it can
+        // never roll back or fail the identity create.
+        self::ensureSlug($userId, $nicename, $displayName, $normalized);
+
         return ['user_id' => $userId, 'uuid' => $uuid, 'created' => $inserted];
+    }
+
+    /**
+     * Fill an EMPTY users.slug with a unique, URL-safe slug. Preference order:
+     * WP nicename (matches the backfill scheme) -> display_name -> email
+     * local-part -> "member"; deduped against users.slug with a numeric suffix.
+     * Never overwrites an existing slug, so nicename-seeded slugs stand and a
+     * re-provision is idempotent. Best-effort: a slug is non-critical, so failure
+     * only logs — identity creation already committed and must not be undone.
+     */
+    private static function ensureSlug(int $userId, ?string $nicename, ?string $displayName, string $email): void
+    {
+        try {
+            $pg  = Db::pg();
+            $cur = $pg->prepare('SELECT slug FROM users WHERE id = :i');
+            $cur->execute([':i' => $userId]);
+            if (trim((string) $cur->fetchColumn()) !== '') return;   // already slugged
+
+            $base = '';
+            foreach ([$nicename, $displayName, explode('@', $email)[0]] as $cand) {
+                $base = self::slugify((string) $cand);
+                if ($base !== '') break;
+            }
+            if ($base === '') $base = 'member';
+
+            $taken     = $pg->prepare('SELECT 1 FROM users WHERE slug = :s AND id <> :self');
+            $candidate = $base;
+            for ($i = 2; $i <= 999; $i++) {
+                $taken->execute([':s' => $candidate, ':self' => $userId]);
+                if (!$taken->fetchColumn()) break;
+                $candidate = $base . '-' . $i;
+            }
+            if ($i > 999) $candidate = $base . '-' . bin2hex(random_bytes(3));
+
+            $pg->prepare("UPDATE users SET slug = :s WHERE id = :i AND (slug IS NULL OR slug = '')")
+               ->execute([':s' => $candidate, ':i' => $userId]);
+        } catch (\Throwable $e) {
+            error_log('[provision] slug assignment skipped for user_id=' . $userId . ': ' . $e->getMessage());
+        }
+    }
+
+    /** Display string -> url-safe slug ('Mikelle Davlin' -> 'mikelle-davlin'). */
+    private static function slugify(string $s): string
+    {
+        $s = strtolower(trim($s));
+        $s = preg_replace('/[^a-z0-9]+/', '-', $s) ?? '';
+        return trim($s, '-');
     }
 
     /**
