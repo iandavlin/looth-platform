@@ -57,6 +57,31 @@ function lgpo_apply_role_via_arbiter( int $wp_user_id, string $tier ): void {
     }
 }
 
+/**
+ * Log the just-onboarded member into WordPress so they land authenticated
+ * instead of anonymous (lifecycle G1). A bare wp_set_auth_cookie is NOT enough:
+ * the looth_id JWT — what the fast /whoami path reads — is minted on the
+ * `wp_login` action (platform/mu-plugins/profile-auth.php). So we fire wp_login
+ * explicitly, which mints the JWT and runs every other login integration just
+ * as a password login would. Must run before any output (we're on
+ * template_redirect, headers not yet sent).
+ */
+function lgpo_login_user( $user ): void {
+    if ( ! $user instanceof WP_User ) {
+        $user = get_user_by( 'id', (int) $user );
+    }
+    if ( ! $user instanceof WP_User ) {
+        return;
+    }
+    if ( headers_sent() ) {
+        error_log( 'lgpo_login_user: headers already sent, cannot set auth cookie for #' . $user->ID );
+        return;
+    }
+    wp_set_current_user( $user->ID, $user->user_login );
+    wp_set_auth_cookie( $user->ID, true );
+    do_action( 'wp_login', $user->user_login, $user );
+}
+
 // Stripe side + arbiter: hook the LGMS lifecycle if the namespace is loaded.
 if ( class_exists( '\\LGMS\\Plugin' ) ) {
     register_activation_hook( __FILE__, [ '\\LGMS\\Plugin', 'activate' ] );
@@ -642,8 +667,9 @@ function lgpo_parse_state_payload( $raw ): ?array {
 /**
  * Terminal-state handler: redirect to <return_target>?onboarded=<status>
  * when the OAuth state was minted by /patreon-connect, OR fall through to
- * the legacy lgpo_success/lgpo_fail wp_die page when it was minted by the
- * shortcode.
+ * the legacy lgpo_confirm_page() wp_die page when it was minted by the
+ * shortcode. Both paths resolve their copy through lgpo_onboard_copy($status),
+ * so first-time-vs-reconnect wording stays in one place.
  */
 function lgpo_terminal( string $status, ?array $payload, string $legacy_html ): void {
     // Creator-OAuth payloads don't carry return_target (they're admin-only and
@@ -655,11 +681,101 @@ function lgpo_terminal( string $status, ?array $payload, string $legacy_html ): 
         wp_redirect( $url, 302 );
         exit;
     }
-    if ( $status === 'success' || $status === 'already_onboarded' ) {
-        lgpo_success( $legacy_html );
-    } else {
-        lgpo_fail( $legacy_html );
+    // Legacy shortcode path (no return target): render a styled confirmation
+    // page whose title + tone match the case — first-time welcome, returning
+    // reconnect, or a hard failure (see lgpo_onboard_copy()).
+    lgpo_confirm_page( $status, $legacy_html );
+}
+
+/**
+ * Single source of truth for onboard/reconnect confirmation copy, keyed on the
+ * terminal $status the callback emits. `ok` selects the green (success) vs red
+ * (needs-action) treatment; `title` + `body` are reused by BOTH the legacy
+ * wp_die confirmation page and the return-target banner (?onboarded=<status>).
+ *
+ * This is where first-time onboard ("Welcome…") and a returning reconnect
+ * ("You're logged in now") are distinguished — a repeat Patreon connection must
+ * never read as a fresh-onboard welcome (Ian).
+ *
+ * @return array{ok:bool,title:string,body:string}
+ */
+function lgpo_onboard_copy( string $status ): array {
+    $map = [
+        'success' => [
+            'ok'    => true,
+            'title' => 'Welcome to The Looth Group',
+            'body'  => "Your account is set up and you're logged in now. We've emailed a set-password link so you can sign back in anytime.",
+        ],
+        'already_onboarded' => [
+            'ok'    => true,
+            'title' => "You're logged in now",
+            'body'  => "Your Patreon was already connected — we've just logged you into your existing account and refreshed your membership access. Nothing else to do.",
+        ],
+        'adopted' => [
+            'ok'    => true,
+            'title' => "You're logged in now",
+            'body'  => 'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level is up to date.',
+        ],
+        'not_a_patron' => [
+            'ok'    => false,
+            'title' => 'Membership not found',
+            'body'  => "We couldn't find an active Looth Group membership on your Patreon account.",
+        ],
+        'email_collision' => [
+            'ok'    => false,
+            'title' => 'Account needs review',
+            'body'  => "There's already an account associated with your email address. Please contact us so we can sort this out.",
+        ],
+    ];
+    return $map[ $status ] ?? [
+        'ok'    => false,
+        'title' => 'Onboarding Issue',
+        'body'  => 'Something went wrong activating your account. Please try again.',
+    ];
+}
+
+/**
+ * Render the terminal confirmation page for the legacy shortcode path (no
+ * return target). Title + accent come from lgpo_onboard_copy($status); the body
+ * is the richer inline HTML the call site passed (which may carry dynamic links
+ * — the Join CTA, a contact mailto — so we keep it over the default copy).
+ */
+function lgpo_confirm_page( string $status, string $body_html ): void {
+    $copy   = lgpo_onboard_copy( $status );
+    $accent = $copy['ok'] ? [ 'bg' => '#d4e0b8', 'border' => '#87986A' ]
+                          : [ 'bg' => '#fde8e4', 'border' => '#FE6A4F' ];
+    wp_die(
+        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
+        . '<h2 style="color:#1A1E12;">' . esc_html( $copy['title'] ) . '</h2>'
+        . '<div style="padding:1em 1.5em;background:' . $accent['bg'] . ';border:1px solid ' . $accent['border'] . ';border-radius:6px;color:#1A1E12;">' . $body_html . '</div>'
+        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
+        $copy['title'],
+        [ 'response' => 200 ]
+    );
+}
+
+/**
+ * Return-target path (/patreon-connect → callback → <return_target>?onboarded=<status>):
+ * prepend a confirmation banner to the landing page so a member who comes
+ * through the standalone /join/ entry still gets the same clear
+ * first-time-vs-reconnect confirmation. No-op unless ?onboarded is one of the
+ * known statuses. Completes the §3n contract — the redirect was already wired,
+ * but nothing consumed the param.
+ */
+add_filter( 'the_content', 'lgpo_onboarded_banner', 5 );
+function lgpo_onboarded_banner( $content ) {
+    if ( ! is_main_query() || ! in_the_loop() || ! is_page() || empty( $_GET['onboarded'] ) ) {
+        return $content;
     }
+    $status = sanitize_key( wp_unslash( $_GET['onboarded'] ) );
+    $copy   = lgpo_onboard_copy( $status );
+    $accent = $copy['ok'] ? [ 'bg' => '#d4e0b8', 'border' => '#87986A' ]
+                          : [ 'bg' => '#fde8e4', 'border' => '#FE6A4F' ];
+    $banner = '<div class="lgpo-onboarded-banner" style="max-width:680px;margin:0 auto 28px;padding:1em 1.5em;background:'
+        . $accent['bg'] . ';border:1px solid ' . $accent['border'] . ';border-radius:8px;color:#1A1E12;">'
+        . '<strong style="display:block;font-size:1.1em;margin-bottom:4px;">' . esc_html( $copy['title'] ) . '</strong>'
+        . '<span>' . esc_html( $copy['body'] ) . '</span></div>';
+    return $banner . $content;
 }
 
 /**
@@ -848,11 +964,19 @@ function lgpo_handle_callback() {
         exit;
     }
 
+    // include=memberships.campaign is REQUIRED for the per-campaign guard below
+    // (lgpo_membership_matches_campaign): the identity membership list spans every
+    // creator the patron backs, and the guard rejects any membership whose
+    // campaign id != lgpo_campaign_id. Without pulling the campaign relationship,
+    // each member's relationships.campaign.data.id is empty → the guard rejects
+    // EVERY self-connector as not_a_patron. fields[campaign]= keeps the payload to
+    // just the linkage id (we only need the id, never campaign attributes).
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
-        . '?include=memberships,memberships.currently_entitled_tiers'
+        . '?include=memberships,memberships.currently_entitled_tiers,memberships.campaign'
         . '&fields%5Buser%5D=email,full_name,image_url'
         . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,email,full_name'
-        . '&fields%5Btier%5D=title';
+        . '&fields%5Btier%5D=title'
+        . '&fields%5Bcampaign%5D=';
 
     $identity_response = wp_remote_get( $identity_url, array(
         'headers' => array(
@@ -878,6 +1002,7 @@ function lgpo_handle_callback() {
     $campaign_id = get_option( 'lgpo_campaign_id' );
     $membership  = null;
     $tier_id     = null;
+    $tier_label  = null;
 
     if ( ! empty( $identity_body['data']['relationships']['memberships']['data'] ) ) {
         $member_ids = wp_list_pluck( $identity_body['data']['relationships']['memberships']['data'], 'id' );
@@ -906,6 +1031,14 @@ function lgpo_handle_callback() {
             $entitled_tiers = $resource['relationships']['currently_entitled_tiers']['data'] ?? array();
             if ( ! empty( $entitled_tiers ) ) {
                 $tier_id = $entitled_tiers[0]['id'];
+                // Resolve the tier title from the included tier resource (fields[tier]=title)
+                // so the lg_patreon_members snapshot carries the same tier_label the sweep writes.
+                foreach ( $included as $inc ) {
+                    if ( ( $inc['type'] ?? '' ) === 'tier' && ( $inc['id'] ?? '' ) === $tier_id ) {
+                        $tier_label = $inc['attributes']['title'] ?? null;
+                        break;
+                    }
+                }
             }
             break;
         }
@@ -919,6 +1052,25 @@ function lgpo_handle_callback() {
         );
     }
 
+    // Snapshot of the matched active membership, shaped for
+    // LGPO_Sync_Engine::record_patreon_member() — written at every terminal
+    // (new account + both adopt branches) so a self-connected member is fully
+    // provisioned (lg_patreon_members row) immediately, not next sweep.
+    $member_snapshot = array(
+        'patreon_user_id'                 => $patreon_user_id,
+        'email'                           => $patreon_email,
+        'full_name'                       => $patreon_name,
+        'patron_status'                   => $membership['attributes']['patron_status'] ?? 'active_patron',
+        'currently_entitled_amount_cents' => $membership['attributes']['currently_entitled_amount_cents'] ?? null,
+        'tier_labels'                     => $tier_label ? array( $tier_label ) : array(),
+        // The OAuth identity response carries no charge history — leave null;
+        // the next creator-token sweep enriches these on its pass.
+        'last_charge_status'              => null,
+        'last_charge_date'                => null,
+        'next_charge_date'                => null,
+        'will_pay_amount_cents'           => null,
+    );
+
     $tier_map = get_option( 'lgpo_tier_map', array() );
     $wp_role  = null;
     if ( $tier_id && isset( $tier_map[ $tier_id ] ) ) {
@@ -928,24 +1080,29 @@ function lgpo_handle_callback() {
         $wp_role = ! empty( $tier_map ) ? reset( $tier_map ) : 'subscriber';
     }
 
-    // Already onboarded?
+    // Already onboarded? Matched by Patreon user-id — reuse, never mint.
     $existing_by_patreon = lgpo_get_user_by_patreon_id( $patreon_user_id );
     if ( $existing_by_patreon ) {
-        lgpo_apply_role_via_arbiter( (int) $existing_by_patreon->ID, $wp_role );
-        update_user_meta( $existing_by_patreon->ID, 'payment_source', 'patreon' );
+        lgpo_adopt_existing_user( $existing_by_patreon, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot );
         lgpo_terminal( 'already_onboarded', $state_payload,
-            'Your account is already connected! Your membership has been verified and your access level updated. '
-            . '<a href="' . esc_url( wp_login_url() ) . '">Log in here</a>.'
+            'Your account is already connected and you\'re now logged in! Your membership has been verified and your access level updated.'
         );
     }
 
-    // Email collision?
+    // Email collision? An existing WP account already owns this Patreon email.
+    // REUSE it instead of minting a second account (the mikelle.davlin
+    // double-account: wp 1848 + minted wp 1905 split her identity and orphaned
+    // the original from the profile bridge). The only cases we DON'T auto-adopt:
+    //   - the existing account is already linked to a DIFFERENT Patreon id
+    //     (genuine conflict — two Patreon accounts, one email), or
+    //   - it's a privileged (admin) account — never hand an admin session out
+    //     over OAuth; route both to human review.
     $existing_by_email = get_user_by( 'email', $patreon_email );
     if ( $existing_by_email ) {
         $contact_email = get_option( 'lgpo_contact_email', 'ian.davlin@gmail.com' );
         $existing_patreon_id = get_user_meta( $existing_by_email->ID, 'lgpo_patreon_user_id', true );
 
-        if ( $existing_patreon_id && $existing_patreon_id !== $patreon_user_id ) {
+        if ( $existing_patreon_id && (string) $existing_patreon_id !== (string) $patreon_user_id ) {
             lgpo_add_pending( array(
                 'patreon_user_id' => $patreon_user_id, 'patreon_email' => $patreon_email,
                 'patreon_name' => $patreon_name, 'tier_id' => $tier_id,
@@ -958,11 +1115,11 @@ function lgpo_handle_callback() {
             );
         }
 
-        if ( ! $existing_patreon_id ) {
+        if ( user_can( $existing_by_email, 'manage_options' ) ) {
             lgpo_add_pending( array(
                 'patreon_user_id' => $patreon_user_id, 'patreon_email' => $patreon_email,
                 'patreon_name' => $patreon_name, 'tier_id' => $tier_id,
-                'wp_user_id' => $existing_by_email->ID, 'reason' => 'email_collision',
+                'wp_user_id' => $existing_by_email->ID, 'reason' => 'admin_collision',
             ) );
             lgpo_notify_admin( $patreon_name, $patreon_email, $existing_by_email->user_login );
             lgpo_terminal( 'email_collision', $state_payload,
@@ -970,9 +1127,15 @@ function lgpo_handle_callback() {
                 . 'Please contact <a href="mailto:' . esc_attr( $contact_email ) . '">' . esc_html( $contact_email ) . '</a> to get this sorted out.'
             );
         }
+
+        // Same Patreon id, or not yet linked: adopt the existing account.
+        lgpo_adopt_existing_user( $existing_by_email, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot );
+        lgpo_terminal( 'adopted', $state_payload,
+            'We connected your Patreon membership to your existing Looth Group account and logged you in. Your access level has been updated.'
+        );
     }
 
-    // Create new user
+    // No existing account by Patreon id or email — create a new one.
     $username = lgpo_generate_username( $patreon_name, $patreon_email );
     $password = wp_generate_password( 24, true, true );
 
@@ -994,26 +1157,36 @@ function lgpo_handle_callback() {
     update_user_meta( $user_id, 'lgpo_onboarded_at', current_time( 'mysql' ) );
     update_user_meta( $user_id, 'payment_source', 'patreon' );
 
+    // Write the full membership snapshot (lg_patreon_members) the sweep would
+    // write, so Membership::statusFor() sees them as a member NOW — not next sweep.
+    if ( class_exists( 'LGPO_Sync_Engine' ) ) {
+        LGPO_Sync_Engine::record_patreon_member( (int) $user_id, $member_snapshot );
+    }
+
     // Record the Patreon role opinion in lg_role_sources so the arbiter
     // sees it on later cross-source merges (e.g. user later signs up for Stripe).
     lgpo_apply_role_via_arbiter( (int) $user_id, $wp_role );
 
+    // Log them straight in (lifecycle G1) — they connected via Patreon, so land
+    // them authenticated instead of bouncing to a password screen.
+    lgpo_login_user( (int) $user_id );
+
+    // Still email a set-password link so they can log in again later without
+    // re-running the Patreon OAuth dance.
     $reset_key  = get_password_reset_key( get_user_by( 'id', $user_id ) );
     $reset_link = network_site_url( "wp-login.php?action=rp&key={$reset_key}&login=" . rawurlencode( $username ), 'login' );
 
     $subject = 'Welcome to The Looth Group — Set Your Password';
     $message = "Hey {$patreon_name},\n\n"
-        . "Your account on loothgroup.com has been created and linked to your Patreon membership.\n\n"
+        . "Your account on loothgroup.com has been created and linked to your Patreon membership. You're already logged in.\n\n"
         . "Username: {$username}\n\n"
-        . "Set your password here:\n{$reset_link}\n\n"
-        . "Once you've set your password, you can log in at " . wp_login_url() . "\n\n"
+        . "Set a password here so you can log back in anytime:\n{$reset_link}\n\n"
         . "Welcome to the group.\n— Ian";
 
     wp_mail( $patreon_email, $subject, $message );
 
     lgpo_terminal( 'success', $state_payload,
-        'Your account has been created! Check your email at <strong>' . esc_html( $patreon_email ) . '</strong> for a link to set your password. '
-        . 'If you don\'t see it, check your spam folder.'
+        'Your account has been created and you\'re now logged in! We\'ve also emailed a set-password link to <strong>' . esc_html( $patreon_email ) . '</strong> so you can log back in anytime.'
     );
 }
 
@@ -1026,6 +1199,37 @@ function lgpo_handle_callback() {
 function lgpo_get_user_by_patreon_id( $patreon_user_id ) {
     $users = get_users( array( 'meta_key' => 'lgpo_patreon_user_id', 'meta_value' => $patreon_user_id, 'number' => 1 ) );
     return ! empty( $users ) ? $users[0] : null;
+}
+
+/**
+ * Reuse an existing WP account for this Patreon member instead of minting a
+ * second one. Stamps the Patreon linkage meta (idempotent), applies the
+ * entitled tier through the arbiter, writes the lg_patreon_members snapshot,
+ * and logs them in. This is the dedupe guard: a Patreon email or Patreon
+ * user-id that already maps to a WP account must NEVER create a new account.
+ *
+ * @param array $member_snapshot Shape for LGPO_Sync_Engine::record_patreon_member().
+ */
+function lgpo_adopt_existing_user( $user, $patreon_user_id, $patreon_email, $tier_id, $wp_role, $member_snapshot = array() ) {
+    if ( ! $user instanceof WP_User ) {
+        $user = get_user_by( 'id', (int) $user );
+    }
+    if ( ! $user instanceof WP_User ) {
+        return;
+    }
+    update_user_meta( $user->ID, 'lgpo_patreon_user_id', $patreon_user_id );
+    update_user_meta( $user->ID, 'lgpo_patreon_email', $patreon_email );
+    update_user_meta( $user->ID, 'lgpo_patreon_tier_id', $tier_id );
+    if ( ! get_user_meta( $user->ID, 'lgpo_onboarded_at', true ) ) {
+        update_user_meta( $user->ID, 'lgpo_onboarded_at', current_time( 'mysql' ) );
+    }
+    update_user_meta( $user->ID, 'payment_source', 'patreon' );
+    lgpo_apply_role_via_arbiter( (int) $user->ID, $wp_role );
+    // Full membership snapshot so the member is provisioned NOW, not next sweep.
+    if ( ! empty( $member_snapshot ) && class_exists( 'LGPO_Sync_Engine' ) ) {
+        LGPO_Sync_Engine::record_patreon_member( (int) $user->ID, $member_snapshot );
+    }
+    lgpo_login_user( $user );
 }
 
 function lgpo_generate_username( $name, $email ) {
@@ -1051,26 +1255,6 @@ function lgpo_notify_admin( $patreon_name, $patreon_email, $wp_username ) {
         "A Patreon member tried to onboard but their email collides with an existing WP account.\n\n"
         . "Patreon Name: {$patreon_name}\nPatreon Email: {$patreon_email}\nExisting WP User: {$wp_username}\n\n"
         . "Review: " . admin_url( 'options-general.php?page=lg-patreon-onboard' ) . "\n"
-    );
-}
-
-function lgpo_fail( $message ) {
-    wp_die(
-        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
-        . '<h2 style="color:#1A1E12;">Looth Group — Account Activation</h2>'
-        . '<div style="padding:1em 1.5em;background:#fde8e4;border:1px solid #FE6A4F;border-radius:6px;color:#1A1E12;">' . $message . '</div>'
-        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
-        'Onboarding Issue', array( 'response' => 200 )
-    );
-}
-
-function lgpo_success( $message ) {
-    wp_die(
-        '<div style="max-width:600px;margin:60px auto;font-family:sans-serif;">'
-        . '<h2 style="color:#1A1E12;">Looth Group — Account Activation</h2>'
-        . '<div style="padding:1em 1.5em;background:#d4e0b8;border:1px solid #87986A;border-radius:6px;color:#1A1E12;">' . $message . '</div>'
-        . '<p style="margin-top:1.5em;"><a href="' . esc_url( home_url() ) . '">← Back to loothgroup.com</a></p></div>',
-        'Welcome!', array( 'response' => 200 )
     );
 }
 

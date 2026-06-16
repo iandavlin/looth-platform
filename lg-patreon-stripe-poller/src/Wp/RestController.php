@@ -1552,6 +1552,10 @@ final class RestController
             $user->set_role( 'looth1' );
             $user->remove_role( 'bbp_participant' );
             self::eraseBuddypressFootprint( (int) $userId );
+            // Purge the /whoami cache so the new looth1 tier is visible at once
+            // (G2). This direct set_role bypasses Arbiter, which normally fires
+            // the transition action.
+            do_action( 'looth_tier_changed', (int) $userId, null, 'looth1', 'gift-auth' );
 
             // Set display_name + first/last from the optional param so
             // the activity feed and member chrome show a recognizable
@@ -1584,9 +1588,12 @@ final class RestController
             }
         }
 
-        // Log the user in.
+        // Log the user in. Fire wp_login so the looth_id JWT mints (G1-class):
+        // a bare auth cookie without wp_login leaves gift-auth users anon on the
+        // fast /whoami path, same defect as the Patreon onboard.
         wp_set_current_user( $user->ID );
         wp_set_auth_cookie( $user->ID, true );
+        do_action( 'wp_login', $user->user_login, $user );
 
         if ( $ipKey    !== '' ) { set_transient( $ipKey,    $ipHits,    HOUR_IN_SECONDS ); }
         if ( $emailKey !== '' ) { set_transient( $emailKey, $emailHits, 15 * MINUTE_IN_SECONDS ); }

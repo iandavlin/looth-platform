@@ -4,6 +4,23 @@
 
 > Companion repo: [`lg-stripe-billing`](https://github.com/iandavlin/lg-stripe-billing) (Slim API). Cross-cutting picture is in its PICKUP.
 
+## 2026-06-14 — onboard double-account dedupe
+
+- **Fix (`62203b7`, lane/login-poller):** OAuth onboard now ADOPTS an existing WP
+  account matched by Patreon email or Patreon user-id (stamp linkage meta, apply
+  tier via arbiter, log in) instead of minting a second one. Removed the
+  same-patreon-id fall-through that could still mint; flipped email-collision
+  from "contact admin" to reuse. Human review kept only for: email bound to a
+  DIFFERENT Patreon id, or a privileged (admin) account. Deployed to the live
+  dev plugin dir (`/var/www/dev/wp-content/plugins/...`, looth-dev:loothdevs 660).
+- **Merged mikelle.davlin on dev:** canonical = wp **1848** (orig). Re-pointed
+  profile bridge (profile_app.wp_user_bridge user 1844 → wp 1848). Neutralized
+  loser wp **1905** WITHOUT `wp user delete`: caps→`a:0:{}`, password scrambled,
+  sessions deleted, patreon meta renamed `*_merged`, `lgpo_merged_into=1848`.
+  Snapshot: `/tmp/mikelle-merge-20260614/`. Only affected member (dupe-email
+  query returns just her). LIVE merge still TODO (or handled at cut via the
+  bridge-gate whitelist — Ian's call).
+
 ## State
 
 WordPress plugin at `/var/www/dev/wp-content/plugins/lg-patreon-stripe-poller/` on `dev.loothgroup.com` (php-fpm pool `php8.3-fpm-looth-dev.sock`). Two databases: WordPress (`wp_*`, accessed via `$wpdb`) and `lg_membership` (own PDO via `LGMS\Db::pdo()`). The plugin's hourly cron (`lgms_poll_tick` → `Tick::run`) is the heart: pulls Stripe events, sweeps expired entitlements, calls back to Slim's `/v1/reconcile-pending`, and runs the customer sync.
@@ -151,17 +168,6 @@ Full ianhates teardown (WP user + customer + FK-linked rows) is in earlier sessi
 
 ## Recent history
 
-- **2026-06-13 (audit fixes)** — 4 committed-not-pushed: (1) HIGH re-enabled the
-  per-campaign Patreon filter in the OAuth onboard (`false &&` was disabling it →
-  any creator's patron got a paid tier); pure predicate `lgpo_membership_matches_campaign()`
-  in `includes/campaign-filter.php`. (2) audit_log wipe-preview was keyed on a
-  non-existent `customer_id` column (TestChecklist) → aligned to `subject_type/subject_id`
-  (canonical teardown was already correct). (3) Arbiter tier precedence now explicit
-  `TIER_RANK` map, not `strcmp`. (4) Tick pass 2.5: `Sync::allPatreon()` re-arbitrates
-  Patreon-only members hourly (Stripe-only sweep never visited them). New WP-free tests
-  in `tests/` (`bash tests/run.sh`, 19 asserts GREEN). **OPEN cross-lane:** `/run-now` +
-  `/send-gift-codes` are shared-secret but not IP-locked at nginx → infra lane. **Cut
-  checklist:** confirm `lgpo_campaign_id` is set on LIVE (it's `4833198` on dev).
 - **2026-05-09 (security audit)** — `/refund-request` rate limit, `Tick` GET_LOCK, `lg_processed_events` table + dup detection, `refund_window_days` clamp 1–90. Reverted commit `a545d39` (laptop's stale membership-guide snapshot) — server's working tree is canonical for that work.
 - **2026-05-04** — gift-management UI shipped: `[lg_my_gifts]` dashboard, `/me/gift-*` endpoints, `/gift-auth` for login-before-Stripe, gift-buy form (`[lg_gift]`), gift-redemption (`[lg_redeem_gift]`), customer-role lockdown. See `git log --grep gift`.
 - Earlier — see `git log` and the companion repo's PICKUP for cross-cutting context.

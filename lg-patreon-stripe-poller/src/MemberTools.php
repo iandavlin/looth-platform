@@ -353,7 +353,15 @@ final class MemberTools
         if ( ! $user ) {
             throw new \RuntimeException( 'No WP user for that email.' );
         }
-        foreach ( [ 'looth1', 'looth2', 'looth3', 'looth4', 'customer' ] as $r ) {
+        $tierRoles = [ 'looth1', 'looth2', 'looth3', 'looth4', 'customer' ];
+        $oldTier   = null;
+        foreach ( $tierRoles as $r ) {
+            if ( in_array( $r, (array) $user->roles, true ) ) {
+                $oldTier = $r;
+                break;
+            }
+        }
+        foreach ( $tierRoles as $r ) {
             if ( $r !== $tier && in_array( $r, (array) $user->roles, true ) ) {
                 $user->remove_role( $r );
             }
@@ -365,6 +373,12 @@ final class MemberTools
                  ON DUPLICATE KEY UPDATE tier = VALUES(tier), updated_at = CURRENT_TIMESTAMP'
             )->execute( [ (int) $user->ID, 'manual_admin', $tier ] );
         } catch ( Throwable $_ ) {}
+        // Invalidate the /whoami cache so the new tier shows immediately (G2).
+        // This write bypasses Arbiter::sync (which normally fires this), so do
+        // it here; PurgeNotifier only acts on an actual transition.
+        if ( $oldTier !== $tier ) {
+            do_action( 'looth_tier_changed', (int) $user->ID, $oldTier, $tier, 'manual_admin' );
+        }
         self::audit( $email, 'set_tier', "tier={$tier}" );
         return "Set {$email} to {$tier}.";
     }

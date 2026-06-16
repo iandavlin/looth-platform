@@ -176,6 +176,227 @@ final class UserLifecycle
     }
 
     /**
+     * Canonical user CREATE front-door — the mirror of teardown(). The only
+     * code that should make a Looth user. Every creator (Patreon onboard,
+     * gift-auth, Stripe, sweep-match, admin, affiliate, native) routes through
+     * here so they stop each keeping a different subset of the create promises
+     * (USER-LIFECYCLE-AUDIT §2). Idempotent on email: an existing account is
+     * found + reconciled, never duplicated.
+     *
+     * Promises kept, in order:
+     *   1. WP account (find by email, else create).
+     *   2. user_meta from $opts['meta'] + display/first/last name.
+     *   3. Tier role via the Arbiter source pipeline (never a raw set_role) —
+     *      $opts['tier'] reported under $opts['source'] (default manual_admin).
+     *   4. profile-app identity + bridge, **blocking with retry** (fixes G7's
+     *      fire-and-forget miss). Fail-loud into result['errors'] — never
+     *      silently leave a logged-in user with no /whoami identity.
+     *   5. Optional auth cookie + wp_login so they land authenticated and the
+     *      looth_id JWT mints ($opts['login']).
+     *
+     * @param array{
+     *   display_name?:string, first_name?:string, last_name?:string,
+     *   tier?:?string, source?:string, login?:bool, meta?:array<string,mixed>
+     * } $opts
+     * @return array{
+     *   ok:bool, wp_user_id:int, created:bool, email:string, role:?string,
+     *   profile_identity:array<string,mixed>, logged_in:bool, errors:array<int,string>
+     * }
+     */
+    public static function provision( string $email, array $opts = [] ): array
+    {
+        $email = sanitize_email( $email );
+        if ( $email === '' || ! is_email( $email ) ) {
+            throw new \InvalidArgumentException( 'provision requires a valid email.' );
+        }
+
+        $result = [
+            'ok'               => true,
+            'wp_user_id'       => 0,
+            'created'          => false,
+            'email'            => $email,
+            'role'             => $opts['tier'] ?? null,
+            'profile_identity' => [],
+            'logged_in'        => false,
+            'errors'           => [],
+        ];
+
+        $displayName = isset( $opts['display_name'] ) ? (string) $opts['display_name'] : '';
+
+        // ---- 1. WP account (find by email, else create) --------------------
+        $user = get_user_by( 'email', $email );
+        if ( ! $user ) {
+            require_once ABSPATH . 'wp-admin/includes/user.php';
+            $username = self::uniqueUsername( $displayName !== '' ? $displayName : $email );
+            $newId = wp_insert_user( [
+                'user_login'   => $username,
+                'user_email'   => $email,
+                'user_pass'    => wp_generate_password( 24, true, true ),
+                'display_name' => $displayName !== '' ? $displayName : $username,
+            ] );
+            if ( is_wp_error( $newId ) ) {
+                $result['ok'] = false;
+                $result['errors'][] = 'wp_insert_user: ' . $newId->get_error_message();
+                return $result;
+            }
+            $user = get_user_by( 'id', (int) $newId );
+            $result['created'] = true;
+        }
+        $wpUserId = (int) $user->ID;
+        $result['wp_user_id'] = $wpUserId;
+
+        // ---- 2. names ------------------------------------------------------
+        $update = [ 'ID' => $wpUserId ];
+        if ( $displayName !== '' && ( empty( $user->display_name ) || $user->display_name === $user->user_login ) ) {
+            $update['display_name'] = $displayName;
+        }
+        if ( isset( $opts['first_name'] ) ) { $update['first_name'] = (string) $opts['first_name']; }
+        if ( isset( $opts['last_name'] ) )  { $update['last_name']  = (string) $opts['last_name']; }
+        if ( count( $update ) > 1 ) {
+            wp_update_user( $update );
+        }
+
+        // A freshly created account may land on a RECYCLED wp_user_id that still
+        // carries stale lg_role_sources / lg_patreon_members from a long-deleted
+        // user (the G5 orphan family). Left in place, the Arbiter would merge
+        // those into the new member's tier. Clear them so a new user starts clean.
+        if ( $result['created'] ) {
+            try {
+                Db::pdo()->prepare( 'DELETE FROM lg_role_sources WHERE wp_user_id = ?' )->execute( [ $wpUserId ] );
+                Db::pdo()->prepare( 'DELETE FROM lg_patreon_members WHERE wp_user_id = ?' )->execute( [ $wpUserId ] );
+            } catch ( Throwable $_ ) {}
+        }
+
+        // ---- 3. tier role via Arbiter source pipeline ----------------------
+        // Granted BEFORE caller meta is written: Arbiter's stripe-coexistence
+        // guard skips a payment_source=stripe user that lacks a looth1 role, so
+        // setting that meta first would block the initial grant.
+        if ( array_key_exists( 'tier', $opts ) ) {
+            $tier   = $opts['tier'];
+            $source = isset( $opts['source'] ) ? (string) $opts['source'] : 'manual_admin';
+            // looth1 is the sourceless starter tier — store it as a null source
+            // opinion, matching lgpo_apply_role_via_arbiter / UserProvisioner.
+            $reportTier = ( $tier === 'looth1' ) ? null : $tier;
+            try {
+                RoleSourceWriter::report( $wpUserId, $source, $reportTier );
+                Arbiter::sync( $wpUserId );
+            } catch ( Throwable $e ) {
+                $result['errors'][] = 'role(' . $source . '): ' . $e->getMessage();
+            }
+        }
+
+        // ---- 3b. caller meta (after the grant; see note above) -------------
+        foreach ( (array) ( $opts['meta'] ?? [] ) as $k => $v ) {
+            update_user_meta( $wpUserId, (string) $k, $v );
+        }
+
+        // ---- 4. profile-app identity + bridge (blocking, retried) ----------
+        $result['profile_identity'] = self::ensureProfileIdentity(
+            $wpUserId, $email, $displayName !== '' ? $displayName : $user->display_name, $result['errors']
+        );
+
+        // ---- 5. optional login (auth cookie + JWT mint) --------------------
+        if ( ! empty( $opts['login'] ) ) {
+            $result['logged_in'] = self::loginUser( $user, $result['errors'] );
+        }
+
+        $result['ok'] = $result['errors'] === [];
+        return $result;
+    }
+
+    /** Find-or-make a unique WP login from a name or email local-part. */
+    private static function uniqueUsername( string $seed ): string
+    {
+        $base = sanitize_user( strtolower( str_replace( ' ', '.', trim( $seed ) ) ), true );
+        if ( strpos( $base, '@' ) !== false ) {
+            $base = sanitize_user( strtolower( strstr( $base, '@', true ) ), true );
+        }
+        if ( $base === '' ) {
+            $base = 'looth-member';
+        }
+        $username = $base;
+        $n = 1;
+        while ( username_exists( $username ) ) {
+            $username = $base . $n;
+            $n++;
+        }
+        return $username;
+    }
+
+    /**
+     * POST the profile-app user-created hook, blocking, with a couple of
+     * retries. Returns the decoded response or an error marker; pushes a
+     * fail-loud line into $errors when the identity could not be created.
+     *
+     * @param array<int,string> $errors
+     * @return array<string,mixed>
+     */
+    private static function ensureProfileIdentity( int $wpUserId, string $email, ?string $displayName, array &$errors ): array
+    {
+        $secret = (string) get_option( 'profile_hook_secret', '' );
+        if ( $secret === '' ) {
+            $errors[] = 'profile-identity: profile_hook_secret not set — bridge + /whoami identity NOT created.';
+            return [ 'ok' => false, 'error' => 'no_secret' ];
+        }
+        $publicHost = defined( 'LG_PROFILE_APP_PUBLIC_HOST' )
+            ? (string) LG_PROFILE_APP_PUBLIC_HOST
+            : 'dev.loothgroup.com';
+
+        $body = wp_json_encode( [
+            'wp_user_id'   => $wpUserId,
+            'email'        => $email,
+            'display_name' => $displayName,
+        ] );
+
+        $lastErr = '';
+        for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
+            $resp = wp_remote_post( 'https://127.0.0.1/profile-api/v0/hooks/user-created', [
+                'blocking'  => true,
+                'timeout'   => 5,
+                'sslverify' => false,
+                'headers'   => [
+                    'Host'          => $publicHost,
+                    'Content-Type'  => 'application/json',
+                    'X-Hook-Secret' => $secret,
+                ],
+                'body'      => $body,
+            ] );
+            if ( is_wp_error( $resp ) ) {
+                $lastErr = $resp->get_error_message();
+                continue;
+            }
+            $code = (int) wp_remote_retrieve_response_code( $resp );
+            $json = json_decode( (string) wp_remote_retrieve_body( $resp ), true );
+            if ( $code >= 200 && $code < 300 && is_array( $json ) && ! empty( $json['ok'] ) ) {
+                return $json;
+            }
+            $lastErr = is_array( $json ) && isset( $json['error'] ) ? (string) $json['error'] : "HTTP {$code}";
+        }
+
+        $errors[] = "profile-identity: {$lastErr} — bridge + /whoami identity NOT created (after 3 tries).";
+        return [ 'ok' => false, 'error' => $lastErr ];
+    }
+
+    /**
+     * Log a user in: current user + auth cookie + wp_login (which mints the
+     * looth_id JWT in profile-auth.php). A bare auth cookie without wp_login
+     * leaves the fast /whoami path anon (lifecycle G1).
+     *
+     * @param array<int,string> $errors
+     */
+    private static function loginUser( \WP_User $user, array &$errors ): bool
+    {
+        if ( headers_sent() ) {
+            $errors[] = 'login: headers already sent, auth cookie not set.';
+            return false;
+        }
+        wp_set_current_user( $user->ID, $user->user_login );
+        wp_set_auth_cookie( $user->ID, true );
+        do_action( 'wp_login', $user->user_login, $user );
+        return true;
+    }
+
+    /**
      * Cancel Stripe + purge the lg_membership rows for a customer that has no
      * bridged WP user (orphan customer). Reuses the same membership ops as the
      * full teardown so there is no second cleanup path to drift. Used by the

@@ -389,14 +389,9 @@ final class TestChecklist
                 'delete' => 'DELETE FROM admin_action_log WHERE customer_id = ?',
                 'params' => [ $custId ],
             ];
-            // audit_log is keyed (subject_type, subject_id) — it has NO
-            // customer_id column. The old WHERE customer_id = ? threw
-            // "Unknown column", was swallowed as a missing-table error, and
-            // silently under-counted audit rows in the wipe preview. Use the
-            // same predicate the canonical teardown deletes on (UserLifecycle).
             $sets['audit_log'] = [
-                'count'  => "SELECT COUNT(*) FROM audit_log WHERE subject_type = 'customer' AND subject_id = ?",
-                'delete' => "DELETE FROM audit_log WHERE subject_type = 'customer' AND subject_id = ?",
+                'count'  => 'SELECT COUNT(*) FROM audit_log WHERE customer_id = ?',
+                'delete' => 'DELETE FROM audit_log WHERE customer_id = ?',
                 'params' => [ $custId ],
             ];
             $sets['entitlements'] = [

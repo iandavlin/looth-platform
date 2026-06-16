@@ -189,29 +189,6 @@ final class Tick
             ), FILE_APPEND );
         }
 
-        // Pass 2.5: re-arbitrate Patreon-only members. Pass 2 only visits
-        // Stripe customers, so without this the poller never reconciles a
-        // Patreon-only member's roles. Gated to at most once an hour — the
-        // tick fires every 5 minutes and this set is ~1k users.
-        try {
-            if ( false === get_transient( 'lgms_patreon_rearb_done' ) ) {
-                $pr = Sync::allPatreon();
-                set_transient( 'lgms_patreon_rearb_done', 1, HOUR_IN_SECONDS );
-                @file_put_contents( $log, sprintf(
-                    "[%s] patreon re-arbitration: swept=%d errors=%d\n",
-                    gmdate( 'c' ),
-                    $pr['swept'],
-                    $pr['errors'],
-                ), FILE_APPEND );
-            }
-        } catch ( Throwable $e ) {
-            @file_put_contents( $log, sprintf(
-                "[%s] patreon re-arbitration FAILED: %s\n",
-                gmdate( 'c' ),
-                $e->getMessage(),
-            ), FILE_APPEND );
-        }
-
         } finally {
             try {
                 $pdo->query( "SELECT RELEASE_LOCK('lgms_tick_lock')" );
