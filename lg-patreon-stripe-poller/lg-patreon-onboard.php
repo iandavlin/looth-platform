@@ -969,14 +969,15 @@ function lgpo_handle_callback() {
     // creator the patron backs, and the guard rejects any membership whose
     // campaign id != lgpo_campaign_id. Without pulling the campaign relationship,
     // each member's relationships.campaign.data.id is empty → the guard rejects
-    // EVERY self-connector as not_a_patron. fields[campaign]= keeps the payload to
-    // just the linkage id (we only need the id, never campaign attributes).
+    // EVERY self-connector as not_a_patron. The include alone populates that
+    // linkage id; do NOT add fields[campaign] — Patreon 400s on an empty
+    // fieldset ("Invalid value for parameter 'fields[campaign]'"), which would
+    // fail the whole identity fetch → ?onboarded=fail.
     $identity_url = 'https://www.patreon.com/api/oauth2/v2/identity'
         . '?include=memberships,memberships.currently_entitled_tiers,memberships.campaign'
         . '&fields%5Buser%5D=email,full_name,image_url'
         . '&fields%5Bmember%5D=patron_status,currently_entitled_amount_cents,email,full_name'
-        . '&fields%5Btier%5D=title'
-        . '&fields%5Bcampaign%5D=';
+        . '&fields%5Btier%5D=title';
 
     $identity_response = wp_remote_get( $identity_url, array(
         'headers' => array(
