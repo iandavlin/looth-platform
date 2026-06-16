@@ -324,23 +324,31 @@ $cStmt = $pg->prepare($countSql);
 $cStmt->execute($params);
 $total = (int)$cStmt->fetchColumn();
 
-// Pull highlights for each result.
+// Card chips show each member's actual SKILLS (live), not the curated
+// Highlights picker — so editing Skills updates the cards immediately
+// (Ian 2026-06-16). Shape matches the old highlights rows (kind/slug/name)
+// so the .hl-chips render at web/directory-members.php is unchanged; the
+// render consumes h.name. Ordered like the editor (Profile::skills:
+// ps.sort_order, s.sort_order, s.name) and capped to the highlights cap (3)
+// so card height stays the same despite SKILLS_MAX=40.
 $results = [];
 if ($rows) {
     $userIds = array_map(fn($r) => (int)$r['id'], $rows);
     $hPh = implode(',', array_fill(0, count($userIds), '?'));
     $hStmt = $pg->prepare("
-        SELECT h.user_id, h.kind, h.ref_id, h.sort_order,
-               CASE WHEN h.kind='instrument' THEN ic.slug ELSE sc.slug END AS slug,
-               CASE WHEN h.kind='instrument' THEN ic.name ELSE sc.name END AS name
-        FROM profile_highlights h
-        LEFT JOIN instrument_catalog ic ON h.kind='instrument' AND ic.id = h.ref_id
-        LEFT JOIN skill_catalog      sc ON h.kind='skill'      AND sc.id = h.ref_id
-        WHERE h.user_id IN ($hPh) ORDER BY h.user_id, h.sort_order");
+        SELECT ps.user_id, sc.slug, sc.name
+        FROM profile_skills ps
+        JOIN skill_catalog sc ON sc.id = ps.skill_id
+        WHERE ps.user_id IN ($hPh)
+        ORDER BY ps.user_id, ps.sort_order, sc.sort_order, sc.name");
     $hStmt->execute($userIds);
     $highlightsByUser = [];
+    foreach ($userIds as $uid) { $skillCount[$uid] = 0; }
     while ($h = $hStmt->fetch()) {
-        $highlightsByUser[(int)$h['user_id']][] = ['kind' => $h['kind'], 'slug' => $h['slug'], 'name' => $h['name']];
+        $suid = (int)$h['user_id'];
+        if (($skillCount[$suid] ?? 0) >= Profile::HIGHLIGHTS_MAX) continue;
+        $skillCount[$suid] = ($skillCount[$suid] ?? 0) + 1;
+        $highlightsByUser[$suid][] = ['kind' => 'skill', 'slug' => $h['slug'], 'name' => $h['name']];
     }
 
     // Social links per result, gated by each member's links-block visibility
