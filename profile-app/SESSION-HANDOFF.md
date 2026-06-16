@@ -1,5 +1,7 @@
 # profile-app — Session Handoff (2026-06-01)
 
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off this file. Source of truth = `git log` + `tools/gates/run-all.sh`, not these bullets.
+
 > **The map + editor chats are RETIRED (2026-06-01).** Their work is committed;
 > the tree is clean. **`buck` now owns profile-app's profile + member-map lanes**,
 > working from his own clone (`~buck/looth-platform`), git-native per
@@ -37,11 +39,10 @@ buck takes it after location-default.
   (`f78b869`); `*.dev.loothgroup.com`→dev env detection (`c7b2e0e`).
 - `GET /profile-api/v0/users?wp_ids=` shipped (`a80dd1e`) — author-bio for WP consumers.
 
-## buck's queue
-1. **location-default** (`docs/relay-to-profile-app-location-default.md`) — idempotent
-   SQL defaulting `location_visibility`/`pin_precision` → members/city for NEW members.
-   Coordinator applies to the dev DB at merge. (Confirmed open: no SQL file, no default set.)
-2. **View-as ↔ header-card CSS gap** (from the retired editor chat) — after #1.
+## buck's queue — ✅ BOTH DONE (2026-06-15 reconcile; do NOT re-work — verify against git first)
+1. ~~**location-default**~~ — ✅ DONE: `32632a3` (buck, 6/3) shipped
+   `profile-app/sql/2026-06-01-location-legacy-defaults.sql` (idempotent members/city defaults for new members).
+2. ~~**View-as ↔ header-card CSS gap**~~ — ✅ DONE: `e7b0412` (6/11, "View-as chrome fix").
 
 ## Onboarding (profile is a light lane — see STRANGLER-COORDINATION.md §3n)
 New-member Patreon onboarding touches profile at: provisioning (the

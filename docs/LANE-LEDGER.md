@@ -1,5 +1,10 @@
 # Lane Ledger — coordinator view (2026-06-03)
 
+> ⚠️ **STALE SNAPSHOT (last real update 2026-06-05) — current lane/cut state =
+> `cutover/lanes/INDEX.md` + `cutover/lanes/HANDOFF.md`.** Many 🟡/🔵 / "uncommitted" /
+> "awaiting push" markers below have since landed (e.g. coral/slate tokens promoted `2f28fae`;
+> archive-poc→PG read-cutover done; the ~9-commit push cleared). Trust INDEX/HANDOFF, not this ledger.
+
 Status of every dispatched lane. Coordinator chat owns this file; lanes report back, coordinator updates.
 
 Legend: 🟢 green/done · 🟡 in-flight · ⚪ dispatched, not started · 🔵 queued/blocked

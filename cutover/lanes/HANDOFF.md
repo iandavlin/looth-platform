@@ -1,5 +1,48 @@
 # Coordinator handoff — FINISHING THE CUT (2026-06-15, PM)
 
+## ═══ LATEST (2026-06-15, late) — READ FIRST; supersedes the older state below ═══
+
+- **A.3 DONE — dev2 is a SINGLE git checkout of `main`** for ALL apps (bb-mirror, archive-poc, profile-app,
+  events, lg-shared) **+ the `/var/www/dev` overlay** (`webroot/`). Deploy = `git pull`. Done via paste scripts
+  `.well-known/dev2-a3-stage1.sh` (clone→main + overlay) + `…-stage2.sh` (repoint the 4 app symlinks); each
+  smoke-tested + auto-rollback; backouts `/tmp/dev2-a3-stage{1,2}-rollback.sh`. archive-poc `config.json` kept
+  app-writable inside the clone. **dev2 == dev verified** (the map regression was dev2 staleness — fixed by this).
+- **SEO continuity — DONE, deployed to dev2, verified.** Resolver + sitemap + nginx 301 blocks live on dev2 via
+  `.well-known/dev2-seo-deploy-v2.sh` (append-only + nginx-t + rollback). `tools/cut/sitemap-grants.sql` **fixed +
+  pushed to main (`d3b3b8c`)**: now CONNECT + schema USAGE + columns (column-only → empty profiles on a fresh PG16
+  restore). Re-apply after every profile_app restore.
+- **Data top-off done on THIS box's `looth_import`** (`tools/topoff-dev-from-live.sh apply all` → +18 posts/+1 user;
+  R2 bucket synced, patreon_avatar excluded). ⚠️ **dev2 top-off is OPEN** — dev2 has its OWN local DBs (local socket),
+  so the cut needs a full live dump→dev2 import (runbook §8) OR a one-time live firewall+grant for dev2→live. Decide.
+- **Reindex tool FIXED (silently broken since ~6/11):** `archive-poc/bin/backfill-pg.php` TRUNCATEd `tag`+`person`
+  mid-txn (built BEFORE the txn) → every tagged post FK-failed → index frozen. Fix: don't truncate tag/person +
+  per-tag savepoint. **✅ COMMITTED to main (`f6400aa`) 6/15; deployed on dev1's served copy.** Run
+  `backfill-pg.php` THEN `materialize-all.php` (slow, background it) after EVERY restore/top-off or new content won't show.
+- **LOGIN "no edit sidebar" — TWO separate bugs:**
+  1. **looth_id re-mint bounce (FIXED + ✅ CONSOLIDATED to main 6/15: `d4e0c9c`+`67036b9`+`9a73282`):** old `/wp-json/looth/auth/issue` REST
+     mint was doubly broken (BB REST gate `bb-enable-private-rest-apis=1`, re-armed every DB reload → 401; + REST
+     cookie-auth needs a nonce a nav lacks → wp-login). Fix = non-REST `/looth-auth/issue` mu-plugin. Branches:
+     **lane-wp-auth `7821c3e`** (handler+gate) **+ `bd98773`** (profile-auth.php git←served reconcile — CUT-CRITICAL:
+     git was 2wk stale with the email-derived-sub bug; cut deploys from git, so git must carry the served minter) ·
+     **lane-profile-app `ebd9b7e`** (repoint config.php + edit.php).
+  2. **Responsive editor sidebar (✅ DONE 6/15: `a871ef7`, the drawer) — THIS was Danny West's real bug:**
+     `profile-app/web/edit.css:227` → `.rail{display:none}` at `@media max-width:780px`, no toggle → editor sidebar
+     vanishes on iPad portrait (768), narrow/split Mac windows, phones. Fix = a drawer/toggle, reachable at every width.
+     (Identity/cache were red herrings — server always checked out: whoami authenticated, looth_id fine.)
+- **CONSOLIDATION TO MAIN — ✅ DONE locally 6/15 (push held for Ian):** all lane work is on `main` —
+  `f6400aa` reindex · `d4e0c9c`+`67036b9` wp-auth · `9a73282`+`a871ef7` profile-app · `b049a7c` GATE 5 wiring ·
+  `538b3cf` render · `4bf9962` /u/ hamburger = **8 commits, all today, run-all.sh GREEN 5/5**. Only
+  `git push origin main` remains.
+- **A.1 (DNS TTL) — MOOT:** loothgroup.com is **Cloudflare-PROXIED**. The "flip" = change the CF **origin IP**
+  (old-live→dev2) — instant at the edge, no TTL/propagation wait; rollback = point CF origin back (seconds). Fix runbook A.1.
+- **New cut-window paste scripts staged** (`.well-known/`): `dev2-cut-reapply-gotchas.sh` (idempotent grants/ACLs/
+  perms re-apply + verify — run after EVERY restore; caught a missing membership ACL on dev2) · `dev2-cut-verify.sh
+  <host>` (renders + SEO redirects + sitemap + whoami). **Fold `bb-enable-private-rest-apis=0` into the gotchas script**
+  (re-arms every reload; 401s the BuddyBoss REST the header uses).
+- **Still open, no downtime:** carry LIVE's JWT keypair to dev2 (salts already staged). Then cut window B–F.
+
+---
+
 Successor: the cut is far along. This supersedes earlier handoffs (in git history). Your job =
 a short punch-list + the **SEO/search-continuity build below** + executing the runbook.
 

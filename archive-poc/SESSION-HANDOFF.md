@@ -1,3 +1,5 @@
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off a stale handoff. Source of truth = `git log` + gates, not these bullets.
+
 <!-- ===================== COORDINATOR BANNER (2026-06-01) ===================== -->
 > **Ownership consolidated 2026-06-01.** archive-poc/standalone had two chats colliding
 > (the shared-tree problem). Resolved to **one owner**: the active standalone chat (Part A

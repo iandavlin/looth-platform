@@ -1,5 +1,7 @@
 # BB-mirror / Hub — Session Handoff (2026-06-06 — one-page-Hub proto + polish)
 
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off a stale handoff. Source of truth = `git log` + gates, not these bullets.
+
 Prior handoff rotated to `handoffs/2026-06-06-deploy-prep-mute.md`.
 
 > **THE board is `docs/hub-deploy-roadmap.md`** (Done / Cut-blocking / Post-deploy + the One-page-Hub

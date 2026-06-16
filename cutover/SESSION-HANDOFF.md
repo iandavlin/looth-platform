@@ -1,5 +1,11 @@
 # cutover — Session Handoff (2026-05-27, opening pass)
 
+> ⚠️ **SUPERSEDED (2026-06-15) — HISTORICAL ONLY.** This is the FIRST cutover-planning session
+> (5/27–5/28); the cut model has changed twice since (in-place → **new box + DNS flip**).
+> **Current cut truth = `docs/DEPLOY-PLAN.md` + `cutover/lanes/HANDOFF.md` (LATEST block) +
+> `docs/PHASE-11-CUT-RUNBOOK.md`.** The 12-step blue-green sequence and "Next session" tasks below
+> are obsolete — do NOT execute them. Kept only for the BATCH-0x live-inventory findings.
+
 > Prior handoff (stub created by coordinator): `handoffs/2026-05-27-scaffold-stub.md`.
 > This is the first real cutover session. Workstream charter is the
 > briefing at [/home/ubuntu/projects/docs/briefing-cutover.md](../docs/briefing-cutover.md).

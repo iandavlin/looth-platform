@@ -1,5 +1,7 @@
 # Session handoff — lg-layout-v2 (2026-05-23)
 
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off a stale handoff. Source of truth = `git log` + `tools/gates/run-all.sh`, not these bullets.
+
 Picks up from the prior 2026-05-23 handoff (now `SESSION-HANDOFF.2026-05-23-am.md` if needed). This session covered: structured callout block (Phase A/B/C), transcript block, paywall + gate-CTA, post-tier taxonomy auto-gate, render-time YT-link scrub, BB @mention strip, image crop (aspect + focal-point) with FE picker, post-footer share row, and a full VG-reprint workflow shipped on the '57 Strat / Dan Erlewine article.
 
 ## TL;DR — what's live

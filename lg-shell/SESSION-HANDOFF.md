@@ -1,5 +1,7 @@
 # lg-shell — Session Handoff (2026-05-28, P3 shipped)
 
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped or ruled out — e.g. the **Follow** modal was DROPPED (`ff23ba4`, connections are mutual-only). Source of truth = `git log` + `tools/gates/run-all.sh`, not these bullets.
+
 > Prior stub: `handoffs/2026-05-28-scaffold.md` (first-session scaffold, no code yet).
 > This handoff covers P3: shared header partial landed + wired into archive-poc and bb-mirror.
 

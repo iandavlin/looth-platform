@@ -1,5 +1,7 @@
 # events lane — SESSION HANDOFF
 
+> ⚠️ **SNAPSHOT — verify every open/queued to-do against `git log` before working it (flagged 2026-06-15).** Items marked open/TODO/next here may already be shipped — a lane re-did a done task off a stale handoff. Source of truth = `git log` + `tools/gates/run-all.sh`, not these bullets.
+
 **Lane:** events (event post page → lg-layout-v2; events landing → shared shell)
 **Session ID:** `8d852dda-54b5-41fc-8308-84cffe16e770` (from transcript path; confirm with Ian)
 **Outliner title:** _events — event page → v2 + landing → shared shell_ (set in roster)
