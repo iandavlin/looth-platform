@@ -140,6 +140,15 @@ final class Provision
             }
         }
 
+        // Provision just wrote the slug (and maybe the claim). Invalidate any
+        // /whoami cached slug-less earlier in THIS onboard request — otherwise the
+        // post-onboard landing serves the stale slug=null payload and the shared
+        // header degrades "My Profile" to /profile/edit until some other /me purge
+        // fires (the "wrong on 1st click, right on 2nd" bug). Best-effort: a cache
+        // miss just re-assembles fresh from Postgres.
+        try { Cache::purgeWhoami($wpUserId); }
+        catch (\Throwable $e) { error_log('[provision] whoami purge skipped for wp_user_id=' . $wpUserId . ': ' . $e->getMessage()); }
+
         return ['user_id' => $userId, 'uuid' => $uuid, 'created' => $inserted];
     }
 
