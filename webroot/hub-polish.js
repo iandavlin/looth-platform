@@ -1383,9 +1383,10 @@
         var d = document.createElement('div'); d.className = 'lg-fbc-step'; d.dataset.step = n;
         d.innerHTML = '<p class="lg-fbc-steph">' + label + '</p>'; return d;
       }
-      var ws1 = wStep(1, 'Step 1 of 3 · Title &amp; forum');
-      var ws2 = wStep(2, 'Step 2 of 3 · Add photos');
-      var ws3 = wStep(3, 'Step 3 of 3 · Details');
+      var ws1 = wStep(1, 'Step 1 of 4 · Title &amp; forum');
+      var ws2 = wStep(2, 'Step 2 of 4 · Add photos');
+      var ws3 = wStep(3, 'Step 3 of 4 · Write your post');
+      var ws4 = wStep(4, 'Step 4 of 4 · Tags &amp; options');
 
       // Step 1: title + forum
       if (wTitleLab) ws1.appendChild(wTitleLab);
@@ -1401,20 +1402,22 @@
       wEmpty.textContent = 'No photos yet — tap “Photo” to add one. (Optional)';
       ws2.appendChild(wEmpty);
 
-      // Step 3: body + tags + quick-tags + anon
+      // Step 3: body only (keyboard step — tags moved to step 4 so they don't get
+      // lost behind the keyboard, Ian 6/17).
       if (wHead) ws3.appendChild(wHead);
       if (wEditor) ws3.appendChild(wEditor);
       if (wBody) ws3.appendChild(wBody);
-      if (wTagsLab) ws3.appendChild(wTagsLab);
-      if (wTags) ws3.appendChild(wTags);
-      if (wQuick) ws3.appendChild(wQuick);
-      if (wAnon) ws3.appendChild(wAnon);
+      // Step 4: tags + quick-tags + anon → Post
+      if (wTagsLab) ws4.appendChild(wTagsLab);
+      if (wTags) ws4.appendChild(wTags);
+      if (wQuick) ws4.appendChild(wQuick);
+      if (wAnon) ws4.appendChild(wAnon);
 
       var wSteps = document.createElement('div'); wSteps.className = 'lg-fbc-steps';
-      wSteps.appendChild(ws1); wSteps.appendChild(ws2); wSteps.appendChild(ws3);
+      wSteps.appendChild(ws1); wSteps.appendChild(ws2); wSteps.appendChild(ws3); wSteps.appendChild(ws4);
 
       var wDots = document.createElement('div'); wDots.className = 'lg-fbc-dots';
-      wDots.innerHTML = '<i></i><i></i><i></i>';
+      wDots.innerHTML = '<i></i><i></i><i></i><i></i>';
 
       var wNav = document.createElement('div'); wNav.className = 'lg-fbc-nav';
       var wBack = document.createElement('button'); wBack.type = 'button'; wBack.className = 'lg-fbc-back';
@@ -1422,7 +1425,7 @@
       var wSp = document.createElement('span'); wSp.className = 'lg-fbc-nav__sp';
       var wNext = document.createElement('button'); wNext.type = 'button'; wNext.className = 'lg-fbc-next'; wNext.textContent = 'Next';
       wNav.appendChild(wBack); wNav.appendChild(wSp); wNav.appendChild(wNext);
-      if (wSubmit) wNav.appendChild(wSubmit);          // Post lives in the nav, step 3 only
+      if (wSubmit) wNav.appendChild(wSubmit);          // Post lives in the nav, last step only
       if (wStatus) wNav.appendChild(wStatus);
 
       var anchor = wActions || (wSubmit && wSubmit.parentNode) || form;
@@ -1433,11 +1436,11 @@
 
       var wCur = 1;
       function wShow(n) {
-        wCur = Math.max(1, Math.min(3, n));
-        [ws1, ws2, ws3].forEach(function (s) { s.classList.toggle('is-on', +s.dataset.step === wCur); });
+        wCur = Math.max(1, Math.min(4, n));
+        [ws1, ws2, ws3, ws4].forEach(function (s) { s.classList.toggle('is-on', +s.dataset.step === wCur); });
         [].forEach.call(wDots.children, function (d, i) { d.classList.toggle('on', i === wCur - 1); });
         wBack.querySelector('span').textContent = wCur === 1 ? 'Cancel' : 'Back';
-        if (wCur === 3) { wNext.style.display = 'none'; if (wSubmit) wSubmit.style.display = ''; }
+        if (wCur === 4) { wNext.style.display = 'none'; if (wSubmit) wSubmit.style.display = ''; }
         else { wNext.style.display = ''; if (wSubmit) wSubmit.style.display = 'none'; }
         try { form.scrollTop = 0; var dlg = form.closest('.ntm-dialog'); if (dlg) dlg.scrollTop = 0; } catch (e) {}
       }
