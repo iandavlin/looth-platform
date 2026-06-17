@@ -198,6 +198,9 @@ body{margin:0;background:var(--lg-cream);color:var(--lg-ink);font-family:var(--l
 .lg-idrow__pic img{width:100%;height:100%;object-fit:cover;border-radius:16px}
 .lg-idrow__cam{position:absolute;right:0;bottom:0;width:30px;height:30px;border-radius:50%;background:var(--lg-card-bg,#fff);
   border:1px solid var(--lg-line);cursor:pointer;font-size:calc(14px*var(--lg-read-scale,1));line-height:1}
+.lg-idrow__avrm{position:absolute;right:0;top:0;width:24px;height:24px;border-radius:50%;background:var(--lg-card-bg,#fff);
+  border:1px solid var(--lg-line);cursor:pointer;display:grid;place-items:center;color:var(--lg-mute,#6b6f6b);padding:0}
+.lg-idrow__avrm:hover{color:#b3261e;border-color:#b3261e}
 .lg-idrow__name{margin:0;font:800 calc(28px*var(--lg-read-scale,1))/1.1 var(--lg-font-serif);color:var(--lg-charcoal);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .lg-tierpill{font:800 calc(10px*var(--lg-read-scale,1))/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;background:var(--lg-amber);color:#4a3c10;border-radius:6px;padding:4px 9px}
 .lg-bizpill-wrap{margin:0 0 14px}
@@ -1420,6 +1423,17 @@ window.lgSortable = function (container, opts) {
         else { cam.innerHTML = CAM_HTML; alert('Upload failed: ' + (res.j && res.j.error || '?')); }
       })
       .catch(function () { cam.innerHTML = CAM_HTML; alert('Network error.'); });
+  });
+
+  // Remove-photo (owner, custom avatar only) → revert to the branded fallback.
+  var rm = document.querySelector('.lg-idrow__avrm');
+  if (rm) rm.addEventListener('click', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    if (!confirm('Remove your profile photo? You’ll go back to the default.')) return;
+    rm.disabled = true;
+    fetch('/profile-api/v0/me/avatar', { method: 'DELETE', credentials: 'include' })
+      .then(function (r) { if (r.ok) location.reload(); else { rm.disabled = false; alert('Remove failed.'); } })
+      .catch(function () { rm.disabled = false; alert('Network error.'); });
   });
 })();
 </script>

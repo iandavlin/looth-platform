@@ -993,6 +993,13 @@ function looth_render_header_block(array $header, string $role, string $headerVi
     if ($isOwner) echo '<button class="lg-idrow__cam" type="button" aria-label="Change avatar">'
         . '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'
         . '</button>';
+    // Remove-photo control: owner only, and only when a CUSTOM avatar is set (the
+    // branded default isn't a /profile-media/ url) → DELETE reverts to the fallback.
+    if ($isOwner && str_contains((string)$avatar, '/profile-media/avatars/')) {
+        echo '<button class="lg-idrow__avrm" type="button" aria-label="Remove photo" title="Remove photo">'
+            . '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+            . '</button>';
+    }
     echo '</div>';
 
     echo '<div class="lg-idrow__body">';

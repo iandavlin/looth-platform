@@ -31,15 +31,39 @@ use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Cache;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Media;
+use Looth\ProfileApp\Provision;
 use Looth\ProfileApp\R2;
 
 const LG_AVATAR_STORE    = '/srv/profile-app-media/avatars';
 const LG_AVATAR_URL_BASE = '/profile-media/avatars';
 const LG_AVATAR_MAX      = 5 * 1024 * 1024;   // 5 MB
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') profile_app_json(405, ['error' => 'method_not_allowed']);
-
 $user = Auth::requireUser();
+
+// DELETE → drop the custom photo and revert to the branded fallback (the same
+// Optimum default a photo-less member has). GCs the uploaded file from R2 + local
+// + cache twins; Media::unlinkUrl is a no-op if the stored url is already the
+// (non-/profile-media) default, so a double-delete is safe.
+if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+    $old = $user['avatar_url'] ?? null;
+    $pg  = Db::pg();
+    $pg->prepare('UPDATE users SET avatar_url = :u WHERE id = :i')
+       ->execute([':u' => Provision::DEFAULT_AVATAR_URL, ':i' => (int)$user['id']]);
+    Media::unlinkUrl($old);
+    // avatar_url is in the /whoami contract — purge so the shared header + mirrors
+    // re-pull the fallback (best-effort; never blocks the API).
+    try {
+        $b = $pg->prepare('SELECT wp_user_id FROM wp_user_bridge WHERE user_id = :u');
+        $b->execute([':u' => (int)$user['id']]);
+        $wpId = (int) $b->fetchColumn();
+        if ($wpId > 0) Cache::purgeWhoami($wpId);
+    } catch (Throwable $e) {
+        error_log('[me-avatar] whoami purge failed: ' . $e->getMessage());
+    }
+    profile_app_json(200, ['ok' => true, 'avatar_url' => Provision::DEFAULT_AVATAR_URL]);
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') profile_app_json(405, ['error' => 'method_not_allowed']);
 
 $file = $_FILES['avatar'] ?? null;
 if (!is_array($file)) profile_app_json(400, ['error' => 'avatar_file_required']);
