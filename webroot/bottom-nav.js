@@ -142,6 +142,14 @@
       '.lt-sheet__row{display:block;padding:12px 6px;color:var(--lg-ink,#323532);text-decoration:none;' +
         'border-radius:10px;font-weight:600}' +
       '.lt-sheet__row:active{background:var(--lg-sage-tint,#eef2e3)}' +
+      // Log out — a pill on the FAR RIGHT of the header (margin-left:auto pushes it
+      // opposite the avatar/View-profile), warm sign-out color, with a real tap
+      // target + breathing room so it's not misclicked next to View profile.
+      '.lt-sheet__logout{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;' +
+        'padding:9px 13px;border:1px solid rgba(198,104,69,.45);border-radius:999px;color:#c66845;' +
+        'font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:rgba(198,104,69,.06)}' +
+      '.lt-sheet__logout:active{background:rgba(198,104,69,.18)}' +
+      '.lt-sheet__logout svg{flex:0 0 auto}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
       // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
@@ -400,12 +408,27 @@
     var name = nameBtn ? (nameBtn.textContent || '').replace(/\s+/g, ' ').trim() : 'You';
     var src = avatarSrc();
     var head = document.createElement('div'); head.className = 'lt-sheet__head';
+    // Log out lives in the header, far-right (Ian 2026-06-17) — opposite the avatar/
+    // "View profile" so the two account actions are well separated (no misclick).
+    // Starts on the plain action URL; upgraded below to a NONCED one-tap URL.
+    var soLink     = document.querySelector('.lg-chrome__account-menu-signout, .lg-chrome__menu a[href*="action=logout"]');
+    var logoutHref = (soLink && soLink.getAttribute('href')) || '/wp-login.php?action=logout';
     head.innerHTML =
       '<span class="lt-sheet__avi">' + (src ? '<img src="' + src + '" alt="">' : '') + '</span>' +
       '<span class="lt-sheet__id"><span class="lt-sheet__name"></span>' +
-      '<a class="lt-sheet__view" href="/profile/edit">View profile</a></span>';
+      '<a class="lt-sheet__view" href="/profile/edit">View profile</a></span>' +
+      '<a class="lt-sheet__logout" href="' + logoutHref.replace(/"/g, '&quot;') + '">' +
+        '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>' +
+        '<span>Log out</span></a>';
     head.querySelector('.lt-sheet__name').textContent = name;
     sheet.appendChild(head);
+    // Upgrade to a NONCED one-tap logout (auth.php runs on the WP pool and can mint
+    // it) so we skip WordPress's "Do you really want to log out?" confirm page.
+    var loEl = head.querySelector('.lt-sheet__logout');
+    fetch('/bb-mirror-api/v0/auth.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.logout_url && loEl) loEl.href = d.logout_url; })
+      .catch(function () {});
 
     // Pull-down-to-close: grab the handle (or the header) and drag down to dismiss
     // (Buck 2026-06-08 — previously only the backdrop tap closed it). A drag past a
