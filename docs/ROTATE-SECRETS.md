@@ -6,9 +6,18 @@
 **Author:** build chat, 2026-06-17. Anchored to real locations recon'd on dev1; `[VERIFY]` =
 location/var-name not fully confirmed — confirm before rotating that line.
 
-> **Why now is cheap:** the cut uses the TOP-OFF plan → **everyone re-logins anyway**. So the
-> WP salt rotation (which invalidates all sessions) costs nothing extra if done in the same
-> window. Do the session-invalidating rotations (WP salts, JWT) first, before users stream back in.
+> **⚠️ LAUNCH IS WITH LIVE SALTS (Ian 2026-06-17).** We deliberately carry the LIVE WP keys+salts
+> (`/etc/looth/live-wp-keys.php`) so live login cookies stay valid across the flip — **users stay
+> logged in, no forced re-login at cut.** This REVERSES the earlier top-off "everyone re-logins"
+> assumption. Therefore:
+> - Rotating the WP salts is **NOT free** anymore — it WILL log everyone out. It's a **separate,
+>   scheduled session-reset event**, not a freebie folded into the cut window.
+> - The live salts are genuine prod secrets (not dev/test), so rotating them is **lower priority /
+>   optional** — do it only if you want a clean break from old-live. The dev-CARRIED secrets (JWT,
+>   R2 clone, internal/app-to-app, DB passwords) are the urgent ones; rotate those first.
+> - For carried sessions to actually validate, the users' `wp_usermeta` `session_tokens` rows must
+>   come over with the live salts — **flag to the top-off lane** (additive/missing-rows-only skips
+>   users already on the dev mirror, so their tokens may not be the live ones).
 
 ---
 
@@ -35,6 +44,9 @@ After EACH group: run the §Verification checklist before moving on.
 | `AUTH_KEY` `SECURE_AUTH_KEY` `LOGGED_IN_KEY` `NONCE_KEY` + matching `*_SALT` (8 total) | logs out every WP session |
 | `WP_CACHE_KEY_SALT` | invalidates object-cache keys (harmless, repopulates) |
 | `LG_INTERNAL_SECRET` | **app-to-app** — see §D, rotate in lockstep, NOT here alone |
+
+> **Launch state:** these 8 are the **LIVE** salts (from `/etc/looth/live-wp-keys.php`), carried so
+> sessions survive the flip. Rotating them = a deliberate all-user logout; schedule it as its own event.
 
 **Rotate (the 8 auth keys+salts):**
 ```bash
