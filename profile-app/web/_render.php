@@ -140,7 +140,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $isOwner ? 'Edit your profile' : looth_h($displayName) ?> · Looth</title>
-<link rel="stylesheet" href="/profile/edit/edit.css">
+<link rel="stylesheet" href="/profile/edit/edit.css?v=<?= @filemtime(__DIR__ . '/edit.css') ?: '1' ?>">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <script>window.LOOTH_BOOT = <?= $bootstrap ?>;</script>
 </head>
@@ -255,7 +255,13 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
   <div class="modal-head"><h2>Edit location</h2><button class="close" data-close>✕</button></div>
   <div class="modal-body">
     <div class="field"><label>Location</label>
-      <input type="text" id="f-loc" placeholder="Start typing a city or address…" value="<?= looth_h($loc['text'] ?? '') ?>" autocomplete="off">
+      <?php if (!empty($loc['text'])): ?>
+      <div class="loc-current" id="loc-current">
+        <span class="loc-current__text" id="loc-current-text"><?= looth_h($loc['text']) ?></span>
+        <button type="button" class="link-btn" id="loc-change">Change location</button>
+      </div>
+      <?php endif; ?>
+      <input type="text" id="f-loc" placeholder="Type a city or address…" value="" autocomplete="off"<?= !empty($loc['text']) ? ' hidden' : '' ?>>
       <div class="loc-picker typeahead" id="loc-picker" hidden></div>
       <div class="loc-empty-state" id="loc-empty-state" hidden>
         No matches — try a more general place.
@@ -391,7 +397,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
 <?php endif; ?>
 
 <?php lg_shared_render_site_footer(['logo_url' => LG_PROFILE_APP_LOGO_URL]); ?>
-<script src="/profile/edit/edit.js"></script>
+<script src="/profile/edit/edit.js?v=<?= @filemtime(__DIR__ . '/edit.js') ?: '1' ?>"></script>
 </body>
 </html>
 <?php
@@ -401,7 +407,7 @@ function looth_render_claim_interstitial(array $user): void {
     $name = looth_h($user['display_name'] ?: 'there');
 ?>
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Start your profile · Looth</title><link rel="stylesheet" href="/profile/edit/edit.css"></head>
+<title>Start your profile · Looth</title><link rel="stylesheet" href="/profile/edit/edit.css?v=<?= @filemtime(__DIR__ . '/edit.css') ?: '1' ?>"></head>
 <body class="interstitial"><div class="interstitial-card">
   <h1>Welcome, <?= $name ?></h1>
   <p>Your profile hasn't been started yet. One click and you're in — you can fill anything in later.</p>
@@ -430,7 +436,7 @@ function looth_render_login_interstitial(string $back = '/profile/edit'): void {
            . urlencode('https://' . LG_PROFILE_APP_HOST . $back);
 ?>
 <!doctype html><html><head><meta charset="utf-8"><title>Sign in to edit · Looth</title>
-<link rel="stylesheet" href="/profile/edit/edit.css"></head>
+<link rel="stylesheet" href="/profile/edit/edit.css?v=<?= @filemtime(__DIR__ . '/edit.css') ?: '1' ?>"></head>
 <body class="interstitial"><div class="interstitial-card">
   <h1>Sign in to edit your profile</h1>
   <p>This page lives outside WordPress, so you'll bounce through the WP login and come right back.</p>

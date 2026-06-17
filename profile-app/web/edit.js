@@ -253,6 +253,16 @@
     const empty  = $('#loc-empty-state');
     if (!input || !picker) return;
 
+    // "Change location" → clear the field and reveal an empty input. No sticky
+    // pre-fill, so a new entry cleanly OVERWRITES instead of refusing. When the
+    // location is taken off the profile the field stays cleared. (Ian 6/17)
+    const changeBtn = $('#loc-change');
+    const current   = $('#loc-current');
+    changeBtn && changeBtn.addEventListener('click', () => {
+      if (current) current.hidden = true;
+      input.hidden = false; input.value = ''; input.focus();
+    });
+
     let timer = null, lastQ = '', hover = -1, items = [];
 
     function clearPicker() { picker.hidden = true; picker.innerHTML = ''; items = []; hover = -1; empty.hidden = true; }
