@@ -60,7 +60,11 @@ if (!function_exists('get_post')) {
         echo json_encode(['error' => 'no wp-load.php found']);
         exit;
     }
-    if (!isset($_SERVER['HTTP_HOST'])) $_SERVER['HTTP_HOST'] = $wp_host;
+    // Prefer the shared /etc/looth/env host (dev2 etc.) over the path-derived
+    // default; falls back to $wp_host when the file is absent (dev1 unchanged).
+    if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+    $lg_shared = function_exists('lg_env') ? lg_env() : [];
+    if (!isset($_SERVER['HTTP_HOST'])) $_SERVER['HTTP_HOST'] = $lg_shared['host'] ?? $wp_host;
     if (!defined('WP_USE_THEMES'))     define('WP_USE_THEMES', false);
     require $wp_load;
 }
