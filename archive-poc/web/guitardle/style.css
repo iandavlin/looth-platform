@@ -1039,6 +1039,27 @@ body.is-embed .refresh-warning {
     margin: 2px 16px 8px;
 }
 
+/* Mobile embed (<=499px): the standalone phone layout pins the keyboard to the
+   viewport bottom and stretches .game-main to 100dvh. Inside the iframe the
+   "viewport" is the parent-sized frame, so 100dvh feeds the postMessage height
+   pipe into a runaway loop (frame grew to ~6000px) and the fixed keyboard
+   landed at the bottom of that giant frame — the game was unusable on phones.
+   In embed mode let the board + keyboard flow inline and size to real content;
+   the desktop embed overrides above already neutralise the >=500px card. */
+@media (max-width: 499px) {
+    body.is-embed .game-main {
+        min-height: 0;
+        padding-bottom: 24px;
+    }
+    body.is-embed .game-main.game-over {
+        padding-bottom: 24px;
+    }
+    body.is-embed .keyboard {
+        position: static;
+        padding: 8px 16px 12px;
+    }
+}
+
 /* ============================================================
    WEEKLY LEADERBOARD (crown chip in the menu bar + overlay)
    ============================================================ */

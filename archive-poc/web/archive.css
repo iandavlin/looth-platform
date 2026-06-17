@@ -3614,7 +3614,10 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__arr { transfor
 }
 
 /* Centered game modal — hides (never destroys) so a mid-game close keeps the round */
-.gdle-modal { position: fixed; inset: 0; z-index: 240; }
+/* Above the site shell's fixed mobile chrome — the bottom tabbar (z 2147481200)
+   and PWA install banner (z 2147483000) otherwise render OVER this modal on
+   phones, covering the Play button + on-screen keyboard. */
+.gdle-modal { position: fixed; inset: 0; z-index: 2147483600; }
 .gdle-modal[hidden] { display: none; }
 .gdle-modal__back { position: absolute; inset: 0; background: rgba(26, 24, 20, .5); cursor: pointer; }
 .gdle-modal__panel {

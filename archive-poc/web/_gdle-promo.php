@@ -21,8 +21,14 @@
  * auto-opens the modal).
  */
 $gdle_compact = !empty($gdle_compact);
+// Bust the iframe cache on the NEWEST of the three game assets — editing
+// style.css or index.html alone (not game.js) must still reload the embed.
+$gdle_v = 1;
+foreach (['guitardle/game.js', 'guitardle/style.css', 'guitardle/index.html'] as $gdle_asset) {
+    $gdle_v = max($gdle_v, (int) @filemtime(__DIR__ . '/' . $gdle_asset));
+}
 $gdle_src = '/archive-poc/guitardle/index.html?embed=1&aud=' . ($is_member ? 'm' : 'p')
-          . '&v=' . (@filemtime(__DIR__ . '/guitardle/game.js') ?: '1');
+          . '&v=' . $gdle_v;
 
 // The board always shows FIVE slots (Ian 6/12): leaders fill from the top,
 // the rest render as open-spot placeholders — never a collapsed/empty card.
