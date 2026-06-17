@@ -20,7 +20,13 @@ if (defined('LG_EVENTS_ENV_LOADED')) return;
 define('LG_EVENTS_ENV_LOADED', true);
 
 /* ---------- env detection ---------- */
-$env = getenv('LG_EVENTS_ENV');
+// Prefer the shared /etc/looth/env (one source of truth across every app);
+// fall back to this app's own detection when the file is absent (e.g. dev1),
+// so any box without it behaves EXACTLY as before. See lg-shared/lg-env.php.
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+$shared = function_exists('lg_env') ? lg_env() : [];
+
+$env = $shared['env'] ?? getenv('LG_EVENTS_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
     $env = ( str_starts_with((string)$host, 'dev.')
@@ -38,7 +44,8 @@ define('LG_EVENTS_ENV', $env);
 $ev_host_fallback = getenv('LG_EVENTS_PUBLIC_HOST')
     ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
 $ev_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
-define('LG_EVENTS_HOST', $ev_req_host !== '' ? $ev_req_host : $ev_host_fallback);
+// Shared host (if /etc/looth/env present) is authoritative; else request-derived, else fallback.
+define('LG_EVENTS_HOST', $shared['host'] ?? ($ev_req_host !== '' ? $ev_req_host : $ev_host_fallback));
 define('LG_EVENTS_PUBLIC_PATH',  '/events');                 // nginx mount (takes over /events/)
 define('LG_EVENTS_TABLE_PREFIX', 'wp_');
 define('LG_EVENTS_DB_SECRET',    '/etc/lg-events-db');
