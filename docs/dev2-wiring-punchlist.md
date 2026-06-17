@@ -112,6 +112,42 @@ it never touches files on disk or out-of-tree data stores. These are the misses.
     (backup + lint each) to: archive-poc, events, membership-pages, bb-mirror config.php. Now
     their CLI/cron resolves the dev-class env (correct DB) on dev2, not `live`.
 
+## FIXED (round 6 — 2026-06-17 NEW-box rebuild, ip-172-31-64-120)
+Dev2 was rebuilt from scratch on a fresh blank box (the prior dev2 EBS was gone). It re-hit the
+same class of traps. The genuinely NEW/most-important ones:
+14. **`profile-app` MySQL reader user MISSING → provisioning dead system-wide** (THE big one).
+    Symptom: WP login works + admin reachable, but the **entire front end reads logged-out**, and a
+    fresh Patreon onboard leaves the user with a WP account + Patreon row + `_looth_uuid` but **no
+    `profile_app.users`/bridge row** → whoami anon → "login failure." Root cause surfaced via
+    `reconcile-bridge.php`: `PDOException SQLSTATE[1045] Access denied for 'profile-app'@'localhost'
+    (using password: NO)`. profile-app connects to MySQL via **unix_socket as its own OS user** to
+    read `wp_users` during provision; that MySQL user didn't exist on the rebuild (the seed created
+    the WP `DB_USER` + membership user but missed the per-app readers). **FIX (system, not per-user):**
+    `CREATE USER 'profile-app'@'localhost' IDENTIFIED VIA unix_socket; GRANT SELECT ON looth_import.*,
+    lg_membership.*, looth_dev.* `. After that, `reconcile-bridge.php` ran clean (created 2 orphans
+    from the broken window, 1818 existing, 0 errors) and onboarded users provision on their own.
+    ⚠️ At the cut, recreate this MySQL reader on the live box too (mirror dev1's `mysql.user`).
+15. **archive-poc / bb-mirror REQUEST-path env misdetect → `/var/www/html` path foul.** Distinct from
+    #12/#13 (those were CLI). Their config only branches `dev.`-prefix vs `live`; `dev2.loothgroup.com`
+    does NOT start with `dev.` → resolves **`live`** → loads WP from `/var/www/html/wp-load.php`
+    (absent) → fatal → user reads anon → **front end logged-out + `card-react`/`save-post` 500s**.
+    **FIX:** `env[LG_ARCHIVE_POC_ENV]=dev` + `env[LG_BB_MIRROR_ENV]=dev` (the config's own pool-override
+    hook) in the **archive-poc, bb-mirror, AND looth-dev** pools — looth-dev serves `/archive-api/v0/*`
+    (card-react/save-post). Applied **identically to dev1** (Ian) so the boxes don't diverge.
+    `PUBLIC_HOST` is the per-box name (`dev`/`dev2`). NOT a code change — a config knob.
+16. **3 secret files + their ACLs missing** → carried dev1→dev2 with `rsync -aAX`:
+    `/etc/lg-profile-app-secret` (root:profile-app, == WP `profile_hook_secret`),
+    `/etc/lg-internal-secret` (root:www-data, ACL `u:profile-app:r`), `/etc/lg-membership-db`
+    (root:membership). Plus the `/etc/looth/jwt-private.pem` `group:profile-app:r--` ACL (preserved by
+    `-A`). Without the hook secret, provision auth is empty (compounds #14).
+17. **`/home/ubuntu` traverse bit** — fresh box defaults `0750`; the strangler apps are symlinked
+    through it (`/srv/bb-mirror`→`/home/ubuntu/worktrees/...`), so nginx/www-data couldn't traverse →
+    **every strangler surface 403'd**. FIX: `chmod o+x /home/ubuntu` (→ `0751`, matches dev1).
+18. **Live salts** (Ian-provided) written into dev2 `wp-config.php` + staged `/etc/looth/live-wp-keys.php`
+    so live login cookies validate across the flip (launch-with-live-salts decision, 6/17).
+- Pattern confirmed (Ian): every dev2 break is a **name** (siteurl, mu-plugin cookie domain/iss,
+  env→WP-path) or a **permission** (`/home/ubuntu` traverse, the 3 secrets+ACLs, the MySQL reader grant).
+
 ## STATUS @ end of 2026-06-16 wiring session
 - drift-check: **28 aligned / 15 drift / 1 FAIL** (was 25/.../4). Endpoints `/ /hub/ /sponsors/
   /archive-poc/ /whoami /u/<slug>` all 200. Timers firing. Onboard→login→delete all verified.
