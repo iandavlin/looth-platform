@@ -127,6 +127,32 @@
       '  html.lgdd .gmaps-filters .dir-sort button.on{background:#6b7c52!important;color:#fff!important}',
       '  html.lgdd .gmaps-filters__foot .apply{background:#6b7c52!important;border-color:#6b7c52!important;color:#fff!important}',
 
+      // unified members+places suggest dropdown (under the search bar, over the map)
+      '  html.lgdd #lgdd-suggest{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:1100;' +
+        'background:#fff;border:1px solid var(--lg-line);border-radius:14px;box-shadow:0 12px 30px rgba(26,29,26,.22);' +
+        'max-height:62vh;overflow:auto;padding:4px;display:none}',
+      '  html.lgdd #lgdd-suggest.open{display:block}',
+      '  html.lgdd .lgdd-sg-h{font:700 11px/1 var(--lg-font-sans);letter-spacing:.06em;text-transform:uppercase;' +
+        'color:var(--lg-mute);padding:10px 12px 6px}',
+      '  html.lgdd .lgdd-sg{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;' +
+        'cursor:pointer;padding:9px 12px;border-radius:9px}',
+      '  html.lgdd .lgdd-sg:hover{background:var(--lg-sage-tint)}',
+      '  html.lgdd .lgdd-sg-ic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--lg-sage-tint);' +
+        'color:var(--lg-sage-d);display:flex;align-items:center;justify-content:center}',
+      '  html.lgdd .lgdd-sg-ic svg{width:16px;height:16px}',
+      '  html.lgdd .lgdd-sg-tx{min-width:0;display:flex;flex-direction:column;gap:1px}',
+      '  html.lgdd .lgdd-sg-t{font:600 14.5px/1.2 var(--lg-font-sans);color:var(--lg-ink);' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '  html.lgdd .lgdd-sg-s{font:12.5px/1.2 var(--lg-font-sans);color:var(--lg-mute);' +
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      // light-lock the dropdown too — it floats over the always-light map, stays light in dark theme
+      '  html.lgdd #lgdd-suggest{background:#fff!important;border-color:#e3ddd0!important}',
+      '  html.lgdd .lgdd-sg-h{color:#6b6f6b!important}',
+      '  html.lgdd .lgdd-sg-ic{background:#eef2e3!important;color:#6b7c52!important}',
+      '  html.lgdd .lgdd-sg:hover{background:#eef2e3!important}',
+      '  html.lgdd .lgdd-sg-t{color:#1a1d1a!important}',
+      '  html.lgdd .lgdd-sg-s{color:#6b6f6b!important}',
+
       // list card: hover-sync highlight
       '  html.lgdd .dir-card{cursor:pointer}',
       '  html.lgdd .dir-card.is-hot{border-color:var(--lg-sage);box-shadow:0 6px 18px rgba(26,29,26,.14)}',
@@ -255,22 +281,143 @@
       if (!pop.hidden && !pop.contains(e.target) && e.target !== filtBtn && !filtBtn.contains(e.target)) closeF();
     });
 
-    // wire: clear button (drops the location pin and re-queries)
-    var loc = document.getElementById('dir-loc');
-    function syncClear() { clear.hidden = !(loc && loc.value.trim()); }
-    if (loc) {
-      loc.setAttribute('placeholder', 'Search city or area');   // clearer, Google-Maps-like
-      loc.addEventListener('input', syncClear);
-      syncClear();
+    // wire: unified members+places autocomplete (parity with directory-mobile.js).
+    // The canonical page wires a Nominatim location autocomplete onto #dir-loc whose
+    // dropdown is a child of .filt.loc; left in place it would fight our dropdown. So
+    // (exactly like the mobile layer) clone+replace #dir-loc to STRIP those listeners,
+    // keep id='dir-loc' so the page's buildQs()/applyFilters() still read it, then
+    // attach our own instant-members + debounced-places suggester.
+    var origLoc = document.getElementById('dir-loc');
+    if (origLoc) {
+      var loc = origLoc.cloneNode(true);
+      loc.value = origLoc.value;
+      origLoc.parentNode.replaceChild(loc, origLoc);
+      loc.setAttribute('placeholder', 'Search members or a place');
+      loc.setAttribute('autocomplete', 'off');
+      wireUnifiedSearch(loc, clear, filterbar);
     }
+  }
+
+  // ---------- unified autocomplete (members + places) ----------
+  // Port of directory-mobile.js's wireUnifiedSearch onto the desktop bar: MEMBERS come
+  // from a one-shot fetch of the pin index (names + coords, matched instantly/locally);
+  // PLACES come from Nominatim (debounced). Picking a member runs the canonical member
+  // zoom (dirCluster.zoomToShowLayer → dirMap.setView + popup) — the desktop map-driven
+  // list then re-centers on them; picking a place drives #dir-lat/#dir-lng + applyFilters
+  // (which fitBounds the map), identical to the location search it replaces.
+  function sEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  var SICO_PERSON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>';
+  var SICO_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+  function wireUnifiedSearch(loc, clear, filterbar) {
+    // dropdown anchors to .dir-filterbar (the over-map positioning context), under the bar.
+    var dd = document.createElement('div'); dd.id = 'lgdd-suggest';
+    filterbar.appendChild(dd);
+
+    var members = [];
+    fetch('/profile-api/v0/directory/members?pins=1', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.pins) members = d.pins.map(function (p) { return { slug: p.slug, name: p.display_name || '', lat: p.lat, lng: p.lng, text: p.text || '' }; });
+      })
+      .catch(function () {});
+
+    function syncClear() { clear.hidden = !(loc.value && loc.value.trim()); }
+    function close() { dd.classList.remove('open'); }
+    function open() { if (dd.children.length) dd.classList.add('open'); }
+    function groupH(label) { var g = document.createElement('div'); g.className = 'lgdd-sg-h'; g.textContent = label; return g; }
+    function row(ico, title, sub, onpick) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'lgdd-sg';
+      b.innerHTML = '<span class="lgdd-sg-ic">' + ico + '</span><span class="lgdd-sg-tx"><span class="lgdd-sg-t">' + sEsc(title) + '</span>' + (sub ? '<span class="lgdd-sg-s">' + sEsc(sub) + '</span>' : '') + '</span>';
+      b.addEventListener('click', onpick);
+      return b;
+    }
+    function memberMatches(q) {
+      var ql = q.toLowerCase(), starts = [], contains = [];
+      for (var i = 0; i < members.length; i++) {
+        var n = (members[i].name || '').toLowerCase();
+        if (!n) continue;
+        if (n.indexOf(ql) === 0) starts.push(members[i]);
+        else if (n.indexOf(ql) > -1) contains.push(members[i]);
+        if (starts.length >= 5) break;
+      }
+      return starts.concat(contains).slice(0, 5);
+    }
+    function pickMember(m) {
+      loc.value = m.name; syncClear(); close();
+      // Canonical member zoom: zoomToShowLayer opens the cluster then setView+popup. The
+      // desktop moveend handler re-queries the list anchored on the new center, so the
+      // picked member lands at the top — no need to touch #dir-lat/#dir-lng here.
+      try {
+        var rec = (typeof pinMarkerBySlug !== 'undefined' && pinMarkerBySlug) ? pinMarkerBySlug[m.slug] : null;
+        if (rec && typeof dirCluster !== 'undefined' && dirCluster && dirCluster.zoomToShowLayer) {
+          dirCluster.zoomToShowLayer(rec.marker, function () {
+            dirMap.setView([rec.lat, rec.lng], Math.max(dirMap.getZoom(), 13), { animate: true });
+            rec.openPin ? rec.openPin() : rec.marker.openPopup();
+          });
+        } else if (typeof dirMap !== 'undefined' && dirMap && m.lat != null) {
+          dirMap.setView([m.lat, m.lng], 13, { animate: true });   // gated/clustered fallback
+        }
+      } catch (e) {}
+    }
+    function pickPlace(lat, lng, label) {
+      var la = document.getElementById('dir-lat'), ln = document.getElementById('dir-lng');
+      if (la) la.value = lat; if (ln) ln.value = lng;
+      loc.value = label; syncClear(); close();
+      try { if (typeof applyFilters === 'function') applyFilters(); } catch (e) {}   // fitBounds the filtered pins
+    }
+    function buildMembers(q) {
+      dd.innerHTML = '';
+      var mem = memberMatches(q);
+      if (mem.length) {
+        dd.appendChild(groupH('Members'));
+        mem.forEach(function (m) { dd.appendChild(row(SICO_PERSON, m.name, m.text, function () { pickMember(m); })); });
+      }
+      if (dd.children.length) open(); else close();
+    }
+    var placeTimer = null, lastPlaceQ = null;
+    function summarize(rw) { var a = rw.address || {}; var city = a.city || a.town || a.village || a.hamlet || a.suburb; var parts = [city, a.state, a.country].filter(Boolean); return parts.length ? parts.join(', ') : (rw.display_name || '').slice(0, 70); }
+    function fetchPlaces(q) {
+      clearTimeout(placeTimer);
+      if (q.length < 3) return;
+      placeTimer = setTimeout(function () {
+        if (q === lastPlaceQ) return; lastPlaceQ = q;
+        fetch('https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=4&q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (rows) {
+            if (loc.value.trim() !== q) return;                    // stale
+            var items = (Array.isArray(rows) ? rows : []).slice(0, 4);
+            if (!items.length) return;
+            dd.appendChild(groupH('Places'));
+            items.forEach(function (rw) { dd.appendChild(row(SICO_PIN, summarize(rw), '', function () { pickPlace(rw.lat, rw.lon, summarize(rw)); })); });
+            open();
+          })
+          .catch(function () {});
+      }, 550);                                                      // Nominatim ≤1 req/sec
+    }
+
+    var inputTimer = null;
+    loc.addEventListener('input', function () {
+      syncClear();
+      var q = loc.value.trim();
+      clearTimeout(inputTimer);
+      if (q.length < 2) { close(); dd.innerHTML = ''; lastPlaceQ = null; return; }
+      inputTimer = setTimeout(function () { buildMembers(q); fetchPlaces(q); }, 110);
+    });
+    loc.addEventListener('focus', function () { if (loc.value.trim().length >= 2 && dd.children.length) open(); });
+    loc.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    document.addEventListener('click', function (e) {
+      var bar = document.querySelector('.gmaps-search');
+      if (!dd.contains(e.target) && !(bar && bar.contains(e.target))) close();
+    });
     clear.addEventListener('click', function () {
-      if (!loc) return;
       loc.value = '';
       var la = document.getElementById('dir-lat'), ln = document.getElementById('dir-lng');
       if (la) la.value = ''; if (ln) ln.value = '';
-      syncClear(); loc.focus();
+      syncClear(); close(); dd.innerHTML = ''; lastPlaceQ = null;
       try { if (typeof applyFilters === 'function') applyFilters(); } catch (e) {}
+      loc.focus();
     });
+    syncClear();
   }
 
   // ---------- hover-sync (card <-> pin) ----------

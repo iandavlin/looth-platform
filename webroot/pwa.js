@@ -122,7 +122,7 @@
     // Coarse pointers can rotate across the 640 split — give them both layers
     // (each self-gates at init); fine pointers load only the matching one.
     if (coarse || mqPhone) inject('looth-dir-mobile-js', '/directory-mobile.js?v=12');
-    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=12');
+    if (coarse || !mqPhone) inject('looth-dir-desktop-js', '/directory-desktop.js?v=13');
   }
 
   (function () {
