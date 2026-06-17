@@ -59,6 +59,8 @@ if ($method === 'DELETE') {
 
 if ($method !== 'POST') profile_app_json(405, ['error' => 'method_not_allowed']);
 
+profile_app_rate_gate('upload:' . $uuid, 30, 300);
+
 $file = $_FILES['resume'] ?? null;
 if (!is_array($file)) profile_app_json(400, ['error' => 'resume_file_required']);
 if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {

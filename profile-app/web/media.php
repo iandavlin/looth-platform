@@ -60,29 +60,40 @@ if ($resizable) {
     // Versioned (?v=) / random gallery filenames mean a replaced image gets a NEW
     // name, so a cached variant is never stale — generate only on a cache miss.
     if (!is_file($dst)) {
-        // Source bytes: the local original (pre-migration) first, else R2 (the store).
-        $localSrc = $root . '/' . $class . '/' . strtolower($uuid) . '/' . $file;
-        $bytes = is_file($localSrc) ? @file_get_contents($localSrc) : false;
-        if (($bytes === false || $bytes === '') && R2::enabled()) {
-            $bytes = R2::get($class . '/' . strtolower($uuid) . '/' . $file);
-        }
-        if (is_string($bytes) && $bytes !== '') {
-            try {
-                $im = @imagecreatefromstring($bytes);
-                if ($im) {
-                    $ow = imagesx($im); $oh = imagesy($im);
-                    if ($ow > $w) {
-                        $nh = (int)round($oh * $w / $ow);
-                        $out = imagecreatetruecolor($w, $nh);
-                        imagealphablending($out, false); imagesavealpha($out, true);
-                        imagecopyresampled($out, $im, 0, 0, 0, 0, $w, $nh, $ow, $oh);
-                        imagedestroy($im); $im = $out;
-                    }
-                    @mkdir(dirname($dst), 0775, true);
-                    @imagewebp($im, $dst, 82);
-                    imagedestroy($im);
+        // Per-variant lock so a cold-cache burst doesn't fetch+resize the SAME image
+        // N times (thundering herd): the first request builds, the rest block on the
+        // lock then serve the freshly-built cache. The R2 fetch inside is capped by
+        // R2's own 5s read timeout, so the critical section is bounded.
+        @mkdir(dirname($dst), 0775, true);
+        $lh = @fopen($dst . '.lock', 'c');
+        if ($lh && flock($lh, LOCK_EX)) {
+            if (!is_file($dst)) {   // recheck — another holder may have just built it
+                $localSrc = $root . '/' . $class . '/' . strtolower($uuid) . '/' . $file;
+                $bytes = is_file($localSrc) ? @file_get_contents($localSrc) : false;
+                if (($bytes === false || $bytes === '') && R2::enabled()) {
+                    $bytes = R2::get($class . '/' . strtolower($uuid) . '/' . $file);
                 }
-            } catch (\Throwable $e) { /* fall through to original */ }
+                if (is_string($bytes) && $bytes !== '') {
+                    try {
+                        $im = @imagecreatefromstring($bytes);
+                        if ($im) {
+                            $ow = imagesx($im); $oh = imagesy($im);
+                            if ($ow > $w) {
+                                $nh = (int)round($oh * $w / $ow);
+                                $out = imagecreatetruecolor($w, $nh);
+                                imagealphablending($out, false); imagesavealpha($out, true);
+                                imagecopyresampled($out, $im, 0, 0, 0, 0, $w, $nh, $ow, $oh);
+                                imagedestroy($im); $im = $out;
+                            }
+                            @imagewebp($im, $dst, 82);
+                            imagedestroy($im);
+                        }
+                    } catch (\Throwable $e) { /* fall through to original */ }
+                }
+            }
+            flock($lh, LOCK_UN); fclose($lh); @unlink($dst . '.lock');
+        } elseif ($lh) {
+            fclose($lh);
         }
     }
     if (is_file($dst)) {

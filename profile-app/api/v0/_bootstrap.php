@@ -12,6 +12,32 @@ function profile_app_json(int $status, array $body): void
 }
 
 /**
+ * Per-key sliding-window rate gate (file-backed — no Redis on this box). Used to
+ * cap user uploads (R2 write cost + churn). FAIL-OPEN on any fs error so a
+ * transient problem never blocks legitimate uploads; sends 429 + exits when over.
+ */
+function profile_app_rate_gate(string $key, int $max, int $windowSec): void
+{
+    $dir = sys_get_temp_dir() . '/lg-rate';
+    if (!is_dir($dir)) @mkdir($dir, 0700, true);
+    $fh = @fopen($dir . '/' . hash('sha256', $key), 'c+');
+    if (!$fh) return;                                  // fail-open
+    if (!flock($fh, LOCK_EX)) { fclose($fh); return; }
+    $now = time();
+    $ts  = array_values(array_filter(
+        array_map('intval', explode("\n", trim((string) stream_get_contents($fh)))),
+        static fn ($t) => $t > $now - $windowSec
+    ));
+    if (count($ts) >= $max) {
+        flock($fh, LOCK_UN); fclose($fh);
+        profile_app_json(429, ['error' => 'rate_limited', 'retry_after' => $windowSec]);
+    }
+    $ts[] = $now;
+    ftruncate($fh, 0); rewind($fh); fwrite($fh, implode("\n", $ts)); fflush($fh);
+    flock($fh, LOCK_UN); fclose($fh);
+}
+
+/**
  * Is $host within the looth_id cookie's own site (*.loothgroup.com)? That is
  * exactly the set of origins a victim's browser could carry the cookie to, so
  * it is the correct allowlist for a same-site CSRF check.

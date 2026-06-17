@@ -65,6 +65,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') profile_app_json(405, ['error' => 'method_not_allowed']);
 
+profile_app_rate_gate('upload:' . strtolower((string)$user['uuid']), 30, 300);
+
 $file = $_FILES['avatar'] ?? null;
 if (!is_array($file)) profile_app_json(400, ['error' => 'avatar_file_required']);
 if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
