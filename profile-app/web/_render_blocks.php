@@ -201,11 +201,29 @@ function looth_render_gallery_block(int $userId, string $role, string $headerVis
         echo '<div class="lg-carousel__viewport"><div class="lg-carousel__track">';
     }
 
+    // Resizer: gallery files are served by media.php, which resizes via ?w= (same
+    // buckets as /img.php). Grid cells are small squares; the carousel is a wide
+    // 16/9 hero — different ladders. data-url stays the RAW full-res URL (owner-save
+    // reads it back; there is no lightbox), so only the <img> gets resized.
+    if ($isCar) {
+        $imgW   = 960;
+        $ladder = [400, 600, 800, 960, 1200, 1600];
+        $sizes  = '(max-width: 760px) 100vw, 710px';
+        $iw = 1280; $ih = 720;
+    } else {
+        $imgW   = 400;
+        $ladder = [240, 400, 480, 600];
+        $sizes  = '(max-width: 520px) 45vw, 200px';
+        $iw = 400; $ih = 400;
+    }
     foreach ($images as $im) {
         $url = (string)($im['url'] ?? '');
         $cap = (string)($im['caption'] ?? '');
+        $rz  = static fn(int $w): string => looth_h($url . (str_contains($url, '?') ? '&' : '?') . 'w=' . $w);
+        $srcset = implode(', ', array_map(static fn(int $w): string => $rz($w) . ' ' . $w . 'w', $ladder));
         echo '<figure class="lg-gphoto" data-url="' . looth_h($url) . '">'
-           . '<img src="' . looth_h($url) . '" alt="' . looth_h($cap) . '" loading="lazy" decoding="async">';
+           . '<img src="' . $rz($imgW) . '" srcset="' . $srcset . '" sizes="' . $sizes . '"'
+           . ' width="' . $iw . '" height="' . $ih . '" alt="' . looth_h($cap) . '" loading="lazy" decoding="async">';
         if ($isOwner) echo '<button type="button" class="lg-gphoto__rm" aria-label="Remove">×</button>';
         if ($cap !== '') echo '<figcaption>' . looth_h($cap) . '</figcaption>';
         echo '</figure>';
