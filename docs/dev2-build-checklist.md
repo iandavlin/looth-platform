@@ -271,4 +271,12 @@ flipped `/srv/bb-mirror` symlink → the clone's `bb-mirror/`. Old plain-files t
   only; the "Active discussions" row reads `forums.topic`/`forum` directly (the `content_item kind=discussion`
   sync was retired 6/5). **Without it the front page 500s for members.** Applied on dev; re-run on dev2 AND live PG.
   (Also a dev2-deploy prereq: archive-poc is plain files on dev2 → e2ac627 ships as a .well-known bundle, and the grant must be run before/with it.)
+- ☐ **`/etc/looth/env` flip (env consolidation):** every app's config.php now prefers the shared
+  `/etc/looth/env` (via `lg-shared/lg-env.php` → `lg_env()`) for `LG_ENV` + `LG_PUBLIC_HOST`, falling
+  back to its own detection when the file is absent. On dev2 the file reads `LG_ENV=dev2` /
+  `LG_PUBLIC_HOST=dev2.loothgroup.com`. **At the cut, edit those two values to `live` /
+  `loothgroup.com` and reload php-fpm** — that one file is the whole env switch; the code is byte-identical
+  per box. (dev1 deliberately carries NO file → unchanged behavior.) NOT host-derived and therefore NOT
+  flipped by this file: profile-auth mu-plugin `LOOTH_AUTH_ISS` + cookie-domain (identity/crypto — set per
+  env at deploy time).
 - ☐ lower DNS TTL ahead; dress-rehearse → freeze live writes → final delta top-off (incl. sessions) → flip DNS → verify → hold old-live as rollback.
