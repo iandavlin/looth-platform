@@ -62,6 +62,26 @@ new_ids() {  # $1 col, $2 table, [$3 live WHERE], [$4 dev WHERE]
 }
 csv() { paste -sd, - ; }   # newline list -> a,b,c   (empty stays empty)
 
+# report_media_collisions <newline-list-of-new-wp_bp_media-ids>
+# For each incoming media row, compare its attachment_id's file on live vs dev.
+# If dev already holds that ID as a different file, the cover will be wrong/missing.
+report_media_collisions() {
+  local ids; ids=$(echo "$1" | csv); [ -n "$ids" ] || return 0
+  local att; att=$(live -e "SELECT DISTINCT attachment_id FROM wp_bp_media WHERE id IN ($ids) AND attachment_id>0" | sort -u | csv)
+  [ -n "$att" ] || return 0
+  local hits=0 line
+  while IFS=$'\t' read -r aid lf; do
+    [ -n "$aid" ] || continue
+    local df; df=$(devsql "$DEV_DB" -e "SELECT meta_value FROM wp_postmeta WHERE post_id=$aid AND meta_key='_wp_attached_file' LIMIT 1")
+    if [ -n "$df" ] && [ "$df" != "$lf" ]; then
+      [ "$hits" -eq 0 ] && echo "   ⚠ attachment ID-collisions (cover will be WRONG — live file vs dev file):"
+      printf '       att %-7s live=%s  dev=%s\n' "$aid" "$lf" "$df"; hits=$((hits+1))
+    fi
+  done < <(live -e "SELECT p.ID, m.meta_value FROM wp_posts p JOIN wp_postmeta m ON m.post_id=p.ID AND m.meta_key='_wp_attached_file' WHERE p.ID IN ($att)")
+  [ "$hits" -gt 0 ] && echo "   ($hits collision(s) — these covers need a manual re-import under a fresh ID.)"
+  return 0
+}
+
 run_db() {
   echo "-- scanning DB delta --"
   local NP NU NT NTT NC
@@ -71,18 +91,37 @@ run_db() {
   NTT=$(new_ids term_taxonomy_id wp_term_taxonomy); local nTT; nTT=$(echo -n "$NTT" | grep -c . || true)
   NC=$(new_ids comment_ID wp_comments);   local nC;  nC=$(echo -n "$NC"  | grep -c . || true)
 
+  # BuddyBoss media/document linkage — NOT core WP, but forum/activity posts
+  # reference these via postmeta (bp_media_ids/bp_document_ids). Without them the
+  # post comes over but its images render as missing (the bb-mirror materializer
+  # finds no attachment row -> no card cover). Missing-ids-only, same as above.
+  local NBM NBA NBD NBF
+  NBM=$(new_ids id wp_bp_media);            local nBM; nBM=$(echo -n "$NBM" | grep -c . || true)
+  NBA=$(new_ids id wp_bp_media_albums);     local nBA; nBA=$(echo -n "$NBA" | grep -c . || true)
+  NBD=$(new_ids id wp_bp_document);         local nBD; nBD=$(echo -n "$NBD" | grep -c . || true)
+  NBF=$(new_ids id wp_bp_document_folder);  local nBF; nBF=$(echo -n "$NBF" | grep -c . || true)
+
   printf '   would add: %s posts, %s users, %s terms, %s term_taxonomy, %s comments\n' "$nP" "$nU" "$nT" "$nTT" "$nC"
   printf '   (+ their postmeta/usermeta/termmeta/commentmeta and new posts'\'' term_relationships)\n'
+  printf '   bp media/albums/docs/folders: %s / %s / %s / %s\n' "$nBM" "$nBA" "$nBD" "$nBF"
+
+  # Surface attachment ID-collisions that silently break covers: a live media row
+  # whose attachment_id already exists on dev as a DIFFERENT file (independent
+  # auto-increment) -> the new post points at the wrong/old dev image. Report so
+  # it's visible (the missing-ids-only model can't remap; that's an accepted
+  # trade-off, but a silent wrong image is not).
+  report_media_collisions "$NBM"
 
   if [ "$MODE" = "preview" ]; then echo "   preview only — no writes."; return 0; fi
-  if [ $((nP+nU+nT+nTT+nC)) -eq 0 ]; then echo "   nothing to add."; return 0; fi
+  if [ $((nP+nU+nT+nTT+nC+nBM+nBA+nBD+nBF)) -eq 0 ]; then echo "   nothing to add."; return 0; fi
 
   # ---- stage ONLY the delta rows into a scratch DB (schema mirrors dev) ----
   echo "-- staging delta into $STAGE_DB --"
   devsql -e "DROP DATABASE IF EXISTS $STAGE_DB; CREATE DATABASE $STAGE_DB;"
   local T
   for T in wp_users wp_usermeta wp_terms wp_termmeta wp_term_taxonomy \
-           wp_posts wp_postmeta wp_term_relationships wp_comments wp_commentmeta; do
+           wp_posts wp_postmeta wp_term_relationships wp_comments wp_commentmeta \
+           wp_bp_media wp_bp_media_albums wp_bp_document wp_bp_document_folder; do
     devsql -e "CREATE TABLE $STAGE_DB.$T LIKE $DEV_DB.$T;"
   done
 
@@ -91,9 +130,10 @@ run_db() {
     [ -n "$where" ] || return 0
     livedump --where="$where" "$LIVE_DB" "$tbl" | sudo mysql "$STAGE_DB"
   }
-  local NP_C NU_C NT_C NTT_C NC_C
+  local NP_C NU_C NT_C NTT_C NC_C NBM_C NBA_C NBD_C NBF_C
   NP_C=$(echo "$NP" | csv); NU_C=$(echo "$NU" | csv); NT_C=$(echo "$NT" | csv)
   NTT_C=$(echo "$NTT" | csv); NC_C=$(echo "$NC" | csv)
+  NBM_C=$(echo "$NBM" | csv); NBA_C=$(echo "$NBA" | csv); NBD_C=$(echo "$NBD" | csv); NBF_C=$(echo "$NBF" | csv)
 
   [ -n "$NU_C" ]  && stage wp_users               "ID IN ($NU_C)"
   [ -n "$NU_C" ]  && stage wp_usermeta            "user_id IN ($NU_C)"
@@ -105,6 +145,10 @@ run_db() {
   [ -n "$NP_C" ]  && stage wp_term_relationships  "object_id IN ($NP_C)"
   [ -n "$NC_C" ]  && stage wp_comments            "comment_ID IN ($NC_C)"
   [ -n "$NC_C" ]  && stage wp_commentmeta         "comment_id IN ($NC_C)"
+  [ -n "$NBM_C" ] && stage wp_bp_media            "id IN ($NBM_C)"
+  [ -n "$NBA_C" ] && stage wp_bp_media_albums     "id IN ($NBA_C)"
+  [ -n "$NBD_C" ] && stage wp_bp_document         "id IN ($NBD_C)"
+  [ -n "$NBF_C" ] && stage wp_bp_document_folder  "id IN ($NBF_C)"
 
   # ---- apply: backup first (apply only), then insert in a transaction ------
   if [ "$MODE" = "apply" ]; then
@@ -130,6 +174,11 @@ INSERT INTO $DEV_DB.wp_postmeta   (post_id,meta_key,meta_value)    SELECT post_i
 INSERT IGNORE INTO $DEV_DB.wp_term_relationships  SELECT * FROM $STAGE_DB.wp_term_relationships;
 INSERT INTO $DEV_DB.wp_comments            SELECT * FROM $STAGE_DB.wp_comments;
 INSERT INTO $DEV_DB.wp_commentmeta(comment_id,meta_key,meta_value) SELECT comment_id,meta_key,meta_value     FROM $STAGE_DB.wp_commentmeta;
+-- BuddyBoss media/document linkage: id PK preserved (bp_media_ids etc. key on it).
+INSERT INTO $DEV_DB.wp_bp_media            SELECT * FROM $STAGE_DB.wp_bp_media;
+INSERT INTO $DEV_DB.wp_bp_media_albums     SELECT * FROM $STAGE_DB.wp_bp_media_albums;
+INSERT INTO $DEV_DB.wp_bp_document         SELECT * FROM $STAGE_DB.wp_bp_document;
+INSERT INTO $DEV_DB.wp_bp_document_folder  SELECT * FROM $STAGE_DB.wp_bp_document_folder;
 SELECT CONCAT('   in-txn dev post count = ', COUNT(*)) FROM $DEV_DB.wp_posts;
 $FINISH
 SQL
@@ -138,6 +187,40 @@ SQL
     echo "   TEST complete — transaction ROLLED BACK, dev unchanged."
   else
     echo "   APPLY complete — committed. (undo: restore the pre-topoff backup above)"
+    # Pull JUST the new media files so covers resolve (the full-bucket sweep in
+    # run_bucket also covers these, but is slow; this makes a db-scope top-off
+    # self-sufficient for images). attachment ids = new attachment posts UNION
+    # attachment_ids of the new bp_media rows. Original file only; the resizer
+    # self-heals derived sizes on first hit.
+    copy_new_media_files "$NP" "$NBM"
+  fi
+}
+
+# copy_new_media_files <new-post-ids> <new-bp_media-ids>  (apply only)
+copy_new_media_files() {
+  local posts; posts=$(echo "$1" | csv)
+  local media; media=$(echo "$2" | csv)
+  local att=""
+  [ -n "$posts" ] && att=$(live -e "SELECT ID FROM wp_posts WHERE ID IN ($posts) AND post_type='attachment'")
+  [ -n "$media" ] && att="$att"$'\n'$(live -e "SELECT DISTINCT attachment_id FROM wp_bp_media WHERE id IN ($media) AND attachment_id>0")
+  local attc; attc=$(echo "$att" | grep -E '^[0-9]+$' | sort -u | csv); [ -n "$attc" ] || { echo "   no new media files to copy."; return 0; }
+  local n=0 path
+  echo "-- copying new media files ($R2_SRC -> $R2_DST) --"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rclone copyto "$R2_SRC/$path" "$R2_DST/$path" 2>/dev/null && n=$((n+1))
+  done < <(live -e "SELECT meta_value FROM wp_postmeta WHERE post_id IN ($attc) AND meta_key='_wp_attached_file'")
+  echo "   copied $n media file(s)."
+  # The uploads FUSE mount caches its dir listing for 12h, so freshly-copied
+  # objects are INVISIBLE to WP (file_exists fails -> bb-mirror drops the cover as
+  # a dead file) until the cache refreshes. Nudge it; if rc is off, tell the op.
+  if [ "$n" -gt 0 ]; then
+    if rclone rc vfs/refresh recursive=true >/dev/null 2>&1; then
+      echo "   refreshed uploads mount dir-cache (rc)."
+    else
+      echo "   ⚠ uploads mount dir-cache is 12h — new files won't be visible to WP yet."
+      echo "     run:  sudo systemctl restart r2-uploads-dev.service   (then re-materialize)"
+    fi
   fi
 }
 
