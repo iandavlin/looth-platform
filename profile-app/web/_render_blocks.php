@@ -705,7 +705,9 @@ function looth_render_location_block(int $userId, string $role, string $headerVi
         }
         echo '<div class="lg-loc__edit" id="lg-loc-edit">'
            . '<button type="button" class="lg-link__add lg-loc__change">'
-           . ($has ? 'Change location' : 'Set your location') . '</button></div>';
+           . ($has ? 'Change location' : 'Set your location') . '</button>'
+           . ($has ? '<button type="button" class="lg-link__rm lg-loc__remove">Remove</button>' : '')
+           . '</div>';
         if ($has) {
             echo '<div class="lg-loc__aud">'
                . '<span class="lg-loc__audrow"><span class="lg-loc__audlabel">Members see</span> '

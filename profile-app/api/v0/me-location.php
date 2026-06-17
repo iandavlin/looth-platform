@@ -95,6 +95,17 @@ if (is_string($textOnly) && trim($textOnly) !== '') {
     $params[':text'] = trim($textOnly);
 }
 
+// Remove location entirely — "take it off the profile" (Ian 6/17). Nulls the
+// text, coordinates, and all derived components so the field comes back empty.
+if (!empty($in['clear'])) {
+    if (!empty($set)) profile_app_json(400, ['error' => 'conflicting_fields']);
+    foreach (['location_text', 'lat', 'lng', 'location_country', 'location_region',
+              'location_city', 'location_postcode', 'place_id', 'place_result',
+              'location_address'] as $col) {
+        $set[] = "$col = NULL";
+    }
+}
+
 if (is_string($visibility)) {
     if (!in_array($visibility, Profile::LOCATION_VIS_VALUES, true)) {
         profile_app_json(400, ['error' => 'invalid_visibility']);

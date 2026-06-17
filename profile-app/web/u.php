@@ -1281,49 +1281,90 @@ window.lgSortable = function (container, opts) {
       .then(function (r) { return r.ok; });
   }
 
+  // Remove location — take it off the profile + clear the field (Ian 6/17).
+  var rmBtn = wrap.querySelector('.lg-loc__remove');
+  if (rmBtn) rmBtn.addEventListener('click', function () {
+    if (!window.confirm('Remove your location from your profile?')) return;
+    rmBtn.disabled = true;
+    save({ clear: true }).then(function (ok) {
+      if (ok) location.reload(); else { rmBtn.disabled = false; alert('Could not remove location.'); }
+    });
+  });
+
+  // Change / set location — NO autocomplete (Ian 6/17). Type the address, Find to
+  // geocode a starting pin, then DRAG the pin to the exact spot and Save. Zero
+  // results → save the typed text as-is.
   btn.addEventListener('click', function () {
-    if (wrap.querySelector('.lg-craft-search')) return;
-    btn.style.display = 'none';
-    var box = document.createElement('span'); box.className = 'lg-craft-search';
-    var inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = 'Search a city or address…';
-    var res = document.createElement('div'); res.className = 'lg-craft-results'; res.style.display = 'none';
-    box.appendChild(inp); box.appendChild(res); wrap.appendChild(box); inp.focus();
+    if (wrap.querySelector('.lg-locw')) return;
+    btn.style.display = 'none'; if (rmBtn) rmBtn.style.display = 'none';
+    var w = document.createElement('div'); w.className = 'lg-locw'; w.style.cssText = 'margin:8px 0 0';
+    w.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:stretch">' +
+        '<input type="text" class="lg-locw__in" placeholder="Type your address or town…" style="flex:1 1 auto">' +
+        '<button type="button" class="lg-link__add lg-locw__find">Find</button>' +
+      '</div>' +
+      '<p class="lg-locw__hint" hidden style="font-size:12.5px;color:var(--lg-mute,#6b6f6b);margin:8px 0 0">' +
+        'Not exact? <b>Drag the pin</b> to your precise spot, then Save.</p>' +
+      '<div class="lg-locw__map" hidden style="height:220px;border-radius:12px;overflow:hidden;margin:8px 0 0"></div>' +
+      '<div class="lg-locw__act" hidden style="margin:8px 0 0;display:flex;gap:10px;align-items:center">' +
+        '<button type="button" class="lg-link__add lg-locw__save">Save location</button>' +
+        '<button type="button" class="lg-locw__cancel" style="background:none;border:0;color:var(--lg-mute,#6b6f6b);cursor:pointer">Cancel</button>' +
+      '</div>';
+    wrap.appendChild(w);
+    var inp = w.querySelector('.lg-locw__in'), findB = w.querySelector('.lg-locw__find');
+    var hint = w.querySelector('.lg-locw__hint'), mapEl = w.querySelector('.lg-locw__map');
+    var act = w.querySelector('.lg-locw__act'), saveB = w.querySelector('.lg-locw__save'), cancelB = w.querySelector('.lg-locw__cancel');
+    inp.focus();
+    var geoRow = null, pin = null, map = null, marker = null;
 
-    var timer = null, lastQ = '';
-    function close() { box.remove(); btn.style.display = ''; }
-    function pick(body) { save(body).then(function (ok) { if (ok) location.reload(); else alert('Could not save location.'); }); }
+    function close() { w.remove(); btn.style.display = ''; if (rmBtn) rmBtn.style.display = ''; }
+    cancelB.addEventListener('click', close);
 
-    function run() {
-      var q = inp.value.trim();
-      if (q === lastQ) return; lastQ = q;
-      if (q.length < 3) { res.style.display = 'none'; return; }
+    function showPin(lat, lng) {
+      mapEl.hidden = false; hint.hidden = false; act.hidden = false;
+      saveB.textContent = 'Save location';
+      if (!map) {
+        map = L.map(mapEl, { zoomControl: true, scrollWheelZoom: false }).setView([lat, lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        marker.on('dragend', function () { var p = marker.getLatLng(); pin = { lat: p.lat, lng: p.lng }; });
+      } else { map.setView([lat, lng], 15); marker.setLatLng([lat, lng]); }
+      pin = { lat: lat, lng: lng };
+      setTimeout(function () { map.invalidateSize(); }, 80);
+    }
+    function find() {
+      var q = inp.value.trim(); if (q.length < 3) { inp.focus(); return; }
+      findB.disabled = true; findB.textContent = '…';
       fetch('/profile-api/v0/me/location/search?q=' + encodeURIComponent(q), { credentials: 'include' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (inp.value.trim() !== q) return;                 // stale
-          res.innerHTML = '';
+          findB.disabled = false; findB.textContent = 'Find';
           var items = (d && d.items) || [];
-          items.slice(0, 6).forEach(function (it) {
-            var b = document.createElement('button'); b.type = 'button';
-            b.innerHTML = '<span>' + (it.short ? it.short.replace(/[&<>"]/g, '') : '') + '</span>';
-            b.title = it.display_name || '';
-            b.addEventListener('click', function () { pick({ nominatim: it.raw }); });
-            res.appendChild(b);
-          });
-          if (!items.length) {                                // escape hatch: save freeform text
-            var t = document.createElement('button'); t.type = 'button'; t.className = 'lg-cat-new';
-            t.innerHTML = '<span>No match — use “' + q.replace(/[&<>"]/g, '') + '” as text</span><span class="t">text</span>';
-            t.addEventListener('click', function () { pick({ text_only: q }); });
-            res.appendChild(t);
+          if (!items.length) {                       // no geocode hit → save typed text as-is
+            geoRow = null; pin = null;
+            mapEl.hidden = true; hint.hidden = true; act.hidden = false;
+            saveB.textContent = 'Save “' + q.replace(/[<>&"]/g, '') + '” as text';
+            return;
           }
-          res.style.display = 'block';
+          geoRow = items[0].raw;
+          showPin(parseFloat(items[0].lat), parseFloat(items[0].lng));
         })
-        .catch(function () { res.innerHTML = '<div class="none">Search unavailable.</div>'; res.style.display = 'block'; });
+        .catch(function () { findB.disabled = false; findB.textContent = 'Find'; alert('Search unavailable — try again.'); });
     }
-    inp.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 320); });   // debounce (Nominatim politeness)
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-    document.addEventListener('click', function onDoc(e) {
-      if (!box.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', onDoc); }
+    findB.addEventListener('click', find);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); find(); } if (e.key === 'Escape') close(); });
+
+    saveB.addEventListener('click', function () {
+      var q = inp.value.trim();
+      saveB.disabled = true;
+      function done(ok) { if (ok) location.reload(); else { saveB.disabled = false; alert('Could not save location.'); } }
+      if (geoRow) {
+        save({ nominatim: geoRow }).then(function (ok) {
+          if (!ok) return done(false);
+          if (pin) save({ pin: { lat: pin.lat, lng: pin.lng } }).then(done); else done(true);   // dragged exact point
+        });
+      } else if (q) { save({ text_only: q }).then(done); }
+      else { saveB.disabled = false; }
     });
   });
 })();
