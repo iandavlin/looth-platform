@@ -276,7 +276,8 @@ flipped `/srv/bb-mirror` symlink → the clone's `bb-mirror/`. Old plain-files t
   back to its own detection when the file is absent. On dev2 the file reads `LG_ENV=dev2` /
   `LG_PUBLIC_HOST=dev2.loothgroup.com`. **At the cut, edit those two values to `live` /
   `loothgroup.com` and reload php-fpm** — that one file is the whole env switch; the code is byte-identical
-  per box. (dev1 deliberately carries NO file → unchanged behavior.) NOT host-derived and therefore NOT
-  flipped by this file: profile-auth mu-plugin `LOOTH_AUTH_ISS` + cookie-domain (identity/crypto — set per
-  env at deploy time).
+  per box. Both boxes carry the file (dev1=`dev`/`dev.loothgroup.com`, dev2=`dev2`/`dev2.loothgroup.com`) so
+  only the VALUES differ; reload php-fpm after any edit so workers re-read it (the reader memoizes per
+  worker). NOT host-derived and therefore NOT flipped by this file: profile-auth mu-plugin `LOOTH_AUTH_ISS`
+  + cookie-domain (identity/crypto — set per env at deploy time).
 - ☐ lower DNS TTL ahead; dress-rehearse → freeze live writes → final delta top-off (incl. sessions) → flip DNS → verify → hold old-live as rollback.

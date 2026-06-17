@@ -13,8 +13,10 @@
  * CONTRACT — reversible + box-safe:
  *   - If /etc/looth/env is ABSENT or unreadable, lg_env() returns [] and every
  *     caller falls through to its own detection => the box behaves EXACTLY as
- *     it did before this file existed. (dev1 ships WITHOUT the file today, so
- *     its behavior is unchanged; only dev2 carries the file.)
+ *     it did before this file existed. (Both dev1 and dev2 carry the file now —
+ *     dev1=dev/dev.loothgroup.com, dev2=dev2/dev2.loothgroup.com — so only the
+ *     VALUES differ per box and the code is identical; the absent-safety path
+ *     still covers any box brought up without it.)
  *   - Keys: LG_ENV -> ['env'], LG_PUBLIC_HOST -> ['host']. A missing/empty key
  *     is omitted from the array, so the caller's ?? fallback still covers it.
  *
