@@ -1,3 +1,8 @@
+> **⚠️ READ `docs/LAUNCH-HANDOFF.md` FIRST (current cut chain).** The NEW-box + DNS/CF-flip
+> *strategy* below still holds, but the DATA/SESSION *method* changed (Ian 6/17): cut = **TOP-OFF +
+> re-login**, NOT full-replace + session carry; deploy = **rsync from /home/ubuntu/projects**, not
+> git-pull. Use this doc for the new-box rationale only; LAUNCH-HANDOFF/CUT-RUNBOOK are the active how.
+
 # Live cut / deploy plan — ACTIVE (supersedes the DEAD `LIVE-DEPLOY-PLAN.md`)
 
 Decided by Ian 2026-06-13. **Strategy: build a NEW box from dev, flip DNS** — NOT in-place. This

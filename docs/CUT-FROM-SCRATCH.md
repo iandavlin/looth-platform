@@ -262,7 +262,7 @@ ln -s /home/ubuntu/worktrees/bespoke-cutover/bb-mirror /srv/bb-mirror
 ```
 Plus real (non-symlink) dirs to create: `/srv/lg-push` (buck:loothdevs 2775), `/srv/lg-sudo-queue` (root:loothdevs 2775).
 
-> **Profile media lives in R2 now — NOT a local `/srv/profile-app-media` dir** (changed 2026-06-17: local EBS won't scale + would be fragile to migrate post-launch). profile-app reads/writes a **DEDICATED** R2 bucket (`loothgroup-profile-media`) via the S3 SDK (`profile-app/src/R2.php`, SigV4 — **not** the FUSE mount), key shape `profile-media/<class>/<uuid>/<file>`. Dedicated (not the uploads bucket) for least-privilege: profile-app takes user uploads + can delete, so its scoped token must not reach WP/forum media. The resizer `.cache/` stays **local** (regenerable). Creds = a scoped R2 token in an `/etc/looth` secret → `LG_PROFILE_R2_*` env (Phase 6). One-time data load: `rclone copy` dev1's `/srv/profile-app-media` → the bucket (Phase 5).
+> **Profile media lives in R2 now — NOT a local `/srv/profile-app-media` dir** (changed 2026-06-17: local EBS won't scale + would be fragile to migrate post-launch). profile-app reads/writes a **DEDICATED** R2 bucket (`loothgroup2-0-profile-bucket`) via the S3 SDK (`profile-app/src/R2.php`, SigV4 — **not** the FUSE mount), key shape `profile-media/<class>/<uuid>/<file>`. Dedicated (not the uploads bucket) for least-privilege: profile-app takes user uploads + can delete, so its scoped token must not reach WP/forum media. The resizer `.cache/` stays **local** (regenerable). Creds = a scoped R2 token in an `/etc/looth` secret → `LG_PROFILE_R2_*` env (Phase 6). One-time data load: `rclone copy` dev1's `/srv/profile-app-media` → the bucket (Phase 5).
 
 > **membership-pages has NO /srv symlink** — nginx aliases it directly from `/home/ubuntu/projects/membership-pages/web/`. Do not create `/srv/membership`.
 > Do NOT recreate `/srv/lg-shared.pre-symlink-*` or any `*.bak-*` artifacts.
@@ -457,6 +457,23 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA discovery GRANT SELECT ON TABLES TO "profile-
 
 `/home/ubuntu/projects/archive-poc/index.sqlite` (= `/srv/archive-poc/index.sqlite`, archive-poc:www-data 664, WAL) is the fallback backend. PG is source of truth. **Do NOT copy the file — regenerate it** (and the PG `discovery` index) from WP. See Phase 9.2 for ordering (reindex MUST run AFTER the WP-URL flip).
 
+### 5.3b Profile media → R2 (one-time backfill, dedicated bucket)
+
+profile-app media (`/srv/profile-app-media/{avatars,banners,gallery,resumes}`) lives in the dedicated
+R2 bucket now (Phase 6.7), not local disk. Load the originals ONCE into the bucket (NOT `.cache` —
+regenerable). New uploads already write straight to R2; this is only the pre-existing files. From the
+box holding the live media (originals), with the profile-media token in env:
+```bash
+for c in avatars banners gallery resumes; do
+  rclone copy /srv/profile-app-media/$c ":s3:<PROFILE_MEDIA_BUCKET>/$c" --transfers 16 --no-check-dest
+done
+# verify per-class: local file count == bucket object count
+```
+> The serve path checks **local first**, so until the local originals are removed the box still serves
+> from disk (R2 is the redundant copy). To actually reclaim disk + serve from R2: snapshot
+> `/srv/profile-app-media`, then remove the local originals (keep `.cache/`). Verify reads come from R2
+> afterward (a strong GET on an exact key — `ListObjects` is eventually-consistent and lags writes).
+
 ### 5.4 Background convergence jobs (systemd timers) — re-arm after any restore
 
 ```bash
@@ -481,6 +498,7 @@ systemctl enable --now bb-mirror-reconcile.timer lg-person-vis-refresh.timer
 | `/etc/looth/jwt-public.pem` | `root:root` | 644 | (world) | every JWT verifier |
 | `/etc/lg-internal-secret` | `root:www-data` | 640 | `u:profile-app:r` | wp-config `LG_INTERNAL_SECRET`, poller, profile-app internal |
 | `/etc/lg-profile-app-secret` | `root:profile-app` | 640 | — | profile-app webhook auth (= WP option `profile_hook_secret`) |
+| `/etc/looth/profile-r2` | `root:profile-app` | 640 | — | profile-app R2 creds for **profile media** — `endpoint/bucket/prefix/key/secret` (read by `src/R2.php`). At cut: live profile-media bucket + bucket-scoped token. |
 | `/etc/lg-archive-poc-secret` | `root:www-data` | 640 | `u:archive-poc:r` | lg-layout-v2 ArchivePocDash |
 | `/etc/lg-membership-db` | `root:membership` | 640 | — | membership-pages + billing |
 | `/etc/lg-events-db` | `root:events` | 640 | — | events |
@@ -532,7 +550,8 @@ Config is in WP `wp_options` (set via `wp option update`). Carry from live DB: `
 
 ### 6.7 R2 + VAPID continuity
 
-- R2: at cut, mount the **live uploads bucket** with a **live-scoped rotated token** (Phase 2.3).
+- R2 (uploads): at cut, mount the **live uploads bucket** with a **live-scoped rotated token** (Phase 2.3). This is WP/BuddyBoss media via the FUSE mount.
+- **R2 (profile media) — SEPARATE, dedicated bucket, NOT the mount:** profile-app reads/writes the dedicated bucket `loothgroup2-0-profile-bucket` (avatars/banners/gallery/resumes) via the **S3 SDK** (`src/R2.php`, SigV4), creds in `/etc/looth/profile-r2`. Dedicated for least-privilege (profile-app takes user uploads + can delete; its scoped token must not reach WP/forum media). At cut, point `bucket=` at the live profile-media bucket + a **bucket-scoped** token; the resizer `.cache/` stays local. Originals load once via the Phase 5 backfill. R2 wiring gotchas (scoped tokens can't `ListBuckets`) → the `r2-wiring` skill.
 - VAPID: regenerating invalidates all browser push subscriptions — **carry the live keypair** to preserve them.
 
 ---

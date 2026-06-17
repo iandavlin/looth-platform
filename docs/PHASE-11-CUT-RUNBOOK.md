@@ -1,3 +1,8 @@
+> **⚠️ SUPERSEDED as the active runbook — use `docs/LAUNCH-HANDOFF.md` → `docs/CUT-RUNBOOK.md`.**
+> This Phase-11 sequence predates Ian's 6/17 TOP-OFF decision (re-login, **no** key/session carry;
+> rsync deploy, **not** git-pull). Kept for history + gotcha detail; do NOT execute its
+> carry-session / full-replace steps.
+
 # Phase 11 — THE CUT runbook (dev2 → loothgroup.com)
 
 **Ordered, executable sequence for flipping `loothgroup.com` → the dev2 prod candidate.**

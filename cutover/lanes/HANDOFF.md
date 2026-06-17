@@ -1,3 +1,9 @@
+> **⚠️ SUPERSEDED — current cut state lives in `docs/LAUNCH-HANDOFF.md`.** This 6/15 handoff
+> predates Ian's 6/17 TOP-OFF decision and still says "carry salts/JWT/sessions so logins survive"
+> + "single git-checkout deploy." Both REVERSED: cut = **top-off + re-login** (no key/session
+> carry); deploy = **rsync from /home/ubuntu/projects** (git-pull is a fast-follow). Read
+> `docs/LAUNCH-HANDOFF.md` → `docs/CUT-RUNBOOK.md` → `docs/dev2-wiring-punchlist.md` instead.
+
 # Coordinator handoff — FINISHING THE CUT (2026-06-15, PM)
 
 ## ═══ LATEST (2026-06-15, late) — READ FIRST; supersedes the older state below ═══
