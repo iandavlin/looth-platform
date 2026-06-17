@@ -187,40 +187,77 @@ SQL
     echo "   TEST complete — transaction ROLLED BACK, dev unchanged."
   else
     echo "   APPLY complete — committed. (undo: restore the pre-topoff backup above)"
-    # Pull JUST the new media files so covers resolve (the full-bucket sweep in
-    # run_bucket also covers these, but is slow; this makes a db-scope top-off
-    # self-sufficient for images). attachment ids = new attachment posts UNION
-    # attachment_ids of the new bp_media rows. Original file only; the resizer
-    # self-heals derived sizes on first hit.
+    # Make a db-scope top-off self-sufficient for IMAGES: pull just the files the
+    # new content references (the full run_bucket sweep covers both classes too,
+    # but is slow). There are TWO distinct image classes, sourced differently:
+    #   1. BuddyBoss media (bb_medias/) — via wp_bp_media.attachment_id + new
+    #      attachment posts. Forum/activity photo uploads.
+    #   2. FluentForm uploads (fluentform/) — embedded as inline <img> with
+    #      ABSOLUTE loothgroup.com URLs in post_content (the weekly-submission /
+    #      council posts). These have NO bp_media row and NO attachment post, so
+    #      class 1 misses them ENTIRELY; the bb-mirror materializer harvests them
+    #      from inline <img>, but only if the file exists locally. So we must scan
+    #      content for any /wp-content/uploads/ <img> and copy it too.
+    _COPIED=0
     copy_new_media_files "$NP" "$NBM"
+    copy_inline_content_files "$NP"
+    refresh_uploads_mount "$_COPIED"
   fi
 }
 
 # copy_new_media_files <new-post-ids> <new-bp_media-ids>  (apply only)
+# Class 1: BuddyBoss media — attachment ids = new attachment posts UNION the new
+# bp_media rows' attachment_ids. Original file only; the resizer self-heals sizes.
 copy_new_media_files() {
   local posts; posts=$(echo "$1" | csv)
   local media; media=$(echo "$2" | csv)
   local att=""
   [ -n "$posts" ] && att=$(live -e "SELECT ID FROM wp_posts WHERE ID IN ($posts) AND post_type='attachment'")
   [ -n "$media" ] && att="$att"$'\n'$(live -e "SELECT DISTINCT attachment_id FROM wp_bp_media WHERE id IN ($media) AND attachment_id>0")
-  local attc; attc=$(echo "$att" | grep -E '^[0-9]+$' | sort -u | csv); [ -n "$attc" ] || { echo "   no new media files to copy."; return 0; }
+  local attc; attc=$(echo "$att" | grep -E '^[0-9]+$' | sort -u | csv); [ -n "$attc" ] || { echo "   no new bp/attachment media files."; return 0; }
   local n=0 path
-  echo "-- copying new media files ($R2_SRC -> $R2_DST) --"
+  echo "-- copying new BuddyBoss media files ($R2_SRC -> $R2_DST) --"
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     rclone copyto "$R2_SRC/$path" "$R2_DST/$path" 2>/dev/null && n=$((n+1))
   done < <(live -e "SELECT meta_value FROM wp_postmeta WHERE post_id IN ($attc) AND meta_key='_wp_attached_file'")
-  echo "   copied $n media file(s)."
-  # The uploads FUSE mount caches its dir listing for 12h, so freshly-copied
-  # objects are INVISIBLE to WP (file_exists fails -> bb-mirror drops the cover as
-  # a dead file) until the cache refreshes. Nudge it; if rc is off, tell the op.
-  if [ "$n" -gt 0 ]; then
-    if rclone rc vfs/refresh recursive=true >/dev/null 2>&1; then
-      echo "   refreshed uploads mount dir-cache (rc)."
-    else
-      echo "   ⚠ uploads mount dir-cache is 12h — new files won't be visible to WP yet."
-      echo "     run:  sudo systemctl restart r2-uploads-dev.service   (then re-materialize)"
-    fi
+  echo "   copied $n bp/attachment media file(s)."
+  _COPIED=$((_COPIED + n))
+}
+
+# copy_inline_content_files <new-post-ids>  (apply only)
+# Class 2: inline <img> files in post_content — mainly fluentform/ uploads on the
+# weekly-submission posts, which carry no bp_media/attachment row. Parse the live
+# content for /wp-content/uploads/<path> image srcs and copy each. Host is
+# stripped (URLs are absolute https://loothgroup.com/...), path is bucket-relative.
+copy_inline_content_files() {
+  local posts; posts=$(echo "$1" | csv); [ -n "$posts" ] || return 0
+  local files
+  files=$(live -e "SELECT post_content FROM wp_posts WHERE ID IN ($posts)" \
+            | grep -oE 'wp-content/uploads/[^"'"'"' ]+\.(jpe?g|png|webp|gif)' \
+            | sed 's#wp-content/uploads/##' | sort -u)
+  [ -n "$files" ] || { echo "   no inline-content image files."; return 0; }
+  local n=0 path
+  echo "-- copying inline-content image files (fluentform/etc; $R2_SRC -> $R2_DST) --"
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    rclone copyto "$R2_SRC/$path" "$R2_DST/$path" 2>/dev/null && n=$((n+1))
+  done < <(echo "$files")
+  echo "   copied $n inline-content image file(s)."
+  _COPIED=$((_COPIED + n))
+}
+
+# refresh_uploads_mount <count-copied>
+# The uploads FUSE mount caches its dir listing for 12h, so freshly-copied objects
+# are INVISIBLE to WP (file_exists fails -> bb-mirror drops the cover as a dead
+# file) until the cache refreshes. Nudge it; if rc is off, tell the op.
+refresh_uploads_mount() {
+  [ "${1:-0}" -gt 0 ] || return 0
+  if rclone rc vfs/refresh recursive=true >/dev/null 2>&1; then
+    echo "   refreshed uploads mount dir-cache (rc)."
+  else
+    echo "   ⚠ uploads mount dir-cache is 12h — new files won't be visible to WP yet."
+    echo "     run:  sudo systemctl restart r2-uploads-dev.service   (then re-materialize)"
   fi
 }
 
