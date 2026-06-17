@@ -22,10 +22,47 @@ namespace Looth\ProfileApp;
  */
 final class R2
 {
+    /** Secret file (Phase 6 pattern: /etc secret read at runtime, not pool env[]). */
+    private const CONF_PATH = '/etc/looth/profile-r2';
+
+    /** env name -> secret-file key. */
+    private const FILE_KEYS = [
+        'LG_PROFILE_R2_ENDPOINT' => 'endpoint',
+        'LG_PROFILE_R2_BUCKET'   => 'bucket',
+        'LG_PROFILE_R2_KEY'      => 'key',
+        'LG_PROFILE_R2_SECRET'   => 'secret',
+        'LG_PROFILE_R2_PREFIX'   => 'prefix',
+    ];
+
+    private static ?array $fileCfg = null;
+
+    private static function fileCfg(): array
+    {
+        if (self::$fileCfg !== null) return self::$fileCfg;
+        self::$fileCfg = [];
+        $path = getenv('LG_PROFILE_R2_CONF') ?: self::CONF_PATH;
+        if (is_string($path) && is_readable($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+                [$k, $v] = explode('=', $line, 2);
+                self::$fileCfg[trim($k)] = trim($v);
+            }
+        }
+        return self::$fileCfg;
+    }
+
+    /** env var wins (override / cut-time), then the /etc/looth secret file. */
     private static function cfg(string $k): string
     {
         $v = getenv($k);
-        return is_string($v) ? $v : '';
+        if (is_string($v) && $v !== '') return $v;
+        $fk = self::FILE_KEYS[$k] ?? null;
+        if ($fk !== null) {
+            $fc = self::fileCfg();
+            if (isset($fc[$fk]) && $fc[$fk] !== '') return $fc[$fk];
+        }
+        return '';
     }
 
     public static function enabled(): bool
