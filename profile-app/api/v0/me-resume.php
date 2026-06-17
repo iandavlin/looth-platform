@@ -29,6 +29,7 @@ use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Media;
+use Looth\ProfileApp\R2;
 
 const LG_RESUME_STORE    = '/srv/profile-app-media/resumes';
 const LG_RESUME_URL_BASE = '/profile-media/resumes';
@@ -79,13 +80,21 @@ if ($head !== '%PDF-') profile_app_json(400, ['error' => 'not_a_pdf']);
 
 $ver = (int)($user['resume_version'] ?? 0) + 1;
 
-$dir = LG_RESUME_STORE . '/' . $uuid;
-if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-    profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_RESUME_STORE . ' (chown to the FPM user)']);
+$fn = $ver . '.pdf';
+if (R2::enabled()) {
+    $bytes = @file_get_contents($tmp);
+    if ($bytes === false || !R2::put('resumes/' . $uuid . '/' . $fn, $bytes, 'application/pdf')) {
+        profile_app_json(500, ['error' => 'write_failed']);
+    }
+} else {
+    $dir = LG_RESUME_STORE . '/' . $uuid;
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_RESUME_STORE . ' (chown to the FPM user)']);
+    }
+    $dest = $dir . '/' . $fn;
+    if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+    @chmod($dest, 0644);
 }
-$dest = $dir . '/' . $ver . '.pdf';
-if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
-@chmod($dest, 0644);
 
 $url = LG_RESUME_URL_BASE . '/' . $uuid . '/' . $ver . '.pdf?v=' . $ver;
 

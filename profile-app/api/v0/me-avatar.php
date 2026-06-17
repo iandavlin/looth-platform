@@ -31,6 +31,7 @@ use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Cache;
 use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Media;
+use Looth\ProfileApp\R2;
 
 const LG_AVATAR_STORE    = '/srv/profile-app-media/avatars';
 const LG_AVATAR_URL_BASE = '/profile-media/avatars';
@@ -59,13 +60,21 @@ if ($ext === null) profile_app_json(400, ['error' => 'unsupported_type', 'allowe
 $uuid = strtolower((string)$user['uuid']);
 $ver  = (int)($user['avatar_version'] ?? 0) + 1;
 
-$dir = LG_AVATAR_STORE . '/' . $uuid;
-if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-    profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_AVATAR_STORE . ' (chown to the FPM user)']);
+$fn = $ver . '.' . $ext;
+if (R2::enabled()) {
+    $bytes = @file_get_contents($tmp);
+    if ($bytes === false || !R2::put('avatars/' . $uuid . '/' . $fn, $bytes, (string)($info['mime'] ?? 'application/octet-stream'))) {
+        profile_app_json(500, ['error' => 'write_failed']);
+    }
+} else {
+    $dir = LG_AVATAR_STORE . '/' . $uuid;
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+        profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_AVATAR_STORE . ' (chown to the FPM user)']);
+    }
+    $dest = $dir . '/' . $fn;
+    if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+    @chmod($dest, 0644);
 }
-$dest = $dir . '/' . $ver . '.' . $ext;
-if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
-@chmod($dest, 0644);
 
 $url = LG_AVATAR_URL_BASE . '/' . $uuid . '/' . $ver . '.' . $ext . '?v=' . $ver;
 

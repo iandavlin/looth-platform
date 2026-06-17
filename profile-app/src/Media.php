@@ -48,22 +48,29 @@ final class Media
         $base = basename($fn);
         if ($base === '' || str_contains($base, '..') || !preg_match(self::FILE_RE, $base)) return false;
 
-        // The user's dir must resolve INSIDE MEDIA_ROOT/<class>/ (reject symlink escapes).
+        $removed = false;
+
+        // R2 (the store, when enabled): delete the original object. Confined by the
+        // class/uuid/base validated above — no unchecked path component reaches R2.
+        // Runs independently of the local dir, which may not exist for R2-only files.
+        if (R2::enabled() && R2::delete($class . '/' . $uuid . '/' . $base)) {
+            $removed = true;
+            error_log('[media-gc] R2 deleted ' . $class . '/' . $uuid . '/' . $base);
+        }
+
+        // Local original (pre-migration files): realpath-confined to the owner dir.
         $classRoot = realpath(self::MEDIA_ROOT . '/' . $class);
         $realDir   = realpath(self::MEDIA_ROOT . '/' . $class . '/' . $uuid);
-        if ($classRoot === false || $realDir === false
-            || !str_starts_with($realDir . '/', $classRoot . '/' . $uuid . '/')) {
-            return false;
+        if ($classRoot !== false && $realDir !== false
+            && str_starts_with($realDir . '/', $classRoot . '/' . $uuid . '/')) {
+            $target = $realDir . '/' . $base;
+            if (is_file($target) && !is_link($target) && @unlink($target)) {
+                $removed = true;
+                error_log('[media-gc] unlinked ' . $class . '/' . $uuid . '/' . $base);
+            }
         }
 
-        $removed = false;
-        $target  = $realDir . '/' . $base;
-        if (is_file($target) && !is_link($target) && @unlink($target)) {
-            $removed = true;
-            error_log('[media-gc] unlinked ' . $class . '/' . $uuid . '/' . $base);
-        }
-
-        // Resizer cache twins (resizable classes only).
+        // Resizer cache twins are ALWAYS local (resizable classes only).
         if (in_array($class, self::RESIZABLE_CLASSES, true)) {
             foreach (self::CACHE_WIDTHS as $w) {
                 $cDir = realpath(self::MEDIA_ROOT . '/.cache/' . $w . '/' . $class . '/' . $uuid);

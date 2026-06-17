@@ -21,6 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config.php';
 
 use Looth\ProfileApp\Visibility;
+use Looth\ProfileApp\R2;
 
 $path = (string)($_GET['path'] ?? '');
 if (!preg_match('#^(avatars|banners|gallery|resumes)/([0-9a-fA-F-]{36})/([A-Za-z0-9][A-Za-z0-9._ -]*)$#', $path, $m)
@@ -54,17 +55,20 @@ $resizable = in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)
           && in_array($w, [96, 240, 400, 480, 600, 800, 960, 1200, 1600], true);
 if ($resizable) {
     $root = '/srv/profile-app-media';
-    $src  = $root . '/' . $class . '/' . strtolower($uuid) . '/' . $file;
     $rel  = '.cache/' . $w . '/' . $class . '/' . strtolower($uuid) . '/' . $file . '.webp';
     $dst  = $root . '/' . $rel;
-    if (is_file($src)) {
-        if (!is_file($dst) || filemtime($dst) < filemtime($src)) {
+    // Versioned (?v=) / random gallery filenames mean a replaced image gets a NEW
+    // name, so a cached variant is never stale — generate only on a cache miss.
+    if (!is_file($dst)) {
+        // Source bytes: the local original (pre-migration) first, else R2 (the store).
+        $localSrc = $root . '/' . $class . '/' . strtolower($uuid) . '/' . $file;
+        $bytes = is_file($localSrc) ? @file_get_contents($localSrc) : false;
+        if (($bytes === false || $bytes === '') && R2::enabled()) {
+            $bytes = R2::get($class . '/' . strtolower($uuid) . '/' . $file);
+        }
+        if (is_string($bytes) && $bytes !== '') {
             try {
-                $im = match ($ext) {
-                    'png'  => @imagecreatefrompng($src),
-                    'webp' => @imagecreatefromwebp($src),
-                    default => @imagecreatefromjpeg($src),
-                };
+                $im = @imagecreatefromstring($bytes);
                 if ($im) {
                     $ow = imagesx($im); $oh = imagesy($im);
                     if ($ow > $w) {
@@ -80,12 +84,12 @@ if ($resizable) {
                 }
             } catch (\Throwable $e) { /* fall through to original */ }
         }
-        if (is_file($dst)) {
-            header('Content-Type: image/webp');
-            header('Cache-Control: ' . (($class === 'avatars' || $class === 'banners') ? 'public, max-age=2592000' : 'private, no-store'));
-            header('X-Accel-Redirect: /profile-media-internal/' . str_replace('%2F', '/', rawurlencode($rel)));
-            exit;
-        }
+    }
+    if (is_file($dst)) {
+        header('Content-Type: image/webp');
+        header('Cache-Control: ' . (($class === 'avatars' || $class === 'banners') ? 'public, max-age=2592000' : 'private, no-store'));
+        header('X-Accel-Redirect: /profile-media-internal/' . str_replace('%2F', '/', rawurlencode($rel)));
+        exit;
     }
 }
 
@@ -99,4 +103,19 @@ if ($class === 'avatars' || $class === 'banners') {
     header('Cache-Control: private, no-store');
 }
 
-header('X-Accel-Redirect: /profile-media-internal/' . $class . '/' . strtolower($uuid) . '/' . rawurlencode($file));
+// Raw original: local (pre-migration) via X-Accel, else stream from R2. Only the
+// rare raw path streams through PHP; the resized path above keeps the X-Accel model.
+$localOrig = '/srv/profile-app-media/' . $class . '/' . strtolower($uuid) . '/' . $file;
+if (is_file($localOrig)) {
+    header('X-Accel-Redirect: /profile-media-internal/' . $class . '/' . strtolower($uuid) . '/' . rawurlencode($file));
+    exit;
+}
+if (R2::enabled()) {
+    $bytes = R2::get($class . '/' . strtolower($uuid) . '/' . $file);
+    if (is_string($bytes)) {
+        header('Content-Length: ' . strlen($bytes));
+        echo $bytes;
+        exit;
+    }
+}
+http_response_code(404);

@@ -14,6 +14,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
+use Looth\ProfileApp\R2;
 
 const LG_GALLERY_STORE = '/srv/profile-app-media/gallery';
 const LG_GALLERY_MAX   = 5 * 1024 * 1024;
@@ -43,14 +44,21 @@ if ($method === 'POST') {
     $current = Block::loadGallery($uid)['images'];
     if (count($current) >= Block::GALLERY_MAX) profile_app_json(400, ['error' => 'gallery_full', 'max' => Block::GALLERY_MAX]);
 
-    $dir = LG_GALLERY_STORE . '/' . $uuid;
-    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-        profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_GALLERY_STORE]);
+    $fn = bin2hex(random_bytes(8)) . '.' . $ext;
+    if (R2::enabled()) {
+        $bytes = @file_get_contents($tmp);
+        if ($bytes === false || !R2::put('gallery/' . $uuid . '/' . $fn, $bytes, (string)$info['mime'])) {
+            profile_app_json(500, ['error' => 'write_failed']);
+        }
+    } else {
+        $dir = LG_GALLERY_STORE . '/' . $uuid;
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
+            profile_app_json(500, ['error' => 'store_unwritable', 'hint' => 'provision ' . LG_GALLERY_STORE]);
+        }
+        $dest = $dir . '/' . $fn;
+        if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
+        @chmod($dest, 0644);
     }
-    $fn   = bin2hex(random_bytes(8)) . '.' . $ext;
-    $dest = $dir . '/' . $fn;
-    if (!@move_uploaded_file($tmp, $dest)) profile_app_json(500, ['error' => 'write_failed']);
-    @chmod($dest, 0644);
 
     $url = Block::GALLERY_URL_BASE . '/' . $uuid . '/' . $fn;
     $current[] = ['url' => $url, 'caption' => ''];
