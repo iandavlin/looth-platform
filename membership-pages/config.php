@@ -23,7 +23,13 @@ if (defined('LG_MEMBERSHIP_ENV_LOADED')) return;
 define('LG_MEMBERSHIP_ENV_LOADED', true);
 
 /* ---------- env detection ---------- */
-$env = getenv('LG_MEMBERSHIP_ENV');
+// Prefer the shared /etc/looth/env (one source of truth across every app);
+// fall back to this app's own detection when the file is absent (e.g. dev1),
+// so any box without it behaves EXACTLY as before. See lg-shared/lg-env.php.
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+$shared = function_exists('lg_env') ? lg_env() : [];
+
+$env = $shared['env'] ?? getenv('LG_MEMBERSHIP_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
     $env = ( str_starts_with((string)$host, 'dev.')
@@ -32,7 +38,12 @@ if (!$env) {
 }
 define('LG_MEMBERSHIP_ENV', $env);
 
-if ($env === 'live') {
+// Shared host (if /etc/looth/env present) is authoritative; else the env default.
+// (This host was env-only before, so on dev2 it pinned dev.loothgroup.com — the
+// shared file now resolves it to dev2.loothgroup.com.)
+if (isset($shared['host'])) {
+    define('LG_MEMBERSHIP_HOST', $shared['host']);
+} elseif ($env === 'live') {
     define('LG_MEMBERSHIP_HOST', 'loothgroup.com');
 } else {
     define('LG_MEMBERSHIP_HOST', 'dev.loothgroup.com');
