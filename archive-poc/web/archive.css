@@ -3306,12 +3306,15 @@ body.view-discover.is-member .lg-loothalong:hover .lg-loothalong__go { backgroun
 
 @media (max-width: 1080px) {
   body.view-discover .lg-bento { grid-template-columns: 1fr; }
-  body.view-discover.is-member .lg-fm { grid-template-columns: auto minmax(0,1fr); }
-  body.view-discover.is-member .lg-fm__act { grid-column: 1 / -1; }
+  /* Featured-member band is BOTH audiences (Ian 6/12) — collapse the 3-col
+     grid for anon too, else the nowrap CTA squeezes the body column to ~0
+     and the name/role crush on phones. */
+  body.view-discover .lg-fm { grid-template-columns: auto minmax(0,1fr); }
+  body.view-discover .lg-fm__act { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  body.view-discover.is-member .lg-fm { grid-template-columns: 1fr; text-align: center; }
-  body.view-discover.is-member .lg-fm__avi { margin: 0 auto; }
+  body.view-discover .lg-fm { grid-template-columns: 1fr; text-align: center; }
+  body.view-discover .lg-fm__avi { margin: 0 auto; }
   body.view-discover.is-member .lg-loothalong { flex-wrap: wrap; }
 }
 
@@ -3706,6 +3709,24 @@ html[data-lguser-theme="dark"] .gdle-side-empty { color: #9aab7f; }
 html[data-lguser-theme="dark"] .gdle-stack__btn { background: #1d211b; border-color: #2e3429; }
 html[data-lguser-theme="dark"] .gdle-stack__title { color: #e5e7e1; }
 .gdle-block--stack .gdle-promo__board { width: 100%; }
+
+/* Mobile: the stacked Guitardle (play button + weekly top-5) rides UNDER the
+   featured video inside the What's-New container, so on phones its full-height
+   board made that container run too long (Ian). The existing .gdle-promo media
+   rule only covers the standalone ROW shape, not this stacked one. Tighten the
+   button + board here so the block stays proportional — all five slots remain
+   visible (Ian 6/12), just compact. */
+@media (max-width: 640px) {
+  .gdle-block--stack { margin-top: 12px; gap: 8px; }
+  .gdle-block--stack .gdle-stack__btn { padding: 11px 14px; gap: 8px; }
+  .gdle-block--stack .gdle-stack__ic { width: 36px; height: 36px; }
+  .gdle-block--stack .gdle-stack__title { font-size: 19px; }
+  .gdle-block--stack .gdle-stack__sub { font-size: 12.5px; }
+  .gdle-block--stack .gdle-promo__board { padding: 11px 13px; }
+  .gdle-block--stack .gdle-card__title { font-size: 14px; }
+  .gdle-block--stack .gdle-side-row { padding: 4px 7px; font-size: 13px; }
+  .gdle-block--stack .gdle-side-row__pts { font-size: 11px; }
+}
 
 /* "Put me back on the map" CTA on the teaser tile (Ian 6/12) — amber primary
    above the quieter Open-the-member-map button; one-click me/layout re-add. */
