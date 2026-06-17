@@ -4301,6 +4301,10 @@
       '#lg-dmodal .lg-dmodal__act,#lg-dmodal .reply-stub__reply{display:inline-flex;align-items:center;gap:5px;cursor:pointer;' +
         'background:none;border:0;padding:2px 4px;box-shadow:none;color:var(--lg-sage-d,#586b3f);font:700 13px/1 var(--font-body,system-ui)}' +
       '#lg-dmodal .lg-dmodal__acts{display:flex;align-items:center;gap:14px;padding:6px 0 0;width:100%}' +
+      // [hidden] must beat .lg-dmodal__act display:inline-flex (above) — else hidden
+      // action buttons (delete/edit) leak to non-authors on the mobile front-page
+      // modal. Guard ALL act buttons so a new one can't reintroduce it. (Ian 6/17)
+      '#lg-dmodal .lg-dmodal__act[hidden]{display:none!important}' +
       '#lg-dmodal .lg-dmodal__thread .reply-stub{padding:12px 0;margin:0;border-top:1px solid var(--border-soft,var(--border,#eee7da));background:none!important;border-radius:0}' +
       '#lg-dmodal .lg-dmodal__thread .reply-stub:first-child{border-top:0}' +
       '#lg-dmodal .lg-dmodal__thread .reply-stub--child{margin-left:34px;border-top:0;padding-top:4px}' +
