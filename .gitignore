@@ -33,3 +33,9 @@ id_ed25519*
 *.sqlite.bak.*
 download-*.tar.gz
 live-bundle/v2-layouts-bundle.json
+
+# archive-poc per-box runtime — NOT version-controlled
+# index.sqlite: rebuilt from Postgres by bin/backfill.php (<3min); README says "built index, not committed"
+archive-poc/index.sqlite
+# config.json: per-box presentational config; fresh box seeds from config.seed.json (deploy: cp -n)
+archive-poc/config.json
