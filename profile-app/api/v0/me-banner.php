@@ -75,7 +75,10 @@ if ($info === false) profile_app_json(400, ['error' => 'not_an_image']);
 $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? null;
 if ($ext === null) profile_app_json(400, ['error' => 'unsupported_type', 'allowed' => ['jpeg', 'png', 'webp']]);
 
-$ver = (int)($user['banner_version'] ?? 0) + 1;
+// Atomic version bump — race-safe vs concurrent uploads (see me-avatar.php).
+$bvs = Db::pg()->prepare('UPDATE users SET banner_version = COALESCE(banner_version,0) + 1 WHERE id = :i RETURNING banner_version');
+$bvs->execute([':i' => $uid]);
+$ver = (int) $bvs->fetchColumn();
 
 $fn = $ver . '.' . $ext;
 if (R2::enabled()) {
@@ -95,8 +98,8 @@ if (R2::enabled()) {
 
 $url = LG_BANNER_URL_BASE . '/' . $uuid . '/' . $ver . '.' . $ext . '?v=' . $ver;
 
-Db::pg()->prepare('UPDATE users SET banner_version = :v, banner_url = :u WHERE id = :i')
-    ->execute([':v' => $ver, ':u' => $url, ':i' => $uid]);
+Db::pg()->prepare('UPDATE users SET banner_url = :u WHERE id = :i')
+    ->execute([':u' => $url, ':i' => $uid]);
 
 // GC the previous banner file + cache twins (replace would orphan it).
 Media::unlinkUrl($user['banner_url'] ?? null);

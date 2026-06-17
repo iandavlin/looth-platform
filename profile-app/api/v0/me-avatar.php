@@ -82,7 +82,13 @@ $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$in
 if ($ext === null) profile_app_json(400, ['error' => 'unsupported_type', 'allowed' => ['jpeg', 'png', 'webp']]);
 
 $uuid = strtolower((string)$user['uuid']);
-$ver  = (int)($user['avatar_version'] ?? 0) + 1;
+// Atomic version bump — race-safe vs concurrent uploads (two near-simultaneous
+// uploads otherwise compute the same version → same filename → one overwrites
+// the other). RETURNING gives each request a unique version.
+$pg    = Db::pg();
+$vstmt = $pg->prepare('UPDATE users SET avatar_version = COALESCE(avatar_version,0) + 1 WHERE id = :i RETURNING avatar_version');
+$vstmt->execute([':i' => (int)$user['id']]);
+$ver = (int) $vstmt->fetchColumn();
 
 $fn = $ver . '.' . $ext;
 if (R2::enabled()) {
@@ -102,9 +108,8 @@ if (R2::enabled()) {
 
 $url = LG_AVATAR_URL_BASE . '/' . $uuid . '/' . $ver . '.' . $ext . '?v=' . $ver;
 
-$pg = Db::pg();
-$pg->prepare('UPDATE users SET avatar_version = :v, avatar_url = :u WHERE id = :i')
-   ->execute([':v' => $ver, ':u' => $url, ':i' => (int)$user['id']]);
+$pg->prepare('UPDATE users SET avatar_url = :u WHERE id = :i')
+   ->execute([':u' => $url, ':i' => (int)$user['id']]);
 
 // GC the previous avatar file + its resizer cache twins (replace would orphan it).
 Media::unlinkUrl($user['avatar_url'] ?? null);

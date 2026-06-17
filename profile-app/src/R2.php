@@ -25,6 +25,13 @@ final class R2
     /** Secret file (Phase 6 pattern: /etc secret read at runtime, not pool env[]). */
     private const CONF_PATH = '/etc/looth/profile-r2';
 
+    // The SERVE path (get/delete/head) must fail FAST so a slow/unreachable R2 can
+    // never hang an FPM worker (the profile-app pool is small) — uploads keep a
+    // long timeout since they carry large bodies and must complete.
+    private const CONNECT_TIMEOUT = 3;
+    private const PUT_TIMEOUT      = 30;
+    private const GET_TIMEOUT      = 5;
+
     /** env name -> secret-file key. */
     private const FILE_KEYS = [
         'LG_PROFILE_R2_ENDPOINT' => 'endpoint',
@@ -80,30 +87,30 @@ final class R2
 
     public static function put(string $rel, string $body, string $contentType = 'application/octet-stream'): bool
     {
-        return self::request('PUT', self::key($rel), $body, $contentType) !== null;
+        return self::request('PUT', self::key($rel), $body, $contentType, self::PUT_TIMEOUT) !== null;
     }
 
-    /** Object body, or null on 404 / error. */
+    /** Object body, or null on 404 / error. Short timeout — this is the serve path. */
     public static function get(string $rel): ?string
     {
-        return self::request('GET', self::key($rel), '', null);
+        return self::request('GET', self::key($rel), '', null, self::GET_TIMEOUT);
     }
 
     public static function delete(string $rel): bool
     {
-        return self::request('DELETE', self::key($rel), '', null) !== null;
+        return self::request('DELETE', self::key($rel), '', null, self::GET_TIMEOUT) !== null;
     }
 
     public static function exists(string $rel): bool
     {
-        return self::request('HEAD', self::key($rel), '', null) !== null;
+        return self::request('HEAD', self::key($rel), '', null, self::GET_TIMEOUT) !== null;
     }
 
     /**
      * SigV4-signed S3 request. Returns the response body on 2xx ('' for PUT/
      * DELETE/HEAD), null on 404 / 4xx / 5xx / transport error.
      */
-    private static function request(string $method, string $key, string $body, ?string $contentType): ?string
+    private static function request(string $method, string $key, string $body, ?string $contentType, int $timeout = self::GET_TIMEOUT): ?string
     {
         if (!self::enabled()) { error_log('[r2] not configured'); return null; }
 
@@ -159,8 +166,8 @@ final class R2
             CURLOPT_HTTPHEADER     => $curlHeaders,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_NOBODY         => $method === 'HEAD',
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
+            CURLOPT_TIMEOUT        => $timeout,
         ]);
         if ($method === 'PUT') curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         $resp = curl_exec($ch);
