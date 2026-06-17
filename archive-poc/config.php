@@ -15,7 +15,13 @@ if (defined('LG_ARCHIVE_POC_ENV_LOADED')) return;
 define('LG_ARCHIVE_POC_ENV_LOADED', true);
 
 // ---------- env detection ----------
-$env = getenv('LG_ARCHIVE_POC_ENV');
+// Prefer the shared /etc/looth/env (one source of truth across every app);
+// fall back to this app's own detection when the file is absent (e.g. dev1),
+// so any box without it behaves EXACTLY as before. See lg-shared/lg-env.php.
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+$shared = function_exists('lg_env') ? lg_env() : [];
+
+$env = $shared['env'] ?? getenv('LG_ARCHIVE_POC_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
     // dev hostnames start with dev. or are the dev box's internal name
@@ -55,7 +61,8 @@ if ($env === 'live') {
 $ap_host_fallback = getenv('LG_ARCHIVE_POC_PUBLIC_HOST')
     ?: (($env === 'live') ? 'loothgroup.com' : 'dev.loothgroup.com');
 $ap_req_host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
-define('LG_ARCHIVE_POC_HOST',          $ap_req_host !== '' ? $ap_req_host : $ap_host_fallback);
+// Shared host (if /etc/looth/env present) is authoritative; else request-derived, else fallback.
+define('LG_ARCHIVE_POC_HOST',          $shared['host'] ?? ($ap_req_host !== '' ? $ap_req_host : $ap_host_fallback));
 define('LG_ARCHIVE_POC_LOGO_URL',      'https://' . LG_ARCHIVE_POC_HOST . '/wp-content/uploads/2024/05/Looth-Group-Logo-Site-Menu.png');
 define('LG_ARCHIVE_POC_CANONICAL_BASE','https://' . LG_ARCHIVE_POC_HOST);
 
