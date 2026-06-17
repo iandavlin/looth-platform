@@ -30,6 +30,7 @@ require_once __DIR__ . '/_bootstrap.php';
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Cache;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Media;
 
 const LG_AVATAR_STORE    = '/srv/profile-app-media/avatars';
 const LG_AVATAR_URL_BASE = '/profile-media/avatars';
@@ -71,6 +72,9 @@ $url = LG_AVATAR_URL_BASE . '/' . $uuid . '/' . $ver . '.' . $ext . '?v=' . $ver
 $pg = Db::pg();
 $pg->prepare('UPDATE users SET avatar_version = :v, avatar_url = :u WHERE id = :i')
    ->execute([':v' => $ver, ':u' => $url, ':i' => (int)$user['id']]);
+
+// GC the previous avatar file + its resizer cache twins (replace would orphan it).
+Media::unlinkUrl($user['avatar_url'] ?? null);
 
 // Identity purge — mirrors (shared header, forum threads, archive bylines) re-pull
 // on their next /whoami / batch-users read. Best-effort; never blocks the API.

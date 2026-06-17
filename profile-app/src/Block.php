@@ -1190,14 +1190,15 @@ Accept: application/json
             $clean[] = ['url' => $url, 'caption' => mb_substr((string)($im['caption'] ?? ''), 0, 200)];
             if (count($clean) >= self::GALLERY_MAX) break;
         }
-        // null params = keep whatever's stored (so a partial PUT doesn't wipe other fields).
-        // Load once if either keep-fallback is needed.
-        $existing = ($title === null || $displayMode === null) ? self::loadGallery($userId) : null;
+        // Previous state — needed both for the keep-fallback on a partial PUT
+        // (null params keep whatever's stored) AND to GC files dropped from the
+        // gallery below (orphan cleanup).
+        $prev = self::loadGallery($userId);
         $finalTitle = ($title === null)
-            ? $existing['title']
+            ? $prev['title']
             : mb_substr(trim($title), 0, 80);
         $finalMode = ($displayMode === null)
-            ? $existing['display_mode']
+            ? $prev['display_mode']
             : (in_array($displayMode, self::GALLERY_DISPLAY_MODES, true) ? $displayMode : self::GALLERY_DISPLAY_DEFAULT);
         $payload = ['images' => $clean];
         if ($finalTitle !== '') $payload['title'] = $finalTitle;
@@ -1217,6 +1218,18 @@ Accept: application/json
                 ON CONFLICT (user_id, key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()
             ")->execute([':u' => $userId, ':d' => $data]);
         }
+
+        // GC files dropped from the gallery: any previously-stored URL not in the
+        // new set is now orphaned on disk → unlink it + its resizer cache twins.
+        // After the row is persisted, so a failed write never deletes live files.
+        $newUrls = array_column($clean, 'url');
+        foreach (($prev['images'] ?? []) as $pi) {
+            $pu = (string)($pi['url'] ?? '');
+            if ($pu !== '' && !in_array($pu, $newUrls, true)) {
+                Media::unlinkUrl($pu);
+            }
+        }
+
         return self::loadGallery($userId);
     }
 

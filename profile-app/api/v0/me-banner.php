@@ -36,6 +36,7 @@ require_once __DIR__ . '/_bootstrap.php';
 
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Media;
 
 const LG_BANNER_STORE    = '/srv/profile-app-media/banners';
 const LG_BANNER_URL_BASE = '/profile-media/banners';
@@ -52,6 +53,7 @@ $uuid = strtolower((string) $user['uuid']);
 
 if ($method === 'DELETE') {
     Db::pg()->prepare('UPDATE users SET banner_url = NULL WHERE id = :i')->execute([':i' => $uid]);
+    Media::unlinkUrl($user['banner_url'] ?? null);   // remove the bytes, not just the row
     profile_app_json(200, ['ok' => true, 'banner_url' => null]);
 }
 
@@ -86,5 +88,8 @@ $url = LG_BANNER_URL_BASE . '/' . $uuid . '/' . $ver . '.' . $ext . '?v=' . $ver
 
 Db::pg()->prepare('UPDATE users SET banner_version = :v, banner_url = :u WHERE id = :i')
     ->execute([':v' => $ver, ':u' => $url, ':i' => $uid]);
+
+// GC the previous banner file + cache twins (replace would orphan it).
+Media::unlinkUrl($user['banner_url'] ?? null);
 
 profile_app_json(200, ['ok' => true, 'banner_url' => $url, 'banner_version' => $ver]);

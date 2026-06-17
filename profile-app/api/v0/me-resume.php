@@ -28,6 +28,7 @@ require_once __DIR__ . '/_bootstrap.php';
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Media;
 
 const LG_RESUME_STORE    = '/srv/profile-app-media/resumes';
 const LG_RESUME_URL_BASE = '/profile-media/resumes';
@@ -51,6 +52,7 @@ if ($method === 'PUT') {
 
 if ($method === 'DELETE') {
     Db::pg()->prepare('UPDATE users SET resume_url = NULL WHERE id = :i')->execute([':i' => $uid]);
+    Media::unlinkUrl($user['resume_url'] ?? null);   // remove the bytes, not just the row
     profile_app_json(200, ['ok' => true, 'resume_url' => null]);
 }
 
@@ -89,5 +91,8 @@ $url = LG_RESUME_URL_BASE . '/' . $uuid . '/' . $ver . '.pdf?v=' . $ver;
 
 Db::pg()->prepare('UPDATE users SET resume_version = :v, resume_url = :u WHERE id = :i')
     ->execute([':v' => $ver, ':u' => $url, ':i' => $uid]);
+
+// GC the previous resume file (replace would orphan the old <v>.pdf).
+Media::unlinkUrl($user['resume_url'] ?? null);
 
 profile_app_json(200, ['ok' => true, 'resume_url' => $url, 'resume_version' => $ver]);
