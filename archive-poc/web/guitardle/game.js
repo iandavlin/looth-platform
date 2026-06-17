@@ -809,10 +809,6 @@ function initMenuBar() {
         openStats();
     });
 
-    // Help — opens instructions overlay
-    document.getElementById('btn-help').addEventListener('click', () => {
-        openInstructions();
-    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -925,35 +921,6 @@ function initStats() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  INSTRUCTIONS OVERLAY
-// ─────────────────────────────────────────────────────────────────────────────
-function openInstructions() {
-    document.getElementById('overlay-instructions').style.display = 'flex';
-}
-
-function closeInstructions() {
-    document.getElementById('overlay-instructions').style.display = 'none';
-}
-
-function initInstructions() {
-    const overlay = document.getElementById('overlay-instructions');
-    const closeBtn = document.getElementById('btn-overlay-close');
-
-    closeBtn.addEventListener('click', closeInstructions);
-
-    // Clicking the backdrop (outside the panel) closes the overlay
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeInstructions();
-    });
-
-    // Show automatically on first visit
-    if (!localStorage.getItem('guitardle_visited')) {
-        localStorage.setItem('guitardle_visited', '1');
-        openInstructions();
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────────────────────────────────────
 async function init() {
@@ -980,7 +947,6 @@ async function init() {
     initMenuBar();
     initBoardOverlay();
     initStats();
-    initInstructions();
     initHardcoreToggle();
     updateScoreBox(0);
     renderMoves();
