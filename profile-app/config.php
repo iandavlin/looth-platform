@@ -49,7 +49,14 @@ function looth_issue_bounce_if_needed(): void {
     exit;
 }
 
-$env = getenv('LG_PROFILE_APP_ENV');
+// Prefer the shared /etc/looth/env (one source of truth across every app); fall
+// back to this app's own detection when the file is absent (e.g. dev1), so any
+// box without it behaves EXACTLY as before. The env drives the per-branch host +
+// WP/DB paths below (profile-app already handles 'dev2'). See lg-shared/lg-env.php.
+if (is_file('/srv/lg-shared/lg-env.php')) require_once '/srv/lg-shared/lg-env.php';
+$shared = function_exists('lg_env') ? lg_env() : [];
+
+$env = $shared['env'] ?? getenv('LG_PROFILE_APP_ENV');
 if (!$env) {
     $host = $_SERVER['HTTP_HOST'] ?? gethostname();
     // dev2 = the prod-candidate box (dev2.loothgroup.com / priv ip-172-31-47-205).
