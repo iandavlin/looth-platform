@@ -1065,6 +1065,48 @@
     form.setAttribute('data-lg-fbc', '1');
     form.classList.add('lg-fbc');
 
+    // Ian 2026-06-17: the full composer is taller (picker + title + tags + quick-
+    // tags + editor), so on mobile top-anchor the dialog and cap it to the VISUAL
+    // viewport — the iOS keyboard shrinks visualViewport from the bottom, so a
+    // top-anchored, internally-scrolling panel keeps the focused field visible
+    // instead of being shoved under the keyboard. --lg-vvh tracks that height.
+    if (!document.getElementById('lg-fbc-layout-css')) {
+      var laySt = document.createElement('style'); laySt.id = 'lg-fbc-layout-css';
+      laySt.textContent =
+        '@media (max-width:640px){' +
+        '.ntm-overlay{align-items:flex-start}' +
+        '.ntm-dialog{width:calc(100vw - 16px);margin:8px auto;padding:16px;gap:12px;' +
+          'max-height:calc(var(--lg-vvh,100dvh) - 16px)}' +
+        '.lg-fbc #ntm-forum.ntm-forumlist{max-height:148px}' +
+        // Accordion trigger that collapses the (tall) forum list into one row.
+        '.lg-fbc-forumtrig{display:flex;align-items:center;gap:8px;width:100%;border:1px solid var(--border,#dcd7ca);' +
+          'background:var(--bg-card,#fff);border-radius:10px;padding:11px 13px;cursor:pointer;text-align:left;' +
+          'font:600 14px/1.15 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--fg,#1f231e)}' +
+        '.lg-fbc-forumtrig__lb{color:var(--fg-muted,#5b5f58);font-weight:600}' +
+        '.lg-fbc-forumtrig__val{font-weight:700;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+        '.lg-fbc-forumtrig__chev{color:var(--fg-muted,#5b5f58);transition:transform .15s ease}' +
+        '.lg-fbc-forumtrig.is-open .lg-fbc-forumtrig__chev{transform:rotate(180deg)}' +
+        // unset = required-and-not-yet-chosen (prompt look); err = tried to post empty
+        '.lg-fbc-forumtrig.is-unset .lg-fbc-forumtrig__val{color:var(--fg-soft,#8d9088);font-weight:600}' +
+        '.lg-fbc-forumtrig--err{border-color:#c0392b!important;box-shadow:0 0 0 1px #c0392b}' +
+        '.lg-fbc-forumtrig__req{color:#c0392b;font-weight:700;margin-left:2px}' +
+        // While the composer is open, hide the 3-button bar (it sits above the
+        // overlay at a very high z-index and would cover the Post/Council buttons).
+        // Pure CSS: tabbar is a later body sibling of the overlay; :not([hidden])
+        // = open, so this auto-toggles with the modal.
+        '.ntm-overlay:not([hidden]) ~ #looth-tabbar{display:none!important}' +
+        '}';
+      document.head.appendChild(laySt);
+    }
+    if (window.visualViewport && !window.__lgVVBound) {
+      window.__lgVVBound = true;
+      var vv = window.visualViewport;
+      var setVVH = function () { document.documentElement.style.setProperty('--lg-vvh', vv.height + 'px'); };
+      setVVH();
+      vv.addEventListener('resize', setVVH);
+      vv.addEventListener('scroll', setVVH);
+    }
+
     // The native forum picker #ntm-forum is now a <div role=radiogroup
     // class=ntm-forumlist> (category headers + radio leaves, name=forum_id) that
     // hub-coord rebuilt from the old <select> — it IS the single-select
@@ -1084,33 +1126,121 @@
       document.head.appendChild(fbcSt);
     }
 
+    // Quiet iOS's AutoFill QuickType bar (the key / card / location chips above the
+    // keyboard) and tune the return key (Ian 2026-06-17: "shrink the keyboard
+    // commands"). The chips are iOS-owned and can't be fully removed from a web
+    // page, but autocomplete=off is the lever that stops Safari offering passwords/
+    // cards/contacts on these plain text fields. Mobile-only (in fbStyleComposer).
+    form.setAttribute('autocomplete', 'off');
+    if (titleIn) {
+      titleIn.setAttribute('autocomplete', 'off');
+      titleIn.setAttribute('autocapitalize', 'sentences');
+      titleIn.setAttribute('autocorrect', 'on');
+      titleIn.setAttribute('spellcheck', 'true');
+      titleIn.setAttribute('enterkeyhint', 'next');
+    }
+    if (tagsIn) {
+      tagsIn.setAttribute('autocomplete', 'off');
+      tagsIn.setAttribute('autocapitalize', 'none');
+      tagsIn.setAttribute('autocorrect', 'off');
+      tagsIn.setAttribute('spellcheck', 'false');
+      tagsIn.setAttribute('enterkeyhint', 'done');
+    }
+    var qeKb = document.getElementById('ntm-editor');
+    qeKb = qeKb && qeKb.querySelector('.ql-editor');
+    if (qeKb) {
+      qeKb.setAttribute('autocapitalize', 'sentences');
+      qeKb.setAttribute('autocorrect', 'on');
+      qeKb.setAttribute('spellcheck', 'true');
+    }
+
     var quicktags = document.getElementById('ntm-quicktags');
-    [titleIn, tagsIn, quicktags].forEach(function (el) {
-      if (!el) return;
-      el.style.display = 'none';
-      var lab = el.previousElementSibling;
-      if (lab && lab.tagName === 'LABEL') lab.style.display = 'none';
-    });
-    // the visible body is the Quill editor (#ntm-editor); #ntm-content is its
-    // hidden textarea fallback. Hide the "Body" label (right before the editor)
-    // and the paste-hint tip.
+    // Ian 2026-06-17: the mobile composer now carries the SAME controls as desktop
+    // — leaf-forum picker, title (server-required), tags, and the Council/Weekly
+    // quick-tags — instead of the old stripped "quick post" (reverses Buck
+    // 2026-06-08's hide-everything). Only the body label + paste hint stay hidden
+    // as declutter; the visible body is the Quill editor (#ntm-editor).
     var editor = document.getElementById('ntm-editor') || body;
     var blab = editor && editor.previousElementSibling;
     if (blab && blab.tagName === 'LABEL') blab.style.display = 'none';
     [].slice.call(form.querySelectorAll('.ntm-paste-hint,.ntm-tip,[class*="hint"],[class*="tip"]')).forEach(function (t) { t.style.display = 'none'; });
 
-    // Buck 2026-06-08: mobile composer = quicker + simpler, NO categories. Hide the
-    // category radiogroup + its label; the post just defaults to General (#3837) so
-    // nobody has to pick. ensureForum still selects it (the radio exists, just hidden).
-    forumSel.style.display = 'none';
-    var forumLab = document.getElementById('ntm-forum-label'); if (forumLab) forumLab.style.display = 'none';
-    function ensureForum() {
-      if (forumSel.querySelector('input[name="forum_id"]:checked')) return;
-      var def = forumSel.querySelector('input[name="forum_id"][value="3837"]') ||
-                forumSel.querySelector('input[name="forum_id"]');
-      if (def) def.checked = true;
+    // Friendlier labels for the workflow quick-tags on mobile. data-tag still
+    // drives the toggle in forums.js (it only flips the is-on class, never the
+    // text), so the toggle stays intact — we just change the visible wording.
+    if (quicktags) {
+      var qLabels = { councilyes: 'Council of Elders', weeklyyes: 'Weekly email' };
+      [].forEach.call(quicktags.querySelectorAll('.ntm-qtag'), function (b) {
+        var nice = qLabels[(b.dataset.tag || '').toLowerCase()];
+        if (nice) b.textContent = nice;
+      });
     }
-    ensureForum();
+
+    // Preselect a sensible default leaf (General #3837) so a post never fails on an
+    // empty forum — but SHOW the picker so the member chooses where it goes.
+    // No default forum (Ian 2026-06-17): the member must deliberately choose where
+    // the post goes — a required action, no auto-selected "General". forums.js
+    // already rejects an empty forum on submit; the guard below surfaces that in
+    // the collapsed accordion (expand + flag) instead of focusing a hidden radio.
+
+    // Collapse the leaf-forum list into an accordion (Ian 2026-06-17: "the forum is
+    // now confusing"). A compact summary row shows the chosen forum; tapping it
+    // expands the existing #ntm-forum radiogroup, and picking a leaf collapses it
+    // back with the new label. The radio that submits is unchanged.
+    var forumLabEl = document.getElementById('ntm-forum-label');
+    if (forumLabEl) forumLabEl.style.display = 'none';
+    if (forumSel && !form.querySelector('.lg-fbc-forumtrig')) {
+      var trig = document.createElement('button');
+      trig.type = 'button';
+      trig.className = 'lg-fbc-forumtrig';
+      trig.setAttribute('aria-expanded', 'false');
+      trig.innerHTML = '<span class="lg-fbc-forumtrig__lb">Forum</span>' +
+        '<span class="lg-fbc-forumtrig__val"></span><span class="lg-fbc-forumtrig__chev" aria-hidden="true">▾</span>';
+      var valEl = trig.querySelector('.lg-fbc-forumtrig__val');
+      forumSel.parentNode.insertBefore(trig, forumSel);
+
+      function fbcChosen() { return forumSel.querySelector('input[name="forum_id"]:checked'); }
+      function fbcSelLabel() {
+        var r = fbcChosen();
+        var leaf = r && r.closest('.ntm-fl__leaf');
+        return leaf ? leaf.textContent.replace(/\s+/g, ' ').trim() : '';
+      }
+      function fbcSyncTrig() {
+        var has = !!fbcChosen();
+        // textContent = XSS-safe; show a prompt (+ required *) until one is picked
+        valEl.textContent = has ? fbcSelLabel() : 'Choose a forum';
+        trig.classList.toggle('is-unset', !has);
+        if (has) trig.classList.remove('lg-fbc-forumtrig--err');
+      }
+      function fbcSetOpen(open) {
+        forumSel.style.display = open ? '' : 'none';
+        trig.classList.toggle('is-open', open);
+        trig.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) forumSel.scrollIntoView({ block: 'nearest' });
+      }
+      forumSel.style.display = 'none';   // collapsed by default
+      fbcSyncTrig();
+      trig.addEventListener('click', function () { fbcSetOpen(forumSel.style.display === 'none'); });
+      forumSel.addEventListener('change', function () { fbcSyncTrig(); fbcSetOpen(false); });
+      // Keep the label accurate when the modal re-opens (incl. a leaf "+ Post here"
+      // that preselects a forum programmatically — no change event fires then).
+      var fbcOv = document.querySelector('.ntm-overlay');
+      if (fbcOv) new MutationObserver(function () {
+        if (!fbcOv.hasAttribute('hidden')) fbcSyncTrig();
+      }).observe(fbcOv, { attributes: true, attributeFilter: ['hidden'] });
+
+      // Required action: block the post until a forum is chosen. Capture-phase on
+      // document so we intercept before forums.js's submit handler (which would
+      // otherwise error against the now-hidden radio list). Expand + flag instead.
+      document.addEventListener('submit', function (e) {
+        if (e.target !== form || fbcChosen()) return;
+        e.preventDefault(); e.stopPropagation();
+        trig.classList.add('lg-fbc-forumtrig--err');
+        fbcSyncTrig();
+        fbcSetOpen(true);
+        trig.scrollIntoView({ block: 'center' });
+      }, true);
+    }
 
     // avatar + name header
     var nameBtn = document.querySelector('.lg-chrome__account');
@@ -1149,8 +1279,13 @@
         '<button type="button" class="lg-fbc-addbtn" data-fbc-yt><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor"/></svg>YouTube link</button>';
       editor.parentNode.insertBefore(addRow, editor.nextSibling);
       addRow.querySelector('[data-fbc-photo]').addEventListener('click', function () {
-        var imgBtn = form.querySelector('.ql-toolbar .ql-image');
-        if (imgBtn) imgBtn.click();                       // Quill's image upload (→ /media/upload)
+        // iOS-safe: drive the upload tray directly (forums.js exposes lgNtmPhoto)
+        // so input.click() stays inside THIS user gesture. The old path bounced
+        // through Quill's display:none .ql-toolbar .ql-image, which iOS Safari
+        // refuses to honor as a file-picker gesture (the bug Ian hit).
+        if (typeof window.lgNtmPhoto === 'function') { window.lgNtmPhoto(); return; }
+        var imgBtn = form.querySelector('.ql-toolbar .ql-image');   // fallback
+        if (imgBtn) imgBtn.click();
       });
       addRow.querySelector('[data-fbc-yt]').addEventListener('click', function () {
         var url = window.prompt('Paste a YouTube link to embed:');
@@ -1171,13 +1306,14 @@
       var q = form.querySelector('.ql-editor');
       return q ? (q.textContent || '').trim() : '';
     }
-    // Right before the canonical submit: auto title + ensure a forum is chosen.
+    // Right before the canonical submit: safety auto-title only (title is now a
+    // required step-1 field in the wizard, so this rarely fires). No forum default
+    // — the member must choose (validated when leaving step 1).
     submit.addEventListener('click', function () {
       if (titleIn && !titleIn.value.trim()) {
         var b = bodyText();
         titleIn.value = ((b ? b.split(/\n/)[0].slice(0, 80) : '') || '').trim() || 'New post';
       }
-      ensureForum();
     }, true);
     // MOBILE: after a successful post the canonical composer redirects to the new
     // TOPIC page (a single-post / desktop-style view) after 600ms. Buck wants to
@@ -1189,9 +1325,154 @@
       ntmStatusEl.setAttribute('data-lg-postnav', '1');
       new MutationObserver(function () {
         if (/posted|redirect/i.test(ntmStatusEl.textContent || '')) {
-          try { window.location.href = '/hub/'; } catch (e) {}
+          // Use the SAME dest the canonical composer computed (hub feed centered on
+          // the new post) instead of bare /hub/ (Ian 6/17). Falls back to /hub/.
+          try { window.location.href = window.__lgPostDest || '/hub/'; } catch (e) {}
         }
       }).observe(ntmStatusEl, { childList: true, characterData: true, subtree: true });
+    }
+
+    // ===== Instagram-style 3-step wizard (Ian 2026-06-17) =====================
+    // Reorganize the (now full) composer into 3 focused screens with Back/Next +
+    // a 1·2·3 progress strip, instead of one tall scroll:
+    //   1 Title + Forum   2 Photos   3 Text + Tags + Council/Weekly + Anon → Post
+    if (!document.getElementById('lg-fbc-wiz-css')) {
+      var wst = document.createElement('style'); wst.id = 'lg-fbc-wiz-css';
+      wst.textContent =
+        '.lg-fbc .lg-fbc-step{display:none}' +
+        '.lg-fbc .lg-fbc-step.is-on{display:block}' +
+        '.lg-fbc-steph{font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--fg-muted,#5b5f58);' +
+          'text-transform:uppercase;letter-spacing:.05em;margin:0 0 12px}' +
+        '.lg-fbc-dots{display:flex;gap:6px;justify-content:center;margin:0 0 12px}' +
+        '.lg-fbc-dots i{width:7px;height:7px;border-radius:50%;background:var(--border,#dcd7ca);transition:all .18s ease}' +
+        '.lg-fbc-dots i.on{background:var(--lguser-accent,#6b7c52);width:22px;border-radius:4px}' +
+        '.lg-fbc-nav{display:flex;align-items:center;gap:10px;margin-top:14px}' +
+        '.lg-fbc-nav__sp{flex:1 1 auto}' +
+        '.lg-fbc-nav button{font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif);border-radius:999px;' +
+          'padding:12px 22px;cursor:pointer;border:0}' +
+        '.lg-fbc-back{background:none;border:1px solid var(--border,#dcd7ca);color:var(--fg,#1f231e);' +
+          'display:inline-flex;align-items:center;gap:6px;padding:11px 16px}' +
+        '.lg-fbc-next{background:var(--lguser-accent,#52613d);color:#fff}' +
+        '.lg-fbc .lg-fbc-nav .ntm-submit{background:var(--lguser-accent,#52613d);color:#fff;border:0;' +
+          'border-radius:999px;padding:12px 22px;font:700 15px/1 var(--lg-font-sans,system-ui,sans-serif)}' +
+        '.lg-fbc-gallery{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px}' +
+        '.lg-fbc-emptyph{color:var(--fg-soft,#8d9088);font:500 13.5px/1.4 var(--lg-font-sans,system-ui,sans-serif);' +
+          'padding:22px 0;text-align:center}';
+      document.head.appendChild(wst);
+    }
+
+    var wForum  = document.getElementById('ntm-forum');
+    if (wForum && !form.querySelector('.lg-fbc-step')) {
+      var wTitle    = document.getElementById('ntm-title-in');
+      var wTitleLab = wTitle && wTitle.previousElementSibling && wTitle.previousElementSibling.tagName === 'LABEL' ? wTitle.previousElementSibling : null;
+      var wForumLab = document.getElementById('ntm-forum-label');
+      var wTrig     = form.querySelector('.lg-fbc-forumtrig');
+      var wHead     = form.querySelector('.lg-fbc-head');
+      var wEditor   = document.getElementById('ntm-editor');
+      var wBody     = document.getElementById('ntm-content');
+      var wAddRow   = form.querySelector('.lg-fbc-add');
+      var wTags     = document.getElementById('ntm-tags');
+      var wTagsLab  = wTags && wTags.previousElementSibling && wTags.previousElementSibling.tagName === 'LABEL' ? wTags.previousElementSibling : null;
+      var wQuick    = document.getElementById('ntm-quicktags');
+      var wAnon     = form.querySelector('.ntm-anon');
+      var wSubmit   = document.getElementById('ntm-submit');
+      var wActions  = wSubmit && wSubmit.closest('.ntm-row');
+      var wStatus   = document.getElementById('ntm-status');
+
+      function wStep(n, label) {
+        var d = document.createElement('div'); d.className = 'lg-fbc-step'; d.dataset.step = n;
+        d.innerHTML = '<p class="lg-fbc-steph">' + label + '</p>'; return d;
+      }
+      var ws1 = wStep(1, 'Step 1 of 3 · Title &amp; forum');
+      var ws2 = wStep(2, 'Step 2 of 3 · Add photos');
+      var ws3 = wStep(3, 'Step 3 of 3 · Details');
+
+      // Step 1: title + forum
+      if (wTitleLab) ws1.appendChild(wTitleLab);
+      if (wTitle) ws1.appendChild(wTitle);
+      if (wForumLab) { wForumLab.style.display = ''; ws1.appendChild(wForumLab); }
+      if (wTrig) ws1.appendChild(wTrig);
+      ws1.appendChild(wForum);
+
+      // Step 2: photos (button row + a thumbnail gallery)
+      if (wAddRow) ws2.appendChild(wAddRow);
+      var wGal = document.createElement('div'); wGal.className = 'lg-fbc-gallery'; ws2.appendChild(wGal);
+      var wEmpty = document.createElement('div'); wEmpty.className = 'lg-fbc-emptyph';
+      wEmpty.textContent = 'No photos yet — tap “Photo” to add one. (Optional)';
+      ws2.appendChild(wEmpty);
+
+      // Step 3: body + tags + quick-tags + anon
+      if (wHead) ws3.appendChild(wHead);
+      if (wEditor) ws3.appendChild(wEditor);
+      if (wBody) ws3.appendChild(wBody);
+      if (wTagsLab) ws3.appendChild(wTagsLab);
+      if (wTags) ws3.appendChild(wTags);
+      if (wQuick) ws3.appendChild(wQuick);
+      if (wAnon) ws3.appendChild(wAnon);
+
+      var wSteps = document.createElement('div'); wSteps.className = 'lg-fbc-steps';
+      wSteps.appendChild(ws1); wSteps.appendChild(ws2); wSteps.appendChild(ws3);
+
+      var wDots = document.createElement('div'); wDots.className = 'lg-fbc-dots';
+      wDots.innerHTML = '<i></i><i></i><i></i>';
+
+      var wNav = document.createElement('div'); wNav.className = 'lg-fbc-nav';
+      var wBack = document.createElement('button'); wBack.type = 'button'; wBack.className = 'lg-fbc-back';
+      wBack.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg><span>Cancel</span>';
+      var wSp = document.createElement('span'); wSp.className = 'lg-fbc-nav__sp';
+      var wNext = document.createElement('button'); wNext.type = 'button'; wNext.className = 'lg-fbc-next'; wNext.textContent = 'Next';
+      wNav.appendChild(wBack); wNav.appendChild(wSp); wNav.appendChild(wNext);
+      if (wSubmit) wNav.appendChild(wSubmit);          // Post lives in the nav, step 3 only
+      if (wStatus) wNav.appendChild(wStatus);
+
+      var anchor = wActions || (wSubmit && wSubmit.parentNode) || form;
+      anchor.parentNode ? anchor.parentNode.insertBefore(wDots, anchor) : form.appendChild(wDots);
+      anchor.parentNode ? anchor.parentNode.insertBefore(wSteps, anchor) : form.appendChild(wSteps);
+      anchor.parentNode ? anchor.parentNode.insertBefore(wNav, anchor) : form.appendChild(wNav);
+      if (wActions) wActions.style.display = 'none';    // original Post/Cancel row retired
+
+      var wCur = 1;
+      function wShow(n) {
+        wCur = Math.max(1, Math.min(3, n));
+        [ws1, ws2, ws3].forEach(function (s) { s.classList.toggle('is-on', +s.dataset.step === wCur); });
+        [].forEach.call(wDots.children, function (d, i) { d.classList.toggle('on', i === wCur - 1); });
+        wBack.querySelector('span').textContent = wCur === 1 ? 'Cancel' : 'Back';
+        if (wCur === 3) { wNext.style.display = 'none'; if (wSubmit) wSubmit.style.display = ''; }
+        else { wNext.style.display = ''; if (wSubmit) wSubmit.style.display = 'none'; }
+        try { form.scrollTop = 0; var dlg = form.closest('.ntm-dialog'); if (dlg) dlg.scrollTop = 0; } catch (e) {}
+      }
+      wBack.addEventListener('click', function () {
+        if (wCur === 1) { var c = document.getElementById('ntm-cancel'); if (c) c.click(); return; }
+        wShow(wCur - 1);
+      });
+      wNext.addEventListener('click', function () {
+        if (wCur === 1) {
+          if (wTitle && !wTitle.value.trim()) {
+            wTitle.focus();
+            wTitle.style.boxShadow = '0 0 0 2px #c0392b';
+            setTimeout(function () { wTitle.style.boxShadow = ''; }, 1200);
+            return;
+          }
+          if (!wForum.querySelector('input[name="forum_id"]:checked')) {
+            wForum.style.display = '';                  // expand the picker
+            if (wTrig) { wTrig.classList.add('is-open', 'lg-fbc-forumtrig--err'); wTrig.scrollIntoView({ block: 'center' }); }
+            return;
+          }
+        }
+        wShow(wCur + 1);
+      });
+      wShow(1);
+
+      // Relocate the upload tray (forceTray thumbnails) into step 2 + toggle the
+      // empty hint as photos come and go.
+      function wSyncGal() {
+        var tray = form.querySelector('.lg-mtray');
+        if (tray && tray.parentNode !== wGal) wGal.appendChild(tray);
+        var has = tray && tray.querySelector('.lg-mtray__item');
+        wEmpty.style.display = has ? 'none' : '';
+      }
+      wSyncGal();
+      new MutationObserver(wSyncGal).observe(form, { childList: true, subtree: true });
     }
   }
 
@@ -1976,7 +2257,10 @@
           // If the fork's §4e ever un-gates for mobile, it claims the tap first
           // (earlier-registered capture listener calls preventDefault) — defer to it.
           if (e.defaultPrevented) return;
-          if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-act-replies, .lg-card-actions, .fcr, .fcr-palette, [data-comments], .fc-cover--video, video, iframe, .feed-card__read-more, .feed-card__expand, .fc-readmore, .reply-stub, .fc-reply')) return;
+          // Video covers no longer play inline on mobile (Ian 2026-06-17) — drop
+          // .fc-cover--video from the exempt list so tapping a topic video cover
+          // opens the discussion like any other topic tap.
+          if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-act-replies, .lg-card-actions, .fcr, .fcr-palette, [data-comments], video, iframe, .feed-card__read-more, .feed-card__expand, .fc-readmore, .reply-stub, .fc-reply')) return;
           var tOnText = e.target.closest('.feed-card__title a, .fc-title a, .feed-card__title, .fc-title, .feed-card__op-excerpt, .fc-excerpt, .feed-card__op, .feed-card__full-body, .fc-full-body, .fc-cover, .feed-card__cover');
           if (!tOnText) return;
           e.preventDefault(); e.stopPropagation();              // beat forums.js inline expand
@@ -1997,27 +2281,27 @@
           e.preventDefault(); e.stopPropagation();
           var cmr = card.querySelector('[data-comments], .feed-card__comments-btn');
           if (cmr) { cmr.click(); return; }
+          // No comments button (anon) → just go to the post (Ian 2026-06-17: CPT
+          // cards click through to the full page, no content-sheet modal).
           var cl0 = card.querySelector('.fc-title a, .feed-card__title a');
-          var ct0 = card.querySelector('.fc-title, .feed-card__title');
-          openContentSheet((cl0 && cl0.href) || card.getAttribute('data-href'),
-            ct0 ? (ct0.textContent || '').trim() : '');
+          var ch0 = (cl0 && cl0.href) || card.getAttribute('data-href');
+          if (ch0) location.href = ch0;
           return;
         }
 
-        // (B) RESTORED + UNGATED (Buck+Ian call 2026-06-10: "pop-ups only -- the
-        // modal is king"; supersedes the same-day retirement): ANY other tap on a
-        // content card (title / cover / excerpt / body) opens the full-post
-        // pull-up sheet (?embed=1). Off-origin links still navigate (lgCsEmbedUrl
-        // returns null). Mobile only -- this handler is 640-gated above.
+        // (B) CLICK THROUGH (Ian 2026-06-17): tapping a content/CPT card (title /
+        // cover / excerpt / body — incl. video covers, which no longer play inline)
+        // NAVIGATES to the full standalone post page, which is mobile-reactive
+        // (fits, no horizontal slide, pinch-zoom). The old #looth-content-sheet
+        // pull-up modal is gone. Mobile only — this handler is 640-gated above.
         if (e.defaultPrevented) return;
-        if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-card-actions, .fcr, .fcr-palette, [data-comments], .fc-cover--video, video, iframe, .reply-stub, .fc-save')) return;
+        if (e.target.closest('button, a[href*="/u/"], .lg-act, .lg-card-actions, .fcr, .fcr-palette, [data-comments], video, iframe, .reply-stub, .fc-save')) return;
         var ca = e.target.closest('a[href]');
         var clink = card.querySelector('.fc-title a[href], .feed-card__title a[href], .fc-cover a[href], .feed-card__cover a[href]');
-        var chref = (ca && ca.href) || (clink && clink.href);
+        var chref = (ca && ca.href) || (clink && clink.href) || card.getAttribute('data-href');
         if (!chref) return;
         e.preventDefault(); e.stopPropagation();
-        var cttl = card.querySelector('.fc-title, .feed-card__title');
-        openContentSheet(chref, cttl ? (cttl.textContent || '').trim() : '');
+        location.href = chref;            // full-page clickthrough — no modal
       } catch (err) {}
     }, true);                                                 // capture: run before forums.js
   }
@@ -2210,6 +2494,29 @@
   // (Search-preview popup RETIRED 2026-06-10 — same rule: search results
   // navigate to the post page.)
 
+  // ── Shared video-teardown guard (Ian 2026-06-17) ───────────────────────────
+  // BOTH video engines (this auto-stop + the scroll-autoplay below) must NOT tear
+  // a video down while it's in iOS's native fullscreen player. iOS does not report
+  // iframe fullscreen (document.fullscreenElement stays null — the real <video> is
+  // inside the cross-origin iframe), and entering fullscreen auto-rotates to
+  // landscape, firing the observers with the host non-intersecting → the iframe got
+  // removed ("video disappears in fullscreen + landscape"). We can't detect it, so
+  // we suspend teardown around an orientation change + while the page is hidden or
+  // an iframe is focused. Bound once on load.
+  var lgVidOrientLockUntil = 0;
+  function lgVidArmLock() { lgVidOrientLockUntil = Date.now() + 4000; }
+  window.addEventListener('orientationchange', lgVidArmLock);
+  if (window.screen && screen.orientation && screen.orientation.addEventListener) {
+    try { screen.orientation.addEventListener('change', lgVidArmLock); } catch (e) {}
+  }
+  function lgVideoProtected() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) return true;
+    if (document.hidden) return true;                 // native player / backgrounded
+    if (Date.now() < lgVidOrientLockUntil) return true; // just rotated → don't tear down
+    var ae = document.activeElement;
+    return !!(ae && ae.tagName === 'IFRAME');           // user is inside the player
+  }
+
   // ── Stop an inline YouTube video when it scrolls off-screen (Buck 2026-06-08) ──
   // forums.js plays a content video by injecting an iframe.fc-video (autoplay, no JS-API)
   // into the .fc-cover--video host. Once it scrolls out of view it would keep playing
@@ -2228,8 +2535,9 @@
           // Don't remove a video that's gone FULLSCREEN — fullscreen pushes the
           // feed behind it out of view, so the host reads as non-intersecting; the
           // old code then yanked the iframe and fullscreen "warped back" instantly
-          // (Buck bug 2026-06-08). Skip removal while any element is fullscreen.
-          if (document.fullscreenElement || document.webkitFullscreenElement) return;
+          // (Buck bug 2026-06-08). iOS doesn't report iframe fullscreen, so use the
+          // shared guard (orientation lock / hidden / focused iframe) — Ian 6/17.
+          if (lgVideoProtected()) return;
           if (!en.isIntersecting && iframe.parentNode) {
             iframe.parentNode.removeChild(iframe);   // stop playback; thumb facade returns
             io.disconnect();
@@ -2372,6 +2680,9 @@
   }
   var lgVidPromoMo = null;
   function wireVideoLinkCards() {
+    return;   // DISABLED on mobile (Ian 2026-06-17): no inline video on mobile, so
+              // don't promote content cards into play-on-card video hosts — they
+              // click through to the post instead.
     if (!window.matchMedia('(max-width:640px)').matches) return;
     promoteVideoLinkCards();
     setTimeout(promoteVideoLinkCards, 800); setTimeout(promoteVideoLinkCards, 2500);
@@ -2387,13 +2698,19 @@
   }
 
   function wireVideoAutoplay() {
+    return;   // DISABLED on mobile (Ian 2026-06-17): no inline video on mobile —
+              // feed videos are static thumbnails that click through to the post.
     if (!window.matchMedia('(max-width:640px)').matches) return;
     if (document.body.getAttribute('data-lg-vidauto')) return;
     document.body.setAttribute('data-lg-vidauto', '1');
     if (!('IntersectionObserver' in window)) return;
     var ratios = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
     var rmap = ratios || { _k: [], _v: [], get: function (k) { var i = this._k.indexOf(k); return i < 0 ? 0 : this._v[i]; }, set: function (k, v) { var i = this._k.indexOf(k); if (i < 0) { this._k.push(k); this._v.push(v); } else this._v[i] = v; } };
-    function fs() { return document.fullscreenElement || document.webkitFullscreenElement; }
+
+    // Shared teardown guard (orientation lock / hidden / focused iframe) — see
+    // lgVideoProtected above. iOS doesn't report iframe fullscreen, so this is how
+    // both engines avoid killing a fullscreen+landscape video (Ian 2026-06-17).
+    function fs() { return lgVideoProtected(); }
     function isInline(host) { return host.classList && host.classList.contains('bb-embed--video'); }
     function ensurePlaying(host) {
       if (isInline(host)) {                              // inline body video (existing iframe)
@@ -2427,7 +2744,13 @@
       var ov = host.querySelector('.lg-unmute'); if (ov) ov.parentNode.removeChild(ov);
     }
     function allHosts() {
-      var a = [].slice.call(document.querySelectorAll('.fc-cover--video[data-yt-play]'));
+      var a = [].slice.call(document.querySelectorAll('.fc-cover--video[data-yt-play]'))
+        // No scroll-autoplay for video CPT cards (Ian 2026-06-17) — they stay
+        // click-to-play. Topic/user videos keep the Instagram-style autoplay.
+        .filter(function (h) {
+          var c = h.closest('.feed-card');
+          return !(c && c.classList.contains('feed-card--content'));
+        });
       // inline videos: only the YouTube ones (have an /embed/ iframe)
       [].forEach.call(document.querySelectorAll('.bb-embed--video'), function (h) {
         var ifr = h.querySelector('iframe'); if (ifr && /youtube\.com\/embed\//.test(ifr.src || '')) a.push(h);
@@ -2663,6 +2986,10 @@
       '#looth-rep-sheet .lrs-op__body a{color:var(--lg-sage-d,#6b7c52)}',
       '#looth-rep-sheet .lrs-op__acts{display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 0 2px;position:relative;border-top:1px solid var(--lg-line,#e6e8e2)}',
       '#looth-rep-sheet .lrs-op__del{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--lg-mute,#6b6f6b);font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:6px 9px;border-radius:8px}',
+      // [hidden] must beat the display:inline-flex above — author CSS overrides the UA
+      // [hidden] rule, so without this the delete button shows to NON-authors (JS leaves
+      // hidden=true for them; only the click handler is gated). Author/mod-only render.
+      '#looth-rep-sheet .lrs-op__del[hidden]{display:none}',
       '#looth-rep-sheet .lrs-op__del:hover{background:rgba(193,51,51,.1);color:#c33}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__acts{border-top-color:#2c312d}',
       'html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-op__del{color:#80867d}',
@@ -2950,6 +3277,31 @@
               try { card.remove(); } catch (e) {}
             })
             .catch(function (err) { del.disabled = false; alert('Network error: ' + err.message); });
+        });
+      });
+      // Edit the OP (author/admin) — inline plain-text body editor -> PUT the topic.
+      // The modal OP is built client-side (no server edit control), so create it
+      // here alongside delete, gated to author (data-author-id) OR mod. Ian 6/17.
+      var opForumId = parseInt(card.getAttribute('data-forum-id'), 10) || 0;
+      var edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'lrs-op__del lrs-op__edit'; edit.hidden = true;
+      edit.setAttribute('aria-label', 'Edit this post');
+      edit.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg><span>Edit</span>';
+      acts.insertBefore(edit, del);
+      lrsGetAuth(function (ae) {
+        if (!ae || !ae.authenticated) return;
+        var mineE = opAuthorId && ae.wp_user_id && parseInt(ae.wp_user_id, 10) === opAuthorId;
+        if (!mineE && !ae.can_edit_others) return;
+        edit.hidden = false;
+        edit.addEventListener('click', function (ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          // Edit the OP via the SAME 3-modal composer wizard, pre-filled (Ian 6/17).
+          var tEl = document.querySelector('#looth-rep-sheet .lrs-t');
+          var ttl = ((tEl && tEl.textContent) || '').trim();
+          if (typeof window.lgNtmEditTopic === 'function') {
+            lrsClose();
+            window.lgNtmEditTopic(tid, opForumId, ttl, body.innerHTML);
+          }
         });
       });
     }
@@ -3999,11 +4351,26 @@
     if (document.body.getAttribute('data-lg-modmod')) return;
     document.body.setAttribute('data-lg-modmod', '1');
     lrsGetAuth(function (a) {
-      if (!a || !a.authenticated || !a.can_edit_others) return;
+      if (!a || !a.authenticated) return;                  // author OR moderator (Ian 6/17)
+      var viewerId = parseInt(a.wp_user_id, 10) || 0;
+      var canMod   = !!a.can_edit_others;
       function mark() {
         ['lg-dmodal', 'looth-rep-sheet'].forEach(function (id) {
           var el = document.getElementById(id);
-          if (el && !el.classList.contains('feed--can-moderate')) el.classList.add('feed--can-moderate');
+          if (!el) return;
+          if (canMod) {
+            // Moderator/admin: reveal controls across the whole modal (unchanged).
+            if (!el.classList.contains('feed--can-moderate')) el.classList.add('feed--can-moderate');
+          } else if (viewerId) {
+            // Author (non-mod): reveal edit/trash only on their OWN reply rows
+            // (data-author-id is now on every .reply-stub; server re-checks caps).
+            el.querySelectorAll('.reply-stub[data-author-id]').forEach(function (stub) {
+              if ((parseInt(stub.getAttribute('data-author-id'), 10) || 0) === viewerId
+                  && !stub.classList.contains('feed--can-moderate')) {
+                stub.classList.add('feed--can-moderate');
+              }
+            });
+          }
         });
       }
       mark();

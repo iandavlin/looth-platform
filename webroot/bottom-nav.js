@@ -16,27 +16,43 @@
 
   // Inline stroke icons (24x24, currentColor). No emoji per brand rules.
   var ICONS = {
-    hub: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-6h4v6h5V9.5"/>',
+    // Wagon wheel (Ian 2026-06-17) — Hub had the same house glyph as Home; the
+    // wheel (rim + hub + 8 spokes) distinguishes it. Stroke is inherited from the
+    // svg (fill:none, stroke:currentColor), so circles + spokes render as outlines.
+    hub: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.3"/>' +
+         '<path d="M12 3v6.7M12 14.3V21M3 12h6.7M14.3 12H21' +
+         'M5.64 5.64 10.37 10.37M18.36 18.36 13.63 13.63' +
+         'M18.36 5.64 13.63 10.37M5.64 18.36 10.37 13.63"/>',
     events: '<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M8 2.5v4M16 2.5v4"/>',
     members: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c0-3 2.6-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.6a3 3 0 0 1 0 5.4"/><path d="M17.5 14.6c2 .5 3.5 2.2 3.5 4.9"/>',
     shop: '<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+    // Home = the marketing front page (was unreachable on mobile before the
+    // 3-button bar — the Hub header hides the logo). Lives top-left in the tray.
+    home: '<path d="M3 11 12 3l9 8"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
+    // Nav button: a 2x2 grid (opens the destinations tray).
+    grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+    // Big center Post button.
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    messages: '<path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9 9 0 0 1-3.2-.6L4 21l1.9-4.4a8 8 0 0 1-1.4-4.6A8.4 8.4 0 0 1 13 3.7a8.4 8.4 0 0 1 8 7.8z"/>',
+    alerts: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M10 21h4"/>',
+    loothtool: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     // Fallback only — the Profile tab shows the member's avatar when one exists.
     person: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.6 3-6 7-6s7 2.4 7 6"/>'
   };
 
-  // Tab definitions. `match` decides the active tab from the current path.
-  var TABS = [
-    { key: 'hub',     label: 'Hub',     href: '/hub/',                icon: ICONS.hub,
-      match: function (p) { return p === '/' || /^\/(hub|stream|archive)(\/|$)/.test(p); } },
-    { key: 'events',  label: 'Events',  href: '/events/',             icon: ICONS.events,
-      match: function (p) { return /^\/events(\/|$)/.test(p); } },
-    { key: 'members', label: 'Members', href: '/directory/members/',  icon: ICONS.members,
-      match: function (p) { return /^\/(directory|members)(\/|$)/.test(p); } },
-    { key: 'shop',    label: 'Shop',    href: '/shop/',               icon: ICONS.shop,
-      shop: true, match: function () { return /^\/shop(\/|$)/.test(location.pathname || ''); } },
-    // Instagram-style: the member's own avatar is the tab; tapping opens their profile.
-    { key: 'profile', label: 'You',     href: '/profile/edit',        icon: ICONS.person,
-      profile: true, match: function (p) { return /^\/(profile|u)(\/|$)/.test(p); } }
+  // Destinations shown in the Nav tray (the slide-up "Go to" sheet). These were
+  // the old bottom-bar tabs (Hub/Events/Members/Shop) plus Home + the items the
+  // mobile header used to hide (Messages/Alerts/Loothtool). `home:true` paints
+  // the accent tile. Shop opens its full page (Buck 2026-06-09). Order = grid.
+  var DESTS = [
+    { key: 'home',     label: 'Home',      href: '/front-page/',         icon: ICONS.home, home: true },
+    { key: 'hub',      label: 'Hub',       href: '/hub/',                icon: ICONS.hub },
+    { key: 'events',   label: 'Events',    href: '/events/',             icon: ICONS.events },
+    { key: 'members',  label: 'Members',   href: '/directory/members/',  icon: ICONS.members },
+    { key: 'shop',     label: 'Shop',      href: '/shop/',               icon: ICONS.shop },
+    { key: 'messages', label: 'Messages',  href: '/members/me/messages/',icon: ICONS.messages, messenger: true },
+    { key: 'alerts',   label: 'Alerts',    href: '/members/me/notifications/', icon: ICONS.alerts, notifs: true },
+    { key: 'loothtool',label: 'Loothtool', href: 'https://loothtool.com/', icon: ICONS.loothtool, ext: true }
   ];
 
   // Pull the signed-in member's avatar from the shared header (.lg-chrome__avatar
@@ -77,12 +93,23 @@
       'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       // active state
       '#' + BAR_ID + ' .is-active{color:var(--lg-sage-d,#6b7c52)}' +
-      '#' + BAR_ID + ' a:active,#' + BAR_ID + ' button:active{color:var(--lg-sage,#87986a);transform:translateY(.5px)}' +
+      '#' + BAR_ID + ' a:active,#' + BAR_ID + ' button:active{color:var(--lg-sage,#87986a)}' +
+      // ---- Big center Post button (raised, always visible) ----
+      '#' + BAR_ID + ' .lt-post{flex:0 0 auto;width:64px;color:#fff !important;justify-content:flex-start}' +
+      '#' + BAR_ID + ' .lt-post-ico{margin-top:-20px;width:54px;height:54px;border-radius:50%;' +
+        'background:var(--lg-sage-d,#52613d);display:flex;align-items:center;justify-content:center;' +
+        'border:3px solid var(--lg-cream,#fbfbf8);box-shadow:0 6px 16px rgba(82,97,61,.45);' +
+        'transition:transform .12s ease}' +
+      '#' + BAR_ID + ' .lt-post-ico svg{width:27px;height:27px;stroke:#fff;stroke-width:2.4}' +
+      '#' + BAR_ID + ' .lt-post:active .lt-post-ico{transform:scale(.93)}' +
       // show only on mobile
       '@media ' + MOBILE_MQ + '{#' + BAR_ID + '{display:flex}' +
       'body.has-looth-tabbar{padding-bottom:calc(' + H + 'px + env(safe-area-inset-bottom,0px)) !important}' +
       // Shop tab replaces the floating FAB on mobile
       '#looth-shop-fab{display:none !important}' +
+      // The center Post button now owns posting on mobile — hide the redundant
+      // (and previously clipped/scroll-tucked) sort-bar post button to avoid two.
+      '.feed-sort-bar>.lg-newpost,.feed-sort-bar>.feed-post-btn,.forum-header__new-post{display:none !important}' +
       // lift the install banner above the bar
       '#looth-pwa-banner{bottom:calc(' + (H + 14) + 'px + env(safe-area-inset-bottom,0px)) !important}' +
       // Consolidate to the bottom "You": hide the shared header's account bubble
@@ -117,6 +144,19 @@
       '.lt-sheet__row:active{background:var(--lg-sage-tint,#eef2e3)}' +
       '.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;' +
         'color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}' +
+      // ---- Nav tray: "Go to" destinations grid (slide-up, same sheet infra) ----
+      '.lt-navgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 0 4px}' +
+      '.lt-navitem{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px;' +
+        'border-radius:14px;text-decoration:none;color:var(--lg-ink,#323532);' +
+        'font:600 12px/1.1 var(--lg-font-sans,system-ui,sans-serif);text-align:center}' +
+      '.lt-navitem:active{background:var(--lg-sage-tint,#eef2e3)}' +
+      '.lt-navitem .lt-nico{width:48px;height:48px;border-radius:50%;background:var(--lg-sage-tint,#eef2e3);' +
+        'display:flex;align-items:center;justify-content:center;color:var(--lg-sage-d,#6b7c52)}' +
+      '.lt-navitem .lt-nico svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;' +
+        'stroke-linecap:round;stroke-linejoin:round}' +
+      '.lt-navitem.is-here .lt-nico{box-shadow:0 0 0 2px var(--lg-sage-d,#6b7c52)}' +
+      '.lt-navitem.lt-home .lt-nico{background:var(--lg-sage-d,#52613d);color:#fff}' +
+      '.lt-navitem .lt-ndot{position:absolute;margin:-4px 0 0 30px;min-width:8px;height:8px;border-radius:50%;background:#e23b3b}' +
       // notification count badge on the You tab (Instagram-style)
       '#' + BAR_ID + ' .lt-badge{position:absolute;top:5px;left:calc(50% + 5px);min-width:16px;height:16px;' +
         'padding:0 4px;box-sizing:border-box;border-radius:9px;background:#e23b3b;color:#fff;' +
@@ -225,48 +265,61 @@
     skelTimer = setTimeout(function () { el.classList.remove('is-on'); }, 4000);
   }
 
+  // Open the Hub's existing "new topic" modal composer (#ntm-overlay) by firing
+  // any [data-ntm-open] trigger on the page — works even though we hide the
+  // sort-bar post button on mobile (.click() fires on display:none elements and
+  // the delegated handler in forums.js catches it). Off the Hub there's no
+  // composer, so route to the Hub where it lives.
+  function openComposer() {
+    var trigger = document.querySelector('[data-ntm-open]');
+    if (trigger) { trigger.click(); return; }
+    showTabSkeleton();
+    try { window.location.assign('/hub/'); } catch (e) { window.location.href = '/hub/'; }
+  }
+
+  // 3-button bar: Nav (tray) · Post (modal) · You (profile sheet). Replaces the
+  // old 5 destination tabs — destinations moved into the Nav tray so the bar can
+  // give Post a big, always-visible center action and restore a Home door
+  // (Ian 2026-06-17). Mobile only; desktop never shows the bar.
   function build() {
     if (document.getElementById(BAR_ID)) return;
     injectStyles();
-    var path = location.pathname || '/';
-    var drawerOpen = shopOpen();
 
     var nav = document.createElement('nav');
     nav.id = BAR_ID;
     nav.setAttribute('role', 'navigation');
     nav.setAttribute('aria-label', 'Primary');
 
-    TABS.forEach(function (t) {
-      var active = t.shop ? t.match(path) : (!drawerOpen && t.match(path));
-      var iconHtml;
-      if (t.profile) {
-        var src = avatarSrc();
-        iconHtml = src
-          ? '<span class="lt-ico lt-avi"><img src="' + src + '" alt=""></span>'
-          : '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + '</svg></span>';
-      } else {
-        iconHtml = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + t.icon + '</svg></span>';
-      }
-      var inner = iconHtml + '<span class="lt-lb">' + t.label + '</span>';
-      var el;
-      if (t.shop) {
-        el = document.createElement('button');
-        el.type = 'button';
-        el.addEventListener('click', function () { openShop(); });
-      } else {
-        el = document.createElement('a');
-        el.href = t.href;
-        // The "You" tab opens the profile sheet instead of navigating away.
-        if (t.profile) el.addEventListener('click', function (e) { e.preventDefault(); openSheet(); });
-        // Hub/Events/Members navigate — show an instant skeleton so the switch feels snappy.
-        else el.addEventListener('click', function () { if (!active) showTabSkeleton(); });
-      }
-      el.className = active ? 'is-active' : '';
-      el.setAttribute('aria-label', t.label);
-      if (active) el.setAttribute('aria-current', 'page');
-      el.innerHTML = inner;
-      nav.appendChild(el);
-    });
+    // Nav (opens the destinations tray)
+    var navBtn = document.createElement('button');
+    navBtn.type = 'button';
+    navBtn.setAttribute('aria-label', 'Menu');
+    navBtn.setAttribute('aria-haspopup', 'dialog');
+    navBtn.innerHTML = '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.grid + '</svg></span><span class="lt-lb">Nav</span>';
+    navBtn.addEventListener('click', openNav);
+    nav.appendChild(navBtn);
+
+    // Post (big center) — pops the existing composer modal
+    var postBtn = document.createElement('button');
+    postBtn.type = 'button';
+    postBtn.className = 'lt-post';
+    postBtn.setAttribute('aria-label', 'New post');
+    postBtn.innerHTML = '<span class="lt-post-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.plus + '</svg></span>';
+    postBtn.addEventListener('click', openComposer);
+    nav.appendChild(postBtn);
+
+    // You (opens the profile sheet — unchanged behavior)
+    var youBtn = document.createElement('a');
+    youBtn.href = '/profile/edit';
+    var src = avatarSrc();
+    youBtn.innerHTML = (src
+        ? '<span class="lt-ico lt-avi"><img src="' + src + '" alt=""></span>'
+        : '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.person + '</svg></span>') +
+      '<span class="lt-lb">You</span>';
+    youBtn.setAttribute('aria-label', 'You');
+    if (/^\/(profile|u)(\/|$)/.test(location.pathname || '')) { youBtn.className = 'is-active'; youBtn.setAttribute('aria-current', 'page'); }
+    youBtn.addEventListener('click', function (e) { e.preventDefault(); openSheet(); });
+    nav.appendChild(youBtn);
 
     (document.body || document.documentElement).appendChild(nav);
     document.body.classList.add('has-looth-tabbar');
@@ -281,34 +334,18 @@
     setInterval(function () { if (document.visibilityState === 'visible') refreshNotifBadge(); }, 60000);
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshNotifBadge(); });
 
-    // The shared header may paint its avatar after we build — if the Profile tab
-    // fell back to the person icon, poll briefly and swap in the real avatar.
-    var profEl = nav.querySelector('a[href="' + '/profile/edit' + '"]');
-    if (profEl && !profEl.querySelector('.lt-avi')) {
+    // The shared header may paint its avatar after we build — if the You tab fell
+    // back to the person icon, poll briefly and swap in the real avatar.
+    if (youTab && !youTab.querySelector('.lt-avi')) {
       var ptries = 0;
       var piv = setInterval(function () {
-        var src = avatarSrc();
-        if (src) {
+        var s = avatarSrc();
+        if (s) {
           clearInterval(piv);
-          var ico = profEl.querySelector('.lt-ico');
-          if (ico) { ico.className = 'lt-ico lt-avi'; ico.innerHTML = '<img src="' + src + '" alt="">'; }
+          var ico = youTab.querySelector('.lt-ico');
+          if (ico) { ico.className = 'lt-ico lt-avi'; ico.innerHTML = '<img src="' + s + '" alt="">'; }
         } else if (++ptries > 20) { clearInterval(piv); }
       }, 150);
-    }
-
-    // Keep the Shop tab's active state in sync with the drawer.
-    var shopBtn = nav.querySelector('button');
-    if (shopBtn) {
-      var sync = function () {
-        var open = shopOpen();
-        nav.querySelectorAll('a,button').forEach(function (n) {
-          if (n === shopBtn) return;
-          // when drawer open, no page tab is active
-        });
-        if (open) { shopBtn.classList.add('is-active'); shopBtn.setAttribute('aria-current', 'true'); }
-        else { shopBtn.classList.remove('is-active'); shopBtn.removeAttribute('aria-current'); }
-      };
-      document.addEventListener('click', function () { setTimeout(sync, 60); }, true);
     }
   }
 
@@ -491,6 +528,80 @@
     document.removeEventListener('keydown', onSheetKey);
     refreshNotifBadge();   // they may have read some
   }
+
+  // ---- Nav tray ("Go to" destinations) --------------------------------------
+  // The slide-up sheet behind the bar's Nav button. Reuses the .lt-sheet /
+  // .lt-sheet-bd infra (same look & transition as the You sheet) with its own
+  // element ids so the two open independently. Carries every destination plus a
+  // Home door — the single fix for "no menu / no way back to the front page" on
+  // the Hub, where the shared header's logo + hamburger are hidden (Ian 6/17).
+  var NAV_ID = 'looth-navsheet', NAV_BD_ID = 'looth-navsheet-bd';
+  function navIsHere(key, path) {
+    return (key === 'home'    && (path === '/front-page/' || path === '/')) ||
+           (key === 'hub'     && /^\/(hub|stream|archive)(\/|$)/.test(path)) ||
+           (key === 'events'  && /^\/events(\/|$)/.test(path)) ||
+           (key === 'members' && /^\/(directory|members)(\/|$)/.test(path)) ||
+           (key === 'shop'    && /^\/shop(\/|$)/.test(path));
+  }
+  function buildNavTray() {
+    var existing = document.getElementById(NAV_ID);
+    if (existing) return existing;
+    var bd = document.createElement('div');
+    bd.id = NAV_BD_ID; bd.className = 'lt-sheet-bd';
+    bd.addEventListener('click', closeNav);
+
+    var sheet = document.createElement('div');
+    sheet.id = NAV_ID; sheet.className = 'lt-sheet';
+    sheet.setAttribute('role', 'dialog'); sheet.setAttribute('aria-modal', 'true'); sheet.setAttribute('aria-label', 'Go to');
+
+    var grab = document.createElement('div'); grab.className = 'lt-sheet__grab'; sheet.appendChild(grab);
+    var h = document.createElement('div'); h.className = 'lt-sheet__sech'; h.textContent = 'Go to'; sheet.appendChild(h);
+
+    var grid = document.createElement('div'); grid.className = 'lt-navgrid';
+    var path = location.pathname || '/';
+    DESTS.forEach(function (d) {
+      var a = document.createElement('a');
+      a.className = 'lt-navitem' + (d.home ? ' lt-home' : '');
+      a.href = d.href;
+      if (d.ext) { a.target = '_blank'; a.rel = 'noopener'; }
+      var here = navIsHere(d.key, path);
+      if (here) a.classList.add('is-here');
+      a.innerHTML = '<span class="lt-nico"><svg viewBox="0 0 24 24" aria-hidden="true">' + d.icon + '</svg></span><span>' + d.label + '</span>';
+      a.addEventListener('click', function (e) {
+        closeNav();
+        // Messages → the messenger pull-up (no page nav) when it's loaded.
+        if (d.messenger && window.openMessenger) { e.preventDefault(); setTimeout(window.openMessenger, 200); return; }
+        // Alerts → the You sheet (notifications live there on mobile).
+        if (d.notifs) { e.preventDefault(); setTimeout(openSheet, 200); return; }
+        if (!d.ext && !here) showTabSkeleton();   // perceived-speed bridge on real nav
+      });
+      grid.appendChild(a);
+    });
+    sheet.appendChild(grid);
+
+    document.body.appendChild(bd);
+    document.body.appendChild(sheet);
+    return sheet;
+  }
+  function openNav() {
+    var sheet = buildNavTray();
+    var bd = document.getElementById(NAV_BD_ID);
+    sheet.style.transform = ''; void sheet.offsetHeight;
+    if (bd) bd.classList.add('is-open');
+    sheet.classList.add('is-open');
+    document.body.classList.add('lt-sheet-open');
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onNavKey);
+  }
+  function closeNav() {
+    var sheet = document.getElementById(NAV_ID), bd = document.getElementById(NAV_BD_ID);
+    if (sheet) sheet.classList.remove('is-open');
+    if (bd) bd.classList.remove('is-open');
+    document.body.classList.remove('lt-sheet-open');
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onNavKey);
+  }
+  function onNavKey(e) { if (e.key === 'Escape') closeNav(); }
 
   // ---- Notifications (badge on the You tab + section in the sheet) -----------
   function ntEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
