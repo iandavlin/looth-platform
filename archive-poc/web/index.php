@@ -177,10 +177,59 @@ elseif ($preview_as === 'pro'  && $edit_capable) { $is_member = true; $viewer_ti
 $GLOBALS['LG_VIEWER_TIER']  = $viewer_tier;
 $GLOBALS['LG_EDIT_CAPABLE'] = $edit_capable;
 
-// ---- "Report a bug or suggestion" modal POST → email ---------------------
+/**
+ * Send the feedback email via an explicit sendmail/msmtp pipe.
+ *
+ * Uses proc_open so we get the binary's real exit status (0 = relay accepted)
+ * instead of PHP mail()'s opaque bool — a dead relay is then detectable and
+ * logged, never silent. `-t` reads recipients from the headers; `-i` keeps a
+ * lone "." in the body from terminating the message. The destination is passed
+ * in by the caller and stays server-side.
+ *
+ * $subject and $extraHeaders are caller-controlled fixed strings (never user
+ * input), so there is no header-injection surface; the user's text is the body.
+ */
+function lg_archive_poc_send_feedback(string $to, string $subject, string $body, string $extraHeaders): bool
+{
+    $sendmail = '/usr/sbin/sendmail';
+    if (!is_executable($sendmail)) return false;
+    $eol = "\r\n";
+    $message = 'To: ' . $to . $eol
+             . 'Subject: ' . $subject . $eol
+             . rtrim($extraHeaders, "\r\n") . $eol
+             . 'MIME-Version: 1.0' . $eol
+             . 'Content-Type: text/plain; charset=UTF-8' . $eol
+             . $eol
+             . str_replace("\r\n", "\n", $body) . $eol;
+    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+    $proc = @proc_open($sendmail . ' -t -i', $descriptors, $pipes);
+    if (!is_resource($proc)) return false;
+    fwrite($pipes[0], $message);
+    fclose($pipes[0]);
+    stream_get_contents($pipes[1]); fclose($pipes[1]);
+    stream_get_contents($pipes[2]); fclose($pipes[2]);
+    return proc_close($proc) === 0;
+}
+
+// ---- "Report a bug or suggestion" modal POST → durable capture + email ----
 // The destination address lives ONLY here, server-side — it must never appear
-// in HTML/JS. On dev, mail lands in the local mailpit catcher (/mailpit/);
-// real delivery starts at cutover when the box gets real SMTP.
+// in HTML/JS.
+//
+// Delivery contract (Ian 6/18): a report must NEVER be silently lost. The old
+// handler delivered via PHP @mail() and returned "Could not send" whenever
+// mail() returned false — which is *always* on live, where there is no real
+// outbound relay (dev only "worked" because msmtp → local mailpit). So:
+//   1. PERSIST FIRST — every report is appended to var/feedback-inbox.jsonl
+//      (LOCK_EX, atomic) BEFORE any mail attempt. This is the real guarantee:
+//      even with mail down, `tail` that file and nothing is lost.
+//   2. Deliver via an EXPLICIT msmtp/sendmail pipe (proc_open) so we get a real
+//      exit code instead of mail()'s opaque bool; failures are logged to
+//      var/feedback-delivery.log so a dead relay is visible, not silent.
+//   3. The user only sees an error if we captured NOTHING (disk full). A
+//      persisted-but-undelivered report still reports success — it is safe.
+// Live email leg needs ONE infra step (out of this lane): give msmtp a real
+// account block (it's already installed; today it points at mailpit). Until
+// then, reports still land durably in the jsonl inbox.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'feedback') {
     header('Content-Type: application/json');
     // Honeypot: real users never see (or fill) the "website" field.
@@ -198,19 +247,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'feedb
         echo json_encode(['ok' => false, 'error' => 'One message a minute, please — try again shortly.']); exit;
     }
     @touch($cool);
-    $who = !empty($whoami['authenticated'])
+    $page = $_SERVER['HTTP_REFERER'] ?? '/front-page/';
+    $ua   = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 200);
+    $when = gmdate('c');
+    $who  = !empty($whoami['authenticated'])
         ? sprintf('%s (wp user %s, tier %s)', $whoami['display_name'] ?? 'member', $whoami['wp_user_id'] ?? '?', $viewer_tier)
         : 'anonymous visitor';
+
+    // 1) Durable capture FIRST — the report is safe the moment this succeeds.
+    $inbox_dir = (defined('LG_ARCHIVE_POC_APP_ROOT') ? LG_ARCHIVE_POC_APP_ROOT : __DIR__ . '/..') . '/var';
+    if (!is_dir($inbox_dir)) @mkdir($inbox_dir, 0775, true);
+    $record = json_encode(
+        ['ts' => $when, 'kind' => $kind, 'message' => $msg, 'from' => $who,
+         'page' => $page, 'ua' => $ua, 'ip' => $ip],
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $persisted = @file_put_contents(
+        $inbox_dir . '/feedback-inbox.jsonl', $record . "\n", FILE_APPEND | LOCK_EX) !== false;
+
+    // 2) Best-effort delivery via explicit sendmail/msmtp pipe (real exit code).
     $body = $msg . "\n\n--\nFrom: " . $who
-          . "\nPage: " . ($_SERVER['HTTP_REFERER'] ?? '/front-page/')
-          . "\nUA: "   . substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 200)
-          . "\nIP: "   . $ip . "\nTime: " . gmdate('c');
-    $ok = @mail('ian.davlin@gmail.com',
-        '[Looth] ' . $kind . ' from the front page',
-        $body,
+          . "\nPage: " . $page . "\nUA: " . $ua
+          . "\nIP: "   . $ip   . "\nTime: " . $when;
+    $sent = lg_archive_poc_send_feedback('ian.davlin@gmail.com',
+        '[Looth] ' . $kind . ' from the front page', $body,
         "From: Looth Group <noreply@loothgroup.com>\r\nReply-To: noreply@loothgroup.com");
-    if (!$ok) http_response_code(500);
-    echo json_encode($ok ? ['ok' => true] : ['ok' => false, 'error' => 'Could not send — try again later.']);
+    if (!$sent) {
+        @file_put_contents($inbox_dir . '/feedback-delivery.log',
+            $when . " DELIVERY-FAILED kind=" . $kind . " ip=" . $ip
+                  . " persisted=" . ($persisted ? '1' : '0') . "\n",
+            FILE_APPEND | LOCK_EX);
+    }
+
+    // 3) Only a TOTAL loss (neither persisted nor sent) is a user-facing error.
+    if (!$persisted && !$sent) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'error' => 'Could not send — try again later.']); exit;
+    }
+    echo json_encode(['ok' => true]);
     exit;
 }
 

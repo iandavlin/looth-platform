@@ -39,3 +39,5 @@ live-bundle/v2-layouts-bundle.json
 archive-poc/index.sqlite
 # config.json: per-box presentational config; fresh box seeds from config.seed.json (deploy: cp -n)
 archive-poc/config.json
+# var/: front-page feedback durable capture (user messages + IPs). Per-box runtime, contains PII — never commit.
+archive-poc/var/
